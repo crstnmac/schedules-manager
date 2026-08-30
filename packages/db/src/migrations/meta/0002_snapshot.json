@@ -1,0 +1,1084 @@
+{
+	"id": "aeaa6e6a-64b2-403e-bd0c-a276a8bec232",
+	"prevId": "122e882a-d297-4dc9-a0b0-0c674f567c40",
+	"version": "7",
+	"dialect": "postgresql",
+	"tables": {
+		"public.time_off_requests": {
+			"name": "time_off_requests",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "uuid",
+					"primaryKey": true,
+					"notNull": true,
+					"default": "gen_random_uuid()"
+				},
+				"employment_id": {
+					"name": "employment_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"starts_at": {
+					"name": "starts_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"ends_at": {
+					"name": "ends_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"reason": {
+					"name": "reason",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"status": {
+					"name": "status",
+					"type": "time_off_status",
+					"typeSchema": "public",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "'pending'"
+				},
+				"decided_by": {
+					"name": "decided_by",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"decision_reason": {
+					"name": "decision_reason",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"decided_at": {
+					"name": "decided_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"time_off_requests_employment_id_employments_id_fk": {
+					"name": "time_off_requests_employment_id_employments_id_fk",
+					"tableFrom": "time_off_requests",
+					"tableTo": "employments",
+					"columnsFrom": ["employment_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.unavailability": {
+			"name": "unavailability",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "uuid",
+					"primaryKey": true,
+					"notNull": true,
+					"default": "gen_random_uuid()"
+				},
+				"employment_id": {
+					"name": "employment_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"kind": {
+					"name": "kind",
+					"type": "unavailability_kind",
+					"typeSchema": "public",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"weekday": {
+					"name": "weekday",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"specific_date": {
+					"name": "specific_date",
+					"type": "date",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"start_minute": {
+					"name": "start_minute",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"end_minute": {
+					"name": "end_minute",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"note": {
+					"name": "note",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"unavailability_employment_id_employments_id_fk": {
+					"name": "unavailability_employment_id_employments_id_fk",
+					"tableFrom": "unavailability",
+					"tableTo": "employments",
+					"columnsFrom": ["employment_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {
+				"unavailability_range_check": {
+					"name": "unavailability_range_check",
+					"value": "\"unavailability\".\"start_minute\" < \"unavailability\".\"end_minute\""
+				}
+			},
+			"isRLSEnabled": false
+		},
+		"public.work_preferences": {
+			"name": "work_preferences",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "uuid",
+					"primaryKey": true,
+					"notNull": true,
+					"default": "gen_random_uuid()"
+				},
+				"employment_id": {
+					"name": "employment_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"note": {
+					"name": "note",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				},
+				"updated_at": {
+					"name": "updated_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"work_preferences_employment_id_employments_id_fk": {
+					"name": "work_preferences_employment_id_employments_id_fk",
+					"tableFrom": "work_preferences",
+					"tableTo": "employments",
+					"columnsFrom": ["employment_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.employment_locations": {
+			"name": "employment_locations",
+			"schema": "",
+			"columns": {
+				"employment_id": {
+					"name": "employment_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"location_id": {
+					"name": "location_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"employment_locations_employment_id_employments_id_fk": {
+					"name": "employment_locations_employment_id_employments_id_fk",
+					"tableFrom": "employment_locations",
+					"tableTo": "employments",
+					"columnsFrom": ["employment_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				},
+				"employment_locations_location_id_locations_id_fk": {
+					"name": "employment_locations_location_id_locations_id_fk",
+					"tableFrom": "employment_locations",
+					"tableTo": "locations",
+					"columnsFrom": ["location_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {
+				"employment_locations_employment_id_location_id_pk": {
+					"name": "employment_locations_employment_id_location_id_pk",
+					"columns": ["employment_id", "location_id"]
+				}
+			},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.employment_positions": {
+			"name": "employment_positions",
+			"schema": "",
+			"columns": {
+				"employment_id": {
+					"name": "employment_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"position_id": {
+					"name": "position_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"employment_positions_employment_id_employments_id_fk": {
+					"name": "employment_positions_employment_id_employments_id_fk",
+					"tableFrom": "employment_positions",
+					"tableTo": "employments",
+					"columnsFrom": ["employment_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				},
+				"employment_positions_position_id_positions_id_fk": {
+					"name": "employment_positions_position_id_positions_id_fk",
+					"tableFrom": "employment_positions",
+					"tableTo": "positions",
+					"columnsFrom": ["position_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {
+				"employment_positions_employment_id_position_id_pk": {
+					"name": "employment_positions_employment_id_position_id_pk",
+					"columns": ["employment_id", "position_id"]
+				}
+			},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.employments": {
+			"name": "employments",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "uuid",
+					"primaryKey": true,
+					"notNull": true,
+					"default": "gen_random_uuid()"
+				},
+				"workplace_id": {
+					"name": "workplace_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"profile_id": {
+					"name": "profile_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"kind": {
+					"name": "kind",
+					"type": "employment_kind",
+					"typeSchema": "public",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "'worker'"
+				},
+				"status": {
+					"name": "status",
+					"type": "employment_status",
+					"typeSchema": "public",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "'active'"
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				},
+				"deactivated_at": {
+					"name": "deactivated_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": false
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"employments_workplace_id_workplaces_id_fk": {
+					"name": "employments_workplace_id_workplaces_id_fk",
+					"tableFrom": "employments",
+					"tableTo": "workplaces",
+					"columnsFrom": ["workplace_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {
+				"employments_workplace_profile_unique": {
+					"name": "employments_workplace_profile_unique",
+					"nullsNotDistinct": false,
+					"columns": ["workplace_id", "profile_id"]
+				}
+			},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.invitation_locations": {
+			"name": "invitation_locations",
+			"schema": "",
+			"columns": {
+				"invitation_id": {
+					"name": "invitation_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"location_id": {
+					"name": "location_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"invitation_locations_invitation_id_invitations_id_fk": {
+					"name": "invitation_locations_invitation_id_invitations_id_fk",
+					"tableFrom": "invitation_locations",
+					"tableTo": "invitations",
+					"columnsFrom": ["invitation_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				},
+				"invitation_locations_location_id_locations_id_fk": {
+					"name": "invitation_locations_location_id_locations_id_fk",
+					"tableFrom": "invitation_locations",
+					"tableTo": "locations",
+					"columnsFrom": ["location_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {
+				"invitation_locations_pk": {
+					"name": "invitation_locations_pk",
+					"columns": ["invitation_id", "location_id"]
+				}
+			},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.invitation_positions": {
+			"name": "invitation_positions",
+			"schema": "",
+			"columns": {
+				"invitation_id": {
+					"name": "invitation_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"position_id": {
+					"name": "position_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"invitation_positions_invitation_id_invitations_id_fk": {
+					"name": "invitation_positions_invitation_id_invitations_id_fk",
+					"tableFrom": "invitation_positions",
+					"tableTo": "invitations",
+					"columnsFrom": ["invitation_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				},
+				"invitation_positions_position_id_positions_id_fk": {
+					"name": "invitation_positions_position_id_positions_id_fk",
+					"tableFrom": "invitation_positions",
+					"tableTo": "positions",
+					"columnsFrom": ["position_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {
+				"invitation_positions_pk": {
+					"name": "invitation_positions_pk",
+					"columns": ["invitation_id", "position_id"]
+				}
+			},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.invitations": {
+			"name": "invitations",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "uuid",
+					"primaryKey": true,
+					"notNull": true,
+					"default": "gen_random_uuid()"
+				},
+				"workplace_id": {
+					"name": "workplace_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"email": {
+					"name": "email",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"kind": {
+					"name": "kind",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "'worker'"
+				},
+				"token": {
+					"name": "token",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "gen_random_uuid()"
+				},
+				"status": {
+					"name": "status",
+					"type": "invitation_status",
+					"typeSchema": "public",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "'pending'"
+				},
+				"invited_by": {
+					"name": "invited_by",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"accepted_profile_id": {
+					"name": "accepted_profile_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"accepted_employment_id": {
+					"name": "accepted_employment_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"expires_at": {
+					"name": "expires_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"accepted_at": {
+					"name": "accepted_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				}
+			},
+			"indexes": {
+				"invitations_pending_workplace_email_unique": {
+					"name": "invitations_pending_workplace_email_unique",
+					"columns": [
+						{
+							"expression": "workplace_id",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						},
+						{
+							"expression": "email",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": true,
+					"where": "status = 'pending'",
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				},
+				"invitations_email_idx": {
+					"name": "invitations_email_idx",
+					"columns": [
+						{
+							"expression": "email",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": false,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				}
+			},
+			"foreignKeys": {
+				"invitations_workplace_id_workplaces_id_fk": {
+					"name": "invitations_workplace_id_workplaces_id_fk",
+					"tableFrom": "invitations",
+					"tableTo": "workplaces",
+					"columnsFrom": ["workplace_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {
+				"invitations_token_unique": {
+					"name": "invitations_token_unique",
+					"nullsNotDistinct": false,
+					"columns": ["token"]
+				}
+			},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.locations": {
+			"name": "locations",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "uuid",
+					"primaryKey": true,
+					"notNull": true,
+					"default": "gen_random_uuid()"
+				},
+				"workplace_id": {
+					"name": "workplace_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"name": {
+					"name": "name",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"timezone": {
+					"name": "timezone",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "'America/Chicago'"
+				},
+				"address_line": {
+					"name": "address_line",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				},
+				"updated_at": {
+					"name": "updated_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"locations_workplace_id_workplaces_id_fk": {
+					"name": "locations_workplace_id_workplaces_id_fk",
+					"tableFrom": "locations",
+					"tableTo": "workplaces",
+					"columnsFrom": ["workplace_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {
+				"locations_workplace_name_unique": {
+					"name": "locations_workplace_name_unique",
+					"nullsNotDistinct": false,
+					"columns": ["workplace_id", "name"]
+				}
+			},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.positions": {
+			"name": "positions",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "uuid",
+					"primaryKey": true,
+					"notNull": true,
+					"default": "gen_random_uuid()"
+				},
+				"workplace_id": {
+					"name": "workplace_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"name": {
+					"name": "name",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				},
+				"updated_at": {
+					"name": "updated_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"positions_workplace_id_workplaces_id_fk": {
+					"name": "positions_workplace_id_workplaces_id_fk",
+					"tableFrom": "positions",
+					"tableTo": "workplaces",
+					"columnsFrom": ["workplace_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {
+				"positions_workplace_name_unique": {
+					"name": "positions_workplace_name_unique",
+					"nullsNotDistinct": false,
+					"columns": ["workplace_id", "name"]
+				}
+			},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.profiles": {
+			"name": "profiles",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "uuid",
+					"primaryKey": true,
+					"notNull": true
+				},
+				"email": {
+					"name": "email",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"full_name": {
+					"name": "full_name",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				},
+				"updated_at": {
+					"name": "updated_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {
+				"profiles_email_unique": {
+					"name": "profiles_email_unique",
+					"nullsNotDistinct": false,
+					"columns": ["email"]
+				}
+			},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.schedules": {
+			"name": "schedules",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "uuid",
+					"primaryKey": true,
+					"notNull": true,
+					"default": "gen_random_uuid()"
+				},
+				"location_id": {
+					"name": "location_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"week_start_date": {
+					"name": "week_start_date",
+					"type": "date",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				},
+				"updated_at": {
+					"name": "updated_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"schedules_location_id_locations_id_fk": {
+					"name": "schedules_location_id_locations_id_fk",
+					"tableFrom": "schedules",
+					"tableTo": "locations",
+					"columnsFrom": ["location_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {
+				"schedules_location_week_unique": {
+					"name": "schedules_location_week_unique",
+					"nullsNotDistinct": false,
+					"columns": ["location_id", "week_start_date"]
+				}
+			},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
+		"public.shifts": {
+			"name": "shifts",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "uuid",
+					"primaryKey": true,
+					"notNull": true,
+					"default": "gen_random_uuid()"
+				},
+				"schedule_id": {
+					"name": "schedule_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"employment_id": {
+					"name": "employment_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"position_id": {
+					"name": "position_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"starts_at": {
+					"name": "starts_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"ends_at": {
+					"name": "ends_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"note": {
+					"name": "note",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				},
+				"updated_at": {
+					"name": "updated_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {
+				"shifts_schedule_id_schedules_id_fk": {
+					"name": "shifts_schedule_id_schedules_id_fk",
+					"tableFrom": "shifts",
+					"tableTo": "schedules",
+					"columnsFrom": ["schedule_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				},
+				"shifts_employment_id_employments_id_fk": {
+					"name": "shifts_employment_id_employments_id_fk",
+					"tableFrom": "shifts",
+					"tableTo": "employments",
+					"columnsFrom": ["employment_id"],
+					"columnsTo": ["id"],
+					"onDelete": "set null",
+					"onUpdate": "no action"
+				},
+				"shifts_position_id_positions_id_fk": {
+					"name": "shifts_position_id_positions_id_fk",
+					"tableFrom": "shifts",
+					"tableTo": "positions",
+					"columnsFrom": ["position_id"],
+					"columnsTo": ["id"],
+					"onDelete": "restrict",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {
+				"shifts_range_check": {
+					"name": "shifts_range_check",
+					"value": "\"shifts\".\"starts_at\" < \"shifts\".\"ends_at\""
+				}
+			},
+			"isRLSEnabled": false
+		},
+		"public.workplaces": {
+			"name": "workplaces",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "uuid",
+					"primaryKey": true,
+					"notNull": true,
+					"default": "gen_random_uuid()"
+				},
+				"name": {
+					"name": "name",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				},
+				"updated_at": {
+					"name": "updated_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				}
+			},
+			"indexes": {},
+			"foreignKeys": {},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		}
+	},
+	"enums": {
+		"public.time_off_status": {
+			"name": "time_off_status",
+			"schema": "public",
+			"values": ["pending", "approved", "declined"]
+		},
+		"public.unavailability_kind": {
+			"name": "unavailability_kind",
+			"schema": "public",
+			"values": ["recurring", "date"]
+		},
+		"public.employment_kind": {
+			"name": "employment_kind",
+			"schema": "public",
+			"values": ["manager", "worker"]
+		},
+		"public.employment_status": {
+			"name": "employment_status",
+			"schema": "public",
+			"values": ["active", "deactivated"]
+		},
+		"public.invitation_status": {
+			"name": "invitation_status",
+			"schema": "public",
+			"values": ["pending", "accepted", "revoked"]
+		}
+	},
+	"schemas": {},
+	"sequences": {},
+	"roles": {},
+	"policies": {},
+	"views": {},
+	"_meta": {
+		"columns": {},
+		"schemas": {},
+		"tables": {}
+	}
+}

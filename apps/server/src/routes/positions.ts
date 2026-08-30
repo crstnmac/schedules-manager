@@ -1,0 +1,107 @@
+import { db, positions } from "@SchedulesManager/db";
+import { eq } from "drizzle-orm";
+import { Elysia, t } from "elysia";
+import { requireManager, requireSession } from "../context";
+import { NotFoundError } from "../errors";
+import { firstRow } from "../rows";
+
+export const positionsRoutes = new Elysia({
+	prefix: "/v1",
+	tags: ["Position"],
+})
+	.get(
+		"/workplaces/:workplaceId/positions",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+
+			const rows = await db
+				.select()
+				.from(positions)
+				.where(eq(positions.workplaceId, params.workplaceId));
+
+			return {
+				positions: rows.map((position) => ({
+					id: position.id,
+					name: position.name,
+				})),
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			detail: {
+				summary: "List Positions for a Workplace (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.post(
+		"/workplaces/:workplaceId/positions",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+
+			const position = firstRow(
+				await db
+					.insert(positions)
+					.values({
+						workplaceId: params.workplaceId,
+						name: body.name,
+					})
+					.returning(),
+			);
+
+			return { position: { id: position.id, name: position.name } };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			body: t.Object({
+				name: t.String({ minLength: 1, maxLength: 120 }),
+			}),
+			detail: {
+				summary: "Create a Position (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.patch(
+		"/positions/:positionId",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+
+			const [existing] = await db
+				.select()
+				.from(positions)
+				.where(eq(positions.id, params.positionId))
+				.limit(1);
+
+			if (!existing) throw new NotFoundError("Position not found");
+			await requireManager(profile.id, existing.workplaceId);
+
+			const position = firstRow(
+				await db
+					.update(positions)
+					.set({
+						name: body.name ?? existing.name,
+						updatedAt: new Date(),
+					})
+					.where(eq(positions.id, params.positionId))
+					.returning(),
+			);
+
+			return { position: { id: position.id, name: position.name } };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ positionId: t.String({ format: "uuid" }) }),
+			body: t.Object({
+				name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
+			}),
+			detail: {
+				summary: "Rename a Position (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	);

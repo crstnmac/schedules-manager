@@ -1,0 +1,33 @@
+{
+	"name": "server",
+	"type": "module",
+	"main": "src/index.ts",
+	"scripts": {
+		"build": "tsdown",
+		"check-types": "tsc -b",
+		"compile": "bun build --compile --minify --sourcemap --bytecode ./src/index.ts --outfile server",
+		"dev": "bun run --hot src/index.ts",
+		"start": "bun run dist/index.mjs"
+	},
+	"dependencies": {
+		"@SchedulesManager/db": "workspace:*",
+		"@SchedulesManager/env": "workspace:*",
+		"@elysiajs/cors": "^1.4.2",
+		"@elysiajs/openapi": "^1.4.15",
+		"@sinclair/typebox": "^0.34.52",
+		"dotenv": "catalog:",
+		"drizzle-orm": "^0.45.2",
+		"elysia": "^1.4.29",
+		"jose": "^6.2.10",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@SchedulesManager/config": "workspace:*",
+		"@types/bun": "catalog:",
+		"tsdown": "^0.22.14",
+		"typescript": "^6.0.3"
+	},
+	"trustedDependencies": [
+		"supabase"
+	]
+}
