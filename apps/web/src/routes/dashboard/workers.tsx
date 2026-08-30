@@ -161,6 +161,7 @@ function WorkersPage() {
 			),
 		onSuccess: () => {
 			invalidate();
+			queryClient.invalidateQueries({ queryKey: ["schedule"] });
 			toast.success("Access removed.");
 		},
 		onError: (error) => toast.error((error as Error).message),

@@ -72,6 +72,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
 	AlertTriangleIcon,
+	BanIcon,
+	CalendarOffIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
 	CopyIcon,
@@ -234,6 +236,100 @@ function positionsForWorker(
 	);
 }
 
+function positionsLabel(count: number): string {
+	if (count === 0) return "All positions";
+	return `${count} position${count === 1 ? "" : "s"}`;
+}
+
+interface CellConstraint {
+	key: string;
+	kind: "unavailability" | "timeOff";
+	label: string;
+}
+
+function localDateKey(date: Date): string {
+	return date.toLocaleDateString("sv-SE");
+}
+
+function timeOffCoversDay(
+	request: { startsAt: string; endsAt: string },
+	day: string,
+): boolean {
+	const startKey = localDateKey(new Date(request.startsAt));
+	const endExclusive = new Date(new Date(request.endsAt).getTime() - 1);
+	return day >= startKey && day <= localDateKey(endExclusive);
+}
+
+function cellConstraints(
+	member: ScheduleResponse["staff"][number],
+	day: string,
+): CellConstraint[] {
+	const weekday = new Date(`${day}T12:00:00`).getDay();
+	const constraints: CellConstraint[] = [];
+	for (const window of member.unavailability ?? []) {
+		const matches =
+			window.kind === "recurring"
+				? window.weekday === weekday
+				: window.date === day;
+		if (!matches) continue;
+		constraints.push({
+			key: `unavailability-${window.kind}-${window.weekday ?? window.date}-${window.startMinute}`,
+			kind: "unavailability",
+			label: `Can't work ${formatMinute(window.startMinute)}–${formatMinute(window.endMinute)}`,
+		});
+	}
+	for (const request of member.timeOff ?? []) {
+		if (request.status === "declined") continue;
+		if (!timeOffCoversDay(request, day)) continue;
+		constraints.push({
+			key: `timeOff-${request.startsAt}`,
+			kind: "timeOff",
+			label: request.status === "approved" ? "Time off" : "Time off (pending)",
+		});
+	}
+	return constraints;
+}
+
+function ShiftTile({
+	shift,
+	onOpen,
+}: {
+	shift: ScheduleShiftDto;
+	onOpen: (shift: ScheduleShiftDto) => void;
+}) {
+	const hasConflicts = shift.conflicts.length > 0;
+	return (
+		<Button
+			type="button"
+			onClick={() => onOpen(shift)}
+			variant={hasConflicts ? "destructive" : "secondary"}
+			size="sm"
+			className={cn(
+				"mb-1.5 h-auto w-full justify-start whitespace-normal py-2 text-left",
+				hasConflicts && "ring-1 ring-destructive/30",
+			)}
+		>
+			<span className="grid min-w-0 flex-1 gap-0.5">
+				<span className="font-semibold text-xs tabular-nums">
+					{formatShiftRange(
+						shift.startMinute,
+						shift.endMinute,
+						shift.overnight,
+					)}
+				</span>
+				<span className="truncate text-xs opacity-70">
+					{shift.positionName}
+				</span>
+				{hasConflicts ? (
+					<span className="mt-0.5 flex items-center gap-1 text-xs">
+						<AlertTriangleIcon /> Conflict
+					</span>
+				) : null}
+			</span>
+		</Button>
+	);
+}
+
 function SchedulePage() {
 	const { workplace } = useWorkplace();
 	const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
@@ -376,6 +472,12 @@ function SchedulePage() {
 		data?.shifts.reduce((sum, shift) => sum + shift.conflicts.length, 0) ?? 0;
 	const openShiftCount =
 		data?.shifts.filter((shift) => shift.employmentId === null).length ?? 0;
+	const staffIds = new Set(
+		(data?.staff ?? []).map((member) => member.employmentId),
+	);
+	const offRosterShifts = (data?.shifts ?? []).filter(
+		(shift) => shift.employmentId !== null && !staffIds.has(shift.employmentId),
+	);
 	const totalHours =
 		data?.hours.reduce((sum, entry) => sum + entry.minutes, 0) ?? 0;
 
@@ -661,6 +763,14 @@ function SchedulePage() {
 						>
 							<strong className="tabular-nums">{openShiftCount}</strong> open
 						</span>
+						{offRosterShifts.length > 0 ? (
+							<span className="font-medium text-destructive">
+								<strong className="tabular-nums">
+									{offRosterShifts.length}
+								</strong>{" "}
+								off-roster
+							</span>
+						) : null}
 						<span
 							className={cn(
 								conflictCount > 0 && "font-medium text-destructive",
@@ -1069,8 +1179,7 @@ function SchedulePage() {
 								<div>
 									<p className="truncate font-medium text-sm">{member.name}</p>
 									<p className="truncate text-muted-foreground text-xs">
-										{member.positionIds.length} position
-										{member.positionIds.length === 1 ? "" : "s"}
+										{positionsLabel(member.positionIds.length)}
 									</p>
 								</div>
 								<p className="font-medium text-muted-foreground text-xs tabular-nums">
@@ -1088,6 +1197,7 @@ function SchedulePage() {
 										shift.date === day &&
 										shift.employmentId === member.employmentId,
 								);
+								const constraints = cellConstraints(member, day);
 								return (
 									<div
 										key={day}
@@ -1098,41 +1208,26 @@ function SchedulePage() {
 												"bg-primary/5",
 										)}
 									>
-										{workerShifts.map((shift) => (
-											<Button
-												key={shift.id}
-												type="button"
-												onClick={() => openEdit(shift)}
-												variant={
-													shift.conflicts.length > 0
-														? "destructive"
-														: "secondary"
-												}
-												size="sm"
-												className={cn(
-													"mb-1.5 h-auto w-full justify-start whitespace-normal py-2 text-left",
-													shift.conflicts.length > 0 &&
-														"ring-1 ring-destructive/30",
-												)}
+										{constraints.map((constraint) => (
+											<span
+												key={constraint.key}
+												title={constraint.label}
+												className="mb-1.5 flex items-center gap-1 rounded-sm border border-dashed px-1.5 py-1 text-left text-[11px] text-muted-foreground leading-tight"
 											>
-												<span className="grid min-w-0 flex-1 gap-0.5">
-													<span className="font-semibold text-xs tabular-nums">
-														{formatShiftRange(
-															shift.startMinute,
-															shift.endMinute,
-															shift.overnight,
-														)}
-													</span>
-													<span className="truncate text-xs opacity-70">
-														{shift.positionName}
-													</span>
-													{shift.conflicts.length > 0 ? (
-														<span className="mt-0.5 flex items-center gap-1 text-xs">
-															<AlertTriangleIcon /> Conflict
-														</span>
-													) : null}
-												</span>
-											</Button>
+												{constraint.kind === "unavailability" ? (
+													<BanIcon className="size-3 shrink-0" />
+												) : (
+													<CalendarOffIcon className="size-3 shrink-0" />
+												)}
+												<span className="truncate">{constraint.label}</span>
+											</span>
+										))}
+										{workerShifts.map((shift) => (
+											<ShiftTile
+												key={shift.id}
+												shift={shift}
+												onOpen={openEdit}
+											/>
 										))}
 										<Button
 											type="button"
@@ -1182,27 +1277,40 @@ function SchedulePage() {
 												shift.date === day && shift.employmentId === null,
 										)
 										.map((shift) => (
-											<Button
+											<ShiftTile
 												key={shift.id}
-												type="button"
-												onClick={() => openEdit(shift)}
-												variant="secondary"
-												size="sm"
-												className="mb-1.5 h-auto w-full justify-start whitespace-normal py-2 text-left"
-											>
-												<span className="grid min-w-0 flex-1 gap-0.5">
-													<span className="font-semibold text-xs tabular-nums">
-														{formatShiftRange(
-															shift.startMinute,
-															shift.endMinute,
-															shift.overnight,
-														)}
-													</span>
-													<span className="truncate text-xs opacity-70">
-														{shift.positionName}
-													</span>
-												</span>
-											</Button>
+												shift={shift}
+												onOpen={openEdit}
+											/>
+										))}
+								</div>
+							))}
+						</>
+					) : null}
+					{offRosterShifts.length > 0 ? (
+						<>
+							<div className="sticky left-0 z-10 border-r bg-muted p-3">
+								<p className="font-semibold text-sm">Off-roster shifts</p>
+								<p className="text-muted-foreground text-xs">
+									Worker is no longer on this roster — reassign or remove
+								</p>
+							</div>
+							{days.map((day, dayIndex) => (
+								<div
+									key={day}
+									className={cn(
+										"min-h-20 bg-muted/50 p-1.5",
+										dayIndex < 6 && "border-r",
+									)}
+								>
+									{offRosterShifts
+										.filter((shift) => shift.date === day)
+										.map((shift) => (
+											<ShiftTile
+												key={shift.id}
+												shift={shift}
+												onOpen={openEdit}
+											/>
 										))}
 								</div>
 							))}

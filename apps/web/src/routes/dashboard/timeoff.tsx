@@ -91,6 +91,7 @@ function TimeOffPage() {
 			queryClient.invalidateQueries({
 				queryKey: ["workplaces", workplace?.id, "time-off"],
 			});
+			queryClient.invalidateQueries({ queryKey: ["schedule"] });
 			setDeclineId(null);
 			setDeclineReason("");
 			toast.success("Decision saved.");
