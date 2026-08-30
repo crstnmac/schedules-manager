@@ -1,0 +1,28 @@
+export const NAV_THEME = {
+	light: {
+		background: "#FFFBFE",
+		border: "#79747E",
+		card: "#FFFFFF",
+		notification: "#B3261E",
+		onNotification: "#FFFFFF",
+		primary: "#6750A4",
+		onPrimary: "#FFFFFF",
+		muted: "#49454F",
+		success: "#146C2E",
+		onSuccess: "#FFFFFF",
+		text: "#1D1B20",
+	},
+	dark: {
+		background: "#141218",
+		border: "#938F99",
+		card: "#211F26",
+		notification: "#F2B8B5",
+		onNotification: "#601410",
+		primary: "#D0BCFF",
+		onPrimary: "#381E72",
+		muted: "#CAC4D0",
+		success: "#6DD58C",
+		onSuccess: "#003914",
+		text: "#E6E0E9",
+	},
+};
