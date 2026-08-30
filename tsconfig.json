@@ -1,0 +1,3 @@
+{
+	"extends": "@SchedulesManager/config/tsconfig.base.json"
+}
