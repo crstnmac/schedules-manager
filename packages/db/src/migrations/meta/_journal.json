@@ -1,62 +1,69 @@
 {
-	"version": "7",
-	"dialect": "postgresql",
-	"entries": [
-		{
-			"idx": 0,
-			"version": "7",
-			"when": 1788016501994,
-			"tag": "0000_furry_gargoyle",
-			"breakpoints": true
-		},
-		{
-			"idx": 1,
-			"version": "7",
-			"when": 1788018211786,
-			"tag": "0001_high_vanisher",
-			"breakpoints": true
-		},
-		{
-			"idx": 2,
-			"version": "7",
-			"when": 1788018551649,
-			"tag": "0002_gray_purple_man",
-			"breakpoints": true
-		},
-		{
-			"idx": 3,
-			"version": "7",
-			"when": 1788018893962,
-			"tag": "0003_familiar_wallow",
-			"breakpoints": true
-		},
-		{
-			"idx": 4,
-			"version": "7",
-			"when": 1788019181375,
-			"tag": "0004_parallel_jimmy_woo",
-			"breakpoints": true
-		},
-		{
-			"idx": 5,
-			"version": "7",
-			"when": 1788019794009,
-			"tag": "0005_quiet_apocalypse",
-			"breakpoints": true
-		},
-		{
-			"idx": 6,
-			"version": "7",
-			"when": 1788025237725,
-			"tag": "0006_loving_warhawk",
-			"breakpoints": true
-		},
-		{
-			"idx": 7,
-			"version": "7",
-			"when": 1788063773889,
-			"tag": "0007_easy_hex",
-			"breakpoints": true
-		}
-	]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1788016501994,
+      "tag": "0000_furry_gargoyle",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788018211786,
+      "tag": "0001_high_vanisher",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788018551649,
+      "tag": "0002_gray_purple_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788018893962,
+      "tag": "0003_familiar_wallow",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788019181375,
+      "tag": "0004_parallel_jimmy_woo",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788019794009,
+      "tag": "0005_quiet_apocalypse",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788025237725,
+      "tag": "0006_loving_warhawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788063773889,
+      "tag": "0007_easy_hex",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788154915295,
+      "tag": "0008_previous_jane_foster",
+      "breakpoints": true
+    }
+  ]
 }

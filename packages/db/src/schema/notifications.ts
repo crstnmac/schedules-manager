@@ -43,7 +43,29 @@ export const auditEvents = pgTable(
 	(table) => [index("audit_events_workplace_idx").on(table.workplaceId)],
 );
 
+export const pilotFeedback = pgTable(
+	"pilot_feedback",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		workplaceId: uuid("workplace_id")
+			.notNull()
+			.references(() => workplaces.id, { onDelete: "cascade" }),
+		profileId: uuid("profile_id").references(() => profiles.id, {
+			onDelete: "set null",
+		}),
+		category: text("category").notNull(),
+		message: text("message").notNull(),
+		page: text("page"),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [index("pilot_feedback_workplace_idx").on(table.workplaceId)],
+);
+
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
 export type AuditEvent = typeof auditEvents.$inferSelect;
 export type NewAuditEvent = typeof auditEvents.$inferInsert;
+export type PilotFeedback = typeof pilotFeedback.$inferSelect;
+export type NewPilotFeedback = typeof pilotFeedback.$inferInsert;

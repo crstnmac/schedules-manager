@@ -9,11 +9,13 @@ import {
 	locations,
 	positions,
 	profiles,
+	workplaces,
 } from "@SchedulesManager/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { requireManager, requireSession } from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
+import { sendInvitationEmail } from "../mail";
 import { firstRow } from "../rows";
 
 const INVITATION_TTL_DAYS = 14;
@@ -197,7 +199,7 @@ export const workersRoutes = new Elysia({
 				Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000,
 			);
 
-			return db.transaction(async (tx) => {
+			const result = await db.transaction(async (tx) => {
 				await tx
 					.update(invitations)
 					.set({ status: "revoked" })
@@ -251,6 +253,19 @@ export const workersRoutes = new Elysia({
 					},
 				};
 			});
+
+			const [workplace] = await db
+				.select({ name: workplaces.name })
+				.from(workplaces)
+				.where(eq(workplaces.id, params.workplaceId))
+				.limit(1);
+			await sendInvitationEmail({
+				email: result.invitation.email,
+				token: result.invitation.token,
+				workplaceName: workplace?.name ?? "your workplace",
+				kind: result.invitation.kind,
+			});
+			return result;
 		},
 		{
 			headers: t.Object({ authorization: t.String() }),
@@ -302,6 +317,17 @@ export const workersRoutes = new Elysia({
 					.where(eq(invitations.id, invitation.id))
 					.returning(),
 			);
+			const [workplace] = await db
+				.select({ name: workplaces.name })
+				.from(workplaces)
+				.where(eq(workplaces.id, params.workplaceId))
+				.limit(1);
+			await sendInvitationEmail({
+				email: updated.email,
+				token: updated.token,
+				workplaceName: workplace?.name ?? "your workplace",
+				kind: updated.kind,
+			});
 
 			return {
 				invitation: {

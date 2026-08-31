@@ -17,6 +17,7 @@ import { invitationsRoutes } from "./routes/invitations";
 import { locationsRoutes } from "./routes/locations";
 import { meRoutes } from "./routes/me";
 import { notificationsRoutes } from "./routes/notifications";
+import { pilotRoutes } from "./routes/pilot";
 import { positionsRoutes } from "./routes/positions";
 import { publicationRoutes } from "./routes/publication";
 import { schedulesRoutes } from "./routes/schedules";
@@ -29,7 +30,7 @@ export function createApp() {
 			openapi({
 				documentation: {
 					info: {
-						title: "SchedulesManager API",
+						title: "jooling API",
 						version: "0.1.0",
 						description: "Authoritative API for restaurant scheduling.",
 					},
@@ -55,7 +56,19 @@ export function createApp() {
 		.onRequest(({ set }) => {
 			set.headers["cache-control"] = "no-store";
 		})
-		.onError(({ error, status }) => {
+		.onError(({ error, status, request }) => {
+			const requestId =
+				request.headers.get("x-request-id") ?? crypto.randomUUID();
+			console.error(
+				JSON.stringify({
+					level: "error",
+					requestId,
+					method: request.method,
+					path: new URL(request.url).pathname,
+					error: error instanceof Error ? error.message : String(error),
+					timestamp: new Date().toISOString(),
+				}),
+			);
 			if (error instanceof AuthenticationError) {
 				return status(401, {
 					error: "unauthorized",
@@ -95,6 +108,7 @@ export function createApp() {
 		.use(workplacesRoutes)
 		.use(locationsRoutes)
 		.use(positionsRoutes)
+		.use(pilotRoutes)
 		.use(workersRoutes)
 		.use(invitationsRoutes)
 		.use(constraintsRoutes)

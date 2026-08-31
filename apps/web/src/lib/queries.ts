@@ -1,4 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+	keepPreviousData,
+	queryOptions,
+	useMutation,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 
 import { api, publicApi } from "./api";
 
@@ -247,17 +253,30 @@ export interface ScheduleResponse {
 	positions: PositionDto[];
 }
 
+const SCHEDULE_STALE_TIME = 2 * 60 * 1000;
+const SCHEDULE_CACHE_TIME = 30 * 60 * 1000;
+
+export function scheduleQueryOptions(locationId: string, weekStart: string) {
+	return queryOptions({
+		queryKey: ["schedule", locationId, weekStart] as const,
+		queryFn: () =>
+			api<ScheduleResponse>(
+				`/v1/locations/${locationId}/schedules/${weekStart}`,
+			),
+		staleTime: SCHEDULE_STALE_TIME,
+		gcTime: SCHEDULE_CACHE_TIME,
+		refetchOnMount: false,
+	});
+}
+
 export function useSchedule(
 	locationId: string | undefined,
 	weekStart: string | undefined,
 ) {
 	return useQuery({
-		queryKey: ["schedule", locationId, weekStart],
-		queryFn: () =>
-			api<ScheduleResponse>(
-				`/v1/locations/${locationId}/schedules/${weekStart}`,
-			),
+		...scheduleQueryOptions(locationId ?? "", weekStart ?? ""),
 		enabled: Boolean(locationId && weekStart),
+		placeholderData: keepPreviousData,
 	});
 }
 
@@ -598,6 +617,35 @@ export function useAudit(workplaceId: string | undefined) {
 			api<{ events: AuditEventDto[] }>(
 				`/v1/workplaces/${workplaceId}/audit`,
 			).then((data) => data.events),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export interface PilotStatusResponse {
+	counts: {
+		locations: number;
+		positions: number;
+		activeWorkers: number;
+		pendingInvitations: number;
+		draftShifts: number;
+		publishedVersions: number;
+		unacknowledgedDeliveries: number;
+	};
+	feedback: {
+		id: string;
+		category: "problem" | "idea" | "question";
+		message: string;
+		page: string | null;
+		createdAt: string;
+		reporter: string | null;
+	}[];
+}
+
+export function usePilotStatus(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["pilot-status", workplaceId],
+		queryFn: () =>
+			api<PilotStatusResponse>(`/v1/workplaces/${workplaceId}/pilot-status`),
 		enabled: Boolean(workplaceId),
 	});
 }

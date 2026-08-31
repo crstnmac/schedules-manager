@@ -55,9 +55,11 @@ export type {
 	AuditEvent,
 	NewAuditEvent,
 	NewNotification,
+	NewPilotFeedback,
 	Notification,
+	PilotFeedback,
 } from "./notifications";
-export { auditEvents, notifications } from "./notifications";
+export { auditEvents, notifications, pilotFeedback } from "./notifications";
 export type { NewProfile, Profile } from "./profiles";
 export { profiles } from "./profiles";
 export type {
