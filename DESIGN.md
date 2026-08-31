@@ -1,16 +1,19 @@
 ---
-name: SchedulesManager
+name: jooling
 description: A calm, operational scheduling system for restaurant managers and workers.
 colors:
-  warm-paper: "oklch(0.985 0.006 75)"
-  ink: "oklch(0.205 0.018 60)"
+  cool-canvas: "oklch(0.978 0.008 245)"
+  navy-ink: "oklch(0.22 0.03 255)"
   white-card: "oklch(1 0 0)"
-  service-copper: "oklch(0.545 0.145 55)"
-  service-copper-foreground: "oklch(0.985 0.006 75)"
-  warm-secondary: "oklch(0.94 0.018 70)"
-  warm-muted: "oklch(0.955 0.012 70)"
-  muted-ink: "oklch(0.46 0.025 55)"
-  warm-accent: "oklch(0.925 0.045 75)"
+  service-blue: "oklch(0.55 0.19 255)"
+  service-blue-foreground: "oklch(0.985 0.006 245)"
+  action-teal: "oklch(0.52 0.13 185)"
+  action-teal-foreground: "oklch(0.985 0.006 185)"
+  seafoam-secondary: "oklch(0.94 0.025 205)"
+  slate-muted: "oklch(0.95 0.012 250)"
+  muted-ink: "oklch(0.46 0.03 255)"
+  teal-accent: "oklch(0.92 0.045 185)"
+  sidebar-navy: "oklch(0.235 0.045 255)"
   conflict-red: "oklch(0.58 0.22 27)"
   hairline: "oklch(0.875 0.018 65)"
   open-shift-amber: "rgb(254 243 199)"
@@ -58,48 +61,48 @@ spacing:
   native-page: "20px"
 components:
   button-primary:
-    backgroundColor: "{colors.service-copper}"
-    textColor: "{colors.service-copper-foreground}"
+    backgroundColor: "{colors.action-teal}"
+    textColor: "{colors.action-teal-foreground}"
     rounded: "{rounded.square}"
     height: "2rem"
     padding: "0 0.625rem"
   button-outline:
-    backgroundColor: "{colors.warm-paper}"
-    textColor: "{colors.ink}"
+    backgroundColor: "{colors.cool-canvas}"
+    textColor: "{colors.navy-ink}"
     rounded: "{rounded.square}"
     height: "2rem"
     padding: "0 0.625rem"
   input:
     backgroundColor: "transparent"
-    textColor: "{colors.ink}"
+    textColor: "{colors.navy-ink}"
     rounded: "{rounded.square}"
     height: "2rem"
     padding: "0 0.625rem"
   card:
     backgroundColor: "{colors.white-card}"
-    textColor: "{colors.ink}"
+    textColor: "{colors.navy-ink}"
     rounded: "{rounded.square}"
     padding: "1rem"
   next-shift:
-    backgroundColor: "{colors.service-copper}"
-    textColor: "{colors.service-copper-foreground}"
+    backgroundColor: "{colors.service-blue}"
+    textColor: "{colors.service-blue-foreground}"
     rounded: "{rounded.feature}"
     padding: "1.5rem"
 ---
 
-# Design System: SchedulesManager
+# Design System: jooling
 
 ## Overview
 
 **Creative North Star: "The Calm Service Board"**
 
-SchedulesManager should feel like the dependable operations board at the center of a well-run restaurant: warm enough to belong in hospitality, disciplined enough to support staffing decisions, and quiet enough for dense weekly scanning. The interface favors explicit status, compact controls, strong alignment, and plain-language consequences over decorative display.
+jooling should feel like the dependable operations board at the center of a well-run restaurant: warm enough to belong in hospitality, disciplined enough to support staffing decisions, and quiet enough for dense weekly scanning. The interface favors explicit status, compact controls, strong alignment, and plain-language consequences over decorative display.
 
 The web manager experience is a high-density workspace built around a worker-by-day week grid. Worker experiences reverse that density: the next shift leads, required responses follow, and the current week provides context. Native preserves platform-appropriate touch sizing and a clear blue action color while sharing the same hierarchy and responsibility language.
 
 **Key Characteristics:**
 
-- Warm neutral web surfaces with a restrained copper action color.
+- Cool slate web surfaces, a deep navy navigation rail, and crisp blue actions with restrained teal support.
 - Dense, table-like manager composition; calm, stacked worker composition.
 - Status is expressed with words, counts, icons, and color together.
 - Square web primitives sit inside selectively softened feature surfaces.
@@ -107,17 +110,18 @@ The web manager experience is a high-density workspace built around a worker-by-
 
 ## Colors
 
-Warm paper, ink, and copper make the web product feel grounded in hospitality; amber and red are reserved for operational exceptions, while native uses a familiar platform blue for primary action.
+Slate, navy, blue, and teal give the web product clearer depth and wayfinding; amber and red remain reserved for operational exceptions, while native keeps a familiar platform blue for primary action.
 
 ### Primary
 
-- **Service Copper:** Primary web actions, selected emphasis, the worker next-shift feature, and focus rings.
+- **Action Teal:** Filled web buttons and text links; this color is reserved for actions.
+- **Service Blue:** Selection, informational emphasis, the worker next-shift feature, and focus rings.
 - **Native Action Blue:** Primary buttons and the next-shift feature in the native worker client.
 
 ### Secondary
 
-- **Warm Secondary:** Shift tiles and low-priority filled controls on the web.
-- **Warm Accent:** Hover feedback and lightweight current-day emphasis.
+- **Seafoam Secondary:** Low-priority filled controls and supportive information on the web.
+- **Teal Accent:** Hover feedback and lightweight current-day emphasis.
 
 ### Tertiary
 
@@ -127,10 +131,11 @@ Warm paper, ink, and copper make the web product feel grounded in hospitality; a
 
 ### Neutral
 
-- **Warm Paper:** Default web canvas and outlined-control fill.
+- **Cool Canvas:** Default web canvas and outlined-control fill.
 - **White Card:** Raised or bounded work surfaces.
-- **Ink:** Primary text and decisive labels.
+- **Navy Ink:** Primary text and decisive labels.
 - **Muted Ink:** Supporting copy, metadata, and secondary counts.
+- **Sidebar Navy:** Persistent navigation surface, visually separating wayfinding from the work canvas.
 - **Hairline:** Dividers, inputs, cards, and the weekly grid structure.
 - **Conflict Red:** Scheduling conflicts, destructive feedback, and invalid states.
 
@@ -170,7 +175,7 @@ Worker web and native screens use a single-column priority stack: next shift fir
 
 ## Elevation & Depth
 
-The system is primarily flat and structural. Web depth comes from white surfaces against warm paper, hairline borders, and very restrained small shadows on major containers; the dense card primitives themselves use a one-pixel tonal ring. Native relies on bordered cards and color contrast rather than shadows.
+The system is primarily flat and structural. Web depth comes from white surfaces against the cool canvas, the deep navigation rail, hairline borders, and restrained small shadows on major containers; the dense card primitives themselves use a one-pixel tonal ring. Native relies on bordered cards and color contrast rather than shadows.
 
 ### Shadow Vocabulary
 
@@ -192,7 +197,7 @@ Web primitives are deliberately square: buttons, badges, inputs, and canonical c
 ### Buttons
 
 - **Shape:** Compact and square on web; comfortably rounded with at least 42px height on native.
-- **Primary:** Service Copper on web and Native Action Blue on native, with high-contrast text and medium-to-bold labels.
+- **Primary:** Action Teal on web and Native Action Blue on native, with high-contrast text and medium-to-bold labels.
 - **Hover / Focus:** Web primary controls reduce fill intensity on hover, depress by one pixel when active, and show a visible one-pixel focus ring. Native press states reduce opacity without changing meaning.
 - **Secondary / Ghost:** Outlined native controls take border and text from semantic theme tokens and use pressed opacity only as interaction feedback. Web outlined controls retain the canvas fill; ghost controls reveal a muted fill only on interaction.
 
@@ -204,7 +209,7 @@ Web primitives are deliberately square: buttons, badges, inputs, and canonical c
 ### Cards / Containers
 
 - **Corner Style:** Canonical web cards are square; task containers may use the surface radius. Native cards use the native-card radius.
-- **Background:** White Card on Warm Paper; priority features use the platform primary color.
+- **Background:** White Card on Cool Canvas; priority features use the platform primary color.
 - **Shadow Strategy:** Flat by default, with Surface Low only on major web containers.
 - **Border:** Hairline borders define cards, notices, controls, and every grid boundary.
 - **Internal Padding:** 1rem for ordinary cards, 1.5rem for a web next-shift feature, and 22px for its native counterpart.
@@ -212,7 +217,7 @@ Web primitives are deliberately square: buttons, badges, inputs, and canonical c
 ### Inputs / Fields
 
 - **Style:** Square 2rem web fields with a one-pixel Hairline border, transparent fill, and compact 0.75rem type.
-- **Focus:** Shift the border to Service Copper and add a restrained matching ring.
+- **Focus:** Shift the border to Service Blue and add a restrained matching ring.
 - **Error / Disabled:** Invalid fields use Conflict Red plus a ring; disabled fields lower opacity and retain their readable value.
 
 ### Navigation

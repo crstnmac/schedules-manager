@@ -70,7 +70,7 @@ function WorkerLayout() {
 		<div className="flex min-h-svh flex-col bg-background">
 			<header className="border-b">
 				<div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-4">
-					<div className="flex items-center justify-between gap-3">
+					<div className="flex items-center justify-between gap-2 sm:gap-3">
 						<div className="min-w-0">
 							<p className="truncate font-medium text-lg">{workplace.name}</p>
 							<p className="text-muted-foreground text-sm">Your schedule</p>
@@ -78,8 +78,10 @@ function WorkerLayout() {
 						<div className="flex items-center gap-2">
 							<ModeToggle />
 							<Button
+								aria-label={isSigningOut ? "Signing out" : "Sign out"}
 								variant="outline"
-								size="sm"
+								size="icon-sm"
+								className="sm:w-auto sm:px-3"
 								disabled={isSigningOut}
 								onClick={() => void handleSignOut()}
 							>
@@ -88,7 +90,9 @@ function WorkerLayout() {
 								) : (
 									<LogOutIcon data-icon="inline-start" />
 								)}
-								{isSigningOut ? "Signing out…" : "Sign out"}
+								<span className="hidden sm:inline">
+									{isSigningOut ? "Signing out…" : "Sign out"}
+								</span>
 							</Button>
 						</div>
 					</div>

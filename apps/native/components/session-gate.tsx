@@ -136,7 +136,14 @@ function WorkerJoin({ onBack }: { onBack: () => void }) {
 				<Pressable accessibilityRole="button" disabled={!validToken || accept.isPending} onPress={() => accept.mutate(token)} style={({ pressed }) => [styles.primaryButton, { backgroundColor: theme.primary, opacity: !validToken || accept.isPending ? 0.45 : pressed ? 0.8 : 1 }]}>
 					{accept.isPending ? <ActivityIndicator color={theme.onPrimary} /> : <Text style={[styles.primaryButtonText, { color: theme.onPrimary }]}>Join workplace</Text>}
 				</Pressable>
-				{accept.isError ? <Text accessibilityRole="alert" style={styles.error}>{(accept.error as Error).message}</Text> : null}
+				{accept.isError ? (
+					<Text
+						accessibilityRole="alert"
+						style={[styles.error, { color: theme.notification }]}
+					>
+						{(accept.error as Error).message}
+					</Text>
+				) : null}
 			</View>
 			<Pressable accessibilityRole="button" disabled={invitations.isFetching} onPress={() => void invitations.refetch()} style={[styles.secondaryButton, { borderColor: theme.border }]}><Text style={[styles.secondaryButtonText, { color: theme.text }]}>{invitations.isFetching ? "Checking…" : "Check for invitation"}</Text></Pressable>
 			<Pressable accessibilityRole="button" onPress={onBack} style={styles.signOutLink}><Text style={[styles.secondaryButtonText, { color: theme.muted }]}>Back</Text></Pressable>
@@ -234,7 +241,10 @@ function WorkplaceSetup({ onBack }: { onBack: () => void }) {
 					theme={theme}
 				/>
 				{error ? (
-					<Text accessibilityRole="alert" style={styles.error}>
+					<Text
+						accessibilityRole="alert"
+						style={[styles.error, { color: theme.notification }]}
+					>
 						{error}
 					</Text>
 				) : null}
@@ -400,7 +410,9 @@ function InvitationView() {
 						)}
 					</Pressable>
 					{accept.isError ? (
-						<Text style={styles.error}>{(accept.error as Error).message}</Text>
+						<Text style={[styles.error, { color: theme.notification }]}>
+							{(accept.error as Error).message}
+						</Text>
 					) : null}
 				</View>
 			))}
@@ -567,7 +579,7 @@ const styles = StyleSheet.create({
 		marginTop: 8,
 	},
 	secondaryButtonText: { fontSize: 15, fontWeight: "600" },
-	error: { color: "oklch(0.58 0.22 27)", fontSize: 13, lineHeight: 19 },
+	error: { fontSize: 13, lineHeight: 19 },
 	eyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1.1, textTransform: "uppercase" },
 	field: { gap: 6 },
 	fieldLabel: { fontSize: 13, fontWeight: "700" },

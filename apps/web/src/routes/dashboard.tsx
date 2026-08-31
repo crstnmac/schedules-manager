@@ -1,6 +1,13 @@
 import { Avatar, AvatarFallback } from "@SchedulesManager/ui/components/avatar";
-import { Badge } from "@SchedulesManager/ui/components/badge";
-import { Separator } from "@SchedulesManager/ui/components/separator";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@SchedulesManager/ui/components/dropdown-menu";
 import {
 	Sidebar,
 	SidebarContent,
@@ -11,6 +18,7 @@ import {
 	SidebarHeader,
 	SidebarInset,
 	SidebarMenu,
+	SidebarMenuBadge,
 	SidebarMenuButton,
 	SidebarMenuItem,
 	SidebarProvider,
@@ -18,6 +26,7 @@ import {
 	SidebarTrigger,
 } from "@SchedulesManager/ui/components/sidebar";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import { cn } from "@SchedulesManager/ui/lib/utils";
 import {
 	createFileRoute,
 	Link,
@@ -28,6 +37,7 @@ import {
 import {
 	BellIcon,
 	CalendarDaysIcon,
+	ChevronsUpDownIcon,
 	Clock3Icon,
 	LayoutDashboardIcon,
 	LogOutIcon,
@@ -39,6 +49,7 @@ import { toast } from "sonner";
 
 import { profileInitials } from "@/components/current-profile";
 import { ModeToggle } from "@/components/mode-toggle";
+import { PilotFeedback } from "@/components/pilot-feedback";
 import { useAuth } from "@/lib/auth";
 import { useMe, useNotifications } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
@@ -93,23 +104,34 @@ function DashboardLayout() {
 	if (!workplace) return <Navigate to="/" replace />;
 	if (kind === "worker") return <Navigate to="/worker" replace />;
 
+	const isSchedule = pathname.startsWith("/dashboard/schedule");
+	const activePage =
+		navigation.find((item) =>
+			"exact" in item && item.exact
+				? pathname === item.to
+				: pathname.startsWith(item.to),
+		)?.label ?? "Overview";
+
 	return (
 		<SidebarProvider>
-			<Sidebar collapsible="icon">
+			<Sidebar variant="inset" collapsible="icon">
 				<SidebarHeader>
-					<div className="flex min-h-12 items-center gap-3 px-2 group-data-[collapsible=icon]:justify-center">
-						<div className="grid size-8 shrink-0 place-items-center rounded-md bg-sidebar-primary font-bold text-sidebar-primary-foreground">
-							S
-						</div>
-						<div className="min-w-0 group-data-[collapsible=icon]:hidden">
-							<p className="truncate font-semibold text-sm">{workplace.name}</p>
-							<p className="text-sidebar-foreground/60 text-xs">
-								Manager workspace
-							</p>
-						</div>
-					</div>
+					<SidebarMenu>
+						<SidebarMenuItem>
+							<SidebarMenuButton size="lg" tooltip={workplace.name}>
+								<div className="grid size-8 shrink-0 place-items-center rounded-lg bg-sidebar-primary font-semibold text-sidebar-primary-foreground">
+									J
+								</div>
+								<div className="grid flex-1 text-left leading-tight">
+									<span className="truncate font-semibold">
+										{workplace.name}
+									</span>
+									<span className="truncate text-xs">Manager workspace</span>
+								</div>
+							</SidebarMenuButton>
+						</SidebarMenuItem>
+					</SidebarMenu>
 				</SidebarHeader>
-				<Separator className="bg-sidebar-border" />
 				<SidebarContent>
 					<SidebarGroup>
 						<SidebarGroupLabel>Operations</SidebarGroupLabel>
@@ -131,9 +153,7 @@ function DashboardLayout() {
 												<span>{item.label}</span>
 												{item.to === "/dashboard/activity" &&
 												unreadCount > 0 ? (
-													<Badge variant="secondary" className="ml-auto">
-														{unreadCount}
-													</Badge>
+													<SidebarMenuBadge>{unreadCount}</SidebarMenuBadge>
 												) : null}
 											</SidebarMenuButton>
 										</SidebarMenuItem>
@@ -144,50 +164,95 @@ function DashboardLayout() {
 					</SidebarGroup>
 				</SidebarContent>
 				<SidebarFooter>
-					{profile ? (
-						<div className="flex items-center gap-2 px-2 py-1.5 group-data-[collapsible=icon]:justify-center">
-							<Avatar size="sm">
-								<AvatarFallback>{profileInitials(profile)}</AvatarFallback>
-							</Avatar>
-							<div className="min-w-0 group-data-[collapsible=icon]:hidden">
-								<p className="truncate font-medium text-sm">
-									{profile.fullName ?? profile.email}
-								</p>
-								<p className="truncate text-sidebar-foreground/60 text-xs">
-									{profile.fullName ? profile.email : null}
-									{kind ? `${profile.fullName ? " · " : ""}${kind}` : null}
-								</p>
-							</div>
+					<div className="flex items-center gap-2 px-1 group-data-[collapsible=icon]:flex-col">
+						<div className="group-data-[collapsible=icon]:hidden">
+							<PilotFeedback
+								workplaceId={workplace.id}
+								buttonClassName="border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:border-sidebar-ring focus-visible:ring-sidebar-ring/30 dark:bg-sidebar-accent/40 dark:hover:bg-sidebar-accent"
+							/>
 						</div>
-					) : null}
+						<ModeToggle buttonClassName="border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:border-sidebar-ring focus-visible:ring-sidebar-ring/30 dark:bg-sidebar-accent/40 dark:hover:bg-sidebar-accent" />
+					</div>
 					<SidebarMenu>
-						<SidebarMenuItem>
-							<SidebarMenuButton
-								tooltip="Sign out"
-								disabled={isSigningOut}
-								onClick={() => void handleSignOut()}
-							>
-								{isSigningOut ? <Spinner /> : <LogOutIcon />}
-								<span>{isSigningOut ? "Signing out…" : "Sign out"}</span>
-							</SidebarMenuButton>
-						</SidebarMenuItem>
+						{profile ? (
+							<SidebarMenuItem>
+								<DropdownMenu>
+									<DropdownMenuTrigger
+										render={<SidebarMenuButton size="lg" tooltip="Account" />}
+									>
+										<Avatar size="sm">
+											<AvatarFallback>
+												{profileInitials(profile)}
+											</AvatarFallback>
+										</Avatar>
+										<div className="grid flex-1 text-left leading-tight">
+											<span className="truncate font-medium">
+												{profile.fullName ?? profile.email}
+											</span>
+											<span className="truncate text-xs">{profile.email}</span>
+										</div>
+										<ChevronsUpDownIcon className="ml-auto" />
+									</DropdownMenuTrigger>
+									<DropdownMenuContent
+										side="right"
+										align="end"
+										className="min-w-56"
+									>
+										<DropdownMenuGroup>
+											<DropdownMenuLabel>
+												<p className="truncate">
+													{profile.fullName ?? profile.email}
+												</p>
+												<p className="truncate font-normal text-muted-foreground text-xs">
+													{kind}
+												</p>
+											</DropdownMenuLabel>
+										</DropdownMenuGroup>
+										<DropdownMenuSeparator />
+										<DropdownMenuItem
+											disabled={isSigningOut}
+											onClick={() => void handleSignOut()}
+										>
+											{isSigningOut ? <Spinner /> : <LogOutIcon />}
+											{isSigningOut ? "Signing out…" : "Sign out"}
+										</DropdownMenuItem>
+									</DropdownMenuContent>
+								</DropdownMenu>
+							</SidebarMenuItem>
+						) : null}
 					</SidebarMenu>
 				</SidebarFooter>
 				<SidebarRail />
 			</Sidebar>
-			<SidebarInset>
-				<header className="flex h-14 shrink-0 items-center justify-between border-b bg-background/95 px-4 backdrop-blur">
-					<div className="flex items-center gap-2">
-						<SidebarTrigger />
-						<Separator orientation="vertical" className="h-4" />
-						<p className="font-medium text-sm">SchedulesManager</p>
-						<Badge variant="secondary" className="hidden sm:inline-flex">
-							Austin pilot
-						</Badge>
-					</div>
-					<ModeToggle />
+			<SidebarInset
+				className={cn(
+					"flex h-svh min-h-0! min-w-0 flex-col overflow-hidden md:h-[calc(100svh-1rem)]",
+					isSchedule && "bg-muted/20",
+				)}
+			>
+				<header
+					className={cn(
+						"sticky top-0 z-40 flex h-14 min-h-14 shrink-0 items-center gap-2 border-b bg-background px-3 shadow-xs",
+						isSchedule && "h-auto flex-wrap py-1.5 sm:h-14 sm:flex-nowrap",
+					)}
+				>
+					<SidebarTrigger className="-ml-1 shrink-0" />
+					<span className="shrink-0 font-medium text-sm">{activePage}</span>
+					{isSchedule ? (
+						<div
+							id="schedule-header-controls"
+							className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-nowrap"
+						/>
+					) : null}
 				</header>
-				<div className="flex flex-1 flex-col gap-6 p-4 md:p-6 lg:p-8">
+				<div
+					className={cn(
+						"flex min-h-0 min-w-0 flex-1 flex-col",
+						isSchedule
+							? "overflow-hidden p-0!"
+							: "gap-6 overflow-auto p-4 md:p-6 lg:p-8",
+					)}
+				>
 					<Outlet />
 				</div>
 			</SidebarInset>

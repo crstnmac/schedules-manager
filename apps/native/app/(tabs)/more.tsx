@@ -67,7 +67,7 @@ export default function MoreScreen() {
 				</Pressable>
 			</Card>
 
-			<Text style={[styles.footer, { color: theme.muted }]}>SchedulesManager · Mobile workforce access</Text>
+			<Text style={[styles.footer, { color: theme.muted }]}>jooling · Mobile workforce access</Text>
 		</AppScreen>
 	);
 }

@@ -5,9 +5,9 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@SchedulesManager/ui/components/popover";
+import { cn } from "@SchedulesManager/ui/lib/utils";
 import { ChevronDownIcon } from "lucide-react";
 import { useState } from "react";
-
 import { formatDay, parseIsoDate, toIsoDate } from "@/lib/time";
 
 export function DatePicker({
@@ -16,12 +16,16 @@ export function DatePicker({
 	onValueChange,
 	placeholder = "Pick a date",
 	disabled,
+	displayValue,
+	buttonClassName,
 }: {
 	id?: string;
 	value: string;
 	onValueChange: (value: string) => void;
 	placeholder?: string;
 	disabled?: (date: Date) => boolean;
+	displayValue?: string;
+	buttonClassName?: string;
 }) {
 	const [open, setOpen] = useState(false);
 	const selected = parseIsoDate(value);
@@ -34,12 +38,15 @@ export function DatePicker({
 						type="button"
 						variant="outline"
 						id={id}
-						className="w-full justify-between data-[empty=true]:text-muted-foreground"
+						className={cn(
+							"w-full justify-between data-[empty=true]:text-muted-foreground",
+							buttonClassName,
+						)}
 						data-empty={!selected}
 					/>
 				}
 			>
-				{selected ? formatDay(value) : placeholder}
+				{selected ? (displayValue ?? formatDay(value)) : placeholder}
 				<ChevronDownIcon data-icon="inline-end" />
 			</PopoverTrigger>
 			<PopoverContent className="w-auto p-0" align="start">

@@ -84,7 +84,7 @@ export function AuthScreen() {
 					]}
 				>
 					<Text style={[styles.brand, { color: theme.primary }]}>
-						SchedulesManager
+						jooling
 					</Text>
 					<Text style={[styles.title, { color: theme.text }]}>
 						{mode === "sign-in" ? "Welcome back" : "Create your account"}
@@ -133,7 +133,10 @@ export function AuthScreen() {
 					/>
 
 					{error ? (
-						<Text accessibilityRole="alert" style={styles.error}>
+						<Text
+							accessibilityRole="alert"
+							style={[styles.error, { color: theme.notification }]}
+						>
 							{error}
 						</Text>
 					) : null}
@@ -218,7 +221,7 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 14,
 		fontSize: 16,
 	},
-	error: { color: "oklch(0.58 0.22 27)", fontSize: 13, lineHeight: 19, marginTop: 12 },
+	error: { fontSize: 13, lineHeight: 19, marginTop: 12 },
 	message: { fontSize: 13, lineHeight: 19, marginTop: 12 },
 	primaryButton: {
 		minHeight: 46,

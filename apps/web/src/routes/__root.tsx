@@ -6,8 +6,6 @@ import {
 	HeadContent,
 	Outlet,
 } from "@tanstack/react-router";
-import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
-
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/lib/auth";
 
@@ -22,11 +20,11 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 	head: () => ({
 		meta: [
 			{
-				title: "SchedulesManager",
+				title: "jooling",
 			},
 			{
 				name: "description",
-				content: "SchedulesManager is a web application",
+				content: "jooling is a workforce scheduling application",
 			},
 		],
 		links: [
@@ -58,7 +56,7 @@ function RootComponent() {
 				</TooltipProvider>
 				<Toaster richColors />
 			</ThemeProvider>
-			<TanStackRouterDevtools position="bottom-left" />
+			{/* <TanStackRouterDevtools position="bottom-left" /> */}
 		</>
 	);
 }

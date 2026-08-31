@@ -19,7 +19,6 @@ import {
 	ItemActions,
 	ItemContent,
 	ItemDescription,
-	ItemGroup,
 	ItemTitle,
 } from "@SchedulesManager/ui/components/item";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
@@ -29,7 +28,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { InboxIcon } from "lucide-react";
 import { toast } from "sonner";
 
-import { PageHeader } from "@/components/page-header";
+import { ProgressiveItemGroup } from "@/components/progressive-item-group";
 import { api } from "@/lib/api";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -118,21 +117,16 @@ function CoveragePage() {
 		(data?.releases.length ?? 0) > 0 || (data?.pickups.length ?? 0) > 0;
 
 	return (
-		<section className="flex flex-col gap-6">
-			<PageHeader
-				title="Coverage queue"
-				description="Approving a release turns the shift into an open shift. Approving a publishable pickup reassigns the shift and publishes a new schedule version immediately."
-			/>
-
+		<section className="grid gap-6 xl:grid-cols-2">
 			{coverage.isLoading ? (
-				<div className="flex flex-col gap-3">
+				<div className="flex flex-col gap-3 xl:col-span-2">
 					<Skeleton className="h-24" />
 					<Skeleton className="h-24" />
 				</div>
 			) : null}
 
 			{!coverage.isLoading && data && !hasItems ? (
-				<Empty className="border border-dashed">
+				<Empty className="border border-dashed xl:col-span-2">
 					<EmptyHeader>
 						<EmptyMedia variant="icon">
 							<InboxIcon />
@@ -147,22 +141,26 @@ function CoveragePage() {
 
 			{data && data.releases.length > 0 ? (
 				<Card>
-					<CardHeader>
-						<CardTitle>Release requests</CardTitle>
+					<CardHeader className="border-b">
+						<div className="flex items-center justify-between gap-2">
+							<CardTitle>Release requests</CardTitle>
+							<Badge variant="secondary">{data.releases.length}</Badge>
+						</div>
 						<CardDescription>
 							Workers asking to give up an assigned shift.
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<ItemGroup>
-							{data.releases.map((release) => (
+						<ProgressiveItemGroup
+							items={data.releases}
+							renderItem={(release) => (
 								<Item key={release.id} variant="outline" role="listitem">
 									<ItemContent>
-										<ItemTitle>
+										<ItemTitle className="w-full min-w-0">
 											{release.workerName} · {release.positionName}
 											{release.status !== "pending" ? (
 												<Badge
-													className="uppercase"
+													className="shrink-0 capitalize"
 													variant={statusVariant(release.status)}
 												>
 													{release.status}
@@ -175,7 +173,7 @@ function CoveragePage() {
 										</ItemDescription>
 									</ItemContent>
 									{release.status === "pending" ? (
-										<ItemActions>
+										<ItemActions className="ml-auto w-full justify-end sm:w-auto">
 											<Button
 												size="sm"
 												disabled={decideRelease.isPending}
@@ -207,30 +205,34 @@ function CoveragePage() {
 										</ItemActions>
 									) : null}
 								</Item>
-							))}
-						</ItemGroup>
+							)}
+						/>
 					</CardContent>
 				</Card>
 			) : null}
 
 			{data && data.pickups.length > 0 ? (
 				<Card>
-					<CardHeader>
-						<CardTitle>Pickup requests</CardTitle>
+					<CardHeader className="border-b">
+						<div className="flex items-center justify-between gap-2">
+							<CardTitle>Pickup requests</CardTitle>
+							<Badge variant="secondary">{data.pickups.length}</Badge>
+						</div>
 						<CardDescription>
 							Workers asking to take an open shift.
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<ItemGroup>
-							{data.pickups.map((pickup) => (
+						<ProgressiveItemGroup
+							items={data.pickups}
+							renderItem={(pickup) => (
 								<Item key={pickup.id} variant="outline" role="listitem">
 									<ItemContent>
-										<ItemTitle>
+										<ItemTitle className="w-full min-w-0">
 											{pickup.workerName} · {pickup.positionName}
 											{pickup.status !== "pending" ? (
 												<Badge
-													className="uppercase"
+													className="shrink-0 capitalize"
 													variant={statusVariant(pickup.status)}
 												>
 													{pickup.status}
@@ -244,7 +246,7 @@ function CoveragePage() {
 										</ItemDescription>
 									</ItemContent>
 									{pickup.status === "pending" ? (
-										<ItemActions>
+										<ItemActions className="ml-auto w-full flex-wrap justify-end sm:w-auto">
 											<Button
 												size="sm"
 												disabled={decidePickup.isPending}
@@ -276,8 +278,8 @@ function CoveragePage() {
 										</ItemActions>
 									) : null}
 								</Item>
-							))}
-						</ItemGroup>
+							)}
+						/>
 					</CardContent>
 				</Card>
 			) : null}

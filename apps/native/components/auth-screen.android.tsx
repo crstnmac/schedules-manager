@@ -49,7 +49,7 @@ export function AuthScreen() {
 		<Host useViewportSizeMeasurement colorScheme={colorScheme} style={styles.host}>
 			<Column verticalArrangement="center" modifiers={[fillMaxSize(), imePadding(), padding(20, 32, 20, 24)]}>
 				<Column modifiers={[fillMaxWidth(), padding(4, 0, 4, 24)]}>
-					<Text color={colors.primary} style={{ typography: "titleMedium", fontWeight: "700" }}>SchedulesManager</Text>
+					<Text color={colors.primary} style={{ typography: "titleMedium", fontWeight: "700" }}>jooling</Text>
 					<Spacer modifiers={[height(12)]} />
 					<Text color={colors.onBackground} style={{ typography: "headlineLarge", fontWeight: "700", lineBreak: "heading" }}>
 						{mode === "sign-in" ? "Welcome back" : "Join your workplace"}
@@ -78,7 +78,7 @@ export function AuthScreen() {
 					</Column>
 				</Card>
 				<Spacer modifiers={[height(12)]} />
-				<TextButton onClick={changeMode} modifiers={[fillMaxWidth()]}><Text>{mode === "sign-in" ? "New to SchedulesManager? Create account" : "Already have an account? Sign in"}</Text></TextButton>
+				<TextButton onClick={changeMode} modifiers={[fillMaxWidth()]}><Text>{mode === "sign-in" ? "New to jooling? Create account" : "Already have an account? Sign in"}</Text></TextButton>
 				<Text color={colors.onSurfaceVariant} style={{ typography: "bodySmall", textAlign: "center", lineHeight: 18 }} modifiers={[fillMaxWidth(), padding(12, 4, 12, 0)]}>Secure access for managers and team members</Text>
 			</Column>
 		</Host>

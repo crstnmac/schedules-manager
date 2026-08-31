@@ -48,7 +48,7 @@ export function BottomNav(props: { state: { index: number; routes: { key: string
 					{
 						backgroundColor: theme.card,
 						borderColor: theme.border,
-						shadowColor: "#000",
+						shadowColor: theme.shadow,
 					},
 				]}
 			>

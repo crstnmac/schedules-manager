@@ -143,7 +143,11 @@ export function Badge({
 		outline: { bg: "transparent", fg: theme.text, border: theme.border },
 		success: { bg: theme.success, fg: theme.onSuccess, border: theme.success },
 		danger: { bg: theme.notification, fg: theme.onNotification, border: theme.notification },
-		amber: { bg: "rgb(254 243 199)", fg: "oklch(0.35 0.06 60)", border: "oklch(0.875 0.045 75)" },
+		amber: {
+			bg: theme.warning,
+			fg: theme.onWarning,
+			border: theme.warningBorder,
+		},
 	};
 	const c = map[variant] ?? map.outline;
 	return (

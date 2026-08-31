@@ -1,3 +1,4 @@
+import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import {
 	Card,
@@ -26,7 +27,6 @@ import {
 	ItemActions,
 	ItemContent,
 	ItemDescription,
-	ItemGroup,
 	ItemTitle,
 } from "@SchedulesManager/ui/components/item";
 import {
@@ -45,7 +45,7 @@ import { MapPinIcon, TagsIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { PageHeader } from "@/components/page-header";
+import { ProgressiveItemGroup } from "@/components/progressive-item-group";
 import { api } from "@/lib/api";
 import {
 	type LocationDto,
@@ -91,11 +91,7 @@ function SettingsPage() {
 
 	return (
 		<section className="flex flex-col gap-6">
-			<PageHeader
-				title="Settings"
-				description="Workplace details, locations, and positions used when drafting the schedule."
-			/>
-			<div className="grid gap-6 lg:grid-cols-2">
+			<div className="grid items-start gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
 				<WorkplaceCard
 					settings={settings.data}
 					isLoading={settings.isLoading}
@@ -141,6 +137,8 @@ function WorkplaceCard({
 				},
 			}),
 		onSuccess: () => {
+			setName(null);
+			setHours(null);
 			onChange();
 			toast.success("Workplace settings saved.");
 		},
@@ -148,8 +146,8 @@ function WorkplaceCard({
 	});
 
 	return (
-		<Card className="lg:col-span-2">
-			<CardHeader>
+		<Card className="lg:row-span-2">
+			<CardHeader className="border-b">
 				<CardTitle>Workplace</CardTitle>
 				<CardDescription>
 					Name and the notice window for late material changes.
@@ -157,12 +155,12 @@ function WorkplaceCard({
 			</CardHeader>
 			<CardContent>
 				{isLoading || !settings ? (
-					<div className="grid gap-4 sm:grid-cols-2">
+					<div className="grid gap-4">
 						<Skeleton className="h-16" />
 						<Skeleton className="h-16" />
 					</div>
 				) : (
-					<FieldGroup className="grid gap-4 sm:grid-cols-2">
+					<FieldGroup className="grid gap-4">
 						<Field>
 							<FieldLabel htmlFor="workplace-name">Workplace name</FieldLabel>
 							<Input
@@ -191,9 +189,12 @@ function WorkplaceCard({
 					</FieldGroup>
 				)}
 			</CardContent>
-			<CardFooter>
+			<CardFooter className="border-t">
 				<Button
-					disabled={save.isPending || !settings}
+					className="w-full sm:w-auto"
+					disabled={
+						save.isPending || !settings || (name === null && hours === null)
+					}
 					onClick={() => save.mutate()}
 				>
 					{save.isPending ? <Spinner data-icon="inline-start" /> : null}
@@ -261,8 +262,11 @@ function LocationsCard({
 
 	return (
 		<Card>
-			<CardHeader>
-				<CardTitle>Locations</CardTitle>
+			<CardHeader className="border-b">
+				<div className="flex flex-wrap items-center justify-between gap-2">
+					<CardTitle>Locations</CardTitle>
+					<Badge variant="secondary">{locations.length}</Badge>
+				</div>
 				<CardDescription>
 					Restaurants and sites workers can be scheduled at.
 				</CardDescription>
@@ -283,12 +287,13 @@ function LocationsCard({
 						</EmptyHeader>
 					</Empty>
 				) : (
-					<ItemGroup>
-						{locations.map((location) => (
+					<ProgressiveItemGroup
+						items={locations}
+						renderItem={(location) => (
 							<Item key={location.id} variant="outline" role="listitem">
 								{editingId === location.id ? (
 									<ItemContent>
-										<FieldGroup>
+										<FieldGroup className="sm:grid sm:grid-cols-2">
 											<Field>
 												<FieldLabel htmlFor={`edit-location-${location.id}`}>
 													Location name
@@ -329,7 +334,7 @@ function LocationsCard({
 												</Select>
 											</Field>
 										</FieldGroup>
-										<ItemActions className="mt-2">
+										<ItemActions className="mt-2 flex-wrap">
 											<Button
 												size="sm"
 												disabled={update.isPending}
@@ -366,7 +371,7 @@ function LocationsCard({
 													: ""}
 											</ItemDescription>
 										</ItemContent>
-										<ItemActions>
+										<ItemActions className="ml-auto w-full justify-end sm:w-auto">
 											<Button
 												variant="outline"
 												size="sm"
@@ -382,11 +387,17 @@ function LocationsCard({
 									</>
 								)}
 							</Item>
-						))}
-					</ItemGroup>
+						)}
+					/>
 				)}
-				<form onSubmit={submit}>
-					<FieldGroup>
+				<form className="border-t pt-5" onSubmit={submit}>
+					<FieldGroup className="sm:grid sm:grid-cols-2">
+						<div className="sm:col-span-2">
+							<p className="font-medium text-sm">Add a location</p>
+							<p className="text-muted-foreground text-xs">
+								Create another place where shifts can be scheduled.
+							</p>
+						</div>
 						<Field>
 							<FieldLabel htmlFor="location-name">Location name</FieldLabel>
 							<Input
@@ -432,7 +443,11 @@ function LocationsCard({
 								</SelectContent>
 							</Select>
 						</Field>
-						<Button type="submit" disabled={create.isPending}>
+						<Button
+							type="submit"
+							className="w-full sm:col-span-2 sm:w-auto sm:justify-self-start"
+							disabled={create.isPending}
+						>
 							{create.isPending ? <Spinner data-icon="inline-start" /> : null}
 							{create.isPending ? "Adding…" : "Add location"}
 						</Button>
@@ -492,8 +507,11 @@ function PositionsCard({
 
 	return (
 		<Card>
-			<CardHeader>
-				<CardTitle>Positions</CardTitle>
+			<CardHeader className="border-b">
+				<div className="flex flex-wrap items-center justify-between gap-2">
+					<CardTitle>Positions</CardTitle>
+					<Badge variant="secondary">{positions.length}</Badge>
+				</div>
 				<CardDescription>
 					Roles workers can be scheduled into, like Server or Cook.
 				</CardDescription>
@@ -512,8 +530,9 @@ function PositionsCard({
 						</EmptyHeader>
 					</Empty>
 				) : (
-					<ItemGroup>
-						{positions.map((position) => (
+					<ProgressiveItemGroup
+						items={positions}
+						renderItem={(position) => (
 							<Item key={position.id} variant="outline" role="listitem">
 								{editingId === position.id ? (
 									<ItemContent>
@@ -529,7 +548,7 @@ function PositionsCard({
 												/>
 											</Field>
 										</FieldGroup>
-										<ItemActions className="mt-2">
+										<ItemActions className="mt-2 flex-wrap">
 											<Button
 												size="sm"
 												disabled={update.isPending}
@@ -559,7 +578,7 @@ function PositionsCard({
 										<ItemContent>
 											<ItemTitle>{position.name}</ItemTitle>
 										</ItemContent>
-										<ItemActions>
+										<ItemActions className="ml-auto w-full justify-end sm:w-auto">
 											<Button
 												variant="outline"
 												size="sm"
@@ -574,11 +593,17 @@ function PositionsCard({
 									</>
 								)}
 							</Item>
-						))}
-					</ItemGroup>
+						)}
+					/>
 				)}
-				<form onSubmit={submit}>
-					<FieldGroup>
+				<form className="border-t pt-5" onSubmit={submit}>
+					<FieldGroup className="sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+						<div className="sm:col-span-2">
+							<p className="font-medium text-sm">Add a position</p>
+							<p className="text-muted-foreground text-xs">
+								Create a role that can be assigned to a shift.
+							</p>
+						</div>
 						<Field>
 							<FieldLabel htmlFor="position-name">Position name</FieldLabel>
 							<Input
@@ -589,7 +614,11 @@ function PositionsCard({
 								required
 							/>
 						</Field>
-						<Button type="submit" disabled={create.isPending}>
+						<Button
+							type="submit"
+							className="w-full sm:w-auto"
+							disabled={create.isPending}
+						>
 							{create.isPending ? <Spinner data-icon="inline-start" /> : null}
 							{create.isPending ? "Adding…" : "Add position"}
 						</Button>

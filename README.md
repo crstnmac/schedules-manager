@@ -1,6 +1,6 @@
-# SchedulesManager
+# jooling
 
-SchedulesManager is a workforce scheduling platform for restaurants. Managers build, publish, and operate schedules from the web, while managers and workers use the Expo mobile app for daily schedule access, coverage, availability, requests, and notifications.
+jooling is a workforce scheduling platform for restaurants. Managers build, publish, and operate schedules from the web, while managers and workers use the Expo mobile app for daily schedule access, coverage, availability, requests, and notifications.
 
 The product treats a published schedule as an immutable operational record. Later changes create a new version, affected workers receive explicit notifications, and material late changes can require acceptance.
 

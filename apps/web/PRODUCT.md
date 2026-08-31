@@ -12,7 +12,7 @@ Managers of independent full-service restaurants plan and communicate weekly wor
 
 ## Product Purpose
 
-SchedulesManager gives managers and workers one dependable source of truth for scheduled work. Success means a manager can build and publish a normal week without a spreadsheet or chat thread, and a worker can understand what they work next within seconds.
+jooling gives managers and workers one dependable source of truth for scheduled work. Success means a manager can build and publish a normal week without a spreadsheet or chat thread, and a worker can understand what they work next within seconds.
 
 ## Positioning
 

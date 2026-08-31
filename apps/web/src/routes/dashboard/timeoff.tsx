@@ -34,7 +34,6 @@ import {
 	ItemActions,
 	ItemContent,
 	ItemDescription,
-	ItemGroup,
 	ItemTitle,
 } from "@SchedulesManager/ui/components/item";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
@@ -50,7 +49,7 @@ import { CalendarOffIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { PageHeader } from "@/components/page-header";
+import { ProgressiveItemGroup } from "@/components/progressive-item-group";
 import { api } from "@/lib/api";
 import { useTimeOff } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
@@ -105,27 +104,24 @@ function TimeOffPage() {
 
 	return (
 		<section className="flex flex-col gap-6">
-			<PageHeader
-				title="Time-off requests"
-				description="Approved time off blocks scheduling in the draft editor and counts as a conflict warning."
-				actions={
+			<Card>
+				<CardHeader className="flex-col items-stretch gap-3 border-b sm:flex-row sm:items-center sm:justify-between">
+					<div className="flex items-center gap-2">
+						<CardTitle>
+							{filter === "pending" ? "Pending requests" : "All requests"}
+						</CardTitle>
+						<Badge variant="secondary">{requests.length}</Badge>
+					</div>
 					<Tabs
+						className="w-full sm:w-auto"
 						value={filter}
 						onValueChange={(value) => setFilter(value as "pending" | "all")}
 					>
-						<TabsList>
+						<TabsList className="grid w-full grid-cols-2 sm:w-auto">
 							<TabsTrigger value="pending">Pending</TabsTrigger>
 							<TabsTrigger value="all">All</TabsTrigger>
 						</TabsList>
 					</Tabs>
-				}
-			/>
-
-			<Card>
-				<CardHeader>
-					<CardTitle>
-						{filter === "pending" ? "Pending requests" : "All requests"}
-					</CardTitle>
 				</CardHeader>
 				<CardContent>
 					{timeOff.isLoading ? (
@@ -152,14 +148,18 @@ function TimeOffPage() {
 							</EmptyHeader>
 						</Empty>
 					) : (
-						<ItemGroup>
-							{requests.map((request) => (
+						<ProgressiveItemGroup
+							key={filter}
+							items={requests}
+							renderItem={(request) => (
 								<Item key={request.id} variant="outline" role="listitem">
-									<ItemContent>
-										<ItemTitle>
-											{request.worker.fullName ?? request.worker.email}
+									<ItemContent className="min-w-0">
+										<ItemTitle className="w-full min-w-0">
+											<span className="truncate">
+												{request.worker.fullName ?? request.worker.email}
+											</span>
 											<Badge
-												className="uppercase"
+												className="shrink-0 capitalize"
 												variant={
 													request.status === "declined"
 														? "destructive"
@@ -171,14 +171,14 @@ function TimeOffPage() {
 												{request.status}
 											</Badge>
 										</ItemTitle>
-										<ItemDescription>
+										<ItemDescription className="break-words">
 											{new Date(request.startsAt).toLocaleString()} →{" "}
 											{new Date(request.endsAt).toLocaleString()}
 											{request.reason ? ` · ${request.reason}` : ""}
 										</ItemDescription>
 									</ItemContent>
 									{request.status === "pending" ? (
-										<ItemActions>
+										<ItemActions className="ml-auto w-full justify-end sm:w-auto">
 											<Button
 												size="sm"
 												disabled={decide.isPending}
@@ -208,8 +208,8 @@ function TimeOffPage() {
 										</ItemActions>
 									) : null}
 								</Item>
-							))}
-						</ItemGroup>
+							)}
+						/>
 					)}
 				</CardContent>
 			</Card>

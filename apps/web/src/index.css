@@ -1,1 +1,68 @@
 @import "@SchedulesManager/ui/globals.css";
+
+.schedule-grid-scroll {
+	scrollbar-color: color-mix(in oklab, var(--muted-foreground) 35%, transparent)
+		transparent;
+	scrollbar-width: thin;
+}
+
+.schedule-grid-scroll::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+.schedule-grid-scroll::-webkit-scrollbar-thumb {
+	border: 3px solid transparent;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--muted-foreground) 35%, transparent)
+		content-box;
+}
+
+.schedule-grid-scroll::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in oklab, var(--muted-foreground) 55%, transparent)
+		content-box;
+}
+
+@media (hover: none), (pointer: coarse) {
+	.schedule-cell-add {
+		width: 2.75rem;
+		height: 2.75rem;
+		opacity: 1;
+	}
+
+	.schedule-cell-add-empty {
+		width: auto;
+		padding-inline: 0.75rem;
+	}
+}
+
+.large-data-list > [data-slot="item"] {
+	content-visibility: auto;
+	contain-intrinsic-size: auto 4.5rem;
+}
+
+@media print {
+	@page {
+		size: landscape;
+		margin: 10mm;
+	}
+	body {
+		background: white;
+		color: black;
+	}
+	[data-sidebar="sidebar"],
+	header {
+		display: none;
+	}
+	[data-sidebar="inset"] {
+		margin: 0;
+		min-height: auto;
+	}
+	button {
+		pointer-events: none;
+	}
+	.shadow,
+	[class*="shadow-"] {
+		box-shadow: none;
+	}
+}

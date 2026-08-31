@@ -138,17 +138,17 @@ export function PageHeader({
 function NativeSurface({
 	children,
 	color,
+	contentColor,
 }: {
 	children: React.ReactNode;
 	color?: string;
+	contentColor?: string;
 }) {
 	const { colorScheme } = useAppTheme();
 	return (
 		<Host matchContents colorScheme={colorScheme} style={styles.nativeHost}>
 			<MaterialCard
-				colors={
-					color ? { containerColor: color, contentColor: "#FFFFFF" } : undefined
-				}
+				colors={color ? { containerColor: color, contentColor } : undefined}
 				elevation={0}
 			>
 				<RNHostView matchContents>
@@ -174,7 +174,11 @@ export function FeatureCard({
 	style?: ViewStyle;
 }) {
 	const { material } = useAppTheme();
-	return <NativeSurface color={material.primary}>{children}</NativeSurface>;
+	return (
+		<NativeSurface color={material.primary} contentColor={material.onPrimary}>
+			{children}
+		</NativeSurface>
+	);
 }
 export function NoticeRow({ children }: { children: React.ReactNode }) {
 	return <NativeSurface>{children}</NativeSurface>;

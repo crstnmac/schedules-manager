@@ -1,3 +1,4 @@
+import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import {
 	Card,
@@ -18,7 +19,6 @@ import {
 	ItemActions,
 	ItemContent,
 	ItemDescription,
-	ItemGroup,
 	ItemTitle,
 } from "@SchedulesManager/ui/components/item";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
@@ -27,7 +27,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { BellIcon, ScrollTextIcon } from "lucide-react";
 import { toast } from "sonner";
 
-import { PageHeader } from "@/components/page-header";
+import { ProgressiveItemGroup } from "@/components/progressive-item-group";
 import {
 	useAudit,
 	useMarkAllNotificationsRead,
@@ -51,37 +51,41 @@ function ActivityPage() {
 	const events = audit.data ?? [];
 
 	return (
-		<section className="flex flex-col gap-6">
-			<PageHeader
-				title="Activity"
-				description="In-app notifications are the durable record. The audit trail shows manager actions for this workplace."
-			/>
-
+		<section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)]">
 			<Card>
-				<CardHeader>
-					<CardTitle>Inbox</CardTitle>
-					<CardDescription>
-						Coverage requests, late-change responses, and time-off submissions.
-					</CardDescription>
+				<CardHeader className="border-b">
+					<div className="flex flex-wrap items-start justify-between gap-3">
+						<div>
+							<div className="flex items-center gap-2">
+								<CardTitle>Inbox</CardTitle>
+								{unreadCount > 0 ? (
+									<Badge variant="secondary">{unreadCount} unread</Badge>
+								) : null}
+							</div>
+							<CardDescription>
+								Coverage, schedule responses, and time-off requests.
+							</CardDescription>
+						</div>
+						{unreadCount > 0 ? (
+							<Button
+								size="sm"
+								variant="outline"
+								disabled={markAll.isPending}
+								onClick={() =>
+									markAll.mutate(undefined, {
+										onError: (error) => toast.error((error as Error).message),
+									})
+								}
+							>
+								{markAll.isPending ? (
+									<Spinner data-icon="inline-start" />
+								) : null}
+								Mark all read
+							</Button>
+						) : null}
+					</div>
 				</CardHeader>
 				<CardContent className="flex flex-col gap-4">
-					{unreadCount > 0 ? (
-						<Button
-							size="sm"
-							variant="outline"
-							className="self-start"
-							disabled={markAll.isPending}
-							onClick={() =>
-								markAll.mutate(undefined, {
-									onError: (error) => toast.error((error as Error).message),
-								})
-							}
-						>
-							{markAll.isPending ? <Spinner data-icon="inline-start" /> : null}
-							Mark all as read
-						</Button>
-					) : null}
-
 					{inbox.isLoading ? <Skeleton className="h-20" /> : null}
 
 					{!inbox.isLoading && items.length === 0 ? (
@@ -99,9 +103,14 @@ function ActivityPage() {
 					) : null}
 
 					{items.length > 0 ? (
-						<ItemGroup>
-							{items.map((item) => (
-								<Item key={item.id} variant="outline" role="listitem">
+						<ProgressiveItemGroup
+							items={items}
+							renderItem={(item) => (
+								<Item
+									key={item.id}
+									variant={item.readAt ? "default" : "outline"}
+									role="listitem"
+								>
 									<ItemContent>
 										<ItemTitle>{item.title}</ItemTitle>
 										<ItemDescription>
@@ -109,7 +118,7 @@ function ActivityPage() {
 										</ItemDescription>
 									</ItemContent>
 									{item.readAt ? null : (
-										<ItemActions>
+										<ItemActions className="ml-auto w-full justify-end sm:w-auto">
 											<Button
 												size="sm"
 												variant="outline"
@@ -126,14 +135,14 @@ function ActivityPage() {
 										</ItemActions>
 									)}
 								</Item>
-							))}
-						</ItemGroup>
+							)}
+						/>
 					) : null}
 				</CardContent>
 			</Card>
 
 			<Card>
-				<CardHeader>
+				<CardHeader className="border-b">
 					<CardTitle>Audit trail</CardTitle>
 					<CardDescription>
 						Publication, time-off decisions, and coverage assignments.
@@ -155,8 +164,9 @@ function ActivityPage() {
 						</Empty>
 					) : null}
 					{events.length > 0 ? (
-						<ItemGroup>
-							{events.map((event) => (
+						<ProgressiveItemGroup
+							items={events}
+							renderItem={(event) => (
 								<Item key={event.id} variant="outline" role="listitem">
 									<ItemContent>
 										<ItemTitle>{event.summary}</ItemTitle>
@@ -166,8 +176,8 @@ function ActivityPage() {
 										</ItemDescription>
 									</ItemContent>
 								</Item>
-							))}
-						</ItemGroup>
+							)}
+						/>
 					) : null}
 				</CardContent>
 			</Card>
