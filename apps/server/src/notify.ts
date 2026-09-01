@@ -3,8 +3,10 @@ import {
 	db,
 	employments,
 	notifications,
+	pushTokens,
 } from "@SchedulesManager/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
+import { type ExpoPushMessage, sendExpoPush } from "./push";
 
 export async function notifyEmployments(
 	employmentIds: string[],
@@ -22,6 +24,48 @@ export async function notifyEmployments(
 			body: payload.body,
 		})),
 	);
+	await deliverPushes(unique, payload);
+}
+
+export async function deliverPushes(
+	employmentIds: string[],
+	payload: { kind: string; title: string; body: string },
+) {
+	if (employmentIds.length === 0) return;
+
+	try {
+		const tokens = await db
+			.select({ token: pushTokens.expoPushToken })
+			.from(pushTokens)
+			.where(inArray(pushTokens.employmentId, employmentIds));
+		if (tokens.length === 0) return;
+
+		const messages: ExpoPushMessage[] = tokens.map((row) => ({
+			to: row.token,
+			title: payload.title,
+			body: payload.body,
+			sound: "default",
+			channelId: "default",
+			data: { kind: payload.kind },
+		}));
+
+		const { invalidTokens } = await sendExpoPush(messages);
+		if (invalidTokens.length > 0) {
+			await db
+				.delete(pushTokens)
+				.where(inArray(pushTokens.expoPushToken, invalidTokens));
+		}
+	} catch (error) {
+		console.error(
+			JSON.stringify({
+				level: "error",
+				message: "Push delivery failed",
+				kind: payload.kind,
+				error: error instanceof Error ? error.message : String(error),
+				timestamp: new Date().toISOString(),
+			}),
+		);
+	}
 }
 
 export async function managerEmploymentIds(

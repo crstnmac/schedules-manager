@@ -1,4 +1,10 @@
-import { auditEvents, db, notifications, profiles } from "@SchedulesManager/db";
+import {
+	auditEvents,
+	db,
+	notifications,
+	profiles,
+	pushTokens,
+} from "@SchedulesManager/db";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import {
@@ -130,6 +136,72 @@ export const notificationsRoutes = new Elysia({
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Mark every unread notification as read",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.post(
+		"/workplaces/:workplaceId/my/push-token",
+		async ({ body, headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const employment = await requireWorkplaceMember(
+				profile.id,
+				params.workplaceId,
+			);
+
+			await db
+				.insert(pushTokens)
+				.values({
+					employmentId: employment.id,
+					expoPushToken: body.token,
+					platform: body.platform,
+				})
+				.onConflictDoUpdate({
+					target: [pushTokens.employmentId, pushTokens.expoPushToken],
+					set: { platform: body.platform, lastSeenAt: new Date() },
+				});
+
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			body: t.Object({
+				token: t.String({ minLength: 10, maxLength: 256 }),
+				platform: t.Union([t.Literal("ios"), t.Literal("android")]),
+			}),
+			detail: {
+				summary: "Register this device's Expo push token for the employment",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.delete(
+		"/workplaces/:workplaceId/my/push-token",
+		async ({ body, headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const employment = await requireWorkplaceMember(
+				profile.id,
+				params.workplaceId,
+			);
+
+			await db
+				.delete(pushTokens)
+				.where(
+					and(
+						eq(pushTokens.employmentId, employment.id),
+						eq(pushTokens.expoPushToken, body.token),
+					),
+				);
+
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			body: t.Object({ token: t.String({ minLength: 10, maxLength: 256 }) }),
+			detail: {
+				summary: "Remove this device's Expo push token for the employment",
 				security: [{ bearerAuth: [] }],
 			},
 		},
