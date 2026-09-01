@@ -1,6 +1,5 @@
 import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
-import { Separator } from "@SchedulesManager/ui/components/separator";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import {
 	createFileRoute,
@@ -15,7 +14,9 @@ import {
 	Clock3Icon,
 	InboxIcon,
 	LogOutIcon,
+	TimerIcon,
 } from "lucide-react";
+import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { CurrentProfile } from "@/components/current-profile";
@@ -32,6 +33,7 @@ const navigation = [
 	{ to: "/worker", label: "My schedule", icon: CalendarDaysIcon, exact: true },
 	{ to: "/worker/availability", label: "Availability", icon: Clock3Icon },
 	{ to: "/worker/openshifts", label: "Open shifts", icon: InboxIcon },
+	{ to: "/worker/timecard", label: "Timecard", icon: TimerIcon },
 	{ to: "/worker/inbox", label: "Inbox", icon: BellIcon },
 ] as const;
 
@@ -44,6 +46,15 @@ function WorkerLayout() {
 	const pathname = useRouterState({
 		select: (state) => state.location.pathname,
 	});
+	const activePage =
+		navigation.find((item) =>
+			"exact" in item && item.exact
+				? pathname === item.to
+				: pathname.startsWith(item.to),
+		)?.label ?? "My schedule";
+	useEffect(() => {
+		document.title = `${activePage} · jooling`;
+	}, [activePage]);
 	const handleSignOut = async () => {
 		try {
 			await signOut();
@@ -57,7 +68,11 @@ function WorkerLayout() {
 	if (!user) return <Navigate to="/" replace />;
 	if (isLoading) {
 		return (
-			<main className="grid min-h-svh place-items-center">
+			<main
+				id="main-content"
+				tabIndex={-1}
+				className="grid min-h-svh place-items-center"
+			>
 				<Spinner />
 				<span className="sr-only">Loading</span>
 			</main>
@@ -99,7 +114,7 @@ function WorkerLayout() {
 					{me.data?.profile ? (
 						<CurrentProfile profile={me.data.profile} kind="worker" />
 					) : null}
-					<nav className="flex flex-wrap gap-1">
+					<nav aria-label="Worker navigation" className="flex flex-wrap gap-1">
 						{navigation.map((item) => {
 							const active =
 								"exact" in item && item.exact
@@ -110,6 +125,7 @@ function WorkerLayout() {
 									key={item.to}
 									size="sm"
 									variant={active ? "secondary" : "ghost"}
+									aria-current={active ? "page" : undefined}
 									nativeButton={false}
 									render={<Link to={item.to} />}
 								>
@@ -124,8 +140,11 @@ function WorkerLayout() {
 					</nav>
 				</div>
 			</header>
-			<Separator />
-			<main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 md:p-6">
+			<main
+				id="main-content"
+				tabIndex={-1}
+				className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 md:p-6"
+			>
 				<Outlet />
 			</main>
 		</div>

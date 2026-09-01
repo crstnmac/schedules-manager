@@ -1,4 +1,4 @@
-import * as React from "react";
+import type * as React from "react";
 import {
 	ActivityIndicator,
 	KeyboardAvoidingView,
@@ -45,7 +45,12 @@ export function AppScreen({
 		return (
 			<View
 				style={[
-					{ flex: 1, backgroundColor: theme.background, paddingTop: topPad, paddingBottom: bottomPad },
+					{
+						flex: 1,
+						backgroundColor: theme.background,
+						paddingTop: topPad,
+						paddingBottom: bottomPad,
+					},
 					contentStyle,
 				]}
 			>
@@ -54,10 +59,17 @@ export function AppScreen({
 		);
 	}
 	return (
-		<KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+		<KeyboardAvoidingView
+			style={{ flex: 1, backgroundColor: theme.background }}
+			behavior={Platform.OS === "ios" ? "padding" : "height"}
+		>
 			<ScrollView
 				style={{ flex: 1 }}
-				contentContainerStyle={[styles.pageContent, { paddingTop: topPad, paddingBottom: bottomPad }, contentStyle]}
+				contentContainerStyle={[
+					styles.pageContent,
+					{ paddingTop: topPad, paddingBottom: bottomPad },
+					contentStyle,
+				]}
 				keyboardShouldPersistTaps="handled"
 				keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
 				automaticallyAdjustKeyboardInsets
@@ -82,24 +94,58 @@ export function PageHeader({
 	const { theme } = useAppTheme();
 	return (
 		<View style={styles.header}>
-			{eyebrow ? <Text style={[styles.eyebrow, { color: theme.primary }]}>{eyebrow}</Text> : null}
+			{eyebrow ? (
+				<Text style={[styles.eyebrow, { color: theme.primary }]}>
+					{eyebrow}
+				</Text>
+			) : null}
 			<Text style={[styles.headline, { color: theme.text }]}>{title}</Text>
-			{description ? <Text style={[styles.description, { color: theme.muted }]}>{description}</Text> : null}
+			{description ? (
+				<Text style={[styles.description, { color: theme.muted }]}>
+					{description}
+				</Text>
+			) : null}
 			{action ? <View style={{ marginTop: 4 }}>{action}</View> : null}
 		</View>
 	);
 }
 
 // ── Cards ────────────────────────────────────────────────────────────────
-export function Card({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
-	const { theme } = useAppTheme();
-	return <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }, style]}>{children}</View>;
-}
-
-export function FeatureCard({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
+export function Card({
+	children,
+	style,
+}: {
+	children: React.ReactNode;
+	style?: ViewStyle;
+}) {
 	const { theme } = useAppTheme();
 	return (
-		<View style={[styles.featureCard, { backgroundColor: theme.primary }, style]}>{children}</View>
+		<View
+			style={[
+				styles.card,
+				{ backgroundColor: theme.card, borderColor: theme.border },
+				style,
+			]}
+		>
+			{children}
+		</View>
+	);
+}
+
+export function FeatureCard({
+	children,
+	style,
+}: {
+	children: React.ReactNode;
+	style?: ViewStyle;
+}) {
+	const { theme } = useAppTheme();
+	return (
+		<View
+			style={[styles.featureCard, { backgroundColor: theme.primary }, style]}
+		>
+			{children}
+		</View>
 	);
 }
 
@@ -107,22 +153,65 @@ export function FeatureCard({ children, style }: { children: React.ReactNode; st
 export function NoticeRow({ children }: { children: React.ReactNode }) {
 	const { theme } = useAppTheme();
 	return (
-		<View style={[styles.notice, { backgroundColor: theme.card, borderColor: theme.border }]}>{children}</View>
+		<View
+			style={[
+				styles.notice,
+				{ backgroundColor: theme.card, borderColor: theme.border },
+			]}
+		>
+			{children}
+		</View>
 	);
 }
 
 // ── Typography helpers ─────────────────────────────────────────────────
-export function CardTitle({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
+export function CardTitle({
+	children,
+	style,
+}: {
+	children: React.ReactNode;
+	style?: ViewStyle;
+}) {
 	const { theme } = useAppTheme();
-	return <Text style={[styles.cardTitle, { color: theme.text }, style as unknown as object]}>{children}</Text>;
+	return (
+		<Text
+			style={[
+				styles.cardTitle,
+				{ color: theme.text },
+				style as unknown as object,
+			]}
+		>
+			{children}
+		</Text>
+	);
 }
-export function Body({ children, muted }: { children: React.ReactNode; muted?: boolean }) {
+export function Body({
+	children,
+	muted,
+}: {
+	children: React.ReactNode;
+	muted?: boolean;
+}) {
 	const { theme } = useAppTheme();
-	return <Text style={[styles.body, { color: muted ? theme.muted : theme.text }]}>{children}</Text>;
+	return (
+		<Text style={[styles.body, { color: muted ? theme.muted : theme.text }]}>
+			{children}
+		</Text>
+	);
 }
-export function Meta({ children, color }: { children: React.ReactNode; color?: string }) {
+export function Meta({
+	children,
+	color,
+}: {
+	children: React.ReactNode;
+	color?: string;
+}) {
 	const { theme } = useAppTheme();
-	return <Text style={[styles.meta, { color: color ?? theme.muted }]}>{children}</Text>;
+	return (
+		<Text style={[styles.meta, { color: color ?? theme.muted }]}>
+			{children}
+		</Text>
+	);
 }
 export function Hint({ children }: { children: React.ReactNode }) {
 	const { theme } = useAppTheme();
@@ -142,7 +231,11 @@ export function Badge({
 		default: { bg: theme.primary, fg: theme.onPrimary, border: theme.primary },
 		outline: { bg: "transparent", fg: theme.text, border: theme.border },
 		success: { bg: theme.success, fg: theme.onSuccess, border: theme.success },
-		danger: { bg: theme.notification, fg: theme.onNotification, border: theme.notification },
+		danger: {
+			bg: theme.notification,
+			fg: theme.onNotification,
+			border: theme.notification,
+		},
 		amber: {
 			bg: theme.warning,
 			fg: theme.onWarning,
@@ -152,10 +245,7 @@ export function Badge({
 	const c = map[variant] ?? map.outline;
 	return (
 		<View
-			style={[
-				styles.badge,
-				{ backgroundColor: c.bg, borderColor: c.border },
-			]}
+			style={[styles.badge, { backgroundColor: c.bg, borderColor: c.border }]}
 		>
 			<Text style={[styles.badgeText, { color: c.fg }]}>{label}</Text>
 		</View>
@@ -186,14 +276,25 @@ export function PrimaryButton({
 			onPress={onPress}
 			style={({ pressed }) => [
 				styles.primaryButton,
-				{ backgroundColor: theme.primary, opacity: disabled ? 0.45 : pressed ? 0.82 : 1 },
+				{
+					backgroundColor: theme.primary,
+					opacity: disabled ? 0.45 : pressed ? 0.82 : 1,
+				},
 				style,
 			]}
 		>
 			{loading ? (
 				<ActivityIndicator color={theme.onPrimary} />
 			) : (
-				<Text style={[styles.primaryButtonText, { color: theme.onPrimary }, textStyle]}>{label}</Text>
+				<Text
+					style={[
+						styles.primaryButtonText,
+						{ color: theme.onPrimary },
+						textStyle,
+					]}
+				>
+					{label}
+				</Text>
 			)}
 		</Pressable>
 	);
@@ -204,11 +305,13 @@ export function SecondaryButton({
 	onPress,
 	disabled,
 	style,
+	textStyle,
 }: {
 	label: string;
 	onPress: () => void;
 	disabled?: boolean;
 	style?: ViewStyle;
+	textStyle?: object;
 }) {
 	const { theme } = useAppTheme();
 	return (
@@ -218,11 +321,16 @@ export function SecondaryButton({
 			onPress={onPress}
 			style={({ pressed }) => [
 				styles.secondaryButton,
-				{ borderColor: theme.border, opacity: disabled ? 0.45 : pressed ? 0.6 : 1 },
+				{
+					borderColor: theme.border,
+					opacity: disabled ? 0.45 : pressed ? 0.6 : 1,
+				},
 				style,
 			]}
 		>
-			<Text style={[styles.secondaryText, { color: theme.text }]}>{label}</Text>
+			<Text style={[styles.secondaryText, { color: theme.text }, textStyle]}>
+				{label}
+			</Text>
 		</Pressable>
 	);
 }
@@ -245,9 +353,17 @@ export function GhostButton({
 			disabled={disabled}
 			onPress={onPress}
 			hitSlop={8}
-			style={({ pressed }) => [{ opacity: pressed ? 0.55 : 1, minHeight: 44, justifyContent: "center" }]}
+			style={({ pressed }) => [
+				{
+					opacity: pressed ? 0.55 : 1,
+					minHeight: 44,
+					justifyContent: "center",
+				},
+			]}
 		>
-			<Text style={[styles.ghostText, { color: color ?? theme.primary }]}>{label}</Text>
+			<Text style={[styles.ghostText, { color: color ?? theme.primary }]}>
+				{label}
+			</Text>
 		</Pressable>
 	);
 }
@@ -255,24 +371,100 @@ export function GhostButton({
 // ── Dividers / Empty ───────────────────────────────────────────────────
 export function Divider() {
 	const { theme } = useAppTheme();
-	return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border }} />;
+	return (
+		<View
+			style={{
+				height: StyleSheet.hairlineWidth,
+				backgroundColor: theme.border,
+			}}
+		/>
+	);
 }
 
-export function NativeField({ label, value, onChange, placeholder, multiline = false }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; multiline?: boolean }) {
+export function NativeField({
+	label,
+	value,
+	onChange,
+	placeholder,
+	multiline = false,
+}: {
+	label: string;
+	value: string;
+	onChange: (value: string) => void;
+	placeholder?: string;
+	multiline?: boolean;
+}) {
 	const { theme } = useAppTheme();
-	return <View style={{ gap: 6 }}><Text style={[styles.fieldLabel, { color: theme.text }]}>{label}</Text><TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={theme.muted} multiline={multiline} style={[styles.nativeField, multiline && { minHeight: 96, textAlignVertical: "top" }, { color: theme.text, borderColor: theme.border }]} /></View>;
+	return (
+		<View style={{ gap: 6 }}>
+			<Text style={[styles.fieldLabel, { color: theme.text }]}>{label}</Text>
+			<TextInput
+				value={value}
+				onChangeText={onChange}
+				placeholder={placeholder}
+				placeholderTextColor={theme.muted}
+				multiline={multiline}
+				style={[
+					styles.nativeField,
+					multiline && { minHeight: 96, textAlignVertical: "top" },
+					{ color: theme.text, borderColor: theme.border },
+				]}
+			/>
+		</View>
+	);
 }
 
-export function NativeWeekdayPicker({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+export function NativeWeekdayPicker({
+	value,
+	onChange,
+}: {
+	value: number;
+	onChange: (value: number) => void;
+}) {
 	const { theme } = useAppTheme();
-	return <View style={styles.weekRow}>{["S", "M", "T", "W", "T", "F", "S"].map((day, index) => <Pressable key={`${day}-${index}`} accessibilityRole="radio" accessibilityState={{ checked: value === index }} onPress={() => onChange(index)} style={[styles.dayButton, { borderColor: value === index ? theme.primary : theme.border, backgroundColor: value === index ? theme.primary : "transparent" }]}><Text style={{ color: value === index ? theme.onPrimary : theme.text, fontWeight: "700" }}>{day}</Text></Pressable>)}</View>;
+	return (
+		<View style={styles.weekRow}>
+			{["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
+				<Pressable
+					key={`${day}-${index}`}
+					accessibilityRole="radio"
+					accessibilityState={{ checked: value === index }}
+					onPress={() => onChange(index)}
+					style={[
+						styles.dayButton,
+						{
+							borderColor: value === index ? theme.primary : theme.border,
+							backgroundColor: value === index ? theme.primary : "transparent",
+						},
+					]}
+				>
+					<Text
+						style={{
+							color: value === index ? theme.onPrimary : theme.text,
+							fontWeight: "700",
+						}}
+					>
+						{day}
+					</Text>
+				</Pressable>
+			))}
+		</View>
+	);
 }
 
-export function NativeDatePickerField(props: { label: string; value: string; onChange: (value: string) => void }) {
+export function NativeDatePickerField(props: {
+	label: string;
+	value: string;
+	onChange: (value: string) => void;
+}) {
 	return <NativeField {...props} placeholder="YYYY-MM-DD" />;
 }
 
-export function NativeTimePickerField(props: { label: string; value: string; onChange: (value: string) => void }) {
+export function NativeTimePickerField(props: {
+	label: string;
+	value: string;
+	onChange: (value: string) => void;
+}) {
 	return <NativeField {...props} placeholder="HH:mm" />;
 }
 
@@ -299,15 +491,37 @@ export function EmptyState({
 const styles = StyleSheet.create({
 	pageContent: { padding: 20, paddingBottom: 40, gap: 16 },
 	header: { gap: 6, marginBottom: 2 },
-	eyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1.1, textTransform: "uppercase" },
-	headline: { fontSize: 30, lineHeight: 36, fontWeight: "800", letterSpacing: -0.6 },
+	eyebrow: {
+		fontSize: 11,
+		fontWeight: "800",
+		letterSpacing: 1.1,
+		textTransform: "uppercase",
+	},
+	headline: {
+		fontSize: 30,
+		lineHeight: 36,
+		fontWeight: "800",
+		letterSpacing: -0.6,
+	},
 	description: { fontSize: 14, lineHeight: 20 },
 	card: { borderWidth: 1, borderRadius: 14, padding: 16, gap: 12 },
 	featureCard: { borderRadius: 18, padding: 22, gap: 4 },
-	notice: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 12, flexDirection: "row", alignItems: "center" },
+	notice: {
+		borderWidth: 1,
+		borderRadius: 14,
+		padding: 14,
+		gap: 12,
+		flexDirection: "row",
+		alignItems: "center",
+	},
 	cardTitle: { fontSize: 17, fontWeight: "700", lineHeight: 24 },
 	body: { fontSize: 14, lineHeight: 21 },
-	meta: { fontSize: 12, lineHeight: 16, fontWeight: "600", textTransform: "uppercase" },
+	meta: {
+		fontSize: 12,
+		lineHeight: 16,
+		fontWeight: "600",
+		textTransform: "uppercase",
+	},
 	hint: { fontSize: 13, lineHeight: 19 },
 	badge: {
 		alignSelf: "flex-start",
@@ -316,7 +530,12 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 10,
 		paddingVertical: 3,
 	},
-	badgeText: { fontSize: 11, fontWeight: "800", letterSpacing: 0.3, textTransform: "uppercase" },
+	badgeText: {
+		fontSize: 11,
+		fontWeight: "800",
+		letterSpacing: 0.3,
+		textTransform: "uppercase",
+	},
 	primaryButton: {
 		minHeight: 46,
 		borderRadius: 10,
@@ -337,7 +556,21 @@ const styles = StyleSheet.create({
 	secondaryText: { fontSize: 15, fontWeight: "600" },
 	ghostText: { fontSize: 13, fontWeight: "700" },
 	fieldLabel: { fontSize: 13, fontWeight: "600" },
-	nativeField: { minHeight: 52, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16 },
+	nativeField: {
+		minHeight: 52,
+		borderWidth: 1,
+		borderRadius: 12,
+		paddingHorizontal: 14,
+		paddingVertical: 12,
+		fontSize: 16,
+	},
 	weekRow: { flexDirection: "row", gap: 6 },
-	dayButton: { flex: 1, minHeight: 44, borderWidth: 1, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+	dayButton: {
+		flex: 1,
+		minHeight: 44,
+		borderWidth: 1,
+		borderRadius: 12,
+		alignItems: "center",
+		justifyContent: "center",
+	},
 });
