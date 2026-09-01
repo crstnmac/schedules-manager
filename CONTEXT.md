@@ -88,6 +88,14 @@ _Avoid_: Notification status, read status
 A Worker's explicit agreement to work a proposed new or materially changed Shift.
 _Avoid_: Acknowledgement, read receipt, approval
 
+**Time Entry**:
+A Worker's record of started and finished work for an assigned Shift, started and ended by the Worker from the mobile app.
+_Avoid_: Clock-in, punch, timesheet
+
+**Shift Swap**:
+A Worker-to-Worker agreement to exchange two assigned Shifts. It takes effect only when the counterpart agrees and a Manager approves; until then each Worker keeps their own Shift.
+_Avoid_: Trade, exchange
+
 **Open Shift**:
 A Shift that needs a Worker and may be offered for pickup.
 _Avoid_: Available shift, empty shift

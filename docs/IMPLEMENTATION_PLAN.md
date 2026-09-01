@@ -227,11 +227,11 @@ The MVP includes scheduling, publication, acknowledgement, late-change acceptanc
 - Manager activity view backed by an audit log
 - Notifications emitted for core publication, change, and coverage workflows
 - Persistent client sessions and explicit sign-out with user-cache cleanup
+- Expo push notifications: mobile device-token registration and fan-out on every notification
 
 ### Remaining before pilot
 
 - Send real invitation and schedule emails; define retry, bounce, and delivery-status handling
-- Add Expo device-token registration and push notifications after email delivery is reliable
 - Add idempotency keys and replay-safe behavior for invitation, publication, acknowledgement, acceptance, release, pickup, and Manager decision commands
 - Add rate limits to authentication-adjacent, invitation, and other abuse-sensitive endpoints
 - Add structured request logs, error tracking, health/readiness checks, and alerting
