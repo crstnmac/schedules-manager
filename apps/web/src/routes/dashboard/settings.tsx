@@ -90,8 +90,8 @@ function SettingsPage() {
 	}
 
 	return (
-		<section className="flex flex-col gap-6">
-			<div className="grid items-start gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+		<section className="flex flex-col gap-4">
+			<div className="grid items-start gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
 				<WorkplaceCard
 					settings={settings.data}
 					isLoading={settings.isLoading}
@@ -116,17 +116,46 @@ function SettingsPage() {
 	);
 }
 
+const PAY_PERIOD_ITEMS = [
+	{ label: "Weekly", value: "weekly" },
+	{ label: "Every two weeks", value: "biweekly" },
+	{ label: "Twice a month (1st–15th, 16th–end)", value: "semimonthly" },
+	{ label: "Monthly", value: "monthly" },
+] as const;
+
+const WEEK_START_ITEMS = [
+	{ label: "Sunday", value: "0" },
+	{ label: "Monday", value: "1" },
+	{ label: "Tuesday", value: "2" },
+	{ label: "Wednesday", value: "3" },
+	{ label: "Thursday", value: "4" },
+	{ label: "Friday", value: "5" },
+	{ label: "Saturday", value: "6" },
+] as const;
+
 function WorkplaceCard({
 	settings,
 	isLoading,
 	onChange,
 }: {
-	settings: { id: string; name: string; noticeWindowHours: number } | undefined;
+	settings:
+		| {
+				id: string;
+				name: string;
+				noticeWindowHours: number;
+				weekStartDay: number;
+				payPeriodType: "weekly" | "biweekly" | "semimonthly" | "monthly";
+				payPeriodAnchor: string | null;
+		  }
+		| undefined;
 	isLoading: boolean;
 	onChange: () => void;
 }) {
 	const [name, setName] = useState<string | null>(null);
 	const [hours, setHours] = useState<number | null>(null);
+	const [weekStartDay, setWeekStartDay] = useState<string | null>(null);
+	const [payPeriodType, setPayPeriodType] = useState<string | null>(null);
+	const [anchor, setAnchor] = useState<string | null>(null);
 	const save = useMutation({
 		mutationFn: () =>
 			api(`/v1/workplaces/${settings?.id}`, {
@@ -134,11 +163,26 @@ function WorkplaceCard({
 				body: {
 					name: name ?? settings?.name,
 					noticeWindowHours: hours ?? settings?.noticeWindowHours,
+					weekStartDay:
+						weekStartDay !== null
+							? Number(weekStartDay)
+							: settings?.weekStartDay,
+					payPeriodType:
+						(payPeriodType as
+							| "weekly"
+							| "biweekly"
+							| "semimonthly"
+							| "monthly"
+							| null) ?? settings?.payPeriodType,
+					payPeriodAnchor: anchor ?? settings?.payPeriodAnchor,
 				},
 			}),
 		onSuccess: () => {
 			setName(null);
 			setHours(null);
+			setWeekStartDay(null);
+			setPayPeriodType(null);
+			setAnchor(null);
 			onChange();
 			toast.success("Workplace settings saved.");
 		},
@@ -147,7 +191,7 @@ function WorkplaceCard({
 
 	return (
 		<Card className="lg:row-span-2">
-			<CardHeader className="border-b">
+			<CardHeader>
 				<CardTitle>Workplace</CardTitle>
 				<CardDescription>
 					Name and the notice window for late material changes.
@@ -186,14 +230,92 @@ function WorkplaceCard({
 								require the worker's explicit acceptance.
 							</FieldDescription>
 						</Field>
+						<Field>
+							<FieldLabel htmlFor="week-start-day">Week starts on</FieldLabel>
+							<Select
+								items={WEEK_START_ITEMS}
+								value={String(weekStartDay ?? settings.weekStartDay)}
+								onValueChange={(value) => {
+									if (!value) return;
+									setWeekStartDay(value);
+								}}
+							>
+								<SelectTrigger id="week-start-day" className="w-full">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent alignItemWithTrigger={false}>
+									<SelectGroup>
+										{WEEK_START_ITEMS.map((item) => (
+											<SelectItem key={item.value} value={item.value}>
+												{item.label}
+											</SelectItem>
+										))}
+									</SelectGroup>
+								</SelectContent>
+							</Select>
+							<FieldDescription>
+								Every schedule grid, week list, and timecard total follows this
+								day — set it once and it stays.
+							</FieldDescription>
+						</Field>
+						<Field>
+							<FieldLabel htmlFor="pay-period-type">Pay period</FieldLabel>
+							<Select
+								items={PAY_PERIOD_ITEMS}
+								value={payPeriodType ?? settings.payPeriodType}
+								onValueChange={(value) => {
+									if (!value) return;
+									setPayPeriodType(value);
+								}}
+							>
+								<SelectTrigger id="pay-period-type" className="w-full">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent alignItemWithTrigger={false}>
+									<SelectGroup>
+										{PAY_PERIOD_ITEMS.map((item) => (
+											<SelectItem key={item.value} value={item.value}>
+												{item.label}
+											</SelectItem>
+										))}
+									</SelectGroup>
+								</SelectContent>
+							</Select>
+							<FieldDescription>
+								How often the timecard resets for your team.
+							</FieldDescription>
+						</Field>
+						{((payPeriodType ?? settings.payPeriodType) === "weekly" ||
+							(payPeriodType ?? settings.payPeriodType) === "biweekly") && (
+							<Field>
+								<FieldLabel htmlFor="pay-period-anchor">
+									Period start date
+								</FieldLabel>
+								<Input
+									id="pay-period-anchor"
+									type="date"
+									defaultValue={settings.payPeriodAnchor ?? ""}
+									onChange={(event) => setAnchor(event.target.value || null)}
+								/>
+								<FieldDescription>
+									A known start of a pay period — periods repeat from this date.
+								</FieldDescription>
+							</Field>
+						)}
 					</FieldGroup>
 				)}
 			</CardContent>
-			<CardFooter className="border-t">
+			<CardFooter>
 				<Button
 					className="w-full sm:w-auto"
 					disabled={
-						save.isPending || !settings || (name === null && hours === null)
+						save.isPending ||
+						!settings ||
+						(name === null &&
+							hours === null &&
+							weekStartDay === null &&
+							payPeriodType === null &&
+							anchor === null)
 					}
 					onClick={() => save.mutate()}
 				>
@@ -262,7 +384,7 @@ function LocationsCard({
 
 	return (
 		<Card>
-			<CardHeader className="border-b">
+			<CardHeader>
 				<div className="flex flex-wrap items-center justify-between gap-2">
 					<CardTitle>Locations</CardTitle>
 					<Badge variant="secondary">{locations.length}</Badge>
@@ -390,7 +512,7 @@ function LocationsCard({
 						)}
 					/>
 				)}
-				<form className="border-t pt-5" onSubmit={submit}>
+				<form className="rounded-md bg-muted/30 p-3" onSubmit={submit}>
 					<FieldGroup className="sm:grid sm:grid-cols-2">
 						<div className="sm:col-span-2">
 							<p className="font-medium text-sm">Add a location</p>
@@ -507,7 +629,7 @@ function PositionsCard({
 
 	return (
 		<Card>
-			<CardHeader className="border-b">
+			<CardHeader>
 				<div className="flex flex-wrap items-center justify-between gap-2">
 					<CardTitle>Positions</CardTitle>
 					<Badge variant="secondary">{positions.length}</Badge>
@@ -596,7 +718,7 @@ function PositionsCard({
 						)}
 					/>
 				)}
-				<form className="border-t pt-5" onSubmit={submit}>
+				<form className="rounded-md bg-muted/30 p-3" onSubmit={submit}>
 					<FieldGroup className="sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
 						<div className="sm:col-span-2">
 							<p className="font-medium text-sm">Add a position</p>

@@ -164,6 +164,9 @@ export const workplacesRoutes = new Elysia({
 					id: workplace.id,
 					name: workplace.name,
 					noticeWindowHours: workplace.noticeWindowHours,
+					weekStartDay: workplace.weekStartDay,
+					payPeriodType: workplace.payPeriodType,
+					payPeriodAnchor: workplace.payPeriodAnchor,
 				},
 			};
 		},
@@ -196,6 +199,12 @@ export const workplacesRoutes = new Elysia({
 						name: body.name ?? existing.name,
 						noticeWindowHours:
 							body.noticeWindowHours ?? existing.noticeWindowHours,
+						weekStartDay: body.weekStartDay ?? existing.weekStartDay,
+						payPeriodType: body.payPeriodType ?? existing.payPeriodType,
+						payPeriodAnchor:
+							body.payPeriodAnchor === undefined
+								? existing.payPeriodAnchor
+								: body.payPeriodAnchor,
 						updatedAt: new Date(),
 					})
 					.where(eq(workplaces.id, existing.id))
@@ -207,6 +216,9 @@ export const workplacesRoutes = new Elysia({
 					id: updated.id,
 					name: updated.name,
 					noticeWindowHours: updated.noticeWindowHours,
+					weekStartDay: updated.weekStartDay,
+					payPeriodType: updated.payPeriodType,
+					payPeriodAnchor: updated.payPeriodAnchor,
 				},
 			};
 		},
@@ -216,6 +228,18 @@ export const workplacesRoutes = new Elysia({
 			body: t.Object({
 				name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
 				noticeWindowHours: t.Optional(t.Integer({ minimum: 0, maximum: 336 })),
+				weekStartDay: t.Optional(t.Integer({ minimum: 0, maximum: 6 })),
+				payPeriodType: t.Optional(
+					t.Union([
+						t.Literal("weekly"),
+						t.Literal("biweekly"),
+						t.Literal("semimonthly"),
+						t.Literal("monthly"),
+					]),
+				),
+				payPeriodAnchor: t.Optional(
+					t.Union([t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }), t.Null()]),
+				),
 			}),
 			detail: {
 				summary:

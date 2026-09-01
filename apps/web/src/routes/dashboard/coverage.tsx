@@ -30,6 +30,7 @@ import { toast } from "sonner";
 
 import { ProgressiveItemGroup } from "@/components/progressive-item-group";
 import { api } from "@/lib/api";
+import { useCoverageSwaps, useSwapDecision } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
 
 interface CoverageResponse {
@@ -117,7 +118,7 @@ function CoveragePage() {
 		(data?.releases.length ?? 0) > 0 || (data?.pickups.length ?? 0) > 0;
 
 	return (
-		<section className="grid gap-6 xl:grid-cols-2">
+		<section className="grid gap-4 xl:grid-cols-2">
 			{coverage.isLoading ? (
 				<div className="flex flex-col gap-3 xl:col-span-2">
 					<Skeleton className="h-24" />
@@ -141,7 +142,7 @@ function CoveragePage() {
 
 			{data && data.releases.length > 0 ? (
 				<Card>
-					<CardHeader className="border-b">
+					<CardHeader>
 						<div className="flex items-center justify-between gap-2">
 							<CardTitle>Release requests</CardTitle>
 							<Badge variant="secondary">{data.releases.length}</Badge>
@@ -211,9 +212,11 @@ function CoveragePage() {
 				</Card>
 			) : null}
 
+			<SwapsQueueCard />
+
 			{data && data.pickups.length > 0 ? (
 				<Card>
-					<CardHeader className="border-b">
+					<CardHeader>
 						<div className="flex items-center justify-between gap-2">
 							<CardTitle>Pickup requests</CardTitle>
 							<Badge variant="secondary">{data.pickups.length}</Badge>
@@ -284,6 +287,94 @@ function CoveragePage() {
 				</Card>
 			) : null}
 		</section>
+	);
+}
+
+function SwapsQueueCard() {
+	const { workplace } = useWorkplace();
+	const swaps = useCoverageSwaps(workplace?.id);
+	const decide = useSwapDecision(workplace?.id);
+	const items = swaps.data ?? [];
+
+	if (swaps.isLoading || items.length === 0) return null;
+
+	return (
+		<Card className="xl:col-span-2">
+			<CardHeader>
+				<div className="flex items-center justify-between gap-2">
+					<CardTitle>Shift swap requests</CardTitle>
+					<Badge variant="secondary">{items.length}</Badge>
+				</div>
+				<CardDescription>
+					Both workers agreed to exchange shifts. Approving exchanges the
+					assignments and republishes the schedule.
+				</CardDescription>
+			</CardHeader>
+			<CardContent>
+				<ProgressiveItemGroup
+					items={items}
+					renderItem={(swap) => (
+						<Item key={swap.id} variant="outline" role="listitem">
+							<ItemContent>
+								<ItemTitle className="w-full min-w-0">
+									{swap.requester.name} ⇄ {swap.counterpart.name}
+								</ItemTitle>
+								<ItemDescription>
+									{swap.requester.name} gives{" "}
+									{new Date(swap.requesterShift.startsAt).toLocaleString()} (
+									{swap.requesterShift.positionName}) · takes{" "}
+									{new Date(swap.counterpartShift.startsAt).toLocaleString()} (
+									{swap.counterpartShift.positionName})
+								</ItemDescription>
+							</ItemContent>
+							<ItemActions className="ml-auto w-full flex-wrap justify-end sm:w-auto">
+								<Button
+									size="sm"
+									disabled={decide.isPending}
+									onClick={() =>
+										decide.mutate(
+											{ swapId: swap.id, decision: "approved" },
+											{
+												onSuccess: (result) => {
+													const published = (
+														result as { publishedVersion?: number }
+													).publishedVersion;
+													toast.success(
+														published
+															? `Swap approved. Version ${published} published.`
+															: "Swap approved.",
+													);
+												},
+											},
+										)
+									}
+								>
+									{decide.isPending ? (
+										<Spinner data-icon="inline-start" />
+									) : null}
+									Approve &amp; publish
+								</Button>
+								<Button
+									size="sm"
+									variant="outline"
+									disabled={decide.isPending}
+									onClick={() =>
+										decide.mutate(
+											{ swapId: swap.id, decision: "declined" },
+											{
+												onSuccess: () => toast.success("Swap declined."),
+											},
+										)
+									}
+								>
+									Decline
+								</Button>
+							</ItemActions>
+						</Item>
+					)}
+				/>
+			</CardContent>
+		</Card>
 	);
 }
 

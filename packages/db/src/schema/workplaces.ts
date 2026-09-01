@@ -1,16 +1,31 @@
 import {
+	date,
 	integer,
+	pgEnum,
 	pgTable,
+	smallint,
 	text,
 	timestamp,
 	unique,
 	uuid,
 } from "drizzle-orm/pg-core";
 
+export const payPeriodTypeEnum = pgEnum("pay_period_type", [
+	"weekly",
+	"biweekly",
+	"semimonthly",
+	"monthly",
+]);
+
 export const workplaces = pgTable("workplaces", {
 	id: uuid("id").defaultRandom().primaryKey(),
 	name: text("name").notNull(),
 	noticeWindowHours: integer("notice_window_hours").notNull().default(48),
+	weekStartDay: smallint("week_start_day").notNull().default(1),
+	payPeriodType: payPeriodTypeEnum("pay_period_type")
+		.notNull()
+		.default("weekly"),
+	payPeriodAnchor: date("pay_period_anchor"),
 	createdAt: timestamp("created_at", { withTimezone: true })
 		.defaultNow()
 		.notNull(),
