@@ -164,7 +164,7 @@ function Overview() {
 		constrainedStaff.length > 0 || outstandingAcceptances.length > 0;
 
 	return (
-		<section className="flex flex-col gap-6">
+		<section className="flex flex-col gap-4">
 			{isLoading ? (
 				<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
 					{["locations", "positions", "workers", "invitations"].map((key) => (
@@ -250,7 +250,7 @@ function Overview() {
 							</Button>
 						</div>
 					</CardHeader>
-					<CardContent className="grid gap-6">
+					<CardContent className="grid gap-4">
 						{constrainedStaff.length > 0 ? (
 							<section aria-labelledby="overview-constraints-heading">
 								<div className="mb-3 flex items-center gap-2">
@@ -290,10 +290,7 @@ function Overview() {
 							</section>
 						) : null}
 						{outstandingAcceptances.length > 0 ? (
-							<section
-								aria-labelledby="overview-acceptances-heading"
-								className="border-t pt-5"
-							>
+							<section aria-labelledby="overview-acceptances-heading">
 								<h3
 									id="overview-acceptances-heading"
 									className="mb-3 font-semibold text-sm"
@@ -334,7 +331,7 @@ function Overview() {
 				</Card>
 			) : null}
 			<Card>
-				<CardHeader className="border-b">
+				<CardHeader>
 					<div className="flex flex-wrap items-start justify-between gap-3">
 						<div>
 							<CardTitle className="flex items-center gap-2">

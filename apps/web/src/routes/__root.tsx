@@ -40,6 +40,12 @@ function RootComponent() {
 	return (
 		<>
 			<HeadContent />
+			<a
+				href="#main-content"
+				className="sr-only fixed top-2 left-2 z-[100] rounded-md bg-background px-3 py-2 font-medium text-foreground shadow-lg focus:not-sr-only focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			>
+				Skip to main content
+			</a>
 			<ThemeProvider
 				attribute="class"
 				defaultTheme="system"

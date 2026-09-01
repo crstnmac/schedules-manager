@@ -8,11 +8,16 @@ type IconName = keyof typeof Ionicons.glyphMap;
 function iconForRoute(routeName: string, focused: boolean): IconName {
 	if (routeName === "index") return focused ? "calendar" : "calendar-outline";
 	if (routeName === "availability") return focused ? "time" : "time-outline";
-	if (routeName === "openshifts") return focused ? "hand-left" : "hand-left-outline";
-	if (routeName === "inbox") return focused ? "notifications" : "notifications-outline";
-	if (routeName === "manager-schedule") return focused ? "calendar" : "calendar-outline";
-	if (routeName === "manager-team") return focused ? "people" : "people-outline";
-	if (routeName === "manager-requests") return focused ? "checkmark-done" : "checkmark-done-outline";
+	if (routeName === "openshifts")
+		return focused ? "hand-left" : "hand-left-outline";
+	if (routeName === "inbox")
+		return focused ? "notifications" : "notifications-outline";
+	if (routeName === "manager-schedule")
+		return focused ? "calendar" : "calendar-outline";
+	if (routeName === "manager-team")
+		return focused ? "people" : "people-outline";
+	if (routeName === "manager-requests")
+		return focused ? "checkmark-done" : "checkmark-done-outline";
 	return focused ? "ellipse" : "ellipse-outline";
 }
 
@@ -27,20 +32,50 @@ function labelForRoute(routeName: string): string {
 	return routeName;
 }
 
-export function BottomNav(props: { state: { index: number; routes: { key: string; name: string }[] }; descriptors: Record<string, { options: { title?: string; href?: unknown } }>; navigation: { emit: (e: { type: string; target: string }) => { defaultPrevented: boolean }; navigate: (name: string) => void }; insets: { top: number; bottom: number; left: number; right: number } }) {
-	const { state, descriptors, navigation, insets } = props as unknown as { state: { index: number; routes: { key: string; name: string }[] }; descriptors: Record<string, { options: { title?: string; href?: unknown } }>; navigation: { emit: (e: { type: string; target: string }) => { defaultPrevented: boolean }; navigate: (name: string) => void }; insets: { top: number; bottom: number; left: number; right: number } };
+export function BottomNav(props: {
+	state: { index: number; routes: { key: string; name: string }[] };
+	descriptors: Record<string, { options: { title?: string; href?: unknown } }>;
+	navigation: {
+		emit: (e: { type: string; target: string }) => {
+			defaultPrevented: boolean;
+		};
+		navigate: (name: string) => void;
+	};
+	insets: { top: number; bottom: number; left: number; right: number };
+}) {
+	const { state, descriptors, navigation, insets } = props as unknown as {
+		state: { index: number; routes: { key: string; name: string }[] };
+		descriptors: Record<
+			string,
+			{ options: { title?: string; href?: unknown } }
+		>;
+		navigation: {
+			emit: (e: { type: string; target: string }) => {
+				defaultPrevented: boolean;
+			};
+			navigate: (name: string) => void;
+		};
+		insets: { top: number; bottom: number; left: number; right: number };
+	};
 	const colorScheme = Appearance.getColorScheme() ?? "light";
 	const theme = colorScheme === "dark" ? NAV_THEME.dark : NAV_THEME.light;
 
-	const visibleRoutes = state.routes.filter((route: { key: string; name: string }) => {
-		const opts = descriptors[route.key]?.options as { href?: unknown } | undefined;
-		return opts?.href !== null;
-	});
+	const visibleRoutes = state.routes.filter(
+		(route: { key: string; name: string }) => {
+			const opts = descriptors[route.key]?.options as
+				| { href?: unknown }
+				| undefined;
+			return opts?.href !== null;
+		},
+	);
 
 	return (
 		<View
 			pointerEvents="box-none"
-			style={[styles.outer, { paddingBottom: Math.max(insets.bottom, 8), paddingHorizontal: 12 }]}
+			style={[
+				styles.outer,
+				{ paddingBottom: Math.max(insets.bottom, 8), paddingHorizontal: 12 },
+			]}
 		>
 			<View
 				style={[
@@ -60,10 +95,15 @@ export function BottomNav(props: { state: { index: number; routes: { key: string
 					const iconName = iconForRoute(route.name, isFocused);
 
 					const onPress = () => {
-						const event = navigation.emit({ type: "tabPress", target: route.key });
-						if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name as never);
+						const event = navigation.emit({
+							type: "tabPress",
+							target: route.key,
+						});
+						if (!isFocused && !event.defaultPrevented)
+							navigation.navigate(route.name as never);
 					};
-					const onLongPress = () => navigation.emit({ type: "tabLongPress", target: route.key });
+					const onLongPress = () =>
+						navigation.emit({ type: "tabLongPress", target: route.key });
 
 					return (
 						<Pressable
@@ -77,7 +117,9 @@ export function BottomNav(props: { state: { index: number; routes: { key: string
 							style={({ pressed }) => [
 								styles.tab,
 								{
-									backgroundColor: isFocused ? `${theme.primary}14` : "transparent",
+									backgroundColor: isFocused
+										? `${theme.primary}14`
+										: "transparent",
 									opacity: pressed ? 0.72 : 1,
 								},
 							]}
@@ -94,12 +136,19 @@ export function BottomNav(props: { state: { index: number; routes: { key: string
 								numberOfLines={1}
 								style={[
 									styles.label,
-									{ color: isFocused ? theme.primary : theme.muted, fontWeight: isFocused ? "800" : "600" },
+									{
+										color: isFocused ? theme.primary : theme.muted,
+										fontWeight: isFocused ? "800" : "600",
+									},
 								]}
 							>
 								{label}
 							</Text>
-							{isFocused ? <View style={[styles.indicator, { backgroundColor: theme.primary }]} /> : null}
+							{isFocused ? (
+								<View
+									style={[styles.indicator, { backgroundColor: theme.primary }]}
+								/>
+							) : null}
 						</Pressable>
 					);
 				})}

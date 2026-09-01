@@ -10,11 +10,10 @@ import {
 	TextInput,
 	View,
 } from "react-native";
-
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NAV_THEME } from "@/lib/constants";
 import { supabase } from "@/lib/supabase";
 import { useColorScheme } from "@/lib/use-color-scheme";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Mode = "sign-in" | "sign-up";
 
@@ -71,7 +70,10 @@ export function AuthScreen() {
 			<ScrollView
 				contentContainerStyle={[
 					styles.scrollContent,
-					{ paddingTop: Math.max(insets.top, 12) + 16, paddingBottom: Math.max(insets.bottom, 16) + 16 },
+					{
+						paddingTop: Math.max(insets.top, 12) + 16,
+						paddingBottom: Math.max(insets.bottom, 16) + 16,
+					},
 				]}
 				keyboardShouldPersistTaps="handled"
 				keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
@@ -83,9 +85,7 @@ export function AuthScreen() {
 						{ backgroundColor: theme.card, borderColor: theme.border },
 					]}
 				>
-					<Text style={[styles.brand, { color: theme.primary }]}>
-						jooling
-					</Text>
+					<Text style={[styles.brand, { color: theme.primary }]}>jooling</Text>
 					<Text style={[styles.title, { color: theme.text }]}>
 						{mode === "sign-in" ? "Welcome back" : "Create your account"}
 					</Text>
@@ -205,8 +205,19 @@ const styles = StyleSheet.create({
 		padding: 20,
 		gap: 2,
 	},
-	brand: { fontSize: 11, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase" },
-	title: { fontSize: 30, lineHeight: 36, fontWeight: "800", letterSpacing: -0.6, marginTop: 8 },
+	brand: {
+		fontSize: 11,
+		fontWeight: "800",
+		letterSpacing: 1,
+		textTransform: "uppercase",
+	},
+	title: {
+		fontSize: 30,
+		lineHeight: 36,
+		fontWeight: "800",
+		letterSpacing: -0.6,
+		marginTop: 8,
+	},
 	description: {
 		fontSize: 14,
 		lineHeight: 20,

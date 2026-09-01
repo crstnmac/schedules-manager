@@ -9,12 +9,11 @@ import {
 	TextInput,
 	View,
 } from "react-native";
-
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AuthScreen } from "@/components/auth-screen";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { NAV_THEME } from "@/lib/constants";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
 	useAcceptInvitation,
 	useMe,
@@ -26,7 +25,9 @@ import { useSelectedWorkplaceId } from "@/lib/workplace-store";
 export function SessionGate({ children }: PropsWithChildren) {
 	const { isLoading: authLoading, user, signOut } = useAuth();
 	const { selected, select } = useSelectedWorkplaceId();
-	const [setupPath, setSetupPath] = useState<"choose" | "manager" | "worker">("choose");
+	const [setupPath, setSetupPath] = useState<"choose" | "manager" | "worker">(
+		"choose",
+	);
 	const me = useMe(Boolean(user));
 	const invitations = usePendingInvitations(Boolean(user));
 
@@ -64,8 +65,10 @@ export function SessionGate({ children }: PropsWithChildren) {
 		if (pending.length > 0) {
 			return <InvitationView />;
 		}
-		if (setupPath === "manager") return <WorkplaceSetup onBack={() => setSetupPath("choose")} />;
-		if (setupPath === "worker") return <WorkerJoin onBack={() => setSetupPath("choose")} />;
+		if (setupPath === "manager")
+			return <WorkplaceSetup onBack={() => setSetupPath("choose")} />;
+		if (setupPath === "worker")
+			return <WorkerJoin onBack={() => setSetupPath("choose")} />;
 		return <OnboardingChoice onChoose={setSetupPath} />;
 	}
 
@@ -89,27 +92,85 @@ export function SessionGate({ children }: PropsWithChildren) {
 	return <>{children}</>;
 }
 
-function OnboardingChoice({ onChoose }: { onChoose: (path: "manager" | "worker") => void }) {
+function OnboardingChoice({
+	onChoose,
+}: {
+	onChoose: (path: "manager" | "worker") => void;
+}) {
 	const { colorScheme } = useColorScheme();
 	const theme = colorScheme === "dark" ? NAV_THEME.dark : NAV_THEME.light;
 	const insets = useSafeAreaInsets();
 	const { signOut } = useAuth();
 
 	return (
-		<View style={[styles.centered, { backgroundColor: theme.background, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+		<View
+			style={[
+				styles.centered,
+				{
+					backgroundColor: theme.background,
+					paddingTop: insets.top,
+					paddingBottom: insets.bottom,
+				},
+			]}
+		>
 			<View style={styles.messageContent}>
-				<Text style={[styles.eyebrow, { color: theme.primary }]}>GET STARTED</Text>
-				<Text style={[styles.title, { color: theme.text }]}>How are you joining?</Text>
-				<Text style={[styles.body, { color: theme.muted }]}>Choose the option that matches your role. You can belong to more than one workplace later.</Text>
-				<Pressable accessibilityRole="button" onPress={() => onChoose("worker")} style={({ pressed }) => [styles.choiceCard, { backgroundColor: theme.card, borderColor: theme.primary, opacity: pressed ? 0.75 : 1 }]}>
-					<Text style={[styles.cardTitle, { color: theme.text }]}>I’m a team member</Text>
-					<Text style={[styles.cardBody, { color: theme.muted }]}>Join a workplace using the invitation from your manager.</Text>
+				<Text style={[styles.eyebrow, { color: theme.primary }]}>
+					GET STARTED
+				</Text>
+				<Text style={[styles.title, { color: theme.text }]}>
+					How are you joining?
+				</Text>
+				<Text style={[styles.body, { color: theme.muted }]}>
+					Choose the option that matches your role. You can belong to more than
+					one workplace later.
+				</Text>
+				<Pressable
+					accessibilityRole="button"
+					onPress={() => onChoose("worker")}
+					style={({ pressed }) => [
+						styles.choiceCard,
+						{
+							backgroundColor: theme.card,
+							borderColor: theme.primary,
+							opacity: pressed ? 0.75 : 1,
+						},
+					]}
+				>
+					<Text style={[styles.cardTitle, { color: theme.text }]}>
+						I’m a team member
+					</Text>
+					<Text style={[styles.cardBody, { color: theme.muted }]}>
+						Join a workplace using the invitation from your manager.
+					</Text>
 				</Pressable>
-				<Pressable accessibilityRole="button" onPress={() => onChoose("manager")} style={({ pressed }) => [styles.choiceCard, { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.75 : 1 }]}>
-					<Text style={[styles.cardTitle, { color: theme.text }]}>I manage a workplace</Text>
-					<Text style={[styles.cardBody, { color: theme.muted }]}>Create a new workplace and invite your team.</Text>
+				<Pressable
+					accessibilityRole="button"
+					onPress={() => onChoose("manager")}
+					style={({ pressed }) => [
+						styles.choiceCard,
+						{
+							backgroundColor: theme.card,
+							borderColor: theme.border,
+							opacity: pressed ? 0.75 : 1,
+						},
+					]}
+				>
+					<Text style={[styles.cardTitle, { color: theme.text }]}>
+						I manage a workplace
+					</Text>
+					<Text style={[styles.cardBody, { color: theme.muted }]}>
+						Create a new workplace and invite your team.
+					</Text>
 				</Pressable>
-				<Pressable accessibilityRole="button" onPress={() => void signOut()} style={styles.signOutLink}><Text style={[styles.secondaryButtonText, { color: theme.muted }]}>Sign out</Text></Pressable>
+				<Pressable
+					accessibilityRole="button"
+					onPress={() => void signOut()}
+					style={styles.signOutLink}
+				>
+					<Text style={[styles.secondaryButtonText, { color: theme.muted }]}>
+						Sign out
+					</Text>
+				</Pressable>
 			</View>
 		</View>
 	);
@@ -126,15 +187,73 @@ function WorkerJoin({ onBack }: { onBack: () => void }) {
 	const validToken = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(token);
 
 	return (
-		<ScrollView style={[styles.screen, { backgroundColor: theme.background }]} contentContainerStyle={[styles.scrollContent, { paddingTop: Math.max(insets.top, 12) + 24, paddingBottom: Math.max(insets.bottom, 12) + 24 }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets>
-			<Text style={[styles.eyebrow, { color: theme.primary }]}>TEAM MEMBER SETUP</Text>
-			<Text style={[styles.title, { color: theme.text }]}>Join your workplace</Text>
-			<Text style={[styles.body, { color: theme.muted }]}>Ask your manager to invite this account’s email. New invitations will appear automatically.</Text>
-			<View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-				<Text style={[styles.cardTitle, { color: theme.text }]}>Have an invite link or code?</Text>
-				<TextInput accessibilityLabel="Invitation link or code" autoCapitalize="none" autoCorrect={false} value={invite} onChangeText={setInvite} placeholder="Paste invitation link or code" placeholderTextColor={theme.muted} style={[styles.input, { color: theme.text, borderColor: theme.border }]} />
-				<Pressable accessibilityRole="button" disabled={!validToken || accept.isPending} onPress={() => accept.mutate(token)} style={({ pressed }) => [styles.primaryButton, { backgroundColor: theme.primary, opacity: !validToken || accept.isPending ? 0.45 : pressed ? 0.8 : 1 }]}>
-					{accept.isPending ? <ActivityIndicator color={theme.onPrimary} /> : <Text style={[styles.primaryButtonText, { color: theme.onPrimary }]}>Join workplace</Text>}
+		<ScrollView
+			style={[styles.screen, { backgroundColor: theme.background }]}
+			contentContainerStyle={[
+				styles.scrollContent,
+				{
+					paddingTop: Math.max(insets.top, 12) + 24,
+					paddingBottom: Math.max(insets.bottom, 12) + 24,
+				},
+			]}
+			keyboardShouldPersistTaps="handled"
+			keyboardDismissMode="on-drag"
+			automaticallyAdjustKeyboardInsets
+		>
+			<Text style={[styles.eyebrow, { color: theme.primary }]}>
+				TEAM MEMBER SETUP
+			</Text>
+			<Text style={[styles.title, { color: theme.text }]}>
+				Join your workplace
+			</Text>
+			<Text style={[styles.body, { color: theme.muted }]}>
+				Ask your manager to invite this account’s email. New invitations will
+				appear automatically.
+			</Text>
+			<View
+				style={[
+					styles.card,
+					{ backgroundColor: theme.card, borderColor: theme.border },
+				]}
+			>
+				<Text style={[styles.cardTitle, { color: theme.text }]}>
+					Have an invite link or code?
+				</Text>
+				<TextInput
+					accessibilityLabel="Invitation link or code"
+					autoCapitalize="none"
+					autoCorrect={false}
+					value={invite}
+					onChangeText={setInvite}
+					placeholder="Paste invitation link or code"
+					placeholderTextColor={theme.muted}
+					style={[
+						styles.input,
+						{ color: theme.text, borderColor: theme.border },
+					]}
+				/>
+				<Pressable
+					accessibilityRole="button"
+					disabled={!validToken || accept.isPending}
+					onPress={() => accept.mutate(token)}
+					style={({ pressed }) => [
+						styles.primaryButton,
+						{
+							backgroundColor: theme.primary,
+							opacity:
+								!validToken || accept.isPending ? 0.45 : pressed ? 0.8 : 1,
+						},
+					]}
+				>
+					{accept.isPending ? (
+						<ActivityIndicator color={theme.onPrimary} />
+					) : (
+						<Text
+							style={[styles.primaryButtonText, { color: theme.onPrimary }]}
+						>
+							Join workplace
+						</Text>
+					)}
 				</Pressable>
 				{accept.isError ? (
 					<Text
@@ -145,8 +264,25 @@ function WorkerJoin({ onBack }: { onBack: () => void }) {
 					</Text>
 				) : null}
 			</View>
-			<Pressable accessibilityRole="button" disabled={invitations.isFetching} onPress={() => void invitations.refetch()} style={[styles.secondaryButton, { borderColor: theme.border }]}><Text style={[styles.secondaryButtonText, { color: theme.text }]}>{invitations.isFetching ? "Checking…" : "Check for invitation"}</Text></Pressable>
-			<Pressable accessibilityRole="button" onPress={onBack} style={styles.signOutLink}><Text style={[styles.secondaryButtonText, { color: theme.muted }]}>Back</Text></Pressable>
+			<Pressable
+				accessibilityRole="button"
+				disabled={invitations.isFetching}
+				onPress={() => void invitations.refetch()}
+				style={[styles.secondaryButton, { borderColor: theme.border }]}
+			>
+				<Text style={[styles.secondaryButtonText, { color: theme.text }]}>
+					{invitations.isFetching ? "Checking…" : "Check for invitation"}
+				</Text>
+			</Pressable>
+			<Pressable
+				accessibilityRole="button"
+				onPress={onBack}
+				style={styles.signOutLink}
+			>
+				<Text style={[styles.secondaryButtonText, { color: theme.muted }]}>
+					Back
+				</Text>
+			</Pressable>
 		</ScrollView>
 	);
 }
@@ -197,7 +333,10 @@ function WorkplaceSetup({ onBack }: { onBack: () => void }) {
 			style={[styles.screen, { backgroundColor: theme.background }]}
 			contentContainerStyle={[
 				styles.scrollContent,
-				{ paddingTop: Math.max(insets.top, 12) + 24, paddingBottom: Math.max(insets.bottom, 12) + 24 },
+				{
+					paddingTop: Math.max(insets.top, 12) + 24,
+					paddingBottom: Math.max(insets.bottom, 12) + 24,
+				},
 			]}
 			keyboardShouldPersistTaps="handled"
 			keyboardDismissMode="on-drag"
@@ -276,7 +415,7 @@ function WorkplaceSetup({ onBack }: { onBack: () => void }) {
 				onPress={onBack}
 				style={styles.signOutLink}
 			>
-				<Text style={[styles.secondaryButtonText, { color: theme.muted }]}> 
+				<Text style={[styles.secondaryButtonText, { color: theme.muted }]}>
 					Back
 				</Text>
 			</Pressable>
@@ -320,7 +459,11 @@ function Splash() {
 		<View
 			style={[
 				styles.centered,
-				{ backgroundColor: theme.background, paddingTop: insets.top, paddingBottom: insets.bottom },
+				{
+					backgroundColor: theme.background,
+					paddingTop: insets.top,
+					paddingBottom: insets.bottom,
+				},
 			]}
 		>
 			<ActivityIndicator color={theme.primary} />
@@ -342,7 +485,10 @@ function InvitationView() {
 			style={[styles.screen, { backgroundColor: theme.background }]}
 			contentContainerStyle={[
 				styles.scrollContent,
-				{ paddingTop: Math.max(insets.top, 12) + 24, paddingBottom: Math.max(insets.bottom, 12) + 24 },
+				{
+					paddingTop: Math.max(insets.top, 12) + 24,
+					paddingBottom: Math.max(insets.bottom, 12) + 24,
+				},
 			]}
 		>
 			<Text style={[styles.title, { color: theme.text }]}>
@@ -443,7 +589,11 @@ function Message({
 		<View
 			style={[
 				styles.centered,
-				{ backgroundColor: theme.background, paddingTop: insets.top, paddingBottom: insets.bottom },
+				{
+					backgroundColor: theme.background,
+					paddingTop: insets.top,
+					paddingBottom: insets.bottom,
+				},
 			]}
 		>
 			<View style={styles.messageContent}>
@@ -506,7 +656,10 @@ function PickerView({
 			style={[styles.screen, { backgroundColor: theme.background }]}
 			contentContainerStyle={[
 				styles.scrollContent,
-				{ paddingTop: Math.max(insets.top, 12) + 24, paddingBottom: Math.max(insets.bottom, 12) + 24 },
+				{
+					paddingTop: Math.max(insets.top, 12) + 24,
+					paddingBottom: Math.max(insets.bottom, 12) + 24,
+				},
 			]}
 		>
 			<Text style={[styles.title, { color: theme.text }]}>
@@ -549,7 +702,12 @@ const styles = StyleSheet.create({
 		padding: 24,
 		gap: 12,
 	},
-	title: { fontSize: 30, lineHeight: 36, fontWeight: "800", letterSpacing: -0.6 },
+	title: {
+		fontSize: 30,
+		lineHeight: 36,
+		fontWeight: "800",
+		letterSpacing: -0.6,
+	},
 	body: { fontSize: 14, lineHeight: 21 },
 	card: {
 		borderWidth: 1,
@@ -557,7 +715,14 @@ const styles = StyleSheet.create({
 		padding: 16,
 		gap: 10,
 	},
-	choiceCard: { borderWidth: 1.5, borderRadius: 16, padding: 18, gap: 4, minHeight: 88, justifyContent: "center" },
+	choiceCard: {
+		borderWidth: 1.5,
+		borderRadius: 16,
+		padding: 18,
+		gap: 4,
+		minHeight: 88,
+		justifyContent: "center",
+	},
 	cardTitle: { fontSize: 17, fontWeight: "700", lineHeight: 24 },
 	cardBody: { fontSize: 14, lineHeight: 21 },
 	primaryButton: {
@@ -580,7 +745,12 @@ const styles = StyleSheet.create({
 	},
 	secondaryButtonText: { fontSize: 15, fontWeight: "600" },
 	error: { fontSize: 13, lineHeight: 19 },
-	eyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1.1, textTransform: "uppercase" },
+	eyebrow: {
+		fontSize: 11,
+		fontWeight: "800",
+		letterSpacing: 1.1,
+		textTransform: "uppercase",
+	},
 	field: { gap: 6 },
 	fieldLabel: { fontSize: 13, fontWeight: "700" },
 	input: {

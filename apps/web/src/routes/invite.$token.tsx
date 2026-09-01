@@ -45,7 +45,11 @@ function InvitePage() {
 
 	if (authLoading || preview.isLoading) {
 		return (
-			<main className="grid min-h-svh place-items-center">
+			<main
+				id="main-content"
+				tabIndex={-1}
+				className="grid min-h-svh place-items-center"
+			>
 				<Spinner />
 				<span className="sr-only">Loading invitation</span>
 			</main>
@@ -120,7 +124,11 @@ function InvitePage() {
 	}
 
 	return (
-		<main className="grid min-h-svh place-items-center">
+		<main
+			id="main-content"
+			tabIndex={-1}
+			className="grid min-h-svh place-items-center"
+		>
 			<Spinner />
 			<span className="sr-only">Accepting invitation</span>
 		</main>
@@ -143,7 +151,11 @@ function InviteMessage({
 	};
 }) {
 	return (
-		<main className="grid min-h-svh place-items-center px-4 py-10">
+		<main
+			id="main-content"
+			tabIndex={-1}
+			className="grid min-h-svh place-items-center px-4 py-10"
+		>
 			<Empty className="max-w-md border border-dashed">
 				<EmptyHeader>
 					<EmptyMedia variant="icon">

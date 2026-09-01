@@ -68,7 +68,11 @@ function OnboardingComponent() {
 	if (!user) return <Navigate to="/" replace />;
 	if (me.isLoading || pending.isLoading) {
 		return (
-			<main className="grid min-h-svh place-items-center">
+			<main
+				id="main-content"
+				tabIndex={-1}
+				className="grid min-h-svh place-items-center"
+			>
 				<Spinner />
 				<span className="sr-only">Loading</span>
 			</main>
@@ -87,7 +91,12 @@ function OnboardingComponent() {
 	}
 
 	return (
-		<main className="grid min-h-svh place-items-center bg-muted/35 px-4 py-10">
+		<main
+			id="main-content"
+			tabIndex={-1}
+			className="grid min-h-svh place-items-center bg-muted/35 px-4 py-10"
+		>
+			<h1 className="sr-only">Set up your workplace</h1>
 			<Card className="w-full max-w-md">
 				<CardHeader>
 					<CardTitle>Set up your workplace</CardTitle>

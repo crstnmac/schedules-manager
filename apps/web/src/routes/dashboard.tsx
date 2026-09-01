@@ -45,6 +45,7 @@ import {
 	UsersIcon,
 	WorkflowIcon,
 } from "lucide-react";
+import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { profileInitials } from "@/components/current-profile";
@@ -83,6 +84,17 @@ function DashboardLayout() {
 	const pathname = useRouterState({
 		select: (state) => state.location.pathname,
 	});
+	const isSchedule = pathname.startsWith("/dashboard/schedule");
+	const activePage =
+		navigation.find((item) =>
+			"exact" in item && item.exact
+				? pathname === item.to
+				: pathname.startsWith(item.to),
+		)?.label ?? "Overview";
+
+	useEffect(() => {
+		document.title = `${activePage} · jooling`;
+	}, [activePage]);
 	const handleSignOut = async () => {
 		try {
 			await signOut();
@@ -96,21 +108,17 @@ function DashboardLayout() {
 	if (!user) return <Navigate to="/" replace />;
 	if (isLoading)
 		return (
-			<main className="grid min-h-svh place-items-center">
+			<main
+				id="main-content"
+				tabIndex={-1}
+				className="grid min-h-svh place-items-center"
+			>
 				<Spinner />
 				<span className="sr-only">Loading workspace</span>
 			</main>
 		);
 	if (!workplace) return <Navigate to="/" replace />;
 	if (kind === "worker") return <Navigate to="/worker" replace />;
-
-	const isSchedule = pathname.startsWith("/dashboard/schedule");
-	const activePage =
-		navigation.find((item) =>
-			"exact" in item && item.exact
-				? pathname === item.to
-				: pathname.startsWith(item.to),
-		)?.label ?? "Overview";
 
 	return (
 		<SidebarProvider>
@@ -136,30 +144,33 @@ function DashboardLayout() {
 					<SidebarGroup>
 						<SidebarGroupLabel>Operations</SidebarGroupLabel>
 						<SidebarGroupContent>
-							<SidebarMenu>
-								{navigation.map((item) => {
-									const active =
-										"exact" in item && item.exact
-											? pathname === item.to
-											: pathname.startsWith(item.to);
-									return (
-										<SidebarMenuItem key={item.to}>
-											<SidebarMenuButton
-												isActive={active}
-												tooltip={item.label}
-												render={<Link to={item.to} />}
-											>
-												<item.icon />
-												<span>{item.label}</span>
-												{item.to === "/dashboard/activity" &&
-												unreadCount > 0 ? (
-													<SidebarMenuBadge>{unreadCount}</SidebarMenuBadge>
-												) : null}
-											</SidebarMenuButton>
-										</SidebarMenuItem>
-									);
-								})}
-							</SidebarMenu>
+							<nav aria-label="Manager navigation">
+								<SidebarMenu>
+									{navigation.map((item) => {
+										const active =
+											"exact" in item && item.exact
+												? pathname === item.to
+												: pathname.startsWith(item.to);
+										return (
+											<SidebarMenuItem key={item.to}>
+												<SidebarMenuButton
+													isActive={active}
+													aria-current={active ? "page" : undefined}
+													tooltip={item.label}
+													render={<Link to={item.to} />}
+												>
+													<item.icon />
+													<span>{item.label}</span>
+													{item.to === "/dashboard/activity" &&
+													unreadCount > 0 ? (
+														<SidebarMenuBadge>{unreadCount}</SidebarMenuBadge>
+													) : null}
+												</SidebarMenuButton>
+											</SidebarMenuItem>
+										);
+									})}
+								</SidebarMenu>
+							</nav>
 						</SidebarGroupContent>
 					</SidebarGroup>
 				</SidebarContent>
@@ -245,7 +256,9 @@ function DashboardLayout() {
 						/>
 					) : null}
 				</header>
-				<div
+				<main
+					id="main-content"
+					tabIndex={-1}
 					className={cn(
 						"flex min-h-0 min-w-0 flex-1 flex-col",
 						isSchedule
@@ -254,7 +267,7 @@ function DashboardLayout() {
 					)}
 				>
 					<Outlet />
-				</div>
+				</main>
 			</SidebarInset>
 		</SidebarProvider>
 	);

@@ -12,11 +12,20 @@ config.resolver.extraNodeModules = {
 	...(config.resolver.extraNodeModules || {}),
 	react: path.join(appNodeModules, "react"),
 	"react-native": path.join(appNodeModules, "react-native"),
-	"react-native-safe-area-context": path.join(appNodeModules, "react-native-safe-area-context"),
+	"react-native-safe-area-context": path.join(
+		appNodeModules,
+		"react-native-safe-area-context",
+	),
 	"@tanstack/react-query": path.join(appNodeModules, "@tanstack/react-query"),
 };
-config.resolver.nodeModulesPaths = [appNodeModules, path.resolve(__dirname, "../../node_modules")];
-config.watchFolders = [...(config.watchFolders || []), path.resolve(__dirname, "../..")];
+config.resolver.nodeModulesPaths = [
+	appNodeModules,
+	path.resolve(__dirname, "../../node_modules"),
+];
+config.watchFolders = [
+	...(config.watchFolders || []),
+	path.resolve(__dirname, "../.."),
+];
 
 // Dedupe React: extraNodeModules forces single copy from app's node_modules.
 // (Blocking node_modules/.bun via blockList broke react/jsx-runtime resolution

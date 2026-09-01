@@ -247,7 +247,7 @@ function AvailabilityPage() {
 	}
 
 	return (
-		<section className="flex flex-col gap-6">
+		<section className="flex flex-col gap-4">
 			<PageHeader
 				title="Availability"
 				description="Three separate actions: when you cannot work, optional preferences, and time-off requests."

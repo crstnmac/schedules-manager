@@ -51,9 +51,9 @@ function ActivityPage() {
 	const events = audit.data ?? [];
 
 	return (
-		<section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)]">
+		<section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)]">
 			<Card>
-				<CardHeader className="border-b">
+				<CardHeader>
 					<div className="flex flex-wrap items-start justify-between gap-3">
 						<div>
 							<div className="flex items-center gap-2">
@@ -142,7 +142,7 @@ function ActivityPage() {
 			</Card>
 
 			<Card>
-				<CardHeader className="border-b">
+				<CardHeader>
 					<CardTitle>Audit trail</CardTitle>
 					<CardDescription>
 						Publication, time-off decisions, and coverage assignments.

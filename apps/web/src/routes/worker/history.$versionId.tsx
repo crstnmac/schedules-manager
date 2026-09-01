@@ -37,7 +37,7 @@ function WorkerHistory() {
 	const data = version.data;
 
 	return (
-		<section className="flex flex-col gap-6">
+		<section className="flex flex-col gap-4">
 			<Button
 				variant="ghost"
 				size="sm"

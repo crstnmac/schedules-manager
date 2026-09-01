@@ -41,7 +41,7 @@ function MessageScrollerViewport({
 		<MessageScrollerPrimitive.Viewport
 			data-slot="message-scroller-viewport"
 			className={cn(
-				"scroll-fade-b scrollbar-thin scrollbar-gutter-stable data-autoscrolling:scrollbar-thumb-transparent data-autoscrolling:scrollbar-track-transparent size-full min-h-0 min-w-0 overflow-y-auto overscroll-contain contain-content",
+				"scroll-fade-b scrollbar-thin scrollbar-gutter-stable data-autoscrolling:scrollbar-thumb-transparent data-autoscrolling:scrollbar-track-transparent size-full min-h-0 min-w-0 overflow-y-auto overscroll-contain contain-content data-pending-scroll:invisible",
 				className,
 			)}
 			{...props}
@@ -56,7 +56,7 @@ function MessageScrollerContent({
 	return (
 		<MessageScrollerPrimitive.Content
 			data-slot="message-scroller-content"
-			className={cn("flex h-max min-h-full flex-col gap-8", className)}
+			className={cn("flex h-max min-h-full flex-col gap-6", className)}
 			{...props}
 		/>
 	);

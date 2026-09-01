@@ -103,9 +103,9 @@ function TimeOffPage() {
 	);
 
 	return (
-		<section className="flex flex-col gap-6">
+		<section className="flex flex-col gap-4">
 			<Card>
-				<CardHeader className="flex-col items-stretch gap-3 border-b sm:flex-row sm:items-center sm:justify-between">
+				<CardHeader className="flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div className="flex items-center gap-2">
 						<CardTitle>
 							{filter === "pending" ? "Pending requests" : "All requests"}

@@ -1,9 +1,9 @@
 import {
+	DatePickerDialog,
 	Host,
 	Badge as MaterialBadge,
 	Button as MaterialButton,
 	Card as MaterialCard,
-	DatePickerDialog,
 	Text as MaterialText,
 	OutlinedButton,
 	OutlinedTextField,
@@ -12,9 +12,10 @@ import {
 	SingleChoiceSegmentedButtonRow,
 	TextButton,
 	TimePickerDialog,
-	useNativeState,
 	useMaterialColors,
+	useNativeState,
 } from "@expo/ui/jetpack-compose";
+import { fillMaxWidth } from "@expo/ui/jetpack-compose/modifiers";
 import type * as React from "react";
 import { useEffect, useState } from "react";
 import {
@@ -27,7 +28,6 @@ import {
 	View,
 	type ViewStyle,
 } from "react-native";
-import { fillMaxWidth } from "@expo/ui/jetpack-compose/modifiers";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { NAV_THEME } from "@/lib/constants";
@@ -86,7 +86,11 @@ export function AppScreen({
 			</View>
 		);
 	return (
-		<KeyboardAvoidingView style={[styles.screen, { backgroundColor: theme.background }]} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
+		<KeyboardAvoidingView
+			style={[styles.screen, { backgroundColor: theme.background }]}
+			behavior={Platform.OS === "ios" ? "padding" : "height"}
+			keyboardVerticalOffset={0}
+		>
 			<ScrollView
 				style={styles.screen}
 				contentContainerStyle={[styles.content, padding, contentStyle]}
@@ -351,9 +355,17 @@ export function Divider() {
 }
 
 export function NativeField({
-	label, value, onChange, placeholder, multiline = false,
+	label,
+	value,
+	onChange,
+	placeholder,
+	multiline = false,
 }: {
-	label: string; value: string; onChange: (value: string) => void; placeholder?: string; multiline?: boolean;
+	label: string;
+	value: string;
+	onChange: (value: string) => void;
+	placeholder?: string;
+	multiline?: boolean;
 }) {
 	const { colorScheme } = useAppTheme();
 	const nativeValue = useNativeState(value);
@@ -361,24 +373,61 @@ export function NativeField({
 		nativeValue.value = value;
 	}, [nativeValue, value]);
 	return (
-		<Host matchContents={{ vertical: true, horizontal: false }} colorScheme={colorScheme} style={styles.nativeHost}>
-			<OutlinedTextField value={nativeValue} singleLine={!multiline} minLines={multiline ? 3 : 1} maxLines={multiline ? 5 : 1} keyboardOptions={{ capitalization: multiline ? "sentences" : "none", imeAction: multiline ? "default" : "next" }} onValueChange={onChange} modifiers={[fillMaxWidth()]}> 
-				<OutlinedTextField.Label><MaterialText>{label}</MaterialText></OutlinedTextField.Label>
-				{placeholder ? <OutlinedTextField.Placeholder><MaterialText>{placeholder}</MaterialText></OutlinedTextField.Placeholder> : null}
+		<Host
+			matchContents={{ vertical: true, horizontal: false }}
+			colorScheme={colorScheme}
+			style={styles.nativeHost}
+		>
+			<OutlinedTextField
+				value={nativeValue}
+				singleLine={!multiline}
+				minLines={multiline ? 3 : 1}
+				maxLines={multiline ? 5 : 1}
+				keyboardOptions={{
+					capitalization: multiline ? "sentences" : "none",
+					imeAction: multiline ? "default" : "next",
+				}}
+				onValueChange={onChange}
+				modifiers={[fillMaxWidth()]}
+			>
+				<OutlinedTextField.Label>
+					<MaterialText>{label}</MaterialText>
+				</OutlinedTextField.Label>
+				{placeholder ? (
+					<OutlinedTextField.Placeholder>
+						<MaterialText>{placeholder}</MaterialText>
+					</OutlinedTextField.Placeholder>
+				) : null}
 			</OutlinedTextField>
 		</Host>
 	);
 }
 
-export function NativeWeekdayPicker({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+export function NativeWeekdayPicker({
+	value,
+	onChange,
+}: {
+	value: number;
+	onChange: (value: number) => void;
+}) {
 	const { colorScheme } = useAppTheme();
 	const days = ["S", "M", "T", "W", "T", "F", "S"];
 	return (
-		<Host matchContents={{ vertical: true, horizontal: false }} colorScheme={colorScheme} style={styles.nativeHost}>
+		<Host
+			matchContents={{ vertical: true, horizontal: false }}
+			colorScheme={colorScheme}
+			style={styles.nativeHost}
+		>
 			<SingleChoiceSegmentedButtonRow modifiers={[fillMaxWidth()]}>
 				{days.map((day, index) => (
-					<SegmentedButton key={`${day}-${index}`} selected={value === index} onClick={() => onChange(index)}>
-						<SegmentedButton.Label><MaterialText>{day}</MaterialText></SegmentedButton.Label>
+					<SegmentedButton
+						key={`${day}-${index}`}
+						selected={value === index}
+						onClick={() => onChange(index)}
+					>
+						<SegmentedButton.Label>
+							<MaterialText>{day}</MaterialText>
+						</SegmentedButton.Label>
 					</SegmentedButton>
 				))}
 			</SingleChoiceSegmentedButtonRow>
@@ -386,28 +435,100 @@ export function NativeWeekdayPicker({ value, onChange }: { value: number; onChan
 	);
 }
 
-export function NativeDatePickerField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+export function NativeDatePickerField({
+	label,
+	value,
+	onChange,
+}: {
+	label: string;
+	value: string;
+	onChange: (value: string) => void;
+}) {
 	const { colorScheme, material } = useAppTheme();
 	const [open, setOpen] = useState(false);
-	const display = value ? new Date(`${value}T12:00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : "Choose date";
+	const display = value
+		? new Date(`${value}T12:00:00`).toLocaleDateString(undefined, {
+				weekday: "short",
+				month: "short",
+				day: "numeric",
+				year: "numeric",
+			})
+		: "Choose date";
 	return (
 		<Host colorScheme={colorScheme} style={styles.pickerHost}>
-			<OutlinedButton onClick={() => setOpen(true)} modifiers={[fillMaxWidth()]}><MaterialText>{`${label}: ${display}`}</MaterialText></OutlinedButton>
-			{open ? <DatePickerDialog initialDate={value ? new Date(`${value}T12:00:00`).toISOString() : new Date().toISOString()} color={material.primary} confirmButtonLabel="Select" dismissButtonLabel="Cancel" onDateSelected={(date) => { const year = date.getFullYear(); const month = String(date.getMonth() + 1).padStart(2, "0"); const day = String(date.getDate()).padStart(2, "0"); onChange(`${year}-${month}-${day}`); setOpen(false); }} onDismissRequest={() => setOpen(false)} /> : null}
+			<OutlinedButton
+				onClick={() => setOpen(true)}
+				modifiers={[fillMaxWidth()]}
+			>
+				<MaterialText>{`${label}: ${display}`}</MaterialText>
+			</OutlinedButton>
+			{open ? (
+				<DatePickerDialog
+					initialDate={
+						value
+							? new Date(`${value}T12:00:00`).toISOString()
+							: new Date().toISOString()
+					}
+					color={material.primary}
+					confirmButtonLabel="Select"
+					dismissButtonLabel="Cancel"
+					onDateSelected={(date) => {
+						const year = date.getFullYear();
+						const month = String(date.getMonth() + 1).padStart(2, "0");
+						const day = String(date.getDate()).padStart(2, "0");
+						onChange(`${year}-${month}-${day}`);
+						setOpen(false);
+					}}
+					onDismissRequest={() => setOpen(false)}
+				/>
+			) : null}
 		</Host>
 	);
 }
 
-export function NativeTimePickerField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+export function NativeTimePickerField({
+	label,
+	value,
+	onChange,
+}: {
+	label: string;
+	value: string;
+	onChange: (value: string) => void;
+}) {
 	const { colorScheme, material } = useAppTheme();
 	const [open, setOpen] = useState(false);
 	const initial = new Date();
 	const [hours, minutes] = value.split(":").map(Number);
-	initial.setHours(Number.isFinite(hours) ? hours : 9, Number.isFinite(minutes) ? minutes : 0, 0, 0);
+	initial.setHours(
+		Number.isFinite(hours) ? hours : 9,
+		Number.isFinite(minutes) ? minutes : 0,
+		0,
+		0,
+	);
 	return (
 		<Host colorScheme={colorScheme} style={styles.pickerHost}>
-			<OutlinedButton onClick={() => setOpen(true)} modifiers={[fillMaxWidth()]}><MaterialText>{`${label}: ${value}`}</MaterialText></OutlinedButton>
-			{open ? <TimePickerDialog initialDate={initial.toISOString()} color={material.primary} is24Hour={false} confirmButtonLabel="Select" dismissButtonLabel="Cancel" onDateSelected={(date) => { onChange(`${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`); setOpen(false); }} onDismissRequest={() => setOpen(false)} /> : null}
+			<OutlinedButton
+				onClick={() => setOpen(true)}
+				modifiers={[fillMaxWidth()]}
+			>
+				<MaterialText>{`${label}: ${value}`}</MaterialText>
+			</OutlinedButton>
+			{open ? (
+				<TimePickerDialog
+					initialDate={initial.toISOString()}
+					color={material.primary}
+					is24Hour={false}
+					confirmButtonLabel="Select"
+					dismissButtonLabel="Cancel"
+					onDateSelected={(date) => {
+						onChange(
+							`${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`,
+						);
+						setOpen(false);
+					}}
+					onDismissRequest={() => setOpen(false)}
+				/>
+			) : null}
 		</Host>
 	);
 }

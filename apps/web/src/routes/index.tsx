@@ -23,7 +23,11 @@ function HomeComponent() {
 
 	if (authLoading || (user && (me.isLoading || pending.isLoading))) {
 		return (
-			<main className="grid min-h-svh place-items-center">
+			<main
+				id="main-content"
+				tabIndex={-1}
+				className="grid min-h-svh place-items-center"
+			>
 				<Spinner />
 				<span className="sr-only">Loading</span>
 			</main>
@@ -34,7 +38,11 @@ function HomeComponent() {
 
 	if (me.isError) {
 		return (
-			<main className="grid min-h-svh place-items-center px-4 py-16">
+			<main
+				id="main-content"
+				tabIndex={-1}
+				className="grid min-h-svh place-items-center px-4 py-16"
+			>
 				<Card className="w-full max-w-md">
 					<CardHeader>
 						<CardTitle>Something went wrong</CardTitle>

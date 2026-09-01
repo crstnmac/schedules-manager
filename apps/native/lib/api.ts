@@ -1,5 +1,5 @@
-import { supabase } from "./supabase";
 import { getServerUrl } from "./server-url";
+import { supabase } from "./supabase";
 
 export class ApiError extends Error {
 	status: number;

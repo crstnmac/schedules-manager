@@ -43,7 +43,7 @@ function OpenShiftsPage() {
 	const shifts = openShifts.data?.openShifts ?? [];
 
 	return (
-		<section className="flex flex-col gap-6">
+		<section className="flex flex-col gap-4">
 			<PageHeader
 				title="Open shifts"
 				description="Request pickup on an open shift. A manager makes the assignment. Pickup never silently reassigns a published shift."

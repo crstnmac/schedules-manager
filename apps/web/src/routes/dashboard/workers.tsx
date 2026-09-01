@@ -224,9 +224,9 @@ function WorkersPage() {
 	const invitations = workers.data?.invitations ?? [];
 
 	return (
-		<section className="flex flex-col gap-6">
-			<div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-				<div className="order-2 flex flex-col gap-6">
+		<section className="flex flex-col gap-4">
+			<div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+				<div className="order-2 flex flex-col gap-4">
 					<Card>
 						<CardHeader>
 							<CardTitle>Invite a worker</CardTitle>
@@ -394,7 +394,7 @@ function WorkersPage() {
 					</Card>
 				</div>
 
-				<div className="order-1 flex min-w-0 flex-col gap-6">
+				<div className="order-1 flex min-w-0 flex-col gap-4">
 					{lastInviteToken ? (
 						<Alert>
 							<LinkIcon />
@@ -427,7 +427,7 @@ function WorkersPage() {
 					) : null}
 
 					<Card>
-						<CardHeader className="border-b">
+						<CardHeader>
 							<div className="flex flex-wrap items-center justify-between gap-2">
 								<CardTitle>Active team</CardTitle>
 								<Badge variant="secondary">{activeWorkers.length} active</Badge>

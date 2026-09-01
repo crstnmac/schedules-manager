@@ -17,6 +17,7 @@ import {
 } from "@SchedulesManager/ui/components/field";
 import { Input } from "@SchedulesManager/ui/components/input";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import { Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 
 import { supabase } from "@/lib/supabase";
@@ -35,6 +36,7 @@ export function AuthForm({
 	const [mode, setMode] = useState<Mode>("sign-in");
 	const [email, setEmail] = useState(defaultEmail ?? "");
 	const [password, setPassword] = useState("");
+	const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
@@ -72,7 +74,16 @@ export function AuthForm({
 	}
 
 	return (
-		<main className="grid min-h-svh place-items-center bg-muted/35 px-4 py-10">
+		<main
+			id="main-content"
+			tabIndex={-1}
+			className="grid min-h-svh place-items-center bg-muted/35 px-4 py-10"
+		>
+			<h1 className="sr-only">
+				{mode === "sign-in"
+					? "Sign in to jooling"
+					: "Create your jooling account"}
+			</h1>
 			<Card className="w-full max-w-sm">
 				<CardHeader>
 					<CardTitle>
@@ -99,25 +110,43 @@ export function AuthForm({
 									onChange={(event) => setEmail(event.target.value)}
 									required
 									aria-invalid={Boolean(error)}
+									aria-describedby={error ? "auth-error" : undefined}
 								/>
 							</Field>
 							<Field data-invalid={Boolean(error)}>
 								<FieldLabel htmlFor="password">Password</FieldLabel>
-								<Input
-									id="password"
-									type="password"
-									autoComplete={
-										mode === "sign-in" ? "current-password" : "new-password"
-									}
-									minLength={6}
-									value={password}
-									onChange={(event) => setPassword(event.target.value)}
-									required
-									aria-invalid={Boolean(error)}
-								/>
+								<div className="relative">
+									<Input
+										id="password"
+										type={isPasswordVisible ? "text" : "password"}
+										autoComplete={
+											mode === "sign-in" ? "current-password" : "new-password"
+										}
+										className="pr-9"
+										minLength={6}
+										value={password}
+										onChange={(event) => setPassword(event.target.value)}
+										required
+										aria-invalid={Boolean(error)}
+										aria-describedby={error ? "auth-error" : undefined}
+									/>
+									<Button
+										type="button"
+										variant="ghost"
+										size="icon"
+										className="absolute top-0 right-0 text-muted-foreground hover:text-foreground"
+										onClick={() => setIsPasswordVisible((visible) => !visible)}
+										aria-label={
+											isPasswordVisible ? "Hide password" : "Show password"
+										}
+										aria-pressed={isPasswordVisible}
+									>
+										{isPasswordVisible ? <EyeOff /> : <Eye />}
+									</Button>
+								</div>
 								<FieldDescription>At least 6 characters.</FieldDescription>
 							</Field>
-							{error ? <FieldError>{error}</FieldError> : null}
+							{error ? <FieldError id="auth-error">{error}</FieldError> : null}
 							{message ? (
 								<Alert>
 									<AlertDescription>{message}</AlertDescription>

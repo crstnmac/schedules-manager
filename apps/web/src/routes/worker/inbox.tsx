@@ -47,7 +47,7 @@ function WorkerInbox() {
 	const unreadCount = inbox.data?.unreadCount ?? 0;
 
 	return (
-		<section className="flex flex-col gap-6">
+		<section className="flex flex-col gap-4">
 			<Card>
 				<CardHeader>
 					<CardTitle>Inbox</CardTitle>
