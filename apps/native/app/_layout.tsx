@@ -43,11 +43,18 @@ export default function RootLayout() {
 								<Stack>
 									<Stack.Screen
 										name="(tabs)"
-									options={{ headerShown: false }}
-								/>
-								<Stack.Screen name="worker-availability" options={{ headerShown: false }} />
-								<Stack.Screen name="team" options={{ headerShown: false }} />
-							</Stack>
+										options={{ headerShown: false }}
+									/>
+									<Stack.Screen
+										name="worker-availability"
+										options={{ headerShown: false }}
+									/>
+									<Stack.Screen
+										name="timecard"
+										options={{ headerShown: false }}
+									/>
+									<Stack.Screen name="team" options={{ headerShown: false }} />
+								</Stack>
 							</SessionGate>
 						</GestureHandlerRootView>
 					</SafeAreaProvider>

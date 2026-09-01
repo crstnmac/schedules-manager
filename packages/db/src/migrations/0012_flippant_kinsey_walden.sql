@@ -1,0 +1,1 @@
+ALTER TABLE "workplaces" ADD COLUMN "week_start_day" smallint DEFAULT 1 NOT NULL;
