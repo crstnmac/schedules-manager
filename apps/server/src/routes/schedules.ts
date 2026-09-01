@@ -10,6 +10,7 @@ import {
 	schedules,
 	scheduleVersions,
 	shifts,
+	timeEntries,
 	timeOffRequests,
 	unavailability,
 	versionShifts,
@@ -21,10 +22,16 @@ import {
 	requireLocationAccess,
 	requireManager,
 	requireSession,
+	weekStartDayFor,
 } from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { firstRow } from "../rows";
-import { assertMonday, shiftDays, wallToInstant, zonedDayInfo } from "../time";
+import {
+	assertWeekStartDay,
+	shiftDays,
+	wallToInstant,
+	zonedDayInfo,
+} from "../time";
 
 type ShiftRow = Shift;
 export interface Conflict {
@@ -389,6 +396,7 @@ async function loadSchedulePayload(location: Location, weekStart: string) {
 	]);
 
 	const conflicts = computeConflicts(location, shiftRows, workforce);
+	const timeclock = await timeclockSummary(schedule.id);
 
 	const workerInfoById = new Map(
 		workforce.employmentRows.map((row) => [
@@ -457,8 +465,10 @@ async function loadSchedulePayload(location: Location, weekStart: string) {
 			locationId: location.id,
 			weekStartDate: schedule.weekStartDate,
 			timezone: location.timezone,
+			weekStartDay: await weekStartDayFor(location.workplaceId),
 		},
 		publication,
+		timeclock,
 		shifts: serialized,
 		staff: workforce.employmentRows
 			.filter(({ employment }) =>
@@ -593,6 +603,56 @@ async function assertAssignmentValid(
 	}
 }
 
+async function timeclockSummary(scheduleId: string) {
+	const [latest] = await db
+		.select()
+		.from(scheduleVersions)
+		.where(eq(scheduleVersions.scheduleId, scheduleId))
+		.orderBy(desc(scheduleVersions.versionNumber))
+		.limit(1);
+	if (!latest) return [];
+
+	const rows = await db
+		.select({
+			shiftId: versionShifts.shiftId,
+			entryId: timeEntries.id,
+			clockedInAt: timeEntries.clockedInAt,
+			clockedOutAt: timeEntries.clockedOutAt,
+		})
+		.from(versionShifts)
+		.leftJoin(timeEntries, eq(timeEntries.versionShiftId, versionShifts.id))
+		.where(and(eq(versionShifts.versionId, latest.id)));
+
+	return rows
+		.filter(
+			(row): row is typeof row & { shiftId: string } => row.shiftId !== null,
+		)
+		.map((row) => {
+			if (!row.entryId || !row.clockedInAt) {
+				return {
+					shiftId: row.shiftId,
+					status: null as "open" | "closed" | null,
+					clockedInAt: null as string | null,
+					workedMinutes: null as number | null,
+				};
+			}
+			const workedMinutes = Math.max(
+				0,
+				Math.round(
+					((row.clockedOutAt?.getTime() ?? Date.now()) -
+						row.clockedInAt.getTime()) /
+						60_000,
+				),
+			);
+			return {
+				shiftId: row.shiftId,
+				status: row.clockedOutAt ? ("closed" as const) : ("open" as const),
+				clockedInAt: row.clockedInAt.toISOString(),
+				workedMinutes,
+			};
+		});
+}
+
 async function publicationSummary(scheduleId: string, draftShifts: ShiftRow[]) {
 	const [latest] = await db
 		.select()
@@ -645,7 +705,6 @@ export const schedulesRoutes = new Elysia({
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers.authorization);
 			await requireLocationAccess(profile.id, params.locationId);
-			assertMonday(params.weekStart);
 
 			const [location] = await db
 				.select()
@@ -653,6 +712,10 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
+			assertWeekStartDay(
+				params.weekStart,
+				await weekStartDayFor(location.workplaceId),
+			);
 
 			return loadSchedulePayload(location, params.weekStart);
 		},
@@ -673,7 +736,6 @@ export const schedulesRoutes = new Elysia({
 		"/locations/:locationId/schedules/:weekStart/shifts",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers.authorization);
-			assertMonday(params.weekStart);
 
 			const [location] = await db
 				.select()
@@ -681,6 +743,10 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
+			assertWeekStartDay(
+				params.weekStart,
+				await weekStartDayFor(location.workplaceId),
+			);
 			await requireManager(profile.id, location.workplaceId);
 
 			const schedule = await getOrCreateSchedule(location.id, params.weekStart);
@@ -852,7 +918,6 @@ export const schedulesRoutes = new Elysia({
 		"/locations/:locationId/schedules/:weekStart/copy-previous",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers.authorization);
-			assertMonday(params.weekStart);
 
 			const [location] = await db
 				.select()
@@ -861,6 +926,10 @@ export const schedulesRoutes = new Elysia({
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
 			await requireManager(profile.id, location.workplaceId);
+			assertWeekStartDay(
+				params.weekStart,
+				await weekStartDayFor(location.workplaceId),
+			);
 
 			const previousWeek = shiftDays(params.weekStart, -7);
 			const [source] = await db

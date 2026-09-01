@@ -76,8 +76,14 @@ export {
 	versionShifts,
 	workerDeliveries,
 } from "./publication";
+export type { NewPushToken, PushToken } from "./push-tokens";
+export { pushTokenPlatformEnum, pushTokens } from "./push-tokens";
 export type { NewSchedule, NewShift, Schedule, Shift } from "./schedules";
 export { schedules, shifts } from "./schedules";
+export type { NewShiftSwap, ShiftSwap } from "./shift-swaps";
+export { shiftSwaps, swapStatusEnum } from "./shift-swaps";
+export type { NewTimeEntry, TimeEntry } from "./time-entries";
+export { timeEntries } from "./time-entries";
 export type {
 	Location,
 	NewLocation,
@@ -86,4 +92,9 @@ export type {
 	Position,
 	Workplace,
 } from "./workplaces";
-export { locations, positions, workplaces } from "./workplaces";
+export {
+	locations,
+	payPeriodTypeEnum,
+	positions,
+	workplaces,
+} from "./workplaces";

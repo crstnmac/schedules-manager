@@ -1,6 +1,6 @@
 {
-	"id": "5c969514-5e6a-43eb-a5ba-17184419ca74",
-	"prevId": "a8aa2e56-1edc-426f-90ec-7fba48180922",
+	"id": "6f626052-5e1e-4463-84ae-ab01ab7cbfee",
+	"prevId": "5c969514-5e6a-43eb-a5ba-17184419ca74",
 	"version": "7",
 	"dialect": "postgresql",
 	"tables": {
@@ -1480,6 +1480,91 @@
 			"checkConstraints": {},
 			"isRLSEnabled": false
 		},
+		"public.push_tokens": {
+			"name": "push_tokens",
+			"schema": "",
+			"columns": {
+				"id": {
+					"name": "id",
+					"type": "uuid",
+					"primaryKey": true,
+					"notNull": true,
+					"default": "gen_random_uuid()"
+				},
+				"employment_id": {
+					"name": "employment_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"expo_push_token": {
+					"name": "expo_push_token",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"platform": {
+					"name": "platform",
+					"type": "push_token_platform",
+					"typeSchema": "public",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				},
+				"last_seen_at": {
+					"name": "last_seen_at",
+					"type": "timestamp with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				}
+			},
+			"indexes": {
+				"push_tokens_employment_idx": {
+					"name": "push_tokens_employment_idx",
+					"columns": [
+						{
+							"expression": "employment_id",
+							"isExpression": false,
+							"asc": true,
+							"nulls": "last"
+						}
+					],
+					"isUnique": false,
+					"concurrently": false,
+					"method": "btree",
+					"with": {}
+				}
+			},
+			"foreignKeys": {
+				"push_tokens_employment_id_employments_id_fk": {
+					"name": "push_tokens_employment_id_employments_id_fk",
+					"tableFrom": "push_tokens",
+					"tableTo": "employments",
+					"columnsFrom": ["employment_id"],
+					"columnsTo": ["id"],
+					"onDelete": "cascade",
+					"onUpdate": "no action"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"uniqueConstraints": {
+				"push_tokens_employment_token_unique": {
+					"name": "push_tokens_employment_token_unique",
+					"nullsNotDistinct": false,
+					"columns": ["employment_id", "expo_push_token"]
+				}
+			},
+			"policies": {},
+			"checkConstraints": {},
+			"isRLSEnabled": false
+		},
 		"public.schedule_versions": {
 			"name": "schedule_versions",
 			"schema": "",
@@ -1976,6 +2061,11 @@
 			"name": "invitation_status",
 			"schema": "public",
 			"values": ["pending", "accepted", "revoked"]
+		},
+		"public.push_token_platform": {
+			"name": "push_token_platform",
+			"schema": "public",
+			"values": ["ios", "android"]
 		}
 	},
 	"schemas": {},

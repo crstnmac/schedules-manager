@@ -6,6 +6,32 @@ export function formatMinute(minute: number): string {
 	return `${display}:${String(mins).padStart(2, "0")} ${suffix}`;
 }
 
+export function formatClockTime(iso?: string): string {
+	if (!iso) return "";
+	return new Date(iso).toLocaleTimeString([], {
+		hour: "numeric",
+		minute: "2-digit",
+	});
+}
+
+export function formatDurationMs(ms: number): string {
+	const minutes = Math.max(0, Math.round(ms / 60000));
+	const h = Math.floor(minutes / 60);
+	const m = minutes % 60;
+	if (h === 0 && m === 0) return "0m";
+	return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+export function formatTimerMs(ms: number): string {
+	const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+	const h = Math.floor(totalSeconds / 3600);
+	const m = Math.floor((totalSeconds % 3600) / 60);
+	const s = totalSeconds % 60;
+	return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+export const CLOCK_IN_EARLY_MS = 15 * 60 * 1000;
+
 export function formatShiftRange(
 	startMinute: number,
 	endMinute: number,

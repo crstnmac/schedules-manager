@@ -10,6 +10,7 @@ import {
 	shiftAcceptances,
 	shiftReleases,
 	shifts,
+	timeEntries,
 	versionShifts,
 	workerDeliveries,
 	workplaces,
@@ -21,20 +22,13 @@ import {
 	requireManager,
 	requireSession,
 	requireWorkplaceMember,
+	weekStartDayFor,
 } from "../context";
 import { NotFoundError } from "../errors";
 import { notifyEmployments, writeAudit } from "../notify";
 import { firstRow } from "../rows";
-import { zonedDayInfo } from "../time";
+import { weekStartOfDateKey, zonedDayInfo } from "../time";
 import { diffShiftSets } from "./changes";
-
-function mondayOfDateKey(dateKey: string): string {
-	const date = new Date(`${dateKey}T00:00:00Z`);
-	const weekday = date.getUTCDay();
-	const diff = (weekday === 0 ? -6 : 1) - weekday;
-	date.setUTCDate(date.getUTCDate() + diff);
-	return date.toISOString().slice(0, 10);
-}
 
 async function scheduleContext(scheduleId: string) {
 	const [row] = await db
@@ -398,8 +392,10 @@ export const publicationRoutes = new Elysia({
 				employment.id,
 				params.workplaceId,
 			);
+			const weekStartDay = await weekStartDayFor(params.workplaceId);
 			if (locationIds.length === 0) {
 				return {
+					weekStartDay,
 					currentWeek: null,
 					nextWeek: null,
 					nextShift: null,
@@ -418,9 +414,10 @@ export const publicationRoutes = new Elysia({
 			);
 
 			const now = new Date();
-			const thisWeek = mondayOfDateKey(
+			const thisWeek = weekStartOfDateKey(
 				zonedDayInfo(now, locationRows[0]?.timezone ?? "America/Chicago")
 					.dateKey,
+				weekStartDay,
 			);
 			const nextWeekDate = new Date(`${thisWeek}T00:00:00Z`);
 			nextWeekDate.setUTCDate(nextWeekDate.getUTCDate() + 7);
@@ -440,6 +437,7 @@ export const publicationRoutes = new Elysia({
 
 			if (versionRows.length === 0) {
 				return {
+					weekStartDay,
 					currentWeek: null,
 					nextWeek: null,
 					nextShift: null,
@@ -471,6 +469,24 @@ export const publicationRoutes = new Elysia({
 						),
 					),
 			]);
+			const myTimeEntries =
+				myShiftRows.length === 0
+					? []
+					: await db
+							.select()
+							.from(timeEntries)
+							.where(
+								and(
+									inArray(
+										timeEntries.versionShiftId,
+										myShiftRows.map((shift) => shift.id),
+									),
+									eq(timeEntries.employmentId, employment.id),
+								),
+							);
+			const timeEntryByShiftId = new Map(
+				myTimeEntries.map((entry) => [entry.versionShiftId, entry]),
+			);
 			const pendingReleaseRows =
 				myShiftRows.length === 0
 					? []
@@ -512,6 +528,9 @@ export const publicationRoutes = new Elysia({
 				return {
 					weekStart,
 					locationId: row.schedule.locationId,
+					locationName:
+						locationRows.find((l) => l.id === row.schedule.locationId)?.name ??
+						"Location",
 					timezone: locationTz,
 					version: {
 						id: row.version.id,
@@ -524,6 +543,7 @@ export const publicationRoutes = new Elysia({
 						.map((shift) => {
 							const startInfo = zonedDayInfo(shift.startsAt, locationTz);
 							const endInfo = zonedDayInfo(shift.endsAt, locationTz);
+							const entry = timeEntryByShiftId.get(shift.id);
 							return {
 								id: shift.id,
 								positionName:
@@ -537,6 +557,12 @@ export const publicationRoutes = new Elysia({
 								note: shift.note,
 								releaseStatus: pendingReleaseShiftIds.has(shift.id)
 									? ("pending" as const)
+									: null,
+								timeEntry: entry
+									? {
+											clockedInAt: entry.clockedInAt.toISOString(),
+											clockedOutAt: entry.clockedOutAt?.toISOString() ?? null,
+										}
 									: null,
 							};
 						})
@@ -558,7 +584,9 @@ export const publicationRoutes = new Elysia({
 							) ?? "America/Chicago";
 						const info = zonedDayInfo(nextShiftRaw.startsAt, locationTz);
 						const endInfo = zonedDayInfo(nextShiftRaw.endsAt, locationTz);
+						const entry = timeEntryByShiftId.get(nextShiftRaw.id);
 						return {
+							id: nextShiftRaw.id,
 							positionName:
 								positionNamesById.get(nextShiftRaw.positionId) ?? "Shift",
 							startsAt: nextShiftRaw.startsAt.toISOString(),
@@ -567,6 +595,12 @@ export const publicationRoutes = new Elysia({
 							startMinute: info.minuteOfDay,
 							endMinute: endInfo.minuteOfDay,
 							overnight: endInfo.dateKey !== info.dateKey,
+							timeEntry: entry
+								? {
+										clockedInAt: entry.clockedInAt.toISOString(),
+										clockedOutAt: entry.clockedOutAt?.toISOString() ?? null,
+									}
+								: null,
 						};
 					})()
 				: null;
@@ -655,6 +689,7 @@ export const publicationRoutes = new Elysia({
 			}
 
 			return {
+				weekStartDay,
 				currentWeek: weekPayload(thisWeek),
 				nextWeek: weekPayload(nextWeek),
 				nextShift,

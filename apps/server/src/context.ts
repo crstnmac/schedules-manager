@@ -158,6 +158,15 @@ export async function requireLocationAccess(
 	return { location, employment };
 }
 
+export async function weekStartDayFor(workplaceId: string): Promise<number> {
+	const [row] = await db
+		.select({ weekStartDay: workplaces.weekStartDay })
+		.from(workplaces)
+		.where(eq(workplaces.id, workplaceId))
+		.limit(1);
+	return row?.weekStartDay ?? 1;
+}
+
 export async function locationScopeFor(
 	employment: Employment,
 ): Promise<string[]> {

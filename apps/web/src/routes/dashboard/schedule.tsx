@@ -69,11 +69,21 @@ import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { Textarea } from "@SchedulesManager/ui/components/textarea";
 import {
+	ToggleGroup,
+	ToggleGroupItem,
+} from "@SchedulesManager/ui/components/toggle-group";
+import {
 	Tooltip,
 	TooltipContent,
 	TooltipTrigger,
 } from "@SchedulesManager/ui/components/tooltip";
 import { cn } from "@SchedulesManager/ui/lib/utils";
+import {
+	DragDropProvider,
+	type DragEndEvent,
+	useDraggable,
+	useDroppable,
+} from "@dnd-kit/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
@@ -83,6 +93,7 @@ import {
 	ChevronDownIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
+	Columns3Icon,
 	CopyIcon,
 	ListFilterIcon,
 	MapPinIcon,
@@ -108,8 +119,14 @@ import {
 	useLocations,
 	usePublication,
 	useSchedule,
+	useWorkplaceSettings,
 } from "@/lib/queries";
-import { formatMinute, WEEKDAY_NAMES } from "@/lib/time";
+import {
+	formatClockTime,
+	formatDurationMs,
+	formatMinute,
+	WEEKDAY_NAMES,
+} from "@/lib/time";
 import { useWorkplace } from "@/lib/use-workplace";
 
 export const Route = createFileRoute("/dashboard/schedule")({
@@ -126,12 +143,18 @@ const DAY_HEADERS = [
 	"Sunday",
 ];
 
-function mondayOf(date: Date): string {
+function weekStartOf(date: Date, weekStartDay: number): string {
 	const result = new Date(date);
-	const day = result.getDay();
-	const diff = (day === 0 ? -6 : 1) - day;
-	result.setDate(result.getDate() + diff);
+	const diff = (result.getDay() - weekStartDay + 7) % 7;
+	result.setDate(result.getDate() - diff);
 	return result.toLocaleDateString("sv-SE");
+}
+
+function orderedDayHeaders(weekStartDay: number): string[] {
+	return Array.from(
+		{ length: 7 },
+		(_, index) => DAY_HEADERS[(weekStartDay + index) % 7],
+	);
 }
 
 function addDays(dateKey: string, days: number): string {
@@ -305,27 +328,27 @@ function cellConstraints(
 
 const POSITION_PALETTE = [
 	{
-		block: "bg-category-1 text-category-1-foreground hover:bg-category-1/80",
+		block: "bg-card text-category-1-foreground hover:bg-category-1/35",
 		dot: "bg-category-1-marker",
 	},
 	{
-		block: "bg-category-2 text-category-2-foreground hover:bg-category-2/80",
+		block: "bg-card text-category-2-foreground hover:bg-category-2/35",
 		dot: "bg-category-2-marker",
 	},
 	{
-		block: "bg-category-3 text-category-3-foreground hover:bg-category-3/80",
+		block: "bg-card text-category-3-foreground hover:bg-category-3/35",
 		dot: "bg-category-3-marker",
 	},
 	{
-		block: "bg-category-4 text-category-4-foreground hover:bg-category-4/80",
+		block: "bg-card text-category-4-foreground hover:bg-category-4/35",
 		dot: "bg-category-4-marker",
 	},
 	{
-		block: "bg-category-5 text-category-5-foreground hover:bg-category-5/80",
+		block: "bg-card text-category-5-foreground hover:bg-category-5/35",
 		dot: "bg-category-5-marker",
 	},
 	{
-		block: "bg-category-6 text-category-6-foreground hover:bg-category-6/80",
+		block: "bg-card text-category-6-foreground hover:bg-category-6/35",
 		dot: "bg-category-6-marker",
 	},
 ] as const;
@@ -357,33 +380,61 @@ function formatCompactShiftRange(
 function ShiftTile({
 	shift,
 	onOpen,
+	compact = false,
+	disabled = false,
+	timeclock,
 }: {
 	shift: ScheduleShiftDto;
 	onOpen: (shift: ScheduleShiftDto) => void;
+	compact?: boolean;
+	disabled?: boolean;
+	timeclock?: ScheduleResponse["timeclock"][number];
 }) {
 	const hasConflicts = shift.conflicts.length > 0;
 	const color = positionColor(shift.positionName);
+	const NO_PUNCH_GRACE_MS = 15 * 60 * 1000;
+	const scheduledMinutes =
+		(new Date(shift.endsAt).getTime() - new Date(shift.startsAt).getTime()) /
+		60_000;
+	const varianceMinutes =
+		timeclock?.workedMinutes != null
+			? timeclock.workedMinutes - Math.round(scheduledMinutes)
+			: null;
+	const missedPunch =
+		timeclock != null &&
+		timeclock.status === null &&
+		new Date(shift.endsAt).getTime() + NO_PUNCH_GRACE_MS < Date.now();
+	const { ref, isDragging, isDropping } = useDraggable({
+		id: `shift:${shift.id}`,
+		type: "schedule-shift",
+		data: { shiftId: shift.id },
+		disabled,
+	});
 	return (
 		<Button
+			ref={ref}
 			type="button"
 			variant="ghost"
 			data-press="subtle"
+			aria-label={`${formatCompactShiftRange(shift.startMinute, shift.endMinute, shift.overnight)}, ${shift.positionName}. Activate to edit or move this shift.`}
 			onClick={() => onOpen(shift)}
 			className={cn(
-				"h-auto min-h-14 w-full flex-col items-start gap-1 whitespace-normal rounded-lg border border-transparent px-2.5 py-2 text-left shadow-none transition-[background-color,border-color] hover:border-current/10",
+				"relative h-auto w-full cursor-grab touch-none flex-col items-start gap-1 overflow-hidden whitespace-normal rounded-md border py-2 pr-2 pl-3 text-left shadow-xs transition-[background-color,border-color,box-shadow,opacity] hover:shadow-sm active:cursor-grabbing motion-reduce:transition-none",
+				compact ? "min-h-11" : "min-h-14",
+				(isDragging || isDropping) && "opacity-45 ring-2 ring-primary/30",
 				hasConflicts
-					? "border-destructive/25 bg-destructive/10 text-destructive hover:bg-destructive/15 dark:bg-destructive/20"
-					: color.block,
+					? "border-destructive/35 bg-destructive/5 text-destructive hover:bg-destructive/10"
+					: cn("border-border/80", color.block),
 			)}
 		>
+			<span
+				className={cn(
+					"absolute inset-y-0 left-0 w-1",
+					hasConflicts ? "bg-destructive" : color.dot,
+				)}
+				aria-hidden
+			/>
 			<span className="flex w-full items-center gap-1.5 leading-none">
-				<span
-					className={cn(
-						"size-1.5 shrink-0 rounded-full",
-						hasConflicts ? "bg-destructive" : color.dot,
-					)}
-					aria-hidden
-				/>
 				<span className="font-semibold text-[11px] tabular-nums">
 					{formatCompactShiftRange(
 						shift.startMinute,
@@ -395,18 +446,78 @@ function ShiftTile({
 					<AlertTriangleIcon className="ml-auto size-3 shrink-0" />
 				) : null}
 			</span>
-			<span
-				className={cn(
-					"w-full truncate text-[11px] leading-tight",
-					hasConflicts ? "opacity-80" : "opacity-75",
-				)}
-			>
+			<span className="w-full truncate text-[11px] text-muted-foreground leading-tight">
 				{shift.positionName}
 			</span>
-			{hasConflicts ? (
+			{timeclock?.status === "open" ? (
+				<span className="flex items-center gap-1.5 font-medium text-[11px] text-primary leading-none">
+					<span
+						className="size-1.5 shrink-0 rounded-full bg-primary"
+						aria-hidden
+					/>
+					On clock
+					{timeclock.clockedInAt
+						? ` · since ${formatClockTime(timeclock.clockedInAt)}`
+						: ""}
+				</span>
+			) : null}
+			{timeclock?.status === "closed" && timeclock.workedMinutes != null ? (
+				<span className="font-medium text-[11px] text-foreground/80 leading-none">
+					Worked {formatDurationMs(timeclock.workedMinutes * 60_000)}
+					{varianceMinutes != null && Math.abs(varianceMinutes) > 10 ? (
+						<span
+							className={
+								varianceMinutes > 0 ? "text-destructive" : "text-amber-600"
+							}
+						>
+							{" "}
+							{varianceMinutes > 0 ? "+" : "−"}
+							{Math.abs(varianceMinutes)}m
+						</span>
+					) : null}
+				</span>
+			) : null}
+			{missedPunch ? (
+				<span className="font-medium text-[11px] text-destructive leading-none">
+					No punch
+				</span>
+			) : null}
+			{hasConflicts && !compact ? (
 				<span className="font-medium text-[11px] leading-none">Conflict</span>
 			) : null}
 		</Button>
+	);
+}
+
+function ScheduleDropCell({
+	employmentId,
+	date,
+	className,
+	children,
+}: {
+	employmentId: string | null;
+	date: string;
+	className?: string;
+	children: React.ReactNode;
+}) {
+	const { ref, isDropTarget } = useDroppable({
+		id: `cell:${employmentId ?? "open"}:${date}`,
+		type: "schedule-cell",
+		accept: "schedule-shift",
+		data: { employmentId, date },
+	});
+
+	return (
+		<div
+			ref={ref}
+			className={cn(
+				className,
+				isDropTarget &&
+					"bg-primary/10 ring-2 ring-primary/45 ring-inset motion-reduce:transition-none",
+			)}
+		>
+			{children}
+		</div>
 	);
 }
 
@@ -429,6 +540,8 @@ const SKELETON_DAYS = [
 	"sun",
 ] as const;
 const SKELETON_ROWS = ["a", "b", "c", "d"] as const;
+
+type GridDensity = "compact" | "comfortable";
 
 function ScheduleGridSkeleton() {
 	return (
@@ -472,11 +585,20 @@ function ScheduleGridSkeleton() {
 function SchedulePage() {
 	const { workplace } = useWorkplace();
 	const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
-	const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
+	const settings = useWorkplaceSettings(workplace?.id);
+	const weekStartDay = settings.data?.weekStartDay ?? 1;
+	const [weekStart, setWeekStart] = useState(() => weekStartOf(new Date(), 1));
+
+	useEffect(() => {
+		setWeekStart((current) =>
+			weekStartOf(new Date(`${current}T12:00:00`), weekStartDay),
+		);
+	}, [weekStartDay]);
 	const [visibleStaffCount, setVisibleStaffCount] = useState(40);
 	const [workerQuery, setWorkerQuery] = useState("");
 	const [positionFilter, setPositionFilter] = useState("all");
 	const [staffStateFilter, setStaffStateFilter] = useState("all");
+	const [gridDensity, setGridDensity] = useState<GridDensity>("comfortable");
 	const locations = useLocations(workplace?.id);
 	const [locationId, setLocationId] = useState<string | undefined>(undefined);
 
@@ -564,6 +686,37 @@ function SchedulePage() {
 		onError: (error) => toast.error((error as Error).message),
 	});
 
+	const moveShift = useMutation({
+		mutationFn: async ({
+			shift,
+			employmentId,
+			date,
+		}: {
+			shift: ScheduleShiftDto;
+			employmentId: string | null;
+			date: string;
+		}) => {
+			await api(`/v1/shifts/${shift.id}`, {
+				method: "PATCH",
+				body: {
+					employmentId,
+					positionId: shift.positionId,
+					date,
+					startMinute: shift.startMinute,
+					endMinute: shift.endMinute,
+					note: shift.note,
+					unavailabilityOverrideReason:
+						shift.unavailabilityOverrideReason ?? null,
+				},
+			});
+		},
+		onSuccess: async () => {
+			await invalidate();
+			toast.success("Shift moved.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
 	const copyPrevious = useMutation({
 		mutationFn: () =>
 			api(
@@ -629,19 +782,40 @@ function SchedulePage() {
 	const scheduleIndex = useMemo(() => {
 		const shiftsByWorkerDay = new Map<string, ScheduleShiftDto[]>();
 		const hoursByEmploymentId = new Map<string, number>();
+		const shiftCountByEmploymentId = new Map<string, number>();
 		for (const shift of data?.shifts ?? []) {
 			const key = `${shift.employmentId ?? "open"}:${shift.date}`;
 			const shifts = shiftsByWorkerDay.get(key);
 			if (shifts) shifts.push(shift);
 			else shiftsByWorkerDay.set(key, [shift]);
+			if (shift.employmentId) {
+				shiftCountByEmploymentId.set(
+					shift.employmentId,
+					(shiftCountByEmploymentId.get(shift.employmentId) ?? 0) + 1,
+				);
+			}
 		}
 		for (const entry of data?.hours ?? []) {
 			hoursByEmploymentId.set(entry.employmentId, entry.minutes);
 		}
-		return { shiftsByWorkerDay, hoursByEmploymentId };
+		return {
+			shiftsByWorkerDay,
+			hoursByEmploymentId,
+			shiftCountByEmploymentId,
+		};
 	}, [data?.hours, data?.shifts]);
 	const conflictCount =
 		data?.shifts.reduce((sum, shift) => sum + shift.conflicts.length, 0) ?? 0;
+	const timeclockByShiftId = useMemo(() => {
+		const map = new Map<string, ScheduleResponse["timeclock"][number]>();
+		for (const entry of data?.timeclock ?? []) {
+			map.set(entry.shiftId, entry);
+		}
+		return map;
+	}, [data?.timeclock]);
+	const dayHeaders = orderedDayHeaders(weekStartDay);
+	const onClockCount =
+		data?.timeclock.filter((entry) => entry.status === "open").length ?? 0;
 	const openShiftCount =
 		data?.shifts.filter((shift) => shift.employmentId === null).length ?? 0;
 	const staffIds = useMemo(
@@ -667,6 +841,21 @@ function SchedulePage() {
 	}, [offRosterShifts]);
 	const totalHours =
 		data?.hours.reduce((sum, entry) => sum + entry.minutes, 0) ?? 0;
+	const daySummaries = useMemo(() => {
+		const summaries = new Map<string, { shifts: number; minutes: number }>();
+		for (const shift of data?.shifts ?? []) {
+			const current = summaries.get(shift.date) ?? { shifts: 0, minutes: 0 };
+			const duration =
+				shift.endMinute > shift.startMinute
+					? shift.endMinute - shift.startMinute
+					: 1440 - shift.startMinute + shift.endMinute;
+			summaries.set(shift.date, {
+				shifts: current.shifts + 1,
+				minutes: current.minutes + duration,
+			});
+		}
+		return summaries;
+	}, [data?.shifts]);
 	const filteredStaff = useMemo(() => {
 		const query = workerQuery.trim().toLocaleLowerCase();
 		return (data?.staff ?? []).filter((member) => {
@@ -759,6 +948,42 @@ function SchedulePage() {
 			if (next.length > 0 && form) setForm({ ...form, date: next[0] ?? date });
 			return next;
 		});
+	}
+
+	async function handleShiftDragEnd(event: DragEndEvent) {
+		if (event.canceled) return;
+		const shiftId = event.operation.source?.data.shiftId;
+		const targetData = event.operation.target?.data;
+		if (
+			typeof shiftId !== "string" ||
+			!targetData ||
+			typeof targetData.date !== "string" ||
+			!(
+				targetData.employmentId === null ||
+				typeof targetData.employmentId === "string"
+			)
+		)
+			return;
+
+		const shift = data?.shifts.find((candidate) => candidate.id === shiftId);
+		if (!shift) return;
+		if (
+			shift.date === targetData.date &&
+			shift.employmentId === targetData.employmentId
+		)
+			return;
+
+		const suspended = event.suspend();
+		try {
+			await moveShift.mutateAsync({
+				shift,
+				employmentId: targetData.employmentId,
+				date: targetData.date,
+			});
+			suspended.resume();
+		} catch {
+			suspended.abort();
+		}
 	}
 
 	const selectedStaff = data?.staff.find(
@@ -880,11 +1105,12 @@ function SchedulePage() {
 		})),
 	];
 	return (
-		<section className="flex min-h-0 min-w-0 flex-1 flex-col bg-muted/30 print:bg-background">
-			<div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
+		<section className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
+			<h1 className="sr-only">Schedule</h1>
+			<div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-none">
 				{headerTarget
 					? createPortal(
-							<div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:flex-nowrap">
+							<div className="grid w-full min-w-0 grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
 								<div className="flex min-w-0 flex-1 items-center gap-2">
 									<Select
 										items={locationItems}
@@ -897,7 +1123,7 @@ function SchedulePage() {
 									>
 										<SelectTrigger
 											aria-label="Location"
-											className="h-9 min-w-0 max-w-48 flex-1 border-transparent bg-muted/60 font-medium sm:flex-none"
+											className="h-9 min-w-0 max-w-40 flex-1 border-transparent bg-muted/60 font-medium sm:w-40 sm:flex-none"
 										>
 											<SelectValue placeholder="Location" />
 										</SelectTrigger>
@@ -911,14 +1137,14 @@ function SchedulePage() {
 											</SelectGroup>
 										</SelectContent>
 									</Select>
-									<div className="flex shrink-0 items-center gap-0.5 rounded-lg p-0.5">
+									<div className="flex shrink-0 items-center gap-1">
 										<Tooltip>
 											<TooltipTrigger
 												render={
 													<Button
 														variant="ghost"
 														size="icon-sm"
-														className="inline-flex"
+														className="size-9"
 														onClick={() => {
 															setWeekStart((c) => addDays(c, -7));
 															setForm(null);
@@ -934,9 +1160,9 @@ function SchedulePage() {
 										<Button
 											variant="ghost"
 											size="sm"
-											className="hidden h-8 px-2 font-semibold text-sm tabular-nums sm:inline-flex"
+											className="hidden h-9 px-3 font-semibold text-sm tabular-nums sm:inline-flex"
 											onClick={() => {
-												setWeekStart(mondayOf(new Date()));
+												setWeekStart(weekStartOf(new Date(), weekStartDay));
 												setForm(null);
 											}}
 										>
@@ -946,9 +1172,14 @@ function SchedulePage() {
 											id="schedule-week"
 											value={weekStart}
 											displayValue={formatWeekLabel(weekStart)}
-											buttonClassName="h-8 w-auto border-transparent bg-transparent px-2 font-semibold text-sm tabular-nums shadow-none hover:bg-muted"
+											buttonClassName="h-9 w-auto border-transparent bg-transparent px-3 font-semibold text-sm tabular-nums shadow-none hover:bg-muted"
 											onValueChange={(date) => {
-												setWeekStart(mondayOf(new Date(`${date}T12:00:00`)));
+												setWeekStart(
+													weekStartOf(
+														new Date(`${date}T12:00:00`),
+														weekStartDay,
+													),
+												);
 												setForm(null);
 											}}
 										/>
@@ -958,7 +1189,7 @@ function SchedulePage() {
 													<Button
 														variant="ghost"
 														size="icon-sm"
-														className="inline-flex"
+														className="size-9"
 														onClick={() => {
 															setWeekStart((c) => addDays(c, 7));
 															setForm(null);
@@ -974,7 +1205,7 @@ function SchedulePage() {
 									</div>
 								</div>
 
-								<div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:shrink-0 sm:flex-nowrap sm:gap-2">
+								<div className="flex min-w-0 flex-wrap items-center gap-2 sm:shrink-0 sm:flex-nowrap">
 									{publicationState?.latestVersionNumber == null ? (
 										<Badge variant="outline" className="font-medium">
 											Draft
@@ -1009,7 +1240,7 @@ function SchedulePage() {
 									</Tooltip>
 									<Button
 										size="sm"
-										className="h-9 bg-primary px-4 font-medium text-primary-foreground hover:bg-primary/85"
+										className="h-9 bg-primary px-4 font-medium text-primary-foreground hover:bg-primary-hover"
 										disabled={
 											previewPublish.isPending ||
 											!schedule.data ||
@@ -1040,182 +1271,258 @@ function SchedulePage() {
 							headerTarget,
 						)
 					: null}
-				<div className="flex flex-wrap items-center gap-3 border-b bg-card px-3 py-2 sm:px-6 print:hidden">
-					{data && data.staff.length > 0 ? (
-						<div className="relative w-full sm:w-56 sm:flex-none">
-							<SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-							<Input
-								aria-label="Search workers"
-								className="h-8 pl-8"
-								placeholder="Search workers"
-								value={workerQuery}
-								onChange={(event) => {
-									setWorkerQuery(event.target.value);
-									setVisibleStaffCount(40);
-								}}
-							/>
-						</div>
-					) : null}
-					{data ? (
-						<div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-muted-foreground text-xs tabular-nums lg:w-[29rem] lg:flex-none lg:flex-nowrap">
-							<span className="shrink-0 whitespace-nowrap">
-								<span className="font-semibold text-foreground">
-									{data.shifts.length}
-								</span>{" "}
-								shifts
-							</span>
-							<span className="text-muted-foreground/40">·</span>
-							<span className="shrink-0 whitespace-nowrap">
-								<span className="font-semibold text-foreground">
-									{(totalHours / 60).toFixed(1)}h
-								</span>{" "}
-								scheduled
-							</span>
-							<span className="text-muted-foreground/40">·</span>
-							<span
-								className={cn(
-									"shrink-0 whitespace-nowrap",
-									openShiftCount > 0 && "font-medium text-primary",
-								)}
-							>
-								{openShiftCount} open
-							</span>
-							<span className="text-muted-foreground/40">·</span>
-							<span
-								className={cn(
-									"shrink-0 whitespace-nowrap",
-									conflictCount > 0 && "font-medium text-destructive",
-								)}
-							>
-								{conflictCount} conflict{conflictCount === 1 ? "" : "s"}
-							</span>
-							{offRosterShifts.length > 0 ? (
-								<>
-									<span className="text-muted-foreground/40">·</span>
-									<span className="shrink-0 whitespace-nowrap">
-										{offRosterShifts.length} off-roster
-									</span>
-								</>
-							) : null}
-							<span className="ml-auto hidden min-w-0 truncate whitespace-nowrap sm:inline">
-								{data.schedule.timezone}
-							</span>
-						</div>
-					) : null}
-					{data && data.staff.length > 0 ? (
-						<>
-							<Popover>
-								<PopoverTrigger
-									render={
+				<div className="border-b bg-background print:hidden">
+					<div className="grid grid-cols-1 items-center gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[14rem_auto_minmax(18rem,1fr)_auto]">
+						{data && data.staff.length > 0 ? (
+							<div className="relative order-1 min-w-0 xl:col-start-1 xl:row-start-1">
+								<SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+								<Input
+									aria-label="Search workers"
+									className="h-9 pl-8"
+									placeholder="Search workers"
+									value={workerQuery}
+									onChange={(event) => {
+										setWorkerQuery(event.target.value);
+										setVisibleStaffCount(40);
+									}}
+								/>
+							</div>
+						) : null}
+						{data ? (
+							<div className="order-3 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 border-border text-muted-foreground text-xs tabular-nums sm:col-span-2 xl:col-span-1 xl:col-start-3 xl:row-start-1 xl:flex-nowrap xl:border-l xl:pl-4">
+								<span className="shrink-0 whitespace-nowrap">
+									<span className="font-semibold text-foreground">
+										{data.shifts.length}
+									</span>{" "}
+									shifts
+								</span>
+								<span className="text-muted-foreground/40">·</span>
+								<span className="shrink-0 whitespace-nowrap">
+									<span className="font-semibold text-foreground">
+										{(totalHours / 60).toFixed(1)}h
+									</span>{" "}
+									scheduled
+								</span>
+								<span className="text-muted-foreground/40">·</span>
+								<span
+									className={cn(
+										"shrink-0 whitespace-nowrap",
+										openShiftCount > 0 && "font-medium text-primary",
+									)}
+								>
+									{openShiftCount} open
+								</span>
+								<span className="text-muted-foreground/40">·</span>
+								<span
+									className={cn(
+										"shrink-0 whitespace-nowrap",
+										conflictCount > 0 && "font-medium text-destructive",
+									)}
+								>
+									{conflictCount} conflict{conflictCount === 1 ? "" : "s"}
+								</span>
+								{onClockCount > 0 ? (
+									<>
+										<span className="text-muted-foreground/40">·</span>
+										<span className="shrink-0 whitespace-nowrap font-medium text-primary">
+											{onClockCount} on clock
+										</span>
+									</>
+								) : null}
+								{offRosterShifts.length > 0 ? (
+									<>
+										<span className="text-muted-foreground/40">·</span>
+										<span className="shrink-0 whitespace-nowrap">
+											{offRosterShifts.length} off-roster
+										</span>
+									</>
+								) : null}
+								<span className="hidden min-w-0 truncate whitespace-nowrap 2xl:inline">
+									{data.schedule.timezone}
+								</span>
+							</div>
+						) : null}
+						{data && data.staff.length > 0 ? (
+							<>
+								<div className="order-2 flex items-center gap-1 xl:col-start-2 xl:row-start-1">
+									<Popover>
+										<PopoverTrigger
+											render={
+												<Button
+													variant="outline"
+													size="sm"
+													className="h-9 min-w-28 justify-start"
+												/>
+											}
+										>
+											<ListFilterIcon data-icon="inline-start" />
+											Filters
+											<Badge
+												aria-hidden={activeSelectFilterCount === 0}
+												className={cn(
+													"ml-auto size-5 px-0 tabular-nums",
+													activeSelectFilterCount === 0 && "invisible",
+												)}
+												variant="secondary"
+											>
+												{activeSelectFilterCount}
+											</Badge>
+											<ChevronDownIcon data-icon="inline-end" />
+										</PopoverTrigger>
+										<PopoverContent align="end" className="w-72 rounded-xl">
+											<PopoverHeader>
+												<PopoverTitle>Filter workers</PopoverTitle>
+											</PopoverHeader>
+											<div className="grid gap-3">
+												<Field>
+													<FieldLabel>Position</FieldLabel>
+													<Select
+														items={[
+															{ label: "All positions", value: "all" },
+															...data.positions.map((position) => ({
+																label: position.name,
+																value: position.id,
+															})),
+														]}
+														value={positionFilter}
+														onValueChange={(value) => {
+															if (!value) return;
+															setPositionFilter(value);
+															setVisibleStaffCount(40);
+														}}
+													>
+														<SelectTrigger className="w-full">
+															<SelectValue />
+														</SelectTrigger>
+														<SelectContent alignItemWithTrigger={false}>
+															<SelectGroup>
+																<SelectItem value="all">
+																	All positions
+																</SelectItem>
+																{data.positions.map((position) => (
+																	<SelectItem
+																		key={position.id}
+																		value={position.id}
+																	>
+																		{position.name}
+																	</SelectItem>
+																))}
+															</SelectGroup>
+														</SelectContent>
+													</Select>
+												</Field>
+												<Field>
+													<FieldLabel>Schedule state</FieldLabel>
+													<Select
+														items={[
+															{ label: "All workers", value: "all" },
+															{ label: "Scheduled", value: "scheduled" },
+															{ label: "Unscheduled", value: "unscheduled" },
+															{
+																label: "Has constraints",
+																value: "constraints",
+															},
+														]}
+														value={staffStateFilter}
+														onValueChange={(value) => {
+															if (!value) return;
+															setStaffStateFilter(value);
+															setVisibleStaffCount(40);
+														}}
+													>
+														<SelectTrigger className="w-full">
+															<SelectValue />
+														</SelectTrigger>
+														<SelectContent alignItemWithTrigger={false}>
+															<SelectGroup>
+																<SelectItem value="all">All workers</SelectItem>
+																<SelectItem value="scheduled">
+																	Scheduled
+																</SelectItem>
+																<SelectItem value="unscheduled">
+																	Unscheduled
+																</SelectItem>
+																<SelectItem value="constraints">
+																	Has constraints
+																</SelectItem>
+															</SelectGroup>
+														</SelectContent>
+													</Select>
+												</Field>
+											</div>
+										</PopoverContent>
+									</Popover>
+									{hasStaffFilters ? (
 										<Button
+											variant="ghost"
+											size="sm"
+											className="h-9"
+											onClick={clearStaffFilters}
+										>
+											<XIcon data-icon="inline-start" />
+											Clear
+										</Button>
+									) : null}
+								</div>
+								<div className="order-4 flex min-w-0 items-center justify-between gap-3 sm:col-span-2 xl:col-span-1 xl:col-start-4 xl:row-start-1 xl:justify-end">
+									<span className="whitespace-nowrap text-muted-foreground text-xs tabular-nums">
+										{filteredStaff.length} of {data.staff.length} workers
+									</span>
+									<div className="flex shrink-0 items-center gap-1.5">
+										<Columns3Icon className="size-3.5 text-muted-foreground" />
+										<ToggleGroup
+											aria-label="Schedule grid density"
+											value={[gridDensity]}
 											variant="outline"
 											size="sm"
-											className="order-last min-w-28 justify-start"
-										/>
-									}
-								>
-									<ListFilterIcon data-icon="inline-start" />
-									Filters
-									<Badge
-										aria-hidden={activeSelectFilterCount === 0}
-										className={cn(
-											"ml-auto size-5 px-0 tabular-nums",
-											activeSelectFilterCount === 0 && "invisible",
-										)}
-										variant="secondary"
-									>
-										{activeSelectFilterCount}
-									</Badge>
-									<ChevronDownIcon data-icon="inline-end" />
-								</PopoverTrigger>
-								<PopoverContent align="end" className="w-72 rounded-xl">
-									<PopoverHeader>
-										<PopoverTitle>Filter workers</PopoverTitle>
-									</PopoverHeader>
-									<div className="grid gap-3">
-										<Field>
-											<FieldLabel>Position</FieldLabel>
-											<Select
-												items={[
-													{ label: "All positions", value: "all" },
-													...data.positions.map((position) => ({
-														label: position.name,
-														value: position.id,
-													})),
-												]}
-												value={positionFilter}
-												onValueChange={(value) => {
-													if (!value) return;
-													setPositionFilter(value);
-													setVisibleStaffCount(40);
-												}}
-											>
-												<SelectTrigger className="w-full">
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent alignItemWithTrigger={false}>
-													<SelectGroup>
-														<SelectItem value="all">All positions</SelectItem>
-														{data.positions.map((position) => (
-															<SelectItem key={position.id} value={position.id}>
-																{position.name}
-															</SelectItem>
-														))}
-													</SelectGroup>
-												</SelectContent>
-											</Select>
-										</Field>
-										<Field>
-											<FieldLabel>Schedule state</FieldLabel>
-											<Select
-												items={[
-													{ label: "All workers", value: "all" },
-													{ label: "Scheduled", value: "scheduled" },
-													{ label: "Unscheduled", value: "unscheduled" },
-													{ label: "Has constraints", value: "constraints" },
-												]}
-												value={staffStateFilter}
-												onValueChange={(value) => {
-													if (!value) return;
-													setStaffStateFilter(value);
-													setVisibleStaffCount(40);
-												}}
-											>
-												<SelectTrigger className="w-full">
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent alignItemWithTrigger={false}>
-													<SelectGroup>
-														<SelectItem value="all">All workers</SelectItem>
-														<SelectItem value="scheduled">Scheduled</SelectItem>
-														<SelectItem value="unscheduled">
-															Unscheduled
-														</SelectItem>
-														<SelectItem value="constraints">
-															Has constraints
-														</SelectItem>
-													</SelectGroup>
-												</SelectContent>
-											</Select>
-										</Field>
+											spacing={0}
+											onValueChange={(value) => {
+												const next = value[0];
+												if (next === "compact" || next === "comfortable") {
+													setGridDensity(next);
+												}
+											}}
+										>
+											<ToggleGroupItem className="h-9" value="compact">
+												Compact
+											</ToggleGroupItem>
+											<ToggleGroupItem className="h-9" value="comfortable">
+												Comfortable
+											</ToggleGroupItem>
+										</ToggleGroup>
 									</div>
-								</PopoverContent>
-							</Popover>
-							{hasStaffFilters ? (
-								<Button
-									variant="ghost"
-									size="sm"
-									className="h-8"
-									onClick={clearStaffFilters}
+								</div>
+							</>
+						) : null}
+					</div>
+					{data && data.positions.length > 0 ? (
+						<div className="grid min-h-8 grid-cols-1 items-center px-3 pt-0 pb-2 xl:grid-cols-[14rem_auto_minmax(18rem,1fr)_auto]">
+							<div className="flex min-w-0 items-center gap-3 overflow-x-auto overscroll-x-contain xl:col-span-2 xl:col-start-3">
+								<span className="shrink-0 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
+									Positions
+								</span>
+								<ul
+									className="flex list-none items-center gap-3"
+									aria-label="Position colors"
 								>
-									<XIcon data-icon="inline-start" />
-									Clear
-								</Button>
-							) : null}
-							<span className="ml-auto whitespace-nowrap text-muted-foreground text-xs tabular-nums">
-								{filteredStaff.length} of {data.staff.length} workers
-							</span>
-						</>
+									{data.positions.map((position) => (
+										<li
+											key={position.id}
+											className="flex shrink-0 items-center gap-1.5 text-xs"
+										>
+											<span
+												className={cn(
+													"h-3 w-1 rounded-full",
+													positionColor(position.name).dot,
+												)}
+												aria-hidden
+											/>
+											{position.name}
+										</li>
+									))}
+								</ul>
+							</div>
+						</div>
 					) : null}
 				</div>
 
@@ -1442,7 +1749,7 @@ function SchedulePage() {
 																onClick={() => toggleAddDate(date)}
 															>
 																<span className="text-[0.6875rem]">
-																	{DAY_HEADERS[index]?.slice(0, 3)}
+																	{dayHeaders[index]?.slice(0, 3)}
 																</span>
 																<span>
 																	{new Date(`${date}T12:00:00`).getDate()}
@@ -1625,322 +1932,379 @@ function SchedulePage() {
 					{schedule.isPending && !data ? <ScheduleGridSkeleton /> : null}
 
 					{data ? (
-						<div className="relative flex min-h-0 flex-1 flex-col overflow-hidden border border-border/70 bg-card shadow-sm print:border print:shadow-none">
-							<div className="schedule-grid-scroll min-h-0 min-w-0 flex-1 overflow-auto">
-								<div className="grid min-w-[1144px] grid-cols-[220px_repeat(7,minmax(132px,1fr))]">
-									{/* Header */}
-									<div className="sticky top-0 left-0 z-30 flex items-end border-border/70 border-r border-b bg-card px-4 pt-3 pb-2.5 shadow-[4px_0_12px_-12px_var(--foreground)]">
-										<span className="font-medium text-muted-foreground/70 text-xs">
-											{hasStaffFilters
-												? `${filteredStaff.length} of ${data.staff.length}`
-												: data.staff.length}{" "}
-											on roster
-										</span>
-									</div>
-									{days.map((day, index) => {
-										const isToday = day === todayKey;
-										const isWeekend = index >= 5;
-										return (
-											<div
-												key={day}
-												className={cn(
-													"sticky top-0 z-20 border-border/70 border-r border-b bg-card px-2 pt-3 pb-2.5 text-center last:border-r-0",
-													isWeekend && "bg-muted/30",
-													isToday && "bg-accent/55",
-												)}
-											>
-												<p className="font-medium text-muted-foreground text-xs">
-													{DAY_HEADERS[index]?.slice(0, 3)}
-												</p>
-												<span
+						<DragDropProvider onDragEnd={handleShiftDragEnd}>
+							<div className="relative flex min-h-0 flex-1 flex-col overflow-hidden border border-border/70 bg-background shadow-sm print:border print:shadow-none">
+								<div className="schedule-grid-scroll min-h-0 min-w-0 flex-1 overflow-auto overscroll-none">
+									<div
+										className={cn(
+											"grid",
+											gridDensity === "compact"
+												? "min-w-[1032px] grid-cols-[200px_repeat(7,minmax(118px,1fr))]"
+												: "min-w-[1144px] grid-cols-[220px_repeat(7,minmax(132px,1fr))]",
+										)}
+									>
+										{/* Header */}
+										<div className="sticky top-0 left-0 z-30 flex items-end border-border/70 border-r border-b bg-background px-4 pt-3 pb-2.5 shadow-[4px_0_12px_-12px_var(--foreground)]">
+											<span className="font-medium text-muted-foreground text-xs">
+												{hasStaffFilters
+													? `${filteredStaff.length} of ${data.staff.length}`
+													: data.staff.length}{" "}
+												on roster
+											</span>
+										</div>
+										{days.map((day, index) => {
+											const isToday = day === todayKey;
+											const isWeekend = index >= 5;
+											const summary = daySummaries.get(day);
+											return (
+												<div
+													key={day}
 													className={cn(
-														"mt-0.5 inline-flex size-7 items-center justify-center rounded-full font-semibold text-sm tabular-nums",
-														isToday &&
-															"bg-primary text-primary-foreground shadow-sm",
+														"sticky top-0 z-20 border-border/70 border-r border-b bg-background px-2 pt-3 pb-2.5 text-center last:border-r-0",
+														isWeekend && "bg-muted/30",
+														isToday && "bg-accent/55",
 													)}
 												>
-													{new Date(`${day}T12:00:00`).getDate()}
-												</span>
-											</div>
-										);
-									})}
-
-									{/* Worker rows */}
-									{visibleStaff.map((member) => {
-										const hasConstraints =
-											(member.unavailability?.length ?? 0) > 0 ||
-											(member.timeOff?.length ?? 0) > 0;
-										const minutes =
-											scheduleIndex.hoursByEmploymentId.get(
-												member.employmentId,
-											) ?? 0;
-										return (
-											<div key={member.employmentId} className="contents">
-												<div className="sticky left-0 z-10 flex min-h-[104px] items-center gap-3 border-border/70 border-r border-b bg-card px-3 py-3 shadow-[4px_0_12px_-12px_var(--foreground)]">
-													<Avatar className="shrink-0 shadow-[0_0_0_2px_var(--background)]">
-														<AvatarFallback
+													<div className="flex items-center justify-center gap-1.5">
+														<p className="font-medium text-muted-foreground text-xs">
+															{dayHeaders[index]?.slice(0, 3)}
+														</p>
+														<span
 															className={cn(
-																member.kind === "manager" &&
-																	"bg-primary/10 font-semibold text-primary",
+																"inline-flex size-6 items-center justify-center rounded-full font-semibold text-xs tabular-nums",
+																isToday &&
+																	"bg-primary text-primary-foreground shadow-sm",
 															)}
 														>
-															{initials(member.name)}
-														</AvatarFallback>
-													</Avatar>
-													<div className="min-w-0 flex-1 space-y-1">
-														<p
-															className="truncate font-semibold text-sm leading-tight"
-															title={member.name}
-														>
-															{member.name}
-														</p>
-														<p className="truncate text-muted-foreground text-xs leading-tight">
-															{member.kind === "manager"
-																? "Manager"
-																: positionsLabel(member.positionIds.length)}
-														</p>
-													</div>
-													<div className="flex shrink-0 flex-col items-end gap-2">
-														<span
-															className="font-semibold text-xs tabular-nums"
-															title={`${(minutes / 60).toFixed(1)} scheduled hours`}
-														>
-															{(minutes / 60).toFixed(1)}h
+															{new Date(`${day}T12:00:00`).getDate()}
 														</span>
-														{hasConstraints ? (
-															<Tooltip>
-																<TooltipTrigger
-																	render={
-																		<span className="inline-flex size-6 items-center justify-center text-muted-foreground">
-																			<BanIcon className="size-3.5" />
-																			<span className="sr-only">
-																				Has scheduling constraints
+													</div>
+													<p className="mt-1 text-[10px] text-muted-foreground tabular-nums">
+														{summary
+															? `${summary.shifts} shift${summary.shifts === 1 ? "" : "s"} · ${(summary.minutes / 60).toFixed(1)}h`
+															: "No shifts"}
+													</p>
+												</div>
+											);
+										})}
+
+										{/* Worker rows */}
+										{visibleStaff.map((member) => {
+											const hasConstraints =
+												(member.unavailability?.length ?? 0) > 0 ||
+												(member.timeOff?.length ?? 0) > 0;
+											const minutes =
+												scheduleIndex.hoursByEmploymentId.get(
+													member.employmentId,
+												) ?? 0;
+											const memberShiftCount =
+												scheduleIndex.shiftCountByEmploymentId.get(
+													member.employmentId,
+												) ?? 0;
+											return (
+												<div key={member.employmentId} className="contents">
+													<div
+														className={cn(
+															"sticky left-0 z-10 flex items-center gap-3 border-border/70 border-r border-b bg-background px-3 py-3 shadow-[4px_0_12px_-12px_var(--foreground)]",
+															gridDensity === "compact"
+																? "min-h-20"
+																: "min-h-[104px]",
+														)}
+													>
+														<Avatar className="shrink-0 shadow-[0_0_0_2px_var(--background)]">
+															<AvatarFallback
+																className={cn(
+																	member.kind === "manager" &&
+																		"bg-primary/10 font-semibold text-primary",
+																)}
+															>
+																{initials(member.name)}
+															</AvatarFallback>
+														</Avatar>
+														<div className="min-w-0 flex-1 space-y-1">
+															<p
+																className="truncate font-semibold text-sm leading-tight"
+																title={member.name}
+															>
+																{member.name}
+															</p>
+															<p className="truncate text-muted-foreground text-xs leading-tight">
+																{member.kind === "manager"
+																	? "Manager"
+																	: positionsLabel(member.positionIds.length)}
+																{" · "}
+																{memberShiftCount} shift
+																{memberShiftCount === 1 ? "" : "s"}
+															</p>
+														</div>
+														<div className="flex shrink-0 flex-col items-end gap-2">
+															<span
+																className="font-semibold text-xs tabular-nums"
+																title={`${(minutes / 60).toFixed(1)} scheduled hours`}
+															>
+																{(minutes / 60).toFixed(1)}h
+															</span>
+															{hasConstraints ? (
+																<Tooltip>
+																	<TooltipTrigger
+																		render={
+																			<span className="inline-flex size-6 items-center justify-center text-muted-foreground">
+																				<BanIcon className="size-3.5" />
+																				<span className="sr-only">
+																					Has scheduling constraints
+																				</span>
 																			</span>
-																		</span>
+																		}
+																	/>
+																	<TooltipContent>
+																		Has unavailability or time off
+																	</TooltipContent>
+																</Tooltip>
+															) : null}
+														</div>
+													</div>
+													{days.map((day, dayIndex) => {
+														const workerShifts =
+															scheduleIndex.shiftsByWorkerDay.get(
+																`${member.employmentId}:${day}`,
+															) ?? [];
+														const constraints = cellConstraints(member, day);
+														const isEmptyCell =
+															workerShifts.length === 0 &&
+															constraints.length === 0;
+														const isToday = day === todayKey;
+														const isWeekend = dayIndex >= 5;
+														return (
+															<ScheduleDropCell
+																key={day}
+																employmentId={member.employmentId}
+																date={day}
+																className={cn(
+																	"group relative border-border/60 border-r border-b p-2 transition-colors last:border-r-0 hover:bg-accent/30",
+																	gridDensity === "compact"
+																		? "min-h-20"
+																		: "min-h-[104px]",
+																	isWeekend && "bg-muted/30",
+																	isToday && "bg-accent/25",
+																)}
+															>
+																{constraints.length > 0 ? (
+																	<div className="mb-1.5 space-y-1">
+																		{constraints.map((constraint) => (
+																			<Badge
+																				key={constraint.key}
+																				variant="outline"
+																				className="max-w-full gap-1 border-border border-dashed px-1.5 py-0 font-normal text-[10px] text-muted-foreground"
+																			>
+																				{constraint.kind ===
+																				"unavailability" ? (
+																					<BanIcon className="size-3 shrink-0" />
+																				) : (
+																					<CalendarOffIcon className="size-3 shrink-0" />
+																				)}
+																				<span className="truncate">
+																					{constraint.label}
+																				</span>
+																			</Badge>
+																		))}
+																	</div>
+																) : null}
+																<div className="space-y-1.5">
+																	{workerShifts.map((shift) => (
+																		<ShiftTile
+																			key={shift.id}
+																			shift={shift}
+																			onOpen={openEdit}
+																			compact={gridDensity === "compact"}
+																			disabled={moveShift.isPending}
+																			timeclock={timeclockByShiftId.get(
+																				shift.id,
+																			)}
+																		/>
+																	))}
+																</div>
+																<Button
+																	type="button"
+																	aria-label={`Add shift for ${member.name} on ${dayHeaders[dayIndex]}`}
+																	variant={isEmptyCell ? "outline" : "ghost"}
+																	size={isEmptyCell ? "sm" : "icon-xs"}
+																	className={cn(
+																		"schedule-cell-add absolute rounded-md border border-border/60 bg-card/90 text-muted-foreground opacity-0 shadow-xs transition-[opacity,background-color,color] hover:bg-action hover:text-action-foreground focus-visible:opacity-100 group-hover:opacity-100",
+																		isEmptyCell &&
+																			"schedule-cell-add-empty inset-0 m-auto h-8 w-fit border-dashed bg-transparent px-2.5 opacity-100 shadow-none",
+																		!isEmptyCell && "right-1.5 bottom-1.5",
+																	)}
+																	disabled={
+																		!data || data.positions.length === 0
 																	}
-																/>
-																<TooltipContent>
-																	Has unavailability or time off
-																</TooltipContent>
-															</Tooltip>
-														) : null}
+																	onClick={() => {
+																		const draft = emptyForm(day);
+																		draft.employmentId = member.employmentId;
+																		const positions = positionsForWorker(
+																			data?.positions ?? [],
+																			member,
+																		);
+																		if (positions.length === 1)
+																			draft.positionId = positions[0]?.id ?? "";
+																		setForm(draft);
+																	}}
+																>
+																	<PlusIcon
+																		data-icon={
+																			isEmptyCell ? "inline-start" : undefined
+																		}
+																	/>
+																	{isEmptyCell ? (
+																		<span>Add shift</span>
+																	) : (
+																		<span className="sr-only">
+																			Add shift for {member.name} on{" "}
+																			{dayHeaders[dayIndex]}
+																		</span>
+																	)}
+																</Button>
+															</ScheduleDropCell>
+														);
+													})}
+												</div>
+											);
+										})}
+										{filteredStaff.length === 0 ? (
+											<div className="col-span-8 flex flex-col items-center gap-2 border-b bg-background p-6 text-center">
+												<p className="font-medium text-sm">
+													No workers match these filters
+												</p>
+												<Button
+													variant="outline"
+													size="sm"
+													onClick={clearStaffFilters}
+												>
+													Clear filters
+												</Button>
+											</div>
+										) : null}
+										{visibleStaff.length < filteredStaff.length ? (
+											<div className="col-span-8 flex justify-center border-b bg-background p-3">
+												<Button
+													variant="outline"
+													size="sm"
+													onClick={() =>
+														setVisibleStaffCount((count) => count + 40)
+													}
+												>
+													Show{" "}
+													{Math.min(
+														40,
+														filteredStaff.length - visibleStaff.length,
+													)}{" "}
+													more workers
+												</Button>
+											</div>
+										) : null}
+
+										{/* Open shifts row */}
+										{data.positions.length > 0 ? (
+											<>
+												<div className="sticky left-0 z-10 flex min-h-20 items-center border-border/70 border-r border-b bg-accent/60 px-4 py-3 shadow-[4px_0_12px_-12px_var(--foreground)]">
+													<div>
+														<p className="font-medium text-sm leading-tight">
+															Open shifts
+														</p>
+														<p className="text-muted-foreground text-xs leading-tight">
+															{openShiftCount > 0
+																? "Needs a worker"
+																: "Drop here to unassign"}
+														</p>
 													</div>
 												</div>
 												{days.map((day, dayIndex) => {
-													const workerShifts =
-														scheduleIndex.shiftsByWorkerDay.get(
-															`${member.employmentId}:${day}`,
-														) ?? [];
-													const constraints = cellConstraints(member, day);
-													const isEmptyCell =
-														workerShifts.length === 0 &&
-														constraints.length === 0;
-													const isToday = day === todayKey;
+													const isWeekend = dayIndex >= 5;
+													return (
+														<ScheduleDropCell
+															key={day}
+															employmentId={null}
+															date={day}
+															className={cn(
+																"min-h-20 border-border/60 border-r border-b bg-accent/25 p-2 last:border-r-0",
+																isWeekend && "bg-muted/30",
+															)}
+														>
+															<div className="space-y-1.5">
+																{(
+																	scheduleIndex.shiftsByWorkerDay.get(
+																		`open:${day}`,
+																	) ?? []
+																).map((shift) => (
+																	<ShiftTile
+																		key={shift.id}
+																		shift={shift}
+																		onOpen={openEdit}
+																		compact={gridDensity === "compact"}
+																		disabled={moveShift.isPending}
+																		timeclock={timeclockByShiftId.get(shift.id)}
+																	/>
+																))}
+															</div>
+														</ScheduleDropCell>
+													);
+												})}
+											</>
+										) : null}
+
+										{/* Off-roster row */}
+										{offRosterShifts.length > 0 ? (
+											<>
+												<div className="sticky left-0 z-10 flex min-h-20 items-center border-border/70 border-r border-b bg-muted/60 px-4 py-3 shadow-[4px_0_12px_-12px_var(--foreground)]">
+													<div>
+														<p className="font-medium text-sm leading-tight">
+															Off-roster
+														</p>
+														<p className="text-muted-foreground text-xs leading-tight">
+															Reassign or remove
+														</p>
+													</div>
+												</div>
+												{days.map((day, dayIndex) => {
 													const isWeekend = dayIndex >= 5;
 													return (
 														<div
 															key={day}
 															className={cn(
-																"group relative min-h-[104px] border-border/60 border-r border-b p-2 transition-colors last:border-r-0 hover:bg-accent/30",
-																isWeekend && "bg-muted/30",
-																isToday && "bg-accent/25",
+																"min-h-20 border-border/60 border-r border-b bg-muted/30 p-2 last:border-r-0",
+																isWeekend && "bg-muted/40",
 															)}
 														>
-															{constraints.length > 0 ? (
-																<div className="mb-1.5 space-y-1">
-																	{constraints.map((constraint) => (
-																		<Badge
-																			key={constraint.key}
-																			variant="outline"
-																			className="max-w-full gap-1 border-border border-dashed px-1.5 py-0 font-normal text-[10px] text-muted-foreground"
-																		>
-																			{constraint.kind === "unavailability" ? (
-																				<BanIcon className="size-3 shrink-0" />
-																			) : (
-																				<CalendarOffIcon className="size-3 shrink-0" />
-																			)}
-																			<span className="truncate">
-																				{constraint.label}
-																			</span>
-																		</Badge>
-																	))}
-																</div>
-															) : null}
 															<div className="space-y-1.5">
-																{workerShifts.map((shift) => (
-																	<ShiftTile
-																		key={shift.id}
-																		shift={shift}
-																		onOpen={openEdit}
-																	/>
-																))}
+																{(offRosterShiftsByDay.get(day) ?? []).map(
+																	(shift) => (
+																		<ShiftTile
+																			key={shift.id}
+																			shift={shift}
+																			onOpen={openEdit}
+																			compact={gridDensity === "compact"}
+																			disabled={moveShift.isPending}
+																			timeclock={timeclockByShiftId.get(
+																				shift.id,
+																			)}
+																		/>
+																	),
+																)}
 															</div>
-															<Button
-																type="button"
-																aria-label={`Add shift for ${member.name} on ${DAY_HEADERS[dayIndex]}`}
-																variant={isEmptyCell ? "outline" : "ghost"}
-																size={isEmptyCell ? "sm" : "icon-xs"}
-																className={cn(
-																	"schedule-cell-add absolute right-1.5 bottom-1.5 rounded-md border border-border/60 bg-card/90 text-muted-foreground opacity-0 shadow-xs transition-[opacity,background-color,color] hover:bg-action hover:text-action-foreground focus-visible:opacity-100 group-hover:opacity-100",
-																	isEmptyCell &&
-																		"schedule-cell-add-empty top-1/2 right-1/2 bottom-auto h-8 translate-x-1/2 -translate-y-1/2 border-dashed bg-transparent px-2.5 opacity-60 shadow-none",
-																)}
-																disabled={!data || data.positions.length === 0}
-																onClick={() => {
-																	const draft = emptyForm(day);
-																	draft.employmentId = member.employmentId;
-																	const positions = positionsForWorker(
-																		data?.positions ?? [],
-																		member,
-																	);
-																	if (positions.length === 1)
-																		draft.positionId = positions[0]?.id ?? "";
-																	setForm(draft);
-																}}
-															>
-																<PlusIcon
-																	data-icon={
-																		isEmptyCell ? "inline-start" : undefined
-																	}
-																/>
-																{isEmptyCell ? (
-																	<span>Add shift</span>
-																) : (
-																	<span className="sr-only">
-																		Add shift for {member.name} on{" "}
-																		{DAY_HEADERS[dayIndex]}
-																	</span>
-																)}
-															</Button>
 														</div>
 													);
 												})}
-											</div>
-										);
-									})}
-									{filteredStaff.length === 0 ? (
-										<div className="col-span-8 flex flex-col items-center gap-2 border-b bg-card p-6 text-center">
-											<p className="font-medium text-sm">
-												No workers match these filters
-											</p>
-											<Button
-												variant="outline"
-												size="sm"
-												onClick={clearStaffFilters}
-											>
-												Clear filters
-											</Button>
-										</div>
-									) : null}
-									{visibleStaff.length < filteredStaff.length ? (
-										<div className="col-span-8 flex justify-center border-b bg-card p-3">
-											<Button
-												variant="outline"
-												size="sm"
-												onClick={() =>
-													setVisibleStaffCount((count) => count + 40)
-												}
-											>
-												Show{" "}
-												{Math.min(
-													40,
-													filteredStaff.length - visibleStaff.length,
-												)}{" "}
-												more workers
-											</Button>
-										</div>
-									) : null}
-
-									{/* Open shifts row */}
-									{openShiftCount > 0 ? (
-										<>
-											<div className="sticky left-0 z-10 flex min-h-20 items-center border-border/70 border-r border-b bg-accent/60 px-4 py-3 shadow-[4px_0_12px_-12px_var(--foreground)]">
-												<div>
-													<p className="font-medium text-sm leading-tight">
-														Open shifts
-													</p>
-													<p className="text-muted-foreground text-xs leading-tight">
-														Needs a worker
-													</p>
-												</div>
-											</div>
-											{days.map((day, dayIndex) => {
-												const isWeekend = dayIndex >= 5;
-												return (
-													<div
-														key={day}
-														className={cn(
-															"min-h-20 border-border/60 border-r border-b bg-accent/25 p-2 last:border-r-0",
-															isWeekend && "bg-muted/30",
-														)}
-													>
-														<div className="space-y-1.5">
-															{(
-																scheduleIndex.shiftsByWorkerDay.get(
-																	`open:${day}`,
-																) ?? []
-															).map((shift) => (
-																<ShiftTile
-																	key={shift.id}
-																	shift={shift}
-																	onOpen={openEdit}
-																/>
-															))}
-														</div>
-													</div>
-												);
-											})}
-										</>
-									) : null}
-
-									{/* Off-roster row */}
-									{offRosterShifts.length > 0 ? (
-										<>
-											<div className="sticky left-0 z-10 flex min-h-20 items-center border-border/70 border-r border-b bg-muted/60 px-4 py-3 shadow-[4px_0_12px_-12px_var(--foreground)]">
-												<div>
-													<p className="font-medium text-sm leading-tight">
-														Off-roster
-													</p>
-													<p className="text-muted-foreground text-xs leading-tight">
-														Reassign or remove
-													</p>
-												</div>
-											</div>
-											{days.map((day, dayIndex) => {
-												const isWeekend = dayIndex >= 5;
-												return (
-													<div
-														key={day}
-														className={cn(
-															"min-h-20 border-border/60 border-r border-b bg-muted/30 p-2 last:border-r-0",
-															isWeekend && "bg-muted/40",
-														)}
-													>
-														<div className="space-y-1.5">
-															{(offRosterShiftsByDay.get(day) ?? []).map(
-																(shift) => (
-																	<ShiftTile
-																		key={shift.id}
-																		shift={shift}
-																		onOpen={openEdit}
-																	/>
-																),
-															)}
-														</div>
-													</div>
-												);
-											})}
-										</>
-									) : null}
+											</>
+										) : null}
+									</div>
 								</div>
 							</div>
-						</div>
+						</DragDropProvider>
 					) : null}
 
 					{/* Insights */}
 					{showScheduleDetails && hasInsights ? (
 						<Card className="rounded-2xl border-border/60 shadow-sm print:hidden">
-							<CardHeader className="gap-8 p-5 sm:p-6">
+							<CardHeader className="gap-4 p-4 sm:p-5">
 								<div>
 									<h2 className="font-semibold text-base">Schedule details</h2>
 									<p className="mt-1 text-muted-foreground text-sm">
@@ -2014,10 +2378,7 @@ function SchedulePage() {
 								) : null}
 
 								{(data?.hours.length ?? 0) > 0 ? (
-									<section
-										aria-labelledby="schedule-hours-heading"
-										className="border-border/60 border-t pt-6"
-									>
+									<section aria-labelledby="schedule-hours-heading">
 										<h3
 											id="schedule-hours-heading"
 											className="mb-1 font-semibold text-sm"
@@ -2056,10 +2417,7 @@ function SchedulePage() {
 								) : null}
 
 								{(acceptances.data?.acceptances.length ?? 0) > 0 ? (
-									<section
-										aria-labelledby="schedule-acceptances-heading"
-										className="border-border/60 border-t pt-6"
-									>
+									<section aria-labelledby="schedule-acceptances-heading">
 										<div className="mb-1 flex items-center gap-2">
 											<h3
 												id="schedule-acceptances-heading"
@@ -2116,10 +2474,7 @@ function SchedulePage() {
 								) : null}
 
 								{(publication.data?.versions.length ?? 0) > 0 ? (
-									<section
-										aria-labelledby="schedule-publication-heading"
-										className="border-border/60 border-t pt-6"
-									>
+									<section aria-labelledby="schedule-publication-heading">
 										<h3
 											id="schedule-publication-heading"
 											className="mb-1 font-semibold text-sm"

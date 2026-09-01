@@ -20,7 +20,10 @@ import { notificationsRoutes } from "./routes/notifications";
 import { pilotRoutes } from "./routes/pilot";
 import { positionsRoutes } from "./routes/positions";
 import { publicationRoutes } from "./routes/publication";
+import { rosterRoutes } from "./routes/roster";
 import { schedulesRoutes } from "./routes/schedules";
+import { swapRoutes } from "./routes/swaps";
+import { timeEntryRoutes } from "./routes/time-entries";
 import { workersRoutes } from "./routes/workers";
 import { workplacesRoutes } from "./routes/workplaces";
 
@@ -116,5 +119,8 @@ export function createApp() {
 		.use(publicationRoutes)
 		.use(changesRoutes)
 		.use(coverageRoutes)
-		.use(notificationsRoutes);
+		.use(notificationsRoutes)
+		.use(timeEntryRoutes)
+		.use(swapRoutes)
+		.use(rosterRoutes);
 }

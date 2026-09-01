@@ -1,6 +1,7 @@
 import { useMaterialColors } from "@expo/ui/jetpack-compose";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
 
+import { usePushRegistration, usePushResponseNavigation } from "@/lib/push";
 import { useCurrentEmployment } from "@/lib/queries";
 import { useColorScheme } from "@/lib/use-color-scheme";
 
@@ -8,6 +9,8 @@ export default function TabLayout() {
 	const { colorScheme } = useColorScheme();
 	const material = useMaterialColors({ colorScheme });
 	const { isManager } = useCurrentEmployment();
+	usePushRegistration();
+	usePushResponseNavigation();
 
 	return (
 		<NativeTabs
@@ -15,14 +18,25 @@ export default function TabLayout() {
 			backgroundColor={material.surfaceContainer}
 			indicatorColor={material.secondaryContainer}
 			rippleColor={material.primaryContainer}
-			iconColor={{ default: material.onSurfaceVariant, selected: material.primary }}
-			labelStyle={{ default: { color: material.onSurfaceVariant, fontSize: 11 }, selected: { color: material.primary, fontSize: 11, fontWeight: "600" } }}
+			iconColor={{
+				default: material.onSurfaceVariant,
+				selected: material.primary,
+			}}
+			labelStyle={{
+				default: { color: material.onSurfaceVariant, fontSize: 11 },
+				selected: { color: material.primary, fontSize: 11, fontWeight: "600" },
+			}}
 			labelVisibilityMode="labeled"
 			tabBarRespectsIMEInsets={false}
 		>
 			<NativeTabs.Trigger name="index">
-				<NativeTabs.Trigger.Icon md={isManager ? "dashboard" : "calendar_month"} sf={isManager ? "square.grid.2x2" : "calendar"} />
-				<NativeTabs.Trigger.Label>{isManager ? "Overview" : "Schedule"}</NativeTabs.Trigger.Label>
+				<NativeTabs.Trigger.Icon
+					md={isManager ? "dashboard" : "calendar_month"}
+					sf={isManager ? "square.grid.2x2" : "calendar"}
+				/>
+				<NativeTabs.Trigger.Label>
+					{isManager ? "Overview" : "Schedule"}
+				</NativeTabs.Trigger.Label>
 			</NativeTabs.Trigger>
 
 			<NativeTabs.Trigger name="availability" hidden>

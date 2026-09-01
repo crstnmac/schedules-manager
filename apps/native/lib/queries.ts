@@ -40,9 +40,11 @@ export function usePendingInvitations(enabled: boolean) {
 }
 
 export interface MyScheduleResponse {
+	weekStartDay: number;
 	currentWeek: PublishedWeek | null;
 	nextWeek: PublishedWeek | null;
 	nextShift: {
+		id: string;
 		positionName: string;
 		startsAt: string;
 		endsAt: string;
@@ -50,6 +52,10 @@ export interface MyScheduleResponse {
 		startMinute: number;
 		endMinute: number;
 		overnight: boolean;
+		timeEntry: {
+			clockedInAt: string;
+			clockedOutAt: string | null;
+		} | null;
 	} | null;
 	currentChanges: string[];
 	pendingAcceptances: {
@@ -70,6 +76,7 @@ export interface MyScheduleResponse {
 export interface PublishedWeek {
 	weekStart: string;
 	locationId: string;
+	locationName: string;
 	timezone: string;
 	version: {
 		id: string;
@@ -87,6 +94,11 @@ export interface PublishedWeek {
 		endMinute: number;
 		overnight: boolean;
 		note: string | null;
+		releaseStatus: "pending" | null;
+		timeEntry: {
+			clockedInAt: string;
+			clockedOutAt: string | null;
+		} | null;
 	}[];
 }
 
@@ -108,6 +120,172 @@ export function useAcknowledge() {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 		},
+	});
+}
+
+export function useClockIn() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (versionShiftId: string) =>
+			api<{ timeEntry: { id: string; clockedInAt: string } }>(
+				`/v1/my/shifts/${versionShiftId}/clock-in`,
+				{ method: "POST" },
+			),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
+			queryClient.invalidateQueries({ queryKey: ["timecard"] });
+		},
+	});
+}
+
+export function useClockOut() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: (versionShiftId: string) =>
+			api<{ timeEntry: { id: string; clockedOutAt: string | null } }>(
+				`/v1/my/shifts/${versionShiftId}/clock-out`,
+				{ method: "POST" },
+			),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
+			queryClient.invalidateQueries({ queryKey: ["timecard"] });
+		},
+	});
+}
+
+export interface TimecardEntry {
+	id: string;
+	versionShiftId: string;
+	positionName: string;
+	shiftStartsAt: string;
+	shiftEndsAt: string;
+	clockedInAt: string;
+	clockedOutAt: string | null;
+}
+
+export function useMyTimeEntries(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["timecard", workplaceId],
+		queryFn: () =>
+			api<{ timeEntries: TimecardEntry[] }>(
+				`/v1/workplaces/${workplaceId}/my/time-entries`,
+			),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export interface SwapDetail {
+	id: string;
+	status:
+		| "pending_counterpart"
+		| "pending_manager"
+		| "approved"
+		| "declined_by_counterpart"
+		| "declined_by_manager"
+		| "cancelled";
+	requestedAt: string;
+	requester: { employmentId: string; name: string };
+	counterpart: { employmentId: string; name: string };
+	requesterShift: {
+		id: string;
+		positionName: string;
+		startsAt: string;
+		endsAt: string;
+	};
+	counterpartShift: {
+		id: string;
+		positionName: string;
+		startsAt: string;
+		endsAt: string;
+	};
+}
+
+export function useMySwaps(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["swaps", workplaceId],
+		queryFn: () =>
+			api<{
+				swaps: { direction: "outgoing" | "incoming"; swap: SwapDetail }[];
+			}>(`/v1/workplaces/${workplaceId}/my/swaps`),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useRespondToSwap() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: { swapId: string; decision: "accept" | "decline" }) =>
+			api(`/v1/my/swaps/${input.swapId}/respond`, {
+				method: "POST",
+				body: { decision: input.decision },
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["swaps"] });
+			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
+		},
+	});
+}
+
+export function useProposeSwap() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			requesterShiftId: string;
+			counterpartEmploymentId: string;
+			counterpartShiftId: string;
+		}) =>
+			api<{ swap: SwapDetail }>("/v1/my/swaps", {
+				method: "POST",
+				body: input,
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["swaps"] });
+		},
+	});
+}
+
+export interface DayRosterEntry {
+	versionShiftId: string;
+	employmentId: string | null;
+	workerName: string;
+	positionName: string;
+	startsAt: string;
+	endsAt: string;
+	mine: boolean;
+}
+
+export function useDayRoster(
+	workplaceId: string | undefined,
+	date: string | undefined,
+) {
+	return useQuery({
+		queryKey: ["day-roster", workplaceId, date],
+		queryFn: () =>
+			api<{ roster: DayRosterEntry[] }>(
+				`/v1/workplaces/${workplaceId}/my/day-roster?date=${date}`,
+			),
+		enabled: Boolean(workplaceId && date),
+	});
+}
+
+export interface PayPeriodInfo {
+	type: "weekly" | "biweekly" | "semimonthly" | "monthly";
+	startsAt: string;
+	endsAt: string;
+	weekStartDay: number;
+}
+
+export function usePayPeriod(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["pay-period", workplaceId],
+		queryFn: () =>
+			api<{ payPeriod: PayPeriodInfo }>(
+				`/v1/workplaces/${workplaceId}/my/pay-period`,
+			).then((data) => data.payPeriod),
+		enabled: Boolean(workplaceId),
+		staleTime: 5 * 60_000,
 	});
 }
 

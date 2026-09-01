@@ -3,6 +3,16 @@ import {
 	AlertDescription,
 	AlertTitle,
 } from "@SchedulesManager/ui/components/alert";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@SchedulesManager/ui/components/alert-dialog";
 import { Button } from "@SchedulesManager/ui/components/button";
 import {
 	Card,
@@ -30,15 +40,25 @@ import {
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CalendarDaysIcon, EyeIcon } from "lucide-react";
+import { CalendarDaysIcon, EyeIcon, TimerIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
 	useAcknowledge,
+	useClockIn,
+	useClockOut,
 	useMySchedule,
 	useRequestRelease,
 	useRespondToAcceptance,
 } from "@/lib/queries";
-import { formatDay, formatMinute, formatShiftRange } from "@/lib/time";
+import {
+	CLOCK_IN_EARLY_MS,
+	formatClockTime,
+	formatDay,
+	formatMinute,
+	formatShiftRange,
+	formatTimerMs,
+} from "@/lib/time";
 import { useWorkplace } from "@/lib/use-workplace";
 
 export const Route = createFileRoute("/worker/")({
@@ -51,10 +71,24 @@ function WorkerHome() {
 	const acknowledge = useAcknowledge();
 	const respond = useRespondToAcceptance();
 	const release = useRequestRelease();
+	const clockIn = useClockIn();
+	const clockOut = useClockOut();
+	const [confirmingIn, setConfirmingIn] = useState(false);
+	const [confirmingOut, setConfirmingOut] = useState(false);
+	const [nowMs, setNowMs] = useState(() => Date.now());
 
 	const currentWeek = schedule.data?.currentWeek ?? null;
 	const nextWeek = schedule.data?.nextWeek ?? null;
 	const nextShift = schedule.data?.nextShift ?? null;
+	const entry = nextShift?.timeEntry ?? null;
+	const onClock = entry !== null && entry.clockedOutAt === null;
+
+	useEffect(() => {
+		if (!onClock) return;
+		const timer = setInterval(() => setNowMs(Date.now()), 1000);
+		return () => clearInterval(timer);
+	}, [onClock]);
+
 	const pendingAcceptances = schedule.data?.pendingAcceptances ?? [];
 	const currentChanges = schedule.data?.currentChanges ?? [];
 	const history = schedule.data?.history ?? [];
@@ -79,7 +113,7 @@ function WorkerHome() {
 	}
 
 	return (
-		<section className="flex flex-col gap-6">
+		<section className="flex flex-col gap-4">
 			{schedule.isLoading ? (
 				<div className="flex flex-col gap-3">
 					<Skeleton className="h-28" />
@@ -103,23 +137,187 @@ function WorkerHome() {
 			) : null}
 
 			{nextShift ? (
-				<div className="rounded-2xl bg-primary p-6 text-primary-foreground shadow-sm">
-					<p className="mb-3 font-medium text-primary-foreground/75 text-sm">
-						Next shift
-					</p>
-					<h1 className="font-semibold text-2xl tracking-[-0.025em]">
-						{formatDay(nextShift.startsAt)}
-					</h1>
-					<p className="mt-1 font-medium text-lg tabular-nums">
-						{formatShiftRange(
-							nextShift.startMinute,
-							nextShift.endMinute,
-							nextShift.overnight,
-						)}{" "}
-						· {nextShift.positionName}
-					</p>
+				<div className="flex flex-col gap-4 rounded-2xl bg-primary p-6 text-primary-foreground shadow-sm">
+					<div>
+						<p className="mb-3 font-medium text-primary-foreground/75 text-sm">
+							{onClock ? "You're on the clock" : "Next shift"}
+						</p>
+						<h1 className="font-semibold text-2xl tracking-[-0.025em]">
+							{formatDay(nextShift.startsAt)}
+						</h1>
+						<p className="mt-1 font-medium text-lg tabular-nums">
+							{formatShiftRange(
+								nextShift.startMinute,
+								nextShift.endMinute,
+								nextShift.overnight,
+							)}{" "}
+							· {nextShift.positionName}
+						</p>
+					</div>
+
+					{onClock && entry ? (
+						<div className="flex flex-col gap-2">
+							<p
+								className="font-mono font-semibold text-3xl tabular-nums"
+								aria-live="off"
+							>
+								{formatTimerMs(nowMs - new Date(entry.clockedInAt).getTime())}
+							</p>
+							<p className="text-primary-foreground/75 text-sm">
+								Clocked in at {formatClockTime(entry.clockedInAt)}
+							</p>
+							<Button
+								variant="outline"
+								className="self-start border-primary-foreground/60 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+								disabled={clockOut.isPending}
+								onClick={() => setConfirmingOut(true)}
+							>
+								{clockOut.isPending ? (
+									<Spinner data-icon="inline-start" />
+								) : (
+									<TimerIcon data-icon="inline-start" />
+								)}
+								Clock out
+							</Button>
+						</div>
+					) : null}
+
+					{!onClock && entry && entry.clockedOutAt !== null ? (
+						<p className="text-primary-foreground/75 text-sm">
+							Last punch · In {formatClockTime(entry.clockedInAt)} · Out{" "}
+							{formatClockTime(entry.clockedOutAt)}
+						</p>
+					) : null}
+
+					{!entry &&
+					nowMs >= new Date(nextShift.startsAt).getTime() - CLOCK_IN_EARLY_MS &&
+					nowMs <= new Date(nextShift.endsAt).getTime() ? (
+						<div className="flex flex-col gap-2">
+							<Button
+								variant="secondary"
+								className="self-start bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+								disabled={clockIn.isPending}
+								onClick={() => setConfirmingIn(true)}
+							>
+								{clockIn.isPending ? (
+									<Spinner data-icon="inline-start" />
+								) : (
+									<TimerIcon data-icon="inline-start" />
+								)}
+								Clock in
+							</Button>
+							{clockIn.isError ? (
+								<p className="text-primary-foreground/75 text-sm">
+									{(clockIn.error as Error).message}
+								</p>
+							) : null}
+						</div>
+					) : null}
+
+					{!entry &&
+					nowMs < new Date(nextShift.startsAt).getTime() - CLOCK_IN_EARLY_MS ? (
+						<p className="text-primary-foreground/75 text-sm">
+							Clock-in opens at{" "}
+							{formatClockTime(
+								new Date(
+									new Date(nextShift.startsAt).getTime() - CLOCK_IN_EARLY_MS,
+								).toISOString(),
+							)}{" "}
+							— 15 minutes before your shift.
+						</p>
+					) : null}
+
+					{clockOut.isError ? (
+						<p className="text-primary-foreground/75 text-sm">
+							{(clockOut.error as Error).message}
+						</p>
+					) : null}
+
+					<Button
+						variant="ghost"
+						className="self-start text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground"
+						nativeButton={false}
+						render={<Link to="/worker/timecard" />}
+					>
+						My timecard
+						<CalendarDaysIcon data-icon="inline-end" />
+					</Button>
 				</div>
 			) : null}
+
+			<AlertDialog
+				open={confirmingIn}
+				onOpenChange={(open) => {
+					if (!open) setConfirmingIn(false);
+				}}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Clock in?</AlertDialogTitle>
+						<AlertDialogDescription>
+							{nextShift
+								? `${nextShift.positionName} · ${formatShiftRange(
+										nextShift.startMinute,
+										nextShift.endMinute,
+										nextShift.overnight,
+									)}. Start work at ${formatClockTime(
+										new Date().toISOString(),
+									)}?`
+								: "Start work now?"}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={() =>
+								nextShift &&
+								clockIn.mutate(nextShift.id, {
+									onSuccess: () => toast.success("Clocked in."),
+									onError: (error) => toast.error((error as Error).message),
+								})
+							}
+						>
+							Clock in
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+
+			<AlertDialog
+				open={confirmingOut}
+				onOpenChange={(open) => {
+					if (!open) setConfirmingOut(false);
+				}}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Clock out?</AlertDialogTitle>
+						<AlertDialogDescription>
+							You've been on the clock for{" "}
+							{entry
+								? formatTimerMs(
+										Date.now() - new Date(entry.clockedInAt).getTime(),
+									)
+								: ""}
+							. This ends your Time Entry for this shift.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={() =>
+								nextShift &&
+								clockOut.mutate(nextShift.id, {
+									onSuccess: () => toast.success("Clocked out."),
+									onError: (error) => toast.error((error as Error).message),
+								})
+							}
+						>
+							Clock out
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 
 			{pendingAcceptances.length > 0 ? (
 				<Card>

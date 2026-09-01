@@ -87,7 +87,10 @@ export function zonedDayInfo(
 	};
 }
 
-export function assertMonday(dateKey: string): string {
+export function assertWeekStartDay(
+	dateKey: string,
+	weekStartDay: number,
+): string {
 	if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
 		throw new BadRequestError("Week must be a date like 2026-08-31");
 	}
@@ -95,10 +98,31 @@ export function assertMonday(dateKey: string): string {
 	if (Number.isNaN(parsed.getTime())) {
 		throw new BadRequestError(`Invalid date: ${dateKey}`);
 	}
-	if (parsed.getUTCDay() !== 1) {
-		throw new BadRequestError("Week must start on a Monday");
+	if (parsed.getUTCDay() !== weekStartDay) {
+		const names = [
+			"Sunday",
+			"Monday",
+			"Tuesday",
+			"Wednesday",
+			"Thursday",
+			"Friday",
+			"Saturday",
+		];
+		throw new BadRequestError(
+			`Week must start on ${names[weekStartDay] ?? "the configured week start day"}`,
+		);
 	}
 	return dateKey;
+}
+
+export function weekStartOfDateKey(
+	dateKey: string,
+	weekStartDay: number,
+): string {
+	const parsed = new Date(`${dateKey}T00:00:00Z`);
+	const diff = (parsed.getUTCDay() - weekStartDay + 7) % 7;
+	parsed.setUTCDate(parsed.getUTCDate() - diff);
+	return parsed.toISOString().slice(0, 10);
 }
 
 export function shiftDays(dateKey: string, days: number): string {
