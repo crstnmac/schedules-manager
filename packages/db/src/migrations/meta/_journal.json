@@ -134,6 +134,13 @@
       "when": 1788350000000,
       "tag": "0018_drop_position_section",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788354000000,
+      "tag": "0019_auto_clock_out",
+      "breakpoints": true
     }
   ]
 }

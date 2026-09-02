@@ -28,6 +28,10 @@ export const workplaces = pgTable("workplaces", {
 	payPeriodAnchor: date("pay_period_anchor"),
 	earlyClockInMinutes: integer("early_clock_in_minutes").notNull().default(15),
 	clockRoundMinutes: integer("clock_round_minutes").notNull().default(0),
+	/** Minutes after published shift end before an open Time Entry is closed. 0 disables. */
+	autoClockOutGraceMinutes: integer("auto_clock_out_grace_minutes")
+		.notNull()
+		.default(30),
 	overtimeWeeklyMinutes: integer("overtime_weekly_minutes")
 		.notNull()
 		.default(2400),

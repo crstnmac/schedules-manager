@@ -30,6 +30,7 @@ type TimesheetRow = {
 	worker: string;
 	clockedInAt: string;
 	clockedOutAt: string | null;
+	autoClosedAt: string | null;
 	approvalStatus: string;
 };
 
@@ -82,11 +83,20 @@ function TimesheetsPage() {
 						),
 					},
 				),
-				columnHelper.accessor("approvalStatus", {
+				columnHelper.display({
+					id: "status",
 					header: "Status",
-					cell: ({ getValue }) => (
-						<Badge variant="secondary">{getValue()}</Badge>
-					),
+					cell: ({ row }) => {
+						const entry = row.original;
+						return (
+							<div className="flex flex-wrap items-center gap-1.5">
+								<Badge variant="secondary">{entry.approvalStatus}</Badge>
+								{entry.autoClosedAt ? (
+									<Badge variant="outline">Auto closed</Badge>
+								) : null}
+							</div>
+						);
+					},
 				}),
 				columnHelper.display({
 					id: "actions",

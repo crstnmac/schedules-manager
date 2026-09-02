@@ -24,6 +24,8 @@ export const timeEntries = pgTable(
 			.defaultNow()
 			.notNull(),
 		clockedOutAt: timestamp("clocked_out_at", { withTimezone: true }),
+		/** Set when the system closed a forgotten open punch after shift end + grace. */
+		autoClosedAt: timestamp("auto_closed_at", { withTimezone: true }),
 		approvalStatus: timesheetApprovalEnum("approval_status")
 			.notNull()
 			.default("pending"),
@@ -42,6 +44,7 @@ export const timeEntries = pgTable(
 	(table) => [
 		unique("time_entries_version_shift_unique").on(table.versionShiftId),
 		index("time_entries_employment_idx").on(table.employmentId),
+		index("time_entries_open_idx").on(table.clockedOutAt),
 	],
 );
 

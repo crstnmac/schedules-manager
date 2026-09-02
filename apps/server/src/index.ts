@@ -1,4 +1,5 @@
 import { createApp } from "./app";
+import { processAutoClockOutBatch } from "./auto-clock-out";
 import { processEmailOutboxBatch } from "./email-outbox";
 import {
 	processNotificationOutboxBatch,
@@ -17,6 +18,7 @@ function dispatchNotifications() {
 		processNotificationOutboxBatch(),
 		processEmailOutboxBatch(),
 		processPushReceiptBatch(),
+		processAutoClockOutBatch(),
 	]).catch((error) => {
 		console.error(
 			JSON.stringify({

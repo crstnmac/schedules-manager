@@ -118,6 +118,7 @@ export function WorkplaceCard({
 				payPeriodAnchor: string | null;
 				earlyClockInMinutes: number;
 				clockRoundMinutes: number;
+				autoClockOutGraceMinutes: number;
 				overtimeWeeklyMinutes: number;
 		  }
 		| undefined;
@@ -135,6 +136,9 @@ export function WorkplaceCard({
 	const [clockRoundMinutes, setClockRoundMinutes] = useState<number | null>(
 		null,
 	);
+	const [autoClockOutGraceMinutes, setAutoClockOutGraceMinutes] = useState<
+		number | null
+	>(null);
 	const [overtimeWeeklyMinutes, setOvertimeWeeklyMinutes] = useState<
 		number | null
 	>(null);
@@ -160,6 +164,8 @@ export function WorkplaceCard({
 					earlyClockInMinutes:
 						earlyClockInMinutes ?? settings?.earlyClockInMinutes,
 					clockRoundMinutes: clockRoundMinutes ?? settings?.clockRoundMinutes,
+					autoClockOutGraceMinutes:
+						autoClockOutGraceMinutes ?? settings?.autoClockOutGraceMinutes,
 					overtimeWeeklyMinutes:
 						overtimeWeeklyMinutes ?? settings?.overtimeWeeklyMinutes,
 				},
@@ -172,6 +178,7 @@ export function WorkplaceCard({
 			setAnchor(null);
 			setEarlyClockInMinutes(null);
 			setClockRoundMinutes(null);
+			setAutoClockOutGraceMinutes(null);
 			setOvertimeWeeklyMinutes(null);
 			onChange();
 			toast.success("Workplace settings saved.");
@@ -187,6 +194,7 @@ export function WorkplaceCard({
 		anchor !== null ||
 		earlyClockInMinutes !== null ||
 		clockRoundMinutes !== null ||
+		autoClockOutGraceMinutes !== null ||
 		overtimeWeeklyMinutes !== null;
 
 	if (isLoading || !settings) {
@@ -344,6 +352,25 @@ export function WorkplaceCard({
 									defaultValue={settings.clockRoundMinutes}
 									onChange={(event) =>
 										setClockRoundMinutes(Number(event.target.value))
+									}
+								/>
+								<InputGroupAddon align="inline-end">min</InputGroupAddon>
+							</InputGroup>
+						</SettingsField>
+						<SettingsField
+							id="auto-clock-out"
+							label="Auto clock-out grace"
+							description="Close forgotten open punches this many minutes after the published shift ends. Set 0 to disable. Auto-closed punches stay pending for review."
+						>
+							<InputGroup>
+								<InputGroupInput
+									id="auto-clock-out"
+									type="number"
+									min={0}
+									max={720}
+									defaultValue={settings.autoClockOutGraceMinutes ?? 30}
+									onChange={(event) =>
+										setAutoClockOutGraceMinutes(Number(event.target.value))
 									}
 								/>
 								<InputGroupAddon align="inline-end">min</InputGroupAddon>

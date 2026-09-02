@@ -450,6 +450,7 @@ export function useWorkplaceSettings(workplaceId: string | undefined) {
 					payPeriodAnchor: string | null;
 					earlyClockInMinutes: number;
 					clockRoundMinutes: number;
+					autoClockOutGraceMinutes: number;
 					overtimeWeeklyMinutes: number;
 				};
 			}>(`/v1/workplaces/${workplaceId}`).then((data) => data.workplace),
@@ -1185,6 +1186,7 @@ export function useTimesheets(workplaceId: string | undefined) {
 					worker: string;
 					clockedInAt: string;
 					clockedOutAt: string | null;
+					autoClosedAt: string | null;
 					approvalStatus: "pending" | "approved" | "declined";
 				}[];
 			}>(`/v1/workplaces/${workplaceId}/timesheets`),

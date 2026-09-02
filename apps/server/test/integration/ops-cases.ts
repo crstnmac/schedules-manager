@@ -600,6 +600,79 @@ export function registerOpsTests(getContext: () => Context) {
 		expect(remaining).toHaveLength(0);
 	});
 
+	test("auto clock-out closes open Time Entries after shift end + grace", async () => {
+		const { database: d } = getContext();
+		const { processAutoClockOutBatch } = await import(
+			"../../src/auto-clock-out"
+		);
+		const seed = await seedWorkplace(d, "Auto Clock Cafe");
+		await d.db
+			.update(d.workplaces)
+			.set({ autoClockOutGraceMinutes: 30, clockRoundMinutes: 0 })
+			.where(eq(d.workplaces.id, seed.workplace.id));
+		const [version] = await d.db
+			.insert(d.scheduleVersions)
+			.values({ scheduleId: seed.schedule.id, versionNumber: 1 })
+			.returning();
+		const endsAt = new Date(Date.now() - 45 * 60_000);
+		const startsAt = new Date(endsAt.getTime() - 6 * 60 * 60_000);
+		const [snapshot] = await d.db
+			.insert(d.versionShifts)
+			.values({
+				versionId: required(version).id,
+				employmentId: seed.worker.id,
+				positionId: seed.position.id,
+				startsAt,
+				endsAt,
+			})
+			.returning();
+		const [entry] = await d.db
+			.insert(d.timeEntries)
+			.values({
+				versionShiftId: required(snapshot).id,
+				employmentId: seed.worker.id,
+				clockedInAt: startsAt,
+				clockedOutAt: null,
+			})
+			.returning();
+		await d.db.insert(d.timeEntryBreaks).values({
+			timeEntryId: required(entry).id,
+			startedAt: new Date(endsAt.getTime() - 20 * 60_000),
+			endedAt: null,
+		});
+
+		const closed = await processAutoClockOutBatch();
+		expect(closed).toBe(1);
+
+		const [updated] = await d.db
+			.select()
+			.from(d.timeEntries)
+			.where(eq(d.timeEntries.id, required(entry).id));
+		expect(updated?.clockedOutAt?.toISOString()).toBe(
+			new Date(endsAt.getTime() + 30 * 60_000).toISOString(),
+		);
+		expect(updated?.autoClosedAt).not.toBeNull();
+		expect(updated?.approvalStatus).toBe("pending");
+
+		const [breakRow] = await d.db
+			.select()
+			.from(d.timeEntryBreaks)
+			.where(eq(d.timeEntryBreaks.timeEntryId, required(entry).id));
+		expect(breakRow?.endedAt?.toISOString()).toBe(
+			updated?.clockedOutAt?.toISOString(),
+		);
+
+		const audits = await d.db
+			.select()
+			.from(d.auditEvents)
+			.where(eq(d.auditEvents.workplaceId, seed.workplace.id));
+		expect(
+			audits.some((row) => row.action === "time_entry.auto_clocked_out"),
+		).toBe(true);
+
+		expect(await processAutoClockOutBatch()).toBe(0);
+	});
+
 	test("manager can approve a completed Time Entry", async () => {
 		const { database: d, app, token } = getContext();
 		const seed = await seedWorkplace(d, "Sheet Cafe");

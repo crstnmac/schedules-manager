@@ -1324,6 +1324,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 					worker: row.name ?? row.email,
 					clockedInAt: row.entry.clockedInAt.toISOString(),
 					clockedOutAt: row.entry.clockedOutAt?.toISOString() ?? null,
+					autoClosedAt: row.entry.autoClosedAt?.toISOString() ?? null,
 					approvalStatus: row.entry.approvalStatus,
 				})),
 			};

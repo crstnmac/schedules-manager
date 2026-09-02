@@ -195,6 +195,7 @@ export const workplacesRoutes = new Elysia({
 					payPeriodAnchor: workplace.payPeriodAnchor,
 					earlyClockInMinutes: workplace.earlyClockInMinutes,
 					clockRoundMinutes: workplace.clockRoundMinutes,
+					autoClockOutGraceMinutes: workplace.autoClockOutGraceMinutes,
 					overtimeWeeklyMinutes: workplace.overtimeWeeklyMinutes,
 				},
 			};
@@ -238,6 +239,9 @@ export const workplacesRoutes = new Elysia({
 							body.earlyClockInMinutes ?? existing.earlyClockInMinutes,
 						clockRoundMinutes:
 							body.clockRoundMinutes ?? existing.clockRoundMinutes,
+						autoClockOutGraceMinutes:
+							body.autoClockOutGraceMinutes ??
+							existing.autoClockOutGraceMinutes,
 						overtimeWeeklyMinutes:
 							body.overtimeWeeklyMinutes ?? existing.overtimeWeeklyMinutes,
 						updatedAt: new Date(),
@@ -256,6 +260,7 @@ export const workplacesRoutes = new Elysia({
 					payPeriodAnchor: updated.payPeriodAnchor,
 					earlyClockInMinutes: updated.earlyClockInMinutes,
 					clockRoundMinutes: updated.clockRoundMinutes,
+					autoClockOutGraceMinutes: updated.autoClockOutGraceMinutes,
 					overtimeWeeklyMinutes: updated.overtimeWeeklyMinutes,
 				},
 			};
@@ -282,6 +287,9 @@ export const workplacesRoutes = new Elysia({
 					t.Integer({ minimum: 0, maximum: 180 }),
 				),
 				clockRoundMinutes: t.Optional(t.Integer({ minimum: 0, maximum: 30 })),
+				autoClockOutGraceMinutes: t.Optional(
+					t.Integer({ minimum: 0, maximum: 720 }),
+				),
 				overtimeWeeklyMinutes: t.Optional(
 					t.Integer({ minimum: 0, maximum: 10_080 }),
 				),
