@@ -15,10 +15,12 @@ import {
 	ItemTitle,
 } from "@SchedulesManager/ui/components/item";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
+import { cn } from "@SchedulesManager/ui/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
 	CalendarCheckIcon,
+	CircleCheckIcon,
 	CircleIcon,
 	MapPinIcon,
 	TagsIcon,
@@ -271,35 +273,43 @@ function Overview() {
 				<Card>
 					<CardHeader>
 						<div className="flex flex-wrap items-center justify-between gap-2">
-							<CardTitle>Next setup step</CardTitle>
-							<Badge
-								variant={
-									completedSteps === checklist.length ? "default" : "secondary"
-								}
-							>
+							<CardTitle>Setup</CardTitle>
+							<Badge variant="secondary">
 								{completedSteps} of {checklist.length} complete
 							</Badge>
 						</div>
 						<CardDescription>
-							Complete the next step to get scheduling ready.
+							Finish these steps to get scheduling ready.
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
-						{checklist
-							.filter((step) => !step.done)
-							.slice(0, 1)
-							.map((step) => (
-								<Button
-									key={step.label}
-									variant="ghost"
-									className="h-auto justify-start py-3"
-									nativeButton={false}
-									render={<Link to={step.to} />}
-								>
-									<CircleIcon />
-									<span>{step.label}</span>
-								</Button>
+						<ul className="flex flex-col">
+							{checklist.map((step) => (
+								<li key={step.label}>
+									<Button
+										variant="ghost"
+										className={cn(
+											"h-auto w-full justify-start py-2.5",
+											step.done && "text-muted-foreground",
+										)}
+										nativeButton={false}
+										render={<Link to={step.to} />}
+									>
+										{step.done ? (
+											<CircleCheckIcon className="text-primary" />
+										) : (
+											<CircleIcon />
+										)}
+										<span className={cn(step.done && "line-through")}>
+											{step.label}
+										</span>
+										<span className="sr-only">
+											{step.done ? "Completed" : "Not completed"}
+										</span>
+									</Button>
+								</li>
 							))}
+						</ul>
 					</CardContent>
 				</Card>
 			) : null}

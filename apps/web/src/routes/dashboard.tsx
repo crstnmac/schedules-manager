@@ -22,7 +22,6 @@ import {
 	SidebarMenuButton,
 	SidebarMenuItem,
 	SidebarProvider,
-	SidebarRail,
 	SidebarTrigger,
 } from "@SchedulesManager/ui/components/sidebar";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
@@ -53,12 +52,13 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { profileInitials } from "@/components/current-profile";
-import { ModeToggle } from "@/components/mode-toggle";
+import { LogoMark } from "@/components/logo-mark";
 import { PilotFeedback } from "@/components/pilot-feedback";
+import { settingsSectionLabel } from "@/components/settings/nav";
+import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
 import { useMe, useNotifications } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
-import { settingsSectionLabel } from "@/components/settings/nav";
 
 export const Route = createFileRoute("/dashboard")({
 	component: DashboardLayout,
@@ -91,6 +91,7 @@ const navigation = [
 
 function DashboardLayout() {
 	const { isSigningOut, user, signOut } = useAuth();
+	const { setTheme } = useTheme();
 	const me = useMe();
 	const { isLoading, workplace, kind } = useWorkplace();
 	const inbox = useNotifications(workplace?.id);
@@ -152,10 +153,8 @@ function DashboardLayout() {
 					<SidebarMenu>
 						<SidebarMenuItem>
 							<SidebarMenuButton size="lg" tooltip={workplace.name}>
-								<div className="grid size-8 shrink-0 place-items-center rounded-lg bg-sidebar-primary font-semibold text-sidebar-primary-foreground">
-									J
-								</div>
-								<div className="grid flex-1 text-left leading-tight">
+								<LogoMark size={32} className="rounded-lg" />
+								<div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:sr-only">
 									<span className="truncate font-semibold">
 										{workplace.name}
 									</span>
@@ -207,34 +206,44 @@ function DashboardLayout() {
 					</SidebarGroup>
 				</SidebarContent>
 				<SidebarFooter>
-					<div className="flex items-center gap-2 px-1 group-data-[collapsible=icon]:flex-col">
-						<div className="group-data-[collapsible=icon]:hidden">
-							<PilotFeedback
-								workplaceId={workplace.id}
-								buttonClassName="border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:border-sidebar-ring focus-visible:ring-sidebar-ring/30 dark:bg-sidebar-accent/40 dark:hover:bg-sidebar-accent"
-							/>
-						</div>
-						<ModeToggle buttonClassName="border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:border-sidebar-ring focus-visible:ring-sidebar-ring/30 dark:bg-sidebar-accent/40 dark:hover:bg-sidebar-accent" />
+					<div className="px-1 group-data-[collapsible=icon]:hidden">
+						<PilotFeedback
+							workplaceId={workplace.id}
+							buttonClassName="w-full border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:border-sidebar-ring focus-visible:ring-sidebar-ring/30 dark:bg-sidebar-accent/40 dark:hover:bg-sidebar-accent"
+						/>
 					</div>
 					<SidebarMenu>
 						{profile ? (
 							<SidebarMenuItem>
 								<DropdownMenu>
 									<DropdownMenuTrigger
-										render={<SidebarMenuButton size="lg" tooltip="Account" />}
+										render={
+											<SidebarMenuButton
+												size="lg"
+												tooltip={profile.fullName ?? profile.email}
+											/>
+										}
 									>
-										<Avatar size="sm">
+										<Avatar className="shrink-0">
 											<AvatarFallback>
 												{profileInitials(profile)}
 											</AvatarFallback>
 										</Avatar>
-										<div className="grid flex-1 text-left leading-tight">
+										<div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
 											<span className="truncate font-medium">
 												{profile.fullName ?? profile.email}
 											</span>
-											<span className="truncate text-xs">{profile.email}</span>
+											{profile.fullName ? (
+												<span className="truncate text-xs">
+													{profile.email}
+												</span>
+											) : (
+												<span className="truncate text-xs capitalize">
+													{kind}
+												</span>
+											)}
 										</div>
-										<ChevronsUpDownIcon className="ml-auto" />
+										<ChevronsUpDownIcon className="ml-auto group-data-[collapsible=icon]:hidden" />
 									</DropdownMenuTrigger>
 									<DropdownMenuContent
 										side="right"
@@ -246,10 +255,25 @@ function DashboardLayout() {
 												<p className="truncate">
 													{profile.fullName ?? profile.email}
 												</p>
-												<p className="truncate font-normal text-muted-foreground text-xs">
+												<p className="truncate font-normal text-muted-foreground text-xs capitalize">
 													{kind}
 												</p>
 											</DropdownMenuLabel>
+										</DropdownMenuGroup>
+										<DropdownMenuSeparator />
+										<DropdownMenuGroup>
+											<DropdownMenuLabel className="text-muted-foreground text-xs">
+												Theme
+											</DropdownMenuLabel>
+											<DropdownMenuItem onClick={() => setTheme("light")}>
+												Light
+											</DropdownMenuItem>
+											<DropdownMenuItem onClick={() => setTheme("dark")}>
+												Dark
+											</DropdownMenuItem>
+											<DropdownMenuItem onClick={() => setTheme("system")}>
+												System
+											</DropdownMenuItem>
 										</DropdownMenuGroup>
 										<DropdownMenuSeparator />
 										<DropdownMenuItem
@@ -265,7 +289,6 @@ function DashboardLayout() {
 						) : null}
 					</SidebarMenu>
 				</SidebarFooter>
-				<SidebarRail />
 			</Sidebar>
 			<SidebarInset
 				className={cn(

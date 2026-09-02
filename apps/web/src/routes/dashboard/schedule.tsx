@@ -753,6 +753,7 @@ function SchedulePage() {
 	const queryClient = useQueryClient();
 	const [form, setForm] = useState<ShiftFormState | null>(null);
 	const [addDates, setAddDates] = useState<string[]>([]);
+	const [addEmploymentIds, setAddEmploymentIds] = useState<string[]>([]);
 	const [positionApproval, setPositionApproval] =
 		useState<PositionApproval | null>(null);
 	const [publishPreview, setPublishPreview] =
@@ -807,32 +808,42 @@ function SchedulePage() {
 				return { count: 1, approvePosition };
 			}
 			const dates = addDates.length > 0 ? addDates : [state.date];
+			const employmentIds: Array<string | null> =
+				addEmploymentIds.length > 0
+					? addEmploymentIds
+					: [state.employmentId || null];
 			await Promise.all(
-				dates.map((date) =>
-					api(
-						`/v1/locations/${activeLocationId}/schedules/${weekStart}/shifts`,
-						{
-							method: "POST",
-							body: {
-								employmentId: state.employmentId || null,
-								positionId: state.positionId,
-								date,
-								startMinute: state.startMinute,
-								endMinute: state.endMinute,
-								note: state.note || undefined,
-								unavailabilityOverrideReason:
-									state.unavailabilityOverrideReason.trim() || undefined,
-								...(approvePosition ? { approvePosition: true } : {}),
+				employmentIds.flatMap((employmentId) =>
+					dates.map((date) =>
+						api(
+							`/v1/locations/${activeLocationId}/schedules/${weekStart}/shifts`,
+							{
+								method: "POST",
+								body: {
+									employmentId,
+									positionId: state.positionId,
+									date,
+									startMinute: state.startMinute,
+									endMinute: state.endMinute,
+									note: state.note || undefined,
+									unavailabilityOverrideReason:
+										state.unavailabilityOverrideReason.trim() || undefined,
+									...(approvePosition ? { approvePosition: true } : {}),
+								},
 							},
-						},
+						),
 					),
 				),
 			);
-			return { count: dates.length, approvePosition };
+			return {
+				count: employmentIds.length * dates.length,
+				approvePosition,
+			};
 		},
 		onSuccess: async (result) => {
 			setForm(null);
 			setAddDates([]);
+			setAddEmploymentIds([]);
 			setPositionApproval(null);
 			await invalidate();
 			if (result.approvePosition) {
@@ -1286,6 +1297,7 @@ function SchedulePage() {
 
 	function openEdit(shift: ScheduleShiftDto) {
 		setAddDates([]);
+		setAddEmploymentIds([]);
 		syncPunchFields(shift);
 		setForm({
 			shiftId: shift.id,
@@ -1320,24 +1332,64 @@ function SchedulePage() {
 			draft.positionId = data.positions[0]?.id ?? "";
 		}
 		setAddDates([date]);
+		setAddEmploymentIds([]);
 		syncPunchFields(undefined);
 		setForm(draft);
 	}
 
+	function createShiftCount(state: ShiftFormState) {
+		if (state.shiftId) return 1;
+		const dates = addDates.length > 0 ? addDates.length : 1;
+		const workers = Math.max(addEmploymentIds.length, 1);
+		return workers * dates;
+	}
+
 	function queueShiftSave(state: ShiftFormState) {
-		const member = data?.staff.find(
-			(candidate) => candidate.employmentId === state.employmentId,
-		);
-		if (workerNeedsPositionApproval(member, state.positionId)) {
-			const positionName =
-				data?.positions.find((position) => position.id === state.positionId)
-					?.name ?? "this position";
+		const positionName =
+			data?.positions.find((position) => position.id === state.positionId)
+				?.name ?? "this position";
+		if (state.shiftId) {
+			const member = data?.staff.find(
+				(candidate) => candidate.employmentId === state.employmentId,
+			);
+			if (workerNeedsPositionApproval(member, state.positionId)) {
+				setPositionApproval({
+					kind: "save",
+					form: state,
+					workerName: member?.name ?? "this worker",
+					positionName,
+					shiftCount: 1,
+				});
+				return;
+			}
+			createOrUpdate.mutate(state);
+			return;
+		}
+		const employmentIds =
+			addEmploymentIds.length > 0
+				? addEmploymentIds
+				: state.employmentId
+					? [state.employmentId]
+					: [];
+		const needingApproval = employmentIds
+			.map((employmentId) =>
+				data?.staff.find((candidate) => candidate.employmentId === employmentId),
+			)
+			.filter((member): member is NonNullable<typeof member> =>
+				Boolean(member && workerNeedsPositionApproval(member, state.positionId)),
+			);
+		if (needingApproval.length > 0) {
+			const first = needingApproval[0]?.name ?? "this worker";
+			const workerName =
+				needingApproval.length === 1
+					? first
+					: `${first} and ${needingApproval.length - 1} other${needingApproval.length === 2 ? "" : "s"}`;
 			setPositionApproval({
 				kind: "save",
 				form: state,
-				workerName: member?.name ?? "this worker",
+				workerName,
 				positionName,
-				shiftCount: state.shiftId ? 1 : addDates.length || 1,
+				shiftCount: createShiftCount(state),
 			});
 			return;
 		}
@@ -1420,54 +1472,82 @@ function SchedulePage() {
 		}
 	}
 
-	const selectedStaff = data?.staff.find(
-		(member) => member.employmentId === form?.employmentId,
-	);
+	const selectedCreateEmploymentIds = form?.shiftId
+		? form.employmentId
+			? [form.employmentId]
+			: []
+		: addEmploymentIds.length > 0
+			? addEmploymentIds
+			: form?.employmentId
+				? [form.employmentId]
+				: [];
+	const selectedCreateStaff = selectedCreateEmploymentIds
+		.map((employmentId) =>
+			data?.staff.find((member) => member.employmentId === employmentId),
+		)
+		.filter((member): member is NonNullable<typeof member> => Boolean(member));
+	const selectedStaff = selectedCreateStaff[0];
 	const allowedPositions = positionsForWorker(
 		data?.positions ?? [],
 		selectedStaff,
 	);
-	const overlappingWindows = selectedStaff
-		? (selectedStaff.unavailability ?? []).filter((window) =>
+	const checkDates =
+		form?.shiftId || addDates.length === 0
+			? form
+				? [form.date]
+				: []
+			: addDates;
+	const overlappingWindows = selectedCreateStaff.flatMap((member) =>
+		(member.unavailability ?? []).filter((window) =>
+			checkDates.some((date) =>
 				form
 					? staffWindowOverlaps(
 							window,
-							form.date,
+							date,
 							form.startMinute,
 							form.endMinute,
 						)
 					: false,
-			)
-		: [];
-	const needsOverride = overlappingWindows.length > 0;
-	const positionNeedsApproval = workerNeedsPositionApproval(
-		selectedStaff,
-		form?.positionId ?? "",
+			),
+		),
 	);
-	const overlappingShift = form?.employmentId
+	const needsOverride = overlappingWindows.length > 0;
+	const positionNeedsApproval = selectedCreateStaff.some((member) =>
+		workerNeedsPositionApproval(member, form?.positionId ?? ""),
+	);
+	const overlappingShift = selectedCreateEmploymentIds.length
 		? (data?.shifts ?? []).find((shift) => {
-				if (shift.employmentId !== form.employmentId) return false;
-				if (form.shiftId && shift.id === form.shiftId) return false;
-				const [aStart, aEnd] = shiftRangeMinutes(
-					weekStart,
-					form.date,
-					form.startMinute,
-					form.endMinute,
-				);
-				const [bStart, bEnd] = shiftRangeMinutes(
-					weekStart,
-					shift.date,
-					shift.startMinute,
-					shift.endMinute,
-				);
-				return aStart < bEnd && bStart < aEnd;
+				if (
+					!shift.employmentId ||
+					!selectedCreateEmploymentIds.includes(shift.employmentId)
+				)
+					return false;
+				if (form?.shiftId && shift.id === form.shiftId) return false;
+				if (!form) return false;
+				return checkDates.some((date) => {
+					const [aStart, aEnd] = shiftRangeMinutes(
+						weekStart,
+						date,
+						form.startMinute,
+						form.endMinute,
+					);
+					const [bStart, bEnd] = shiftRangeMinutes(
+						weekStart,
+						shift.date,
+						shift.startMinute,
+						shift.endMinute,
+					);
+					return aStart < bEnd && bStart < aEnd;
+				});
 			})
 		: undefined;
-	const overlappingTimeOff = form?.employmentId
-		? (selectedStaff?.timeOff ?? []).find((request) => {
-				if (request.status !== "approved") return false;
+	const overlappingTimeOff = selectedCreateStaff
+		.flatMap((member) => member.timeOff ?? [])
+		.find((request) => {
+			if (request.status !== "approved" || !form) return false;
+			return checkDates.some((date) => {
 				const overnight = form.endMinute <= form.startMinute;
-				const [year, month, day] = form.date.split("-").map(Number);
+				const [year, month, day] = date.split("-").map(Number);
 				const start = new Date(
 					year ?? 0,
 					(month ?? 1) - 1,
@@ -1475,7 +1555,7 @@ function SchedulePage() {
 					Math.floor(form.startMinute / 60),
 					form.startMinute % 60,
 				);
-				const endDate = overnight ? addDays(form.date, 1) : form.date;
+				const endDate = overnight ? addDays(date, 1) : date;
 				const [endYear, endMonth, endDay] = endDate.split("-").map(Number);
 				const end = new Date(
 					endYear ?? 0,
@@ -1487,8 +1567,9 @@ function SchedulePage() {
 				return (
 					start < new Date(request.endsAt) && new Date(request.startsAt) < end
 				);
-			})
-		: undefined;
+			});
+		});
+	const pendingAddCount = form ? createShiftCount(form) : 0;
 	const canSave = Boolean(
 		form?.positionId &&
 			(form.shiftId || addDates.length > 0) &&
@@ -2206,6 +2287,7 @@ function SchedulePage() {
 								if (positionApproval) return;
 								setForm(null);
 								setAddDates([]);
+								setAddEmploymentIds([]);
 							}
 						}}
 					>
@@ -2223,416 +2305,577 @@ function SchedulePage() {
 											{form.shiftId ? "Edit shift" : "Add shifts"}
 										</DialogTitle>
 										<DialogDescription>
-											Times are in {data.schedule.timezone}. Leave the worker
-											open if you have not assigned anyone yet.
+											Times are in {data.schedule.timezone}.
+											{form.shiftId
+												? " Leave the worker open if you have not assigned anyone yet."
+												: " Add workers and days — leave workers empty for open shifts."}
 										</DialogDescription>
 									</DialogHeader>
 									<div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
 										<FieldGroup>
-											<Field>
-												<FieldLabel htmlFor="shift-worker">Worker</FieldLabel>
-												<Select
-													items={workerItems}
-													value={form.employmentId || null}
-													onValueChange={(employmentId) => {
-														const nextEmploymentId = employmentId ?? "";
-														const member = data.staff.find(
-															(candidate) =>
-																candidate.employmentId === nextEmploymentId,
-														);
-														let positionId = form.positionId;
-														if (!positionId) {
-															const allowed = positionsForWorker(
-																data.positions,
-																member,
-															);
-															if (allowed.length === 1) {
-																positionId = allowed[0]?.id ?? "";
-															}
-														}
-														setForm({
-															...form,
-															employmentId: nextEmploymentId,
-															positionId,
-															unavailabilityOverrideReason: "",
-														});
-													}}
-												>
-													<SelectTrigger id="shift-worker" className="w-full">
-														<SelectValue />
-													</SelectTrigger>
-													<SelectContent alignItemWithTrigger={false}>
-														<SelectGroup>
-															{workerItems.map((item) => (
-																<SelectItem
-																	key={item.value ?? "open"}
-																	value={item.value}
-																>
-																	{item.label}
-																</SelectItem>
-															))}
-														</SelectGroup>
-													</SelectContent>
-												</Select>
-											</Field>
-											<Field>
-												<FieldLabel htmlFor="shift-position">
-													Position
-												</FieldLabel>
-												<Select
-													items={positionItems}
-													value={form.positionId || null}
-													onValueChange={(positionId) =>
-														setForm({ ...form, positionId: positionId ?? "" })
-													}
-												>
-													<SelectTrigger
-														id="shift-position"
-														className="w-full"
-													>
-														<SelectValue />
-													</SelectTrigger>
-													<SelectContent alignItemWithTrigger={false}>
-														<SelectGroup>
-															<SelectItem value={null}>Choose…</SelectItem>
-														</SelectGroup>
-														{showPositionGroups ? (
-															<>
+											{(timeBlocks.data?.timeBlocks ?? []).length > 0 ||
+											(timeBlocks.data?.shiftTemplates ?? []).length > 0 ? (
+												<div className="grid gap-2 sm:grid-cols-2">
+													{(timeBlocks.data?.timeBlocks ?? []).length > 0 ? (
+														<Select
+															items={(timeBlocks.data?.timeBlocks ?? []).map(
+																(block) => ({
+																	label: `${block.name} · ${formatMinute(block.startMinute)}–${formatMinute(block.endMinute)}`,
+																	value: block.id,
+																}),
+															)}
+															value={null}
+															onValueChange={(value) => {
+																const block = (
+																	timeBlocks.data?.timeBlocks ?? []
+																).find((row) => row.id === value);
+																if (!block) return;
+																setForm({
+																	...form,
+																	startMinute: block.startMinute,
+																	endMinute: block.endMinute,
+																});
+															}}
+														>
+															<SelectTrigger className="w-full">
+																<SelectValue placeholder="Apply time block" />
+															</SelectTrigger>
+															<SelectContent alignItemWithTrigger={false}>
 																<SelectGroup>
-																	<SelectLabel>
-																		Approved for {selectedStaff?.name}
-																	</SelectLabel>
-																	{allowedPositions.map((position) => (
-																		<SelectItem
-																			key={position.id}
-																			value={position.id}
-																		>
-																			{position.name}
-																		</SelectItem>
-																	))}
+																	{(timeBlocks.data?.timeBlocks ?? []).map(
+																		(block) => (
+																			<SelectItem
+																				key={block.id}
+																				value={block.id}
+																			>
+																				{block.name}
+																			</SelectItem>
+																		),
+																	)}
 																</SelectGroup>
-																<SelectGroup>
-																	<SelectLabel>Other positions</SelectLabel>
-																	{otherPositions.map((position) => (
-																		<SelectItem
-																			key={position.id}
-																			value={position.id}
-																		>
-																			{position.name}
-																		</SelectItem>
-																	))}
-																</SelectGroup>
-															</>
-														) : (
-															<SelectGroup>
-																{(data.positions ?? []).map((position) => (
-																	<SelectItem
-																		key={position.id}
-																		value={position.id}
-																	>
-																		{position.name}
-																	</SelectItem>
-																))}
-															</SelectGroup>
-														)}
-													</SelectContent>
-												</Select>
-												{positionNeedsApproval ? (
-													<Alert className="mt-1">
-														<UserPlusIcon />
-														<AlertTitle>
-															{selectedStaff?.name} isn’t approved for{" "}
-															{data.positions.find(
-																(position) => position.id === form.positionId,
-															)?.name ?? "this position"}
-														</AlertTitle>
-														<AlertDescription>
-															You can add this Position to their Employment when
-															you save. It will apply to future shifts too.
-														</AlertDescription>
-													</Alert>
-												) : selectedStaff &&
-												  selectedStaff.kind === "worker" &&
-												  selectedStaff.positionIds.length > 0 &&
-												  allowedPositions.length === 0 ? (
-													<FieldDescription>
-														This worker has no matching approved positions.
-														Choose one to add it when you save.
-													</FieldDescription>
-												) : null}
-											</Field>
-											<Field>
-												<FieldLabel htmlFor="shift-date">
-													{form.shiftId ? "Day" : "Days"}
-												</FieldLabel>
-												{form.shiftId ? (
-													<DatePicker
-														id="shift-date"
-														value={form.date}
-														onValueChange={(date) => setForm({ ...form, date })}
-														disabled={(date) => {
-															const key = date.toLocaleDateString("sv-SE");
-															return (
-																key < weekStart || key > addDays(weekStart, 6)
-															);
-														}}
-													/>
-												) : (
-													<div
-														id="shift-date"
-														className="grid grid-cols-4 gap-2 sm:grid-cols-7"
-													>
-														{days.map((date, index) => (
-															<Button
-																key={date}
-																type="button"
-																variant={
-																	addDates.includes(date)
-																		? "default"
-																		: "outline"
-																}
-																className="h-auto min-h-11 flex-col gap-0.5 px-1 py-1.5 tabular-nums"
-																aria-pressed={addDates.includes(date)}
-																onClick={() => toggleAddDate(date)}
-															>
-																<span className="text-[10px] text-muted-foreground">
-																	{dayHeaders[index]?.slice(0, 3)}
-																</span>
-																<span className="font-medium">
-																	{new Date(`${date}T12:00:00`).getDate()}
-																</span>
-															</Button>
-														))}
-													</div>
-												)}
-												{!form.shiftId ? (
-													<FieldDescription>
-														Select one or more days in this week.
-													</FieldDescription>
-												) : null}
-											</Field>
-											<div className="grid gap-4 sm:grid-cols-2">
-												<Field>
-													<FieldLabel htmlFor="shift-start">Start</FieldLabel>
-													<TimePicker
-														id="shift-start"
-														value={form.startMinute}
-														onValueChange={(startMinute) =>
-															setForm({ ...form, startMinute })
-														}
-													/>
-												</Field>
-												<Field>
-													<FieldLabel htmlFor="shift-end">End</FieldLabel>
-													<TimePicker
-														id="shift-end"
-														value={form.endMinute}
-														onValueChange={(endMinute) =>
-															setForm({ ...form, endMinute })
-														}
-														overnightAfterMinute={form.startMinute}
-													/>
-													{form.endMinute <= form.startMinute ? (
-														<FieldDescription>
-															This shift continues overnight into the next day.
-														</FieldDescription>
+															</SelectContent>
+														</Select>
 													) : null}
-												</Field>
-											</div>
-											<Field>
-												<FieldLabel htmlFor="shift-note">Note</FieldLabel>
-												<Input
-													id="shift-note"
-													value={form.note}
-													onChange={(event) =>
-														setForm({ ...form, note: event.target.value })
-													}
-													placeholder="Optional"
-													maxLength={200}
-												/>
-											</Field>
-											<details className="group rounded-lg border border-border/70">
-												<summary className="cursor-pointer list-none px-3 py-2 font-medium text-sm marker:content-none [&::-webkit-details-marker]:hidden">
-													<span className="flex items-center justify-between gap-2">
-														More options
-														<span className="text-muted-foreground text-xs font-normal group-open:hidden">
-															Templates, tags, tasks…
-														</span>
-													</span>
-												</summary>
-												<div className="flex flex-col gap-4 border-t px-3 py-3">
-											{(timeBlocks.data?.timeBlocks ?? []).length > 0 ? (
-												<Field>
-													<FieldLabel>Time Block</FieldLabel>
-													<Select
-														items={(timeBlocks.data?.timeBlocks ?? []).map(
-															(block) => ({
-																label: `${block.name} · ${formatMinute(block.startMinute)}–${formatMinute(block.endMinute)}`,
-																value: block.id,
-															}),
-														)}
-														value={null}
-														onValueChange={(value) => {
-															const block = (
-																timeBlocks.data?.timeBlocks ?? []
-															).find((row) => row.id === value);
-															if (!block) return;
-															setForm({
-																...form,
-																startMinute: block.startMinute,
-																endMinute: block.endMinute,
-															});
-														}}
-													>
-														<SelectTrigger className="w-full">
-															<SelectValue placeholder="Apply a Time Block" />
-														</SelectTrigger>
-														<SelectContent alignItemWithTrigger={false}>
-															<SelectGroup>
-																{(timeBlocks.data?.timeBlocks ?? []).map(
-																	(block) => (
-																		<SelectItem key={block.id} value={block.id}>
-																			{block.name}
-																		</SelectItem>
-																	),
-																)}
-															</SelectGroup>
-														</SelectContent>
-													</Select>
-												</Field>
-											) : null}
-											{(timeBlocks.data?.shiftTemplates ?? []).length > 0 ? (
-												<Field>
-													<FieldLabel>Shift Template</FieldLabel>
-													<Select
-														items={(timeBlocks.data?.shiftTemplates ?? []).map(
-															(template) => ({
+													{(timeBlocks.data?.shiftTemplates ?? []).length >
+													0 ? (
+														<Select
+															items={(
+																timeBlocks.data?.shiftTemplates ?? []
+															).map((template) => ({
 																label: template.name,
 																value: template.id,
-															}),
-														)}
-														value={null}
-														onValueChange={(value) => {
-															const template = (
-																timeBlocks.data?.shiftTemplates ?? []
-															).find((row) => row.id === value);
-															if (!template) return;
-															setForm({
-																...form,
-																positionId: template.positionId,
-																startMinute: template.startMinute,
-																endMinute: template.endMinute,
-																note: template.note ?? form.note,
-															});
-														}}
-													>
-														<SelectTrigger className="w-full">
-															<SelectValue placeholder="Apply a Shift Template" />
-														</SelectTrigger>
-														<SelectContent alignItemWithTrigger={false}>
-															<SelectGroup>
-																{(timeBlocks.data?.shiftTemplates ?? []).map(
-																	(template) => (
+															}))}
+															value={null}
+															onValueChange={(value) => {
+																const template = (
+																	timeBlocks.data?.shiftTemplates ?? []
+																).find((row) => row.id === value);
+																if (!template) return;
+																setForm({
+																	...form,
+																	positionId: template.positionId,
+																	startMinute: template.startMinute,
+																	endMinute: template.endMinute,
+																	note: template.note ?? form.note,
+																});
+															}}
+														>
+															<SelectTrigger className="w-full">
+																<SelectValue placeholder="Apply shift template" />
+															</SelectTrigger>
+															<SelectContent alignItemWithTrigger={false}>
+																<SelectGroup>
+																	{(
+																		timeBlocks.data?.shiftTemplates ?? []
+																	).map((template) => (
 																		<SelectItem
 																			key={template.id}
 																			value={template.id}
 																		>
 																			{template.name}
 																		</SelectItem>
-																	),
-																)}
+																	))}
+																</SelectGroup>
+															</SelectContent>
+														</Select>
+													) : null}
+												</div>
+											) : null}
+											<div className="grid grid-cols-[4.75rem_minmax(0,1fr)] items-start gap-x-3 gap-y-4">
+												<span className="pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+													{form.shiftId ? "Day" : "Days"}
+												</span>
+												<div className="min-w-0">
+													{form.shiftId ? (
+														<DatePicker
+															id="shift-date"
+															value={form.date}
+															onValueChange={(date) =>
+																setForm({ ...form, date })
+															}
+															disabled={(date) => {
+																const key = date.toLocaleDateString("sv-SE");
+																return (
+																	key < weekStart ||
+																	key > addDays(weekStart, 6)
+																);
+															}}
+														/>
+													) : (
+														<div
+															id="shift-date"
+															className="grid grid-cols-4 gap-1.5 sm:grid-cols-7"
+														>
+															{days.map((date) => {
+																const selected = addDates.includes(date);
+																return (
+																	<Button
+																		key={date}
+																		type="button"
+																		variant={
+																			selected ? "default" : "outline"
+																		}
+																		className="h-auto min-h-11 flex-col gap-0.5 px-1 py-1.5 tabular-nums"
+																		aria-pressed={selected}
+																		onClick={() => toggleAddDate(date)}
+																	>
+																		<span
+																			className={cn(
+																				"text-[10px]",
+																				selected
+																					? "text-primary-foreground/80"
+																					: "text-muted-foreground",
+																			)}
+																		>
+																			{weekdayShort(date)}
+																		</span>
+																		<span className="font-medium">
+																			{new Date(
+																				`${date}T12:00:00`,
+																			).getDate()}
+																		</span>
+																	</Button>
+																);
+															})}
+														</div>
+													)}
+												</div>
+
+												<span className="pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+													Time
+												</span>
+												<div className="min-w-0 space-y-1.5">
+													<div className="grid grid-cols-2 gap-2">
+														<TimePicker
+															id="shift-start"
+															value={form.startMinute}
+															onValueChange={(startMinute) =>
+																setForm({ ...form, startMinute })
+															}
+														/>
+														<TimePicker
+															id="shift-end"
+															value={form.endMinute}
+															onValueChange={(endMinute) =>
+																setForm({ ...form, endMinute })
+															}
+															overnightAfterMinute={form.startMinute}
+														/>
+													</div>
+													{form.endMinute <= form.startMinute ? (
+														<p className="text-muted-foreground text-xs">
+															Continues overnight into the next day.
+														</p>
+													) : null}
+												</div>
+
+												<span className="pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+													Position
+												</span>
+												<div className="min-w-0 space-y-1.5">
+													<Select
+														items={positionItems}
+														value={form.positionId || null}
+														onValueChange={(positionId) =>
+															setForm({
+																...form,
+																positionId: positionId ?? "",
+															})
+														}
+													>
+														<SelectTrigger
+															id="shift-position"
+															className="w-full"
+														>
+															<SelectValue />
+														</SelectTrigger>
+														<SelectContent alignItemWithTrigger={false}>
+															<SelectGroup>
+																<SelectItem value={null}>Choose…</SelectItem>
 															</SelectGroup>
+															{showPositionGroups ? (
+																<>
+																	<SelectGroup>
+																		<SelectLabel>
+																			Approved for {selectedStaff?.name}
+																		</SelectLabel>
+																		{allowedPositions.map((position) => (
+																			<SelectItem
+																				key={position.id}
+																				value={position.id}
+																			>
+																				{position.name}
+																			</SelectItem>
+																		))}
+																	</SelectGroup>
+																	<SelectGroup>
+																		<SelectLabel>Other positions</SelectLabel>
+																		{otherPositions.map((position) => (
+																			<SelectItem
+																				key={position.id}
+																				value={position.id}
+																			>
+																				{position.name}
+																			</SelectItem>
+																		))}
+																	</SelectGroup>
+																</>
+															) : (
+																<SelectGroup>
+																	{(data.positions ?? []).map((position) => (
+																		<SelectItem
+																			key={position.id}
+																			value={position.id}
+																		>
+																			{position.name}
+																		</SelectItem>
+																	))}
+																</SelectGroup>
+															)}
 														</SelectContent>
 													</Select>
-												</Field>
-											) : null}
-											{(tags.data?.tags ?? []).length > 0 && form.shiftId ? (
-												<Field>
-													<FieldLabel>Shift Tags</FieldLabel>
-													<div className="flex flex-wrap gap-2">
-														{(tags.data?.tags ?? []).map((tag) => (
-															<Button
-																key={tag.id}
-																type="button"
-																size="sm"
-																variant={
-																	form.tagIds.includes(tag.id)
-																		? "secondary"
-																		: "outline"
+													{positionNeedsApproval ? (
+														<Alert>
+															<UserPlusIcon />
+															<AlertTitle>
+																{selectedCreateStaff.length > 1
+																	? `${selectedCreateStaff.length} workers aren’t approved`
+																	: `${selectedStaff?.name ?? "This worker"} isn’t approved`}{" "}
+																for{" "}
+																{data.positions.find(
+																	(position) =>
+																		position.id === form.positionId,
+																)?.name ?? "this position"}
+															</AlertTitle>
+															<AlertDescription>
+																You can add this Position to their Employment
+																when you save. It will apply to future shifts
+																too.
+															</AlertDescription>
+														</Alert>
+													) : null}
+												</div>
+
+												<span className="pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+													{form.shiftId ? "Worker" : "Workers"}
+												</span>
+												<div className="min-w-0 space-y-1.5">
+													{form.shiftId ? (
+														<Select
+															items={workerItems}
+															value={form.employmentId || null}
+															onValueChange={(employmentId) => {
+																const nextEmploymentId = employmentId ?? "";
+																const member = data.staff.find(
+																	(candidate) =>
+																		candidate.employmentId ===
+																		nextEmploymentId,
+																);
+																let positionId = form.positionId;
+																if (!positionId) {
+																	const allowed = positionsForWorker(
+																		data.positions,
+																		member,
+																	);
+																	if (allowed.length === 1) {
+																		positionId = allowed[0]?.id ?? "";
+																	}
 																}
-																onClick={() =>
-																	setForm({
-																		...form,
-																		tagIds: form.tagIds.includes(tag.id)
-																			? form.tagIds.filter((id) => id !== tag.id)
-																			: [...form.tagIds, tag.id],
-																	})
-																}
+																setForm({
+																	...form,
+																	employmentId: nextEmploymentId,
+																	positionId,
+																	unavailabilityOverrideReason: "",
+																});
+															}}
+														>
+															<SelectTrigger
+																id="shift-worker"
+																className="w-full"
 															>
-																{tag.name}
-															</Button>
-														))}
-													</div>
-												</Field>
-											) : null}
-											{form.shiftId ? (
-												<Field>
-													<FieldLabel htmlFor="shift-tasks">
-														Shift Tasks
-													</FieldLabel>
-													<Textarea
-														id="shift-tasks"
-														value={form.taskTitles}
+																<SelectValue />
+															</SelectTrigger>
+															<SelectContent alignItemWithTrigger={false}>
+																<SelectGroup>
+																	{workerItems.map((item) => (
+																		<SelectItem
+																			key={item.value ?? "open"}
+																			value={item.value}
+																		>
+																			{item.label}
+																		</SelectItem>
+																	))}
+																</SelectGroup>
+															</SelectContent>
+														</Select>
+													) : (
+														<>
+															<div className="flex flex-wrap items-center gap-1.5">
+																{addEmploymentIds.map((employmentId) => {
+																	const member = data.staff.find(
+																		(candidate) =>
+																			candidate.employmentId === employmentId,
+																	);
+																	const name = member?.name ?? "Worker";
+																	return (
+																		<Badge
+																			key={employmentId}
+																			variant="secondary"
+																			className="gap-1 pr-1"
+																		>
+																			{name}
+																			<button
+																				type="button"
+																				className="rounded-sm p-0.5 hover:bg-muted"
+																				aria-label={`Remove ${name}`}
+																				onClick={() => {
+																					const next = addEmploymentIds.filter(
+																						(id) => id !== employmentId,
+																					);
+																					setAddEmploymentIds(next);
+																					setForm({
+																						...form,
+																						employmentId: next[0] ?? "",
+																						unavailabilityOverrideReason: "",
+																					});
+																				}}
+																			>
+																				<XIcon className="size-3" />
+																			</button>
+																		</Badge>
+																	);
+																})}
+																{(data.staff ?? []).some(
+																	(member) =>
+																		!addEmploymentIds.includes(
+																			member.employmentId,
+																		),
+																) ? (
+																	<Select
+																		items={(data.staff ?? [])
+																			.filter(
+																				(member) =>
+																					!addEmploymentIds.includes(
+																						member.employmentId,
+																					),
+																			)
+																			.map((member) => ({
+																				label: member.name,
+																				value: member.employmentId,
+																			}))}
+																		value={null}
+																		onValueChange={(employmentId) => {
+																			if (!employmentId) return;
+																			if (
+																				addEmploymentIds.includes(
+																					employmentId,
+																				)
+																			)
+																				return;
+																			const member = data.staff.find(
+																				(candidate) =>
+																					candidate.employmentId ===
+																					employmentId,
+																			);
+																			const next = [
+																				...addEmploymentIds,
+																				employmentId,
+																			];
+																			let positionId = form.positionId;
+																			if (!positionId) {
+																				const allowed = positionsForWorker(
+																					data.positions,
+																					member,
+																				);
+																				if (allowed.length === 1) {
+																					positionId = allowed[0]?.id ?? "";
+																				}
+																			}
+																			setAddEmploymentIds(next);
+																			setForm({
+																				...form,
+																				employmentId: next[0] ?? "",
+																				positionId,
+																				unavailabilityOverrideReason: "",
+																			});
+																		}}
+																	>
+																		<SelectTrigger
+																			aria-label="Add worker"
+																			className="h-7 w-auto gap-1 border-dashed px-2"
+																		>
+																			<PlusIcon className="size-3.5" />
+																			<SelectValue placeholder="Add worker" />
+																		</SelectTrigger>
+																		<SelectContent alignItemWithTrigger={false}>
+																			<SelectGroup>
+																				{(data.staff ?? [])
+																					.filter(
+																						(member) =>
+																							!addEmploymentIds.includes(
+																								member.employmentId,
+																							),
+																					)
+																					.map((member) => (
+																						<SelectItem
+																							key={member.employmentId}
+																							value={member.employmentId}
+																						>
+																							{member.name}
+																						</SelectItem>
+																					))}
+																			</SelectGroup>
+																		</SelectContent>
+																	</Select>
+																) : null}
+															</div>
+															{addEmploymentIds.length === 0 ? (
+																<p className="text-muted-foreground text-xs">
+																	No workers selected — creates open shifts.
+																</p>
+															) : null}
+														</>
+													)}
+												</div>
+
+												<span className="pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
+													Note
+												</span>
+												<div className="min-w-0">
+													<Input
+														id="shift-note"
+														value={form.note}
 														onChange={(event) =>
 															setForm({
 																...form,
-																taskTitles: event.target.value,
+																note: event.target.value,
 															})
 														}
-														placeholder="One checklist item per line"
+														placeholder="Optional"
+														maxLength={200}
 													/>
-													<FieldDescription>
-														Saving replaces the checklist on this Shift.
-													</FieldDescription>
-												</Field>
-											) : null}
-											{form.shiftId ? (
-												<Field>
-													<FieldLabel htmlFor="shift-repeat">
-														Repeat into later weeks
-													</FieldLabel>
-													<div className="flex gap-2">
-														<Input
-															id="shift-repeat"
-															type="number"
-															min={1}
-															max={12}
-															value={repeatWeeks}
-															onChange={(event) =>
-																setRepeatWeeks(event.target.value)
-															}
-														/>
-														<Button
-															type="button"
-															variant="outline"
-															disabled={repeatShift.isPending}
-															onClick={() =>
-																repeatShift.mutate({
-																	shiftId: form.shiftId ?? "",
-																	weeks: Math.max(
-																		1,
-																		Math.min(12, Number(repeatWeeks) || 1),
-																	),
-																})
-															}
-														>
-															Copy forward
-														</Button>
-													</div>
-												</Field>
-											) : null}
 												</div>
-											</details>
+											</div>
+											{form.shiftId ? (
+												<details className="group rounded-lg border border-border/70">
+													<summary className="cursor-pointer list-none px-3 py-2 font-medium text-sm marker:content-none [&::-webkit-details-marker]:hidden">
+														<span className="flex items-center justify-between gap-2">
+															More options
+															<span className="font-normal text-muted-foreground text-xs group-open:hidden">
+																Tags, tasks, repeat…
+															</span>
+														</span>
+													</summary>
+													<div className="flex flex-col gap-4 border-t px-3 py-3">
+														{(tags.data?.tags ?? []).length > 0 ? (
+															<Field>
+																<FieldLabel>Shift Tags</FieldLabel>
+																<div className="flex flex-wrap gap-2">
+																	{(tags.data?.tags ?? []).map((tag) => (
+																		<Button
+																			key={tag.id}
+																			type="button"
+																			size="sm"
+																			variant={
+																				form.tagIds.includes(tag.id)
+																					? "secondary"
+																					: "outline"
+																			}
+																			onClick={() =>
+																				setForm({
+																					...form,
+																					tagIds: form.tagIds.includes(tag.id)
+																						? form.tagIds.filter(
+																								(id) => id !== tag.id,
+																							)
+																						: [...form.tagIds, tag.id],
+																				})
+																			}
+																		>
+																			{tag.name}
+																		</Button>
+																	))}
+																</div>
+															</Field>
+														) : null}
+														<Field>
+															<FieldLabel htmlFor="shift-tasks">
+																Shift Tasks
+															</FieldLabel>
+															<Textarea
+																id="shift-tasks"
+																value={form.taskTitles}
+																onChange={(event) =>
+																	setForm({
+																		...form,
+																		taskTitles: event.target.value,
+																	})
+																}
+																placeholder="One checklist item per line"
+															/>
+															<FieldDescription>
+																Saving replaces the checklist on this Shift.
+															</FieldDescription>
+														</Field>
+														<Field>
+															<FieldLabel htmlFor="shift-repeat">
+																Repeat into later weeks
+															</FieldLabel>
+															<div className="flex gap-2">
+																<Input
+																	id="shift-repeat"
+																	type="number"
+																	min={1}
+																	max={12}
+																	value={repeatWeeks}
+																	onChange={(event) =>
+																		setRepeatWeeks(event.target.value)
+																	}
+																/>
+																<Button
+																	type="button"
+																	variant="outline"
+																	disabled={repeatShift.isPending}
+																	onClick={() =>
+																		repeatShift.mutate({
+																			shiftId: form.shiftId ?? "",
+																			weeks: Math.max(
+																				1,
+																				Math.min(
+																					12,
+																					Number(repeatWeeks) || 1,
+																				),
+																			),
+																		})
+																	}
+																>
+																	Copy forward
+																</Button>
+															</div>
+														</Field>
+													</div>
+												</details>
+											) : null}
 											{needsOverride ? (
 												<Field>
 													<FieldLabel htmlFor="shift-override">
@@ -2892,7 +3135,7 @@ function SchedulePage() {
 											) : null}
 											{form.shiftId
 												? "Save"
-												: `Add ${addDates.length || 1} shift${(addDates.length || 1) === 1 ? "" : "s"}`}
+												: `Add ${pendingAddCount} shift${pendingAddCount === 1 ? "" : "s"}`}
 										</Button>
 										{form.shiftId ? (
 											<Button
@@ -3391,6 +3634,9 @@ function SchedulePage() {
 																		);
 																		if (positions.length === 1)
 																			draft.positionId = positions[0]?.id ?? "";
+																		setAddDates([day]);
+																		setAddEmploymentIds([member.employmentId]);
+																		syncPunchFields(undefined);
 																		setForm(draft);
 																	}}
 																>
