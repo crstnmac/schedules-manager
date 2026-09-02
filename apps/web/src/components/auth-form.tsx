@@ -1,4 +1,10 @@
-import { Alert, AlertDescription } from "@SchedulesManager/ui/components/alert";
+import { signUpWithEmail } from "@SchedulesManager/auth";
+import {
+	Alert,
+	AlertDescription,
+	AlertTitle,
+} from "@SchedulesManager/ui/components/alert";
+import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import {
 	Card,
@@ -15,52 +21,105 @@ import {
 	FieldGroup,
 	FieldLabel,
 } from "@SchedulesManager/ui/components/field";
-import { Input } from "@SchedulesManager/ui/components/input";
+import {
+	InputGroup,
+	InputGroupAddon,
+	InputGroupButton,
+	InputGroupInput,
+} from "@SchedulesManager/ui/components/input-group";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
-import { Eye, EyeOff } from "lucide-react";
+import {
+	Tabs,
+	TabsList,
+	TabsTrigger,
+} from "@SchedulesManager/ui/components/tabs";
+import {
+	CalendarDaysIcon,
+	EyeIcon,
+	EyeOffIcon,
+	MailIcon,
+	UserPlusIcon,
+} from "lucide-react";
 import { useState } from "react";
 
+import { AuthShell } from "@/components/auth-shell";
 import { supabase } from "@/lib/supabase";
 
 type Mode = "sign-in" | "sign-up";
+
+const copy = {
+	"sign-in": {
+		title: "Welcome back",
+		description:
+			"Sign in with the email tied to your workplace — manager or worker.",
+		submit: "Sign in",
+		submitting: "Signing in…",
+	},
+	"sign-up": {
+		title: "Create your account",
+		description:
+			"Managers use this to set up a workplace. Workers should use their invite link instead.",
+		submit: "Create account",
+		submitting: "Creating account…",
+	},
+} as const;
 
 export function AuthForm({
 	title,
 	description,
 	defaultEmail,
+	defaultMode = "sign-in",
+	invite,
 }: {
 	title?: string;
 	description?: string;
 	defaultEmail?: string;
+	defaultMode?: Mode;
+	invite?: {
+		email: string;
+		workplaceName: string;
+		kind: "worker" | "manager";
+	};
 } = {}) {
-	const [mode, setMode] = useState<Mode>("sign-in");
-	const [email, setEmail] = useState(defaultEmail ?? "");
+	const [mode, setMode] = useState<Mode>(defaultMode);
+	const lockedEmail = invite?.email ?? defaultEmail;
+	const [email, setEmail] = useState(lockedEmail ?? "");
 	const [password, setPassword] = useState("");
 	const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
 
+	const isInvite = Boolean(invite);
+	const emailLocked = Boolean(lockedEmail) && isInvite;
+	const activeCopy = copy[mode];
+	const inviteTitle = title ?? (invite ? `Join ${invite.workplaceName}` : null);
+	const inviteDescription =
+		description ??
+		(invite
+			? mode === "sign-up"
+				? `Create an account with ${invite.email} to accept this ${invite.kind} invitation.`
+				: `Sign in with ${invite.email} to accept this ${invite.kind} invitation.`
+			: null);
+
 	async function submit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		setError(null);
 		setMessage(null);
 		setIsSubmitting(true);
+		const submitEmail = (lockedEmail ?? email).trim().toLowerCase();
 		try {
 			if (mode === "sign-in") {
 				const { error: authError } = await supabase.auth.signInWithPassword({
-					email: email.trim(),
+					email: submitEmail,
 					password,
 				});
 				if (authError) throw authError;
 			} else {
-				const { data, error: authError } = await supabase.auth.signUp({
-					email: email.trim(),
-					password,
-				});
-				if (authError) throw authError;
-				if (!data.session)
+				const data = await signUpWithEmail(supabase, submitEmail, password);
+				if (!data.session) {
 					setMessage("Check your email to confirm your account, then sign in.");
+				}
 			}
 		} catch (caughtError) {
 			setError(
@@ -73,56 +132,117 @@ export function AuthForm({
 		}
 	}
 
+	function switchMode(nextMode: Mode) {
+		setMode(nextMode);
+		setError(null);
+		setMessage(null);
+	}
+
 	return (
-		<main
-			id="main-content"
-			tabIndex={-1}
-			className="grid min-h-svh place-items-center bg-muted/35 px-4 py-10"
-		>
+		<AuthShell>
 			<h1 className="sr-only">
 				{mode === "sign-in"
 					? "Sign in to jooling"
 					: "Create your jooling account"}
 			</h1>
-			<Card className="w-full max-w-sm">
-				<CardHeader>
-					<CardTitle>
-						{title ??
-							(mode === "sign-in" ? "Welcome back" : "Create your account")}
-					</CardTitle>
-					<CardDescription>
-						{description ??
-							(mode === "sign-in"
-								? "Managers set up a workplace. Workers sign in with the invited email."
-								: "Use the email from your invite, or create a manager account.")}
-					</CardDescription>
+			<Card className="w-full max-w-md">
+				<CardHeader className="flex flex-col gap-4">
+					{isInvite ? (
+						<div className="flex flex-col gap-2">
+							<Badge variant="secondary">Workplace invite</Badge>
+							<CardTitle>{inviteTitle}</CardTitle>
+							<CardDescription>{inviteDescription}</CardDescription>
+						</div>
+					) : null}
+					<Tabs
+						value={mode}
+						onValueChange={(value) => switchMode(value as Mode)}
+					>
+						<TabsList className="grid w-full grid-cols-2">
+							<TabsTrigger value="sign-in">Sign in</TabsTrigger>
+							<TabsTrigger value="sign-up">Create account</TabsTrigger>
+						</TabsList>
+					</Tabs>
 				</CardHeader>
-				<CardContent>
+
+				<CardContent className="flex flex-col gap-4">
+					{!isInvite ? (
+						<div className="flex flex-col gap-2">
+							<CardTitle>{activeCopy.title}</CardTitle>
+							<CardDescription>{activeCopy.description}</CardDescription>
+						</div>
+					) : null}
+					{mode === "sign-up" && isInvite && invite ? (
+						<Alert>
+							<UserPlusIcon />
+							<AlertTitle>Joining this workplace</AlertTitle>
+							<AlertDescription>
+								Use the invited email. After you create an account, you&apos;ll
+								join {invite.workplaceName}.
+							</AlertDescription>
+						</Alert>
+					) : null}
+					{mode === "sign-up" && !isInvite ? (
+						<Alert>
+							<UserPlusIcon />
+							<AlertTitle>Setting up as a manager</AlertTitle>
+							<AlertDescription>
+								After you create an account, you&apos;ll configure your first
+								workplace, location, and position.
+							</AlertDescription>
+						</Alert>
+					) : null}
+
 					<form id="auth-form" onSubmit={submit}>
 						<FieldGroup>
 							<Field data-invalid={Boolean(error)}>
 								<FieldLabel htmlFor="email">Email</FieldLabel>
-								<Input
-									id="email"
-									type="email"
-									autoComplete="email"
-									value={email}
-									onChange={(event) => setEmail(event.target.value)}
-									required
-									aria-invalid={Boolean(error)}
-									aria-describedby={error ? "auth-error" : undefined}
-								/>
+								<InputGroup>
+									<InputGroupAddon align="inline-start">
+										<MailIcon />
+									</InputGroupAddon>
+									<InputGroupInput
+										id="email"
+										type="email"
+										autoComplete="email"
+										placeholder="you@restaurant.com"
+										value={email}
+										onChange={(event) => {
+											if (!emailLocked) setEmail(event.target.value);
+										}}
+										required
+										readOnly={emailLocked}
+										aria-readonly={emailLocked || undefined}
+										aria-invalid={Boolean(error)}
+										aria-describedby={
+											[
+												error ? "auth-error" : null,
+												emailLocked ? "invite-email-hint" : null,
+											]
+												.filter(Boolean)
+												.join(" ") || undefined
+										}
+									/>
+								</InputGroup>
+								{emailLocked ? (
+									<FieldDescription id="invite-email-hint">
+										This invitation was sent to this address.
+									</FieldDescription>
+								) : null}
 							</Field>
+
 							<Field data-invalid={Boolean(error)}>
 								<FieldLabel htmlFor="password">Password</FieldLabel>
-								<div className="relative">
-									<Input
+								<InputGroup>
+									<InputGroupInput
 										id="password"
 										type={isPasswordVisible ? "text" : "password"}
 										autoComplete={
 											mode === "sign-in" ? "current-password" : "new-password"
 										}
-										className="pr-9"
+										placeholder={
+											mode === "sign-up" ? "At least 6 characters" : undefined
+										}
 										minLength={6}
 										value={password}
 										onChange={(event) => setPassword(event.target.value)}
@@ -130,32 +250,40 @@ export function AuthForm({
 										aria-invalid={Boolean(error)}
 										aria-describedby={error ? "auth-error" : undefined}
 									/>
-									<Button
-										type="button"
-										variant="ghost"
-										size="icon"
-										className="absolute top-0 right-0 text-muted-foreground hover:text-foreground"
-										onClick={() => setIsPasswordVisible((visible) => !visible)}
-										aria-label={
-											isPasswordVisible ? "Hide password" : "Show password"
-										}
-										aria-pressed={isPasswordVisible}
-									>
-										{isPasswordVisible ? <EyeOff /> : <Eye />}
-									</Button>
-								</div>
-								<FieldDescription>At least 6 characters.</FieldDescription>
+									<InputGroupAddon align="inline-end">
+										<InputGroupButton
+											aria-label={
+												isPasswordVisible ? "Hide password" : "Show password"
+											}
+											aria-pressed={isPasswordVisible}
+											onClick={() =>
+												setIsPasswordVisible((visible) => !visible)
+											}
+										>
+											{isPasswordVisible ? <EyeOffIcon /> : <EyeIcon />}
+										</InputGroupButton>
+									</InputGroupAddon>
+								</InputGroup>
+								{mode === "sign-up" ? (
+									<FieldDescription>
+										Use at least 6 characters.
+									</FieldDescription>
+								) : null}
 							</Field>
+
 							{error ? <FieldError id="auth-error">{error}</FieldError> : null}
 							{message ? (
 								<Alert>
+									<CalendarDaysIcon />
+									<AlertTitle>Confirm your email</AlertTitle>
 									<AlertDescription>{message}</AlertDescription>
 								</Alert>
 							) : null}
 						</FieldGroup>
 					</form>
 				</CardContent>
-				<CardFooter className="flex-col gap-3">
+
+				<CardFooter>
 					<Button
 						className="w-full"
 						disabled={isSubmitting}
@@ -163,29 +291,10 @@ export function AuthForm({
 						type="submit"
 					>
 						{isSubmitting ? <Spinner data-icon="inline-start" /> : null}
-						{isSubmitting
-							? "Please wait…"
-							: mode === "sign-in"
-								? "Sign in"
-								: "Create account"}
+						{isSubmitting ? activeCopy.submitting : activeCopy.submit}
 					</Button>
-					<p className="text-center text-muted-foreground text-sm">
-						{mode === "sign-in" ? "New here?" : "Already have an account?"}{" "}
-						<Button
-							variant="link"
-							className="h-auto px-1 py-0"
-							type="button"
-							onClick={() => {
-								setMode(mode === "sign-in" ? "sign-up" : "sign-in");
-								setError(null);
-								setMessage(null);
-							}}
-						>
-							{mode === "sign-in" ? "Create an account" : "Sign in"}
-						</Button>
-					</p>
 				</CardFooter>
 			</Card>
-		</main>
+		</AuthShell>
 	);
 }

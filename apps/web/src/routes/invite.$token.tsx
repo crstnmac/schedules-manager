@@ -101,9 +101,11 @@ function InvitePage() {
 	if (!user) {
 		return (
 			<AuthForm
-				defaultEmail={invitation.email}
-				title={`Join ${invitation.workplaceName}`}
-				description={`Sign in with ${invitation.email} to accept this ${invitation.kind} invitation.`}
+				invite={{
+					email: invitation.email,
+					workplaceName: invitation.workplaceName,
+					kind: invitation.kind === "manager" ? "manager" : "worker",
+				}}
 			/>
 		);
 	}

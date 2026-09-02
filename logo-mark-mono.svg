@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="logoMonoTitle">
+  <title id="logoMonoTitle">jooling</title>
+  <!-- Monochrome mark for UI surfaces. Theme with currentColor. -->
+  <rect x="16" y="24" width="44" height="48" rx="11" fill="currentColor" opacity="0.38"/>
+  <rect x="36" y="24" width="44" height="48" rx="11" fill="currentColor"/>
+</svg>

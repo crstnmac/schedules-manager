@@ -25,3 +25,10 @@ export class BadRequestError extends Error {
 		this.name = "BadRequestError";
 	}
 }
+
+export class RateLimitError extends Error {
+	constructor(message = "Too many requests. Try again later.") {
+		super(message);
+		this.name = "RateLimitError";
+	}
+}

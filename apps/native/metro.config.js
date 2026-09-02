@@ -10,6 +10,7 @@ const appNodeModules = path.resolve(__dirname, "node_modules");
 config.resolver = config.resolver || {};
 config.resolver.extraNodeModules = {
 	...(config.resolver.extraNodeModules || {}),
+	"@SchedulesManager/auth": path.resolve(__dirname, "../../packages/auth"),
 	react: path.join(appNodeModules, "react"),
 	"react-native": path.join(appNodeModules, "react-native"),
 	"react-native-safe-area-context": path.join(

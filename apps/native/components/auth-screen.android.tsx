@@ -19,7 +19,9 @@ import {
 	paddingAll,
 } from "@expo/ui/jetpack-compose/modifiers";
 import { useState } from "react";
-import { StyleSheet } from "react-native";
+import { Image, StyleSheet } from "react-native";
+
+import { signUpWithEmail } from "@SchedulesManager/auth";
 
 import { supabase } from "@/lib/supabase";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -49,11 +51,7 @@ export function AuthScreen() {
 				});
 				if (authError) throw authError;
 			} else {
-				const { data, error: authError } = await supabase.auth.signUp({
-					email: email.trim(),
-					password,
-				});
-				if (authError) throw authError;
+				const data = await signUpWithEmail(supabase, email, password);
 				if (!data.session)
 					setMessage("Check your email to confirm your account, then sign in.");
 			}
@@ -85,6 +83,12 @@ export function AuthScreen() {
 				modifiers={[fillMaxSize(), imePadding(), padding(20, 32, 20, 24)]}
 			>
 				<Column modifiers={[fillMaxWidth(), padding(4, 0, 4, 24)]}>
+					<Image
+						source={require("@/assets/images/logo-mark.png")}
+						style={styles.logo}
+						accessibilityLabel="jooling"
+					/>
+					<Spacer modifiers={[height(12)]} />
 					<Text
 						color={colors.primary}
 						style={{ typography: "titleMedium", fontWeight: "700" }}
@@ -224,4 +228,7 @@ export function AuthScreen() {
 	);
 }
 
-const styles = StyleSheet.create({ host: { flex: 1 } });
+const styles = StyleSheet.create({
+	host: { flex: 1 },
+	logo: { width: 56, height: 56 },
+});

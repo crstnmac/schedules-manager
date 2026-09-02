@@ -21,6 +21,7 @@
       "name": "native",
       "version": "1.0.0",
       "dependencies": {
+        "@SchedulesManager/auth": "workspace:*",
         "@SchedulesManager/env": "workspace:*",
         "@expo/ui": "~57.0.12",
         "@expo/vector-icons": "^15.1.1",
@@ -88,6 +89,7 @@
       "name": "web",
       "version": "0.0.0",
       "dependencies": {
+        "@SchedulesManager/auth": "workspace:*",
         "@SchedulesManager/env": "workspace:*",
         "@SchedulesManager/ui": "workspace:*",
         "@dnd-kit/react": "^0.5.0",
@@ -115,6 +117,18 @@
         "tailwindcss": "catalog:",
         "typescript": "^6.0.3",
         "vite": "^8.1.5",
+      },
+    },
+    "packages/auth": {
+      "name": "@SchedulesManager/auth",
+      "version": "0.0.0",
+      "dependencies": {
+        "@supabase/supabase-js": "^2.112.4",
+      },
+      "devDependencies": {
+        "@SchedulesManager/config": "workspace:*",
+        "@types/bun": "catalog:",
+        "typescript": "^6.0.3",
       },
     },
     "packages/config": {
@@ -193,6 +207,8 @@
     "zod": "^4.4.3",
   },
   "packages": {
+    "@SchedulesManager/auth": ["@SchedulesManager/auth@workspace:packages/auth"],
+
     "@SchedulesManager/config": ["@SchedulesManager/config@workspace:packages/config"],
 
     "@SchedulesManager/db": ["@SchedulesManager/db@workspace:packages/db"],

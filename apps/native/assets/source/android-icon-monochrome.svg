@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="androidMonoTitle">
+  <title id="androidMonoTitle">jooling android monochrome</title>
+  <g transform="translate(128 128) scale(8)">
+    <rect x="16" y="24" width="44" height="48" rx="11" fill="#FFFFFF" opacity="0.38"/>
+    <rect x="36" y="24" width="44" height="48" rx="11" fill="#FFFFFF"/>
+  </g>
+</svg>

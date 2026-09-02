@@ -11,6 +11,7 @@
 		"check-types": "vite build && tsc --noEmit"
 	},
 	"dependencies": {
+		"@SchedulesManager/auth": "workspace:*",
 		"@SchedulesManager/env": "workspace:*",
 		"@SchedulesManager/ui": "workspace:*",
 		"@dnd-kit/react": "^0.5.0",

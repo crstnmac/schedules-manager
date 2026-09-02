@@ -16,6 +16,7 @@ import { requireManager, requireSession } from "../context";
 import { enqueueInvitationEmail } from "../email-outbox";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { withIdempotency } from "../idempotency";
+import { consumeRateLimitOrThrow } from "../rate-limit";
 import { firstRow } from "../rows";
 
 const INVITATION_TTL_DAYS = 14;
@@ -149,6 +150,10 @@ export const workersRoutes = new Elysia({
 					positionIds: requestedPositionIds,
 				},
 				execute: async () => {
+					consumeRateLimitOrThrow(
+						`invitation.create:${profile.id}`,
+						"invitationCreate",
+					);
 					const [existingProfile] = await db
 						.select({ id: profiles.id })
 						.from(profiles)
@@ -306,6 +311,10 @@ export const workersRoutes = new Elysia({
 					invitationId: params.invitationId,
 				},
 				execute: async () => {
+					consumeRateLimitOrThrow(
+						`invitation.resend:${profile.id}`,
+						"invitationResend",
+					);
 					const [invitation] = await db
 						.select()
 						.from(invitations)

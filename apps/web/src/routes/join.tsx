@@ -1,3 +1,4 @@
+import { Alert, AlertDescription } from "@SchedulesManager/ui/components/alert";
 import { Button } from "@SchedulesManager/ui/components/button";
 import {
 	Card,
@@ -16,7 +17,7 @@ import {
 } from "@SchedulesManager/ui/components/item";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
-
+import { AuthShell } from "@/components/auth-shell";
 import { CurrentProfile } from "@/components/current-profile";
 import { useAuth } from "@/lib/auth";
 import { homePath } from "@/lib/home-path";
@@ -69,11 +70,7 @@ function JoinPage() {
 	}
 
 	return (
-		<main
-			id="main-content"
-			tabIndex={-1}
-			className="grid min-h-svh place-items-center bg-muted/35 px-4 py-10"
-		>
+		<AuthShell>
 			<h1 className="sr-only">Join a workplace</h1>
 			<Card className="w-full max-w-md">
 				<CardHeader>
@@ -113,15 +110,17 @@ function JoinPage() {
 						))}
 					</ItemGroup>
 					{accept.isError ? (
-						<p role="alert" className="text-destructive text-sm">
-							{(accept.error as Error).message}
-						</p>
+						<Alert variant="destructive">
+							<AlertDescription>
+								{(accept.error as Error).message}
+							</AlertDescription>
+						</Alert>
 					) : null}
 					<Button variant="outline" onClick={() => void signOut()}>
 						Sign out
 					</Button>
 				</CardContent>
 			</Card>
-		</main>
+		</AuthShell>
 	);
 }

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="androidFgTitle">
+  <title id="androidFgTitle">jooling android foreground</title>
+  <g transform="translate(128 128) scale(8)">
+    <rect x="16" y="24" width="44" height="48" rx="11" fill="#F3F8FD"/>
+    <rect x="36" y="24" width="44" height="48" rx="11" fill="#006EDC"/>
+  </g>
+</svg>

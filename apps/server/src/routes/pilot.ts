@@ -5,7 +5,6 @@ import {
 	invitationPositions,
 	invitations,
 	locations,
-	notifications,
 	pilotFeedback,
 	positions,
 	profiles,
@@ -24,7 +23,9 @@ import {
 } from "../context";
 import { enqueueInvitationEmail } from "../email-outbox";
 import { BadRequestError } from "../errors";
-import { writeAudit } from "../notify";
+import { withIdempotency } from "../idempotency";
+import { notifyEmployments, writeAudit } from "../notify";
+import { consumeRateLimitOrThrow } from "../rate-limit";
 
 const INVITATION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -193,48 +194,63 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers.authorization);
 			await requireManager(profile.id, params.workplaceId);
-			const scheduleIds = (
-				await db
-					.select({ id: schedules.id })
-					.from(schedules)
-					.innerJoin(locations, eq(locations.id, schedules.locationId))
-					.where(eq(locations.workplaceId, params.workplaceId))
-			).map((row) => row.id);
-			if (scheduleIds.length === 0) return { reminded: 0 };
-			const latestIds = await latestVersionIds(scheduleIds);
-			const rows = latestIds.length
-				? await db
-						.select({ employmentId: workerDeliveries.employmentId })
-						.from(workerDeliveries)
-						.where(
-							and(
-								inArray(workerDeliveries.versionId, latestIds),
-								isNull(workerDeliveries.acknowledgedAt),
-							),
-						)
-				: [];
-			const ids = [...new Set(rows.map((row) => row.employmentId))];
-			if (ids.length > 0)
-				await db.insert(notifications).values(
-					ids.map((employmentId) => ({
-						employmentId,
-						kind: "schedule_reminder",
-						title: "Please review your schedule",
-						body: "Your manager asked you to review and acknowledge the latest published schedule.",
-					})),
-				);
-			await writeAudit({
-				workplaceId: params.workplaceId,
+			return withIdempotency({
 				actorProfileId: profile.id,
-				action: "schedule.reminder",
-				entityType: "workplace",
-				entityId: params.workplaceId,
-				summary: `Sent an in-app schedule reminder to ${ids.length} worker${ids.length === 1 ? "" : "s"}.`,
+				scope: `schedule.reminder:${params.workplaceId}`,
+				key: headers["idempotency-key"],
+				request: { workplaceId: params.workplaceId },
+				execute: async () => {
+					const scheduleIds = (
+						await db
+							.select({ id: schedules.id })
+							.from(schedules)
+							.innerJoin(locations, eq(locations.id, schedules.locationId))
+							.where(eq(locations.workplaceId, params.workplaceId))
+					).map((row) => row.id);
+					if (scheduleIds.length === 0) return { reminded: 0 };
+					const latestIds = await latestVersionIds(scheduleIds);
+					const rows = latestIds.length
+						? await db
+								.select({ employmentId: workerDeliveries.employmentId })
+								.from(workerDeliveries)
+								.where(
+									and(
+										inArray(workerDeliveries.versionId, latestIds),
+										isNull(workerDeliveries.acknowledgedAt),
+									),
+								)
+						: [];
+					const ids = [...new Set(rows.map((row) => row.employmentId))];
+					if (ids.length > 0) {
+						await notifyEmployments(
+							ids,
+							{
+								kind: "schedule_reminder",
+								title: "Please review your schedule",
+								body: "Your manager asked you to review and acknowledge the latest published schedule.",
+							},
+							db,
+						);
+					}
+					await writeAudit({
+						workplaceId: params.workplaceId,
+						actorProfileId: profile.id,
+						action: "schedule.reminder",
+						entityType: "workplace",
+						entityId: params.workplaceId,
+						summary: `Sent a schedule reminder to ${ids.length} worker${ids.length === 1 ? "" : "s"}.`,
+					});
+					return { reminded: ids.length };
+				},
 			});
-			return { reminded: ids.length };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({
+				authorization: t.String(),
+				"idempotency-key": t.Optional(
+					t.String({ minLength: 8, maxLength: 200 }),
+				),
+			}),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 		},
 	)
@@ -255,75 +271,90 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 				throw new BadRequestError(
 					"The import contains duplicate email addresses",
 				);
-			const [locationRows, positionRows] = await Promise.all([
-				db
-					.select()
-					.from(locations)
-					.where(eq(locations.workplaceId, params.workplaceId)),
-				db
-					.select()
-					.from(positions)
-					.where(eq(positions.workplaceId, params.workplaceId)),
-			]);
-			const locationByName = new Map(
-				locationRows.map((row) => [row.name.toLowerCase(), row.id]),
-			);
-			const positionByName = new Map(
-				positionRows.map((row) => [row.name.toLowerCase(), row.id]),
-			);
-			for (const row of normalized) {
-				if (row.location && !locationByName.has(row.location.toLowerCase()))
-					throw new BadRequestError(`Unknown location: ${row.location}`);
-				if (row.position && !positionByName.has(row.position.toLowerCase()))
-					throw new BadRequestError(`Unknown position: ${row.position}`);
-			}
-			const created = await db.transaction(async (tx) => {
-				const result = [];
-				for (const row of normalized) {
-					await tx
-						.update(invitations)
-						.set({ status: "revoked" })
-						.where(
-							and(
-								eq(invitations.workplaceId, params.workplaceId),
-								eq(invitations.email, row.email),
-								eq(invitations.status, "pending"),
-							),
-						);
-					const [invitation] = await tx
-						.insert(invitations)
-						.values({
-							workplaceId: params.workplaceId,
-							email: row.email,
-							kind: "worker",
-							invitedBy: profile.id,
-							expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
-						})
-						.returning();
-					if (!invitation) continue;
-					const locationId = row.location
-						? locationByName.get(row.location.toLowerCase())
-						: undefined;
-					const positionId = row.position
-						? positionByName.get(row.position.toLowerCase())
-						: undefined;
-					if (locationId)
-						await tx
-							.insert(invitationLocations)
-							.values({ invitationId: invitation.id, locationId });
-					if (positionId)
-						await tx
-							.insert(invitationPositions)
-							.values({ invitationId: invitation.id, positionId });
-					await enqueueInvitationEmail(tx, invitation);
-					result.push({ email: row.email, token: invitation.token });
-				}
-				return result;
+
+			return withIdempotency({
+				actorProfileId: profile.id,
+				scope: `invitation.import:${params.workplaceId}`,
+				key: headers["idempotency-key"],
+				request: { rows: normalized },
+				execute: async () => {
+					consumeRateLimitOrThrow(
+						`invitation.import:${profile.id}`,
+						"invitationImport",
+					);
+					const [locationRows, positionRows] = await Promise.all([
+						db
+							.select()
+							.from(locations)
+							.where(eq(locations.workplaceId, params.workplaceId)),
+						db
+							.select()
+							.from(positions)
+							.where(eq(positions.workplaceId, params.workplaceId)),
+					]);
+					const locationByName = new Map(
+						locationRows.map((row) => [row.name.toLowerCase(), row.id]),
+					);
+					const positionByName = new Map(
+						positionRows.map((row) => [row.name.toLowerCase(), row.id]),
+					);
+					for (const row of normalized) {
+						if (row.location && !locationByName.has(row.location.toLowerCase()))
+							throw new BadRequestError(`Unknown location: ${row.location}`);
+						if (row.position && !positionByName.has(row.position.toLowerCase()))
+							throw new BadRequestError(`Unknown position: ${row.position}`);
+					}
+					const result = [];
+					for (const row of normalized) {
+						await db
+							.update(invitations)
+							.set({ status: "revoked" })
+							.where(
+								and(
+									eq(invitations.workplaceId, params.workplaceId),
+									eq(invitations.email, row.email),
+									eq(invitations.status, "pending"),
+								),
+							);
+						const [invitation] = await db
+							.insert(invitations)
+							.values({
+								workplaceId: params.workplaceId,
+								email: row.email,
+								kind: "worker",
+								invitedBy: profile.id,
+								expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
+							})
+							.returning();
+						if (!invitation) continue;
+						const locationId = row.location
+							? locationByName.get(row.location.toLowerCase())
+							: undefined;
+						const positionId = row.position
+							? positionByName.get(row.position.toLowerCase())
+							: undefined;
+						if (locationId)
+							await db
+								.insert(invitationLocations)
+								.values({ invitationId: invitation.id, locationId });
+						if (positionId)
+							await db
+								.insert(invitationPositions)
+								.values({ invitationId: invitation.id, positionId });
+						await enqueueInvitationEmail(db, invitation);
+						result.push({ email: row.email, token: invitation.token });
+					}
+					return { invitations: result };
+				},
 			});
-			return { invitations: created };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({
+				authorization: t.String(),
+				"idempotency-key": t.Optional(
+					t.String({ minLength: 8, maxLength: 200 }),
+				),
+			}),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				rows: t.Array(

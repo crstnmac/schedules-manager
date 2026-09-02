@@ -11,6 +11,9 @@ import {
 	View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { signUpWithEmail } from "@SchedulesManager/auth";
+
+import { LogoMark } from "@/components/logo-mark";
 import { NAV_THEME } from "@/lib/constants";
 import { supabase } from "@/lib/supabase";
 import { useColorScheme } from "@/lib/use-color-scheme";
@@ -40,11 +43,7 @@ export function AuthScreen() {
 				});
 				if (authError) throw authError;
 			} else {
-				const { data, error: authError } = await supabase.auth.signUp({
-					email: email.trim(),
-					password,
-				});
-				if (authError) throw authError;
+				const data = await signUpWithEmail(supabase, email, password);
 				if (!data.session)
 					setMessage("Check your email to confirm your account, then sign in.");
 			}
@@ -85,6 +84,7 @@ export function AuthScreen() {
 						{ backgroundColor: theme.card, borderColor: theme.border },
 					]}
 				>
+					<LogoMark size={56} style={styles.logo} />
 					<Text style={[styles.brand, { color: theme.primary }]}>jooling</Text>
 					<Text style={[styles.title, { color: theme.text }]}>
 						{mode === "sign-in" ? "Welcome back" : "Create your account"}
@@ -210,6 +210,10 @@ const styles = StyleSheet.create({
 		fontWeight: "800",
 		letterSpacing: 1,
 		textTransform: "uppercase",
+		marginTop: 12,
+	},
+	logo: {
+		alignSelf: "flex-start",
 	},
 	title: {
 		fontSize: 30,

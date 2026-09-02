@@ -6,6 +6,10 @@ import { AuthenticationError } from "../auth";
 import { requireManager, requireSession } from "../context";
 import { BadRequestError } from "../errors";
 import {
+	clientIpFromRequest,
+	consumeRateLimitOrThrow,
+} from "../rate-limit";
+import {
 	parseZeptoMailEvents,
 	verifyZeptoMailWebhook,
 } from "../zeptomail-webhook";
@@ -46,6 +50,10 @@ export const emailDeliveryRoutes = new Elysia({ prefix: "/v1" })
 	.post(
 		"/webhooks/zeptomail",
 		async ({ body, request }) => {
+			consumeRateLimitOrThrow(
+				`zeptomail.webhook:${clientIpFromRequest(request)}`,
+				"zeptomailWebhook",
+			);
 			if (typeof body !== "string" || body.length > 256_000)
 				throw new BadRequestError("Invalid webhook body");
 			const verified = verifyZeptoMailWebhook(

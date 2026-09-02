@@ -228,6 +228,7 @@ The MVP includes scheduling, publication, acknowledgement, late-change acceptanc
 - Notifications emitted for core publication, change, and coverage workflows
 - Persistent client sessions and explicit sign-out with user-cache cleanup
 - Expo push notifications: mobile device-token registration and fan-out on every notification
+- Invitation-led Workplace membership: open account signup, refused Workplace create when any Employment or pending invitation exists, and a waiting-for-invite onboarding path
 
 ### Remaining before pilot
 
@@ -242,7 +243,6 @@ The MVP includes scheduling, publication, acknowledgement, late-change acceptanc
 - Run accessibility checks and keyboard/screen-reader testing on manager and worker web flows
 - Test native offline/read-only behavior, slow networks, expired sessions, notification permission denial, and recovery after reconnect
 - Instrument pilot metrics: time to publish, acknowledgement rate, late-change acceptance time, release/pickup resolution time, missed-shift reports, and weekly active Workers
-- Replace unrestricted worker registration with an invitation-led pilot policy, or explicitly document why open registration is acceptable
 
 ## Recommended implementation order inside each phase
 

@@ -16,7 +16,7 @@ The product treats a published schedule as an immutable operational record. Late
 
 ### Workers
 
-- Join a workplace through mobile onboarding
+- Join a workplace through an invitation on web or mobile
 - View current, upcoming, and historical schedules
 - Acknowledge or respond to material schedule changes
 - Submit availability, preferences, and time-off requests
@@ -156,15 +156,29 @@ bun run db:migrate:deploy
 
 Migrations are manual, not run automatically on server startup. Container file edits are ephemeral and will be lost on redeployment; change source through Git.
 
-Protected scheduling commands accept an `Idempotency-Key` header. Reuse the same key and request body when retrying a command; its mutations and saved response commit atomically. Reusing a key with a different body returns a conflict. Requests without a key remain transactional but are distinct commands. The PostgreSQL integration suite installs a test-only trigger rejecting updates and deletes of published shift snapshots.
+Protected write commands accept an `Idempotency-Key` header, including invitation create/resend/import/accept, publication, acknowledgement, acceptance, coverage, swaps, time clock, and unacknowledged-schedule reminders. Reuse the same key and request body when retrying a command; its mutations and saved response commit atomically. Reusing a key with a different body returns a conflict. Requests without a key remain transactional but are distinct commands. The PostgreSQL integration suite installs a test-only trigger rejecting updates and deletes of published shift snapshots.
 
-Invitation creation, resend, and import queue email in the same PostgreSQL transaction. The server dispatches queued mail and push jobs and polls Expo receipts every five seconds. Apply database migrations before starting the updated server. Email retries use exponential backoff, recover abandoned leases after five minutes, and become `failed` after eight failed attempts. A manager can resend a pending invitation to create a fresh delivery. Superseded, expired, accepted, and revoked invitation jobs are cancelled before sending.
+Invitation creation, resend, and import queue email in the same PostgreSQL transaction. Manager “remind unacknowledged” actions enqueue inbox notifications and `notification_outbox` rows through the same path as publication, so Expo push fan-out applies. The server dispatches queued mail and push jobs and polls Expo receipts every five seconds. Apply database migrations before starting the updated server. Email retries use exponential backoff, recover abandoned leases after five minutes, and become `failed` after eight failed attempts. A manager can resend a pending invitation to create a fresh delivery. Superseded, expired, accepted, and revoked invitation jobs are cancelled before sending.
+
+Abuse-sensitive email endpoints are rate limited in process with fixed windows: invitation create 30/10m per manager, resend 20/10m per manager, CSV import 10/10m per manager, and ZeptoMail webhook 120/1m per client IP (`X-Forwarded-For` first hop when present). Over-limit requests return `429` with `error: "rate_limited"`. Idempotent invitation create/resend replays do not consume a new slot.
+
+`GET /health` is process liveness only. `GET /ready` pings PostgreSQL and returns `200` with `{ status: "ready", checks: { database: "up" } }` or `503` with `{ status: "not_ready", checks: { database: "down" } }`. Point load balancers and deploy gates at `/ready`. Every response includes `x-request-id` (echoed from the request when provided). The server writes one JSON log line per request with `level`, `requestId`, `method`, `path`, `status`, `durationMs`, and optional `error`.
 
 Set `ZEPTOMAIL_WEBHOOK_SECRET` (at least 16 characters) to the ZeptoMail Agent's webhook Authentication Key. Configure the public HTTPS endpoint `/v1/webhooks/zeptomail` for Delivered, Hard bounce, and Soft bounce events. The endpoint validates the documented `producer-signature` HMAC over the decoded form payload, enforces a five-minute request timestamp tolerance, and deduplicates webhook IDs. Missing configuration fails closed. See [ZeptoMail webhook setup and signing](https://www.zoho.com/zeptomail/help/webhooks.html).
 
 `GET /v1/workplaces/:workplaceId/email-deliveries` returns the latest 100 delivery records to active managers of that workplace, without invitation tokens. `sent` means the provider accepted the send, not mailbox delivery; only a signed Delivered event marks `delivered`. Outbox delivery is at-least-once: a provider acceptance followed by a process crash before recording success can cause a duplicate email on retry. No provider or DNS configuration is performed by migrations. Validate credentials, webhook events, and device receipts in a staging environment before pilot rollout.
 
 Expo receipt `delivered` means APNs/FCM accepted the notification, not that a device displayed it. Swaps are limited to a single Schedule. Approval revalidates eligibility in its transaction; policy and unrelated cross-Schedule draft writes do not yet share a global worker-lock protocol, so concurrent policy changes need further serialization before claiming a system-wide eligibility guarantee. Attendance expansion remains deferred.
+
+## Joining a workplace
+
+Account signup stays open so a manager can create the first Workplace and an invited worker can make an account for the invited email. Membership is invitation-led:
+
+- `POST /v1/workplaces` creates the caller's first Workplace as a manager only when they have no Employment (including deactivated) and no unexpired pending invitation.
+- Joining an existing Workplace happens by accepting an invitation. A deactivated Employment still cannot open a new Workplace. The invite page lets a new person create an account with the invited email locked.
+- Web and mobile onboarding ask whether you manage a workplace or are waiting for an invite, so workers are not pushed into restaurant setup.
+
+Open registration of *accounts* is acceptable for the pilot because it does not grant Workplace membership.
 
 ## Security notes
 

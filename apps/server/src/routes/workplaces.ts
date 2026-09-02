@@ -4,6 +4,7 @@ import {
 	invitations,
 	locations,
 	positions,
+	profiles,
 	workplaces,
 } from "@SchedulesManager/db";
 import { and, eq, gt } from "drizzle-orm";
@@ -55,36 +56,48 @@ export const workplacesRoutes = new Elysia({
 		"/workplaces",
 		async ({ headers, body }) => {
 			const { profile } = await requireSession(headers.authorization);
-
-			const memberships = await listActiveEmployments(profile.id);
-			if (memberships.length > 0) {
-				throw new ForbiddenError(
-					"You already belong to a Workplace. Workers join by invitation.",
-				);
-			}
-
-			const [pendingInvite] = await db
-				.select({ id: invitations.id })
-				.from(invitations)
-				.where(
-					and(
-						eq(invitations.email, profile.email.toLowerCase()),
-						eq(invitations.status, "pending"),
-						gt(invitations.expiresAt, new Date()),
-					),
-				)
-				.limit(1);
-
-			if (pendingInvite) {
-				throw new ForbiddenError(
-					"Accept your invitation instead of creating a Workplace.",
-				);
-			}
-
 			const timezone = body.location.timezone ?? "America/Chicago";
 			assertTimeZone(timezone);
 
 			return db.transaction(async (tx) => {
+				const [lockedProfile] = await tx
+					.select({ id: profiles.id })
+					.from(profiles)
+					.where(eq(profiles.id, profile.id))
+					.limit(1)
+					.for("update");
+				if (!lockedProfile) {
+					throw new ForbiddenError("Profile could not be resolved");
+				}
+
+				const [existingEmployment] = await tx
+					.select({ id: employments.id })
+					.from(employments)
+					.where(eq(employments.profileId, profile.id))
+					.limit(1);
+				if (existingEmployment) {
+					throw new ForbiddenError(
+						"You already belong to a Workplace. Workers join by invitation.",
+					);
+				}
+
+				const [pendingInvite] = await tx
+					.select({ id: invitations.id })
+					.from(invitations)
+					.where(
+						and(
+							eq(invitations.email, profile.email.toLowerCase()),
+							eq(invitations.status, "pending"),
+							gt(invitations.expiresAt, new Date()),
+						),
+					)
+					.limit(1);
+				if (pendingInvite) {
+					throw new ForbiddenError(
+						"Accept your invitation instead of creating a Workplace.",
+					);
+				}
+
 				const workplace = firstRow(
 					await tx.insert(workplaces).values({ name: body.name }).returning(),
 				);
@@ -141,7 +154,7 @@ export const workplacesRoutes = new Elysia({
 			}),
 			detail: {
 				summary:
-					"Create a Workplace with its first Location and Position, granting the caller a Manager Employment",
+					"Create the first Workplace when the caller has no Employment and no pending invitation. Additional workplaces are joined by invitation.",
 				security: [{ bearerAuth: [] }],
 			},
 		},

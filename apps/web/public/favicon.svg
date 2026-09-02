@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-labelledby="faviconTitle">
+  <title id="faviconTitle">jooling</title>
+  <rect width="32" height="32" rx="8" fill="#111B28"/>
+  <rect x="5" y="8" width="15" height="16" rx="4" fill="#F3F8FD"/>
+  <rect x="12" y="8" width="15" height="16" rx="4" fill="#006EDC"/>
+</svg>

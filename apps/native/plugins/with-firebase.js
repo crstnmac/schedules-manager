@@ -1,4 +1,8 @@
-const { withProjectBuildGradle, withAppBuildGradle, withDangerousMod } = require("expo/config-plugins");
+const {
+	withProjectBuildGradle,
+	withAppBuildGradle,
+	withDangerousMod,
+} = require("expo/config-plugins");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -49,9 +53,7 @@ function applyGoogleServicesPlugin(config) {
 	return withAppBuildGradle(config, (config) => {
 		if (
 			config.modResults.language === "groovy" &&
-			!config.modResults.contents.includes(
-				"com.google.gms.google-services",
-			)
+			!config.modResults.contents.includes("com.google.gms.google-services")
 		) {
 			config.modResults.contents = `apply plugin: "com.google.gms.google-services"\n${config.modResults.contents}`;
 		}

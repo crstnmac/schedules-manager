@@ -9,7 +9,13 @@ import {
 	ConflictError,
 	ForbiddenError,
 	NotFoundError,
+	RateLimitError,
 } from "./errors";
+import {
+	getReadinessReport,
+	type ReadinessReport,
+} from "./readiness";
+import { newRequestId, writeRequestLog } from "./request-log";
 import { changesRoutes } from "./routes/changes";
 import { constraintsRoutes } from "./routes/constraints";
 import { coverageRoutes } from "./routes/coverage";
@@ -28,7 +34,25 @@ import { timeEntryRoutes } from "./routes/time-entries";
 import { workersRoutes } from "./routes/workers";
 import { workplacesRoutes } from "./routes/workplaces";
 
-export function createApp() {
+export type CreateAppOptions = {
+	getReadiness?: () => Promise<ReadinessReport>;
+};
+
+const startedAtByRequest = new WeakMap<Request, number>();
+const errorByRequest = new WeakMap<Request, string>();
+
+function responseStatus(set: { status?: number | string }): number {
+	if (typeof set.status === "number") return set.status;
+	if (typeof set.status === "string") {
+		const parsed = Number(set.status);
+		if (Number.isFinite(parsed)) return parsed;
+	}
+	return 200;
+}
+
+export function createApp(options: CreateAppOptions = {}) {
+	const getReadiness = options.getReadiness ?? getReadinessReport;
+
 	return new Elysia()
 		.use(
 			openapi({
@@ -57,21 +81,38 @@ export function createApp() {
 				methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 			}),
 		)
-		.onRequest(({ set }) => {
+		.onRequest(({ request, set }) => {
+			startedAtByRequest.set(request, Date.now());
 			set.headers["cache-control"] = "no-store";
+			set.headers["x-request-id"] = newRequestId(request);
 		})
-		.onError(({ error, status, request }) => {
+		.onAfterResponse(({ request, set }) => {
+			const startedAt = startedAtByRequest.get(request) ?? Date.now();
+			const status = responseStatus(set);
 			const requestId =
-				request.headers.get("x-request-id") ?? crypto.randomUUID();
-			console.error(
-				JSON.stringify({
-					level: "error",
-					requestId,
-					method: request.method,
-					path: new URL(request.url).pathname,
-					error: error instanceof Error ? error.message : String(error),
-					timestamp: new Date().toISOString(),
-				}),
+				typeof set.headers["x-request-id"] === "string"
+					? set.headers["x-request-id"]
+					: newRequestId(request);
+			writeRequestLog({
+				level: status >= 500 ? "error" : "info",
+				requestId,
+				method: request.method,
+				path: new URL(request.url).pathname,
+				status,
+				durationMs: Date.now() - startedAt,
+				error: errorByRequest.get(request),
+				timestamp: new Date().toISOString(),
+			});
+		})
+		.onError(({ error, status, request, set }) => {
+			const requestId =
+				typeof set.headers["x-request-id"] === "string"
+					? set.headers["x-request-id"]
+					: newRequestId(request);
+			set.headers["x-request-id"] = requestId;
+			errorByRequest.set(
+				request,
+				error instanceof Error ? error.message : String(error),
 			);
 			if (error instanceof AuthenticationError) {
 				return status(401, {
@@ -103,11 +144,39 @@ export function createApp() {
 					message: error.message,
 				});
 			}
+			if (error instanceof RateLimitError) {
+				return status(429, {
+					error: "rate_limited",
+					message: error.message,
+				});
+			}
 		})
 		.get("/health", () => ({ status: "ok" as const }), {
 			response: t.Object({ status: t.Literal("ok") }),
-			detail: { tags: ["System"], summary: "Check API health" },
+			detail: { tags: ["System"], summary: "Check API process liveness" },
 		})
+		.get(
+			"/ready",
+			async ({ set }) => {
+				const report = await getReadiness();
+				if (report.status !== "ready") {
+					set.status = 503;
+				}
+				return report;
+			},
+			{
+				response: t.Object({
+					status: t.Union([t.Literal("ready"), t.Literal("not_ready")]),
+					checks: t.Object({
+						database: t.Union([t.Literal("up"), t.Literal("down")]),
+					}),
+				}),
+				detail: {
+					tags: ["System"],
+					summary: "Check whether the API is ready to serve traffic",
+				},
+			},
+		)
 		.use(meRoutes)
 		.use(workplacesRoutes)
 		.use(locationsRoutes)

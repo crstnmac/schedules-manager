@@ -7,7 +7,10 @@ import {
 	emailWebhookTestSecret,
 	registerEmailDeliveryTests,
 } from "./email-delivery-cases";
+import { registerJoinPolicyTests } from "./join-policy-cases";
 import { registerPushReceiptTests } from "./push-receipt-cases";
+import { registerReadinessTests } from "./readiness-cases";
+import { registerReminderTests } from "./reminder-cases";
 import { registerTimeClockTests } from "./time-clock-cases";
 
 const integrationDescribe =
@@ -77,6 +80,9 @@ integrationDescribe("Schedule publication", () => {
 	registerEmailDeliveryTests(() => ({ database, app, token: managerToken }));
 	registerTimeClockTests(() => ({ database, app, token: managerToken }));
 	registerPushReceiptTests(() => ({ database }));
+	registerReadinessTests(() => ({ app }));
+	registerReminderTests(() => ({ database, app, token: managerToken }));
+	registerJoinPolicyTests(() => ({ database, app, token: managerToken }));
 
 	test("republishing never changes the previous published Shift snapshot", async () => {
 		const managerProfileId = crypto.randomUUID();
@@ -993,13 +999,18 @@ integrationDescribe("Schedule publication", () => {
 			invitationId: invitation?.id ?? "",
 			positionId: position?.id ?? "",
 		});
-		const accept = (token: string, invitationToken = invitation?.token) =>
+		const accept = (
+			token: string,
+			invitationToken = invitation?.token,
+			idempotencyKey?: string,
+		) =>
 			app.handle(
 				new Request("http://localhost/v1/invitations/accept", {
 					method: "POST",
 					headers: {
 						authorization: `Bearer ${token}`,
 						"content-type": "application/json",
+						...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {}),
 					},
 					body: JSON.stringify({ token: invitationToken }),
 				}),
@@ -1046,6 +1057,45 @@ integrationDescribe("Schedule publication", () => {
 				.from(database.employments)
 				.where(eq(database.employments.profileId, recipientId)),
 		).toHaveLength(1);
+
+		const [replayInvitation] = await database.db
+			.insert(database.invitations)
+			.values({
+				workplaceId: workplace?.id ?? "",
+				email: "invite-recipient@example.test",
+				expiresAt: new Date(Date.now() + 60_000),
+			})
+			.returning();
+		const replayed = await Promise.all([
+			accept(
+				recipientToken,
+				replayInvitation?.token,
+				"accept-invitation-replay",
+			),
+			accept(
+				recipientToken,
+				replayInvitation?.token,
+				"accept-invitation-replay",
+			),
+		]);
+		expect(replayed.map((response) => response.status)).toEqual([200, 200]);
+		expect(await replayed[0]?.json()).toEqual(await replayed[1]?.json());
+		expect(
+			(
+				await accept(
+					recipientToken,
+					replayInvitation?.token,
+					"accept-invitation-different-key",
+				)
+			).status,
+		).toBe(409);
+		expect(
+			await database.db
+				.select()
+				.from(database.employments)
+				.where(eq(database.employments.profileId, recipientId)),
+		).toHaveLength(1);
+
 		const [expired] = await database.db
 			.insert(database.invitations)
 			.values({

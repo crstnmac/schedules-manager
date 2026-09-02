@@ -12,6 +12,7 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@SchedulesManager/auth": "workspace:*",
 		"@SchedulesManager/env": "workspace:*",
 		"@expo/ui": "~57.0.12",
 		"@expo/vector-icons": "^15.1.1",

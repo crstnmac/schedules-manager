@@ -11,6 +11,7 @@
 		"rootDirs": ["."],
 		"paths": {
 			"@/*": ["./src/*"],
+			"@SchedulesManager/auth": ["../../packages/auth/src/index.ts"],
 			"@SchedulesManager/ui/*": ["../../packages/ui/src/*"]
 		}
 	}
