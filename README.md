@@ -77,7 +77,10 @@ cp apps/native/.env.example apps/native/.env
 Fill the copied files with your Supabase project values:
 
 - `apps/server/.env`: set `DATABASE_URL` and `SUPABASE_URL`. `DATABASE_POOL_MAX`
-  defaults to `5`, which stays below Supabase session-pool limits during local hot reload.
+  defaults to `5` per server process. Keep the total across running processes below
+  your Supabase session-pool limit. The server uses `--watch` to restart on edits
+  and release database connections and background timers; `--hot` preserves process
+  state and can accumulate pools and dispatchers across reloads.
 - `apps/web/.env`: set the public Supabase URL and publishable/anon key.
 - `apps/native/.env`: set the same public URL and key, plus an API URL reachable from the device.
 
@@ -142,7 +145,16 @@ See [CONTEXT.md](./CONTEXT.md) for the domain model and [docs/adr](./docs/adr) f
 
 ## Delivery operations
 
-The server Docker image includes Bash for Dokploy terminal access and runs as the non-root `bun` user. It contains the compiled server, not the repository or migration tooling; run database migrations from a checkout or a separate deployment job.
+The server Docker image includes Bash, repository source under `/app`, and installed server/database dependencies, including migration tooling. It runs the compiled server as the non-root `bun` user. Local environment files and Git metadata are excluded from the image; Dokploy supplies runtime environment variables.
+
+To apply committed migrations from Dokploy's Bash terminal, confirm `DATABASE_URL` targets the intended database and take an appropriate backup, then run:
+
+```bash
+cd /app/packages/db
+bun run db:migrate:deploy
+```
+
+Migrations are manual, not run automatically on server startup. Container file edits are ephemeral and will be lost on redeployment; change source through Git.
 
 Protected scheduling commands accept an `Idempotency-Key` header. Reuse the same key and request body when retrying a command; its mutations and saved response commit atomically. Reusing a key with a different body returns a conflict. Requests without a key remain transactional but are distinct commands. The PostgreSQL integration suite installs a test-only trigger rejecting updates and deletes of published shift snapshots.
 

@@ -18,17 +18,19 @@ COPY packages/db/package.json packages/db/
 COPY packages/env/package.json packages/env/
 COPY packages/ui/package.json packages/ui/
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-	bun install --frozen-lockfile --filter server --filter '@SchedulesManager/config'
+	bun install --frozen-lockfile --filter server --filter '@SchedulesManager/config' --filter '@SchedulesManager/db'
 
 # ---- Compile the server into a self-contained executable ----
 FROM deps AS build
 COPY . .
 RUN bun run --cwd apps/server compile
 
-# ---- Runtime: shell-enabled for Dokploy terminal access, no node_modules ----
+# ---- Runtime: source and server/database tooling for Dokploy operations ----
 FROM base AS runtime
-COPY --from=build /app/apps/server/server /usr/local/bin/server
-RUN bash --version > /dev/null
+COPY --from=build --chown=bun:bun /app /app
+RUN bash --version > /dev/null \
+	&& test -x /app/packages/db/node_modules/.bin/drizzle-kit \
+	&& test -f /app/packages/db/src/migrations/meta/_journal.json
 EXPOSE 3000
 USER bun:bun
-ENTRYPOINT ["server"]
+ENTRYPOINT ["/app/apps/server/server"]
