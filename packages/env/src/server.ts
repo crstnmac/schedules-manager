@@ -14,6 +14,7 @@ export const env = createEnv({
 		ZEPTOMAIL_FROM_NAME: z.string().min(1).default("Schedules Manager"),
 		ZEPTOMAIL_API_URL: z.string().min(1).default("api.zeptomail.com/"),
 		ZEPTOMAIL_WEBHOOK_SECRET: z.string().min(16).optional(),
+		GEOCODER_BASE_URL: z.url().optional(),
 		NODE_ENV: z
 			.enum(["development", "production", "test"])
 			.default("development"),

@@ -16,9 +16,12 @@ import {
 } from "@SchedulesManager/ui/components/empty";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronLeftIcon, TimerIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { api } from "@/lib/api";
 import {
 	type TimecardEntry,
 	useMySchedule,
@@ -26,16 +29,14 @@ import {
 } from "@/lib/queries";
 import { formatClockTime, formatDurationMs } from "@/lib/time";
 import { useWorkplace } from "@/lib/use-workplace";
+import { AppDocument } from "@/components/app-page";
+import { createDataColumnHelper, DataTable } from "@/components/data-table";
 
 export const Route = createFileRoute("/worker/timecard")({
 	component: TimecardPage,
 });
 
-interface DayGroup {
-	label: string;
-	totalMs: number;
-	entries: TimecardEntry[];
-}
+const punchHelper = createDataColumnHelper<TimecardEntry>();
 
 function TimecardPage() {
 	const { workplace } = useWorkplace();
@@ -43,6 +44,25 @@ function TimecardPage() {
 	const schedule = useMySchedule(workplace?.id);
 	const weekStartDay = schedule.data?.weekStartDay ?? 1;
 	const [nowMs, setNowMs] = useState(() => Date.now());
+	const [breakStates, setBreakStates] = useState<Record<string, boolean>>({});
+	const queryClient = useQueryClient();
+	const updateBreak = useMutation({
+		mutationFn: (input: { timeEntryId: string; action: "start" | "end" }) =>
+			api(`/v1/my/time-entries/${input.timeEntryId}/breaks/${input.action}`, {
+				method: "POST",
+			}),
+		onSuccess: (_, input) => {
+			setBreakStates((current) => ({
+				...current,
+				[input.timeEntryId]: input.action === "start",
+			}));
+			queryClient.invalidateQueries({ queryKey: ["timecard"] });
+			toast.success(
+				input.action === "start" ? "Break started." : "Break ended.",
+			);
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
 	const entries = timecard.data?.timeEntries ?? [];
 	const hasOpen = entries.some((entry) => entry.clockedOutAt === null);
 
@@ -52,11 +72,109 @@ function TimecardPage() {
 		return () => clearInterval(timer);
 	}, [hasOpen]);
 
-	const groups = groupByDay(entries, nowMs);
 	const week = currentWeekTotals(entries, nowMs, weekStartDay);
+	const columns = useMemo(
+		() =>
+			punchHelper.columns([
+				punchHelper.accessor((row) => formatDayLabel(row.clockedInAt), {
+					id: "day",
+					header: "Day",
+					cell: ({ getValue }) => (
+						<span className="font-medium">{getValue()}</span>
+					),
+				}),
+				punchHelper.accessor("positionName", { header: "Position" }),
+				punchHelper.accessor(
+					(row) =>
+						`${formatClockTime(row.clockedInAt)} – ${
+							row.clockedOutAt
+								? formatClockTime(row.clockedOutAt)
+								: "on the clock"
+						}`,
+					{
+						id: "window",
+						header: "Clock window",
+						cell: ({ getValue }) => (
+							<span className="tabular-nums text-muted-foreground">
+								{getValue()}
+							</span>
+						),
+					},
+				),
+				punchHelper.accessor(
+					(row) =>
+						row.clockedOutAt == null
+							? nowMs - new Date(row.clockedInAt).getTime()
+							: new Date(row.clockedOutAt).getTime() -
+								new Date(row.clockedInAt).getTime(),
+					{
+						id: "duration",
+						header: "Duration",
+						cell: ({ getValue }) => (
+							<span className="tabular-nums">{formatDurationMs(getValue())}</span>
+						),
+					},
+				),
+				punchHelper.display({
+					id: "status",
+					header: "Status",
+					enableSorting: false,
+					cell: ({ row }) => {
+						if (row.original.clockedOutAt !== null) return null;
+						return (
+							<Badge>{breakStates[row.original.id] ? "On Break" : "Open"}</Badge>
+						);
+					},
+				}),
+				punchHelper.display({
+					id: "actions",
+					header: "Actions",
+					enableSorting: false,
+					cell: ({ row }) => {
+						const entry = row.original;
+						if (entry.clockedOutAt !== null) return null;
+						const breakOpen = breakStates[entry.id];
+						return (
+							<div className="flex flex-wrap items-center justify-end gap-2">
+								<Button
+									size="sm"
+									variant="outline"
+									disabled={updateBreak.isPending || breakOpen === true}
+									onClick={() =>
+										updateBreak.mutate({
+											timeEntryId: entry.id,
+											action: "start",
+										})
+									}
+								>
+									{updateBreak.isPending ? (
+										<Spinner data-icon="inline-start" />
+									) : null}
+									Start Break
+								</Button>
+								<Button
+									size="sm"
+									variant="outline"
+									disabled={updateBreak.isPending || breakOpen === false}
+									onClick={() =>
+										updateBreak.mutate({
+											timeEntryId: entry.id,
+											action: "end",
+										})
+									}
+								>
+									End Break
+								</Button>
+							</div>
+						);
+					},
+				}),
+			]),
+		[breakStates, nowMs, updateBreak],
+	);
 
 	return (
-		<section className="flex flex-col gap-4">
+		<AppDocument>
 			<Button
 				variant="ghost"
 				size="sm"
@@ -116,7 +234,7 @@ function TimecardPage() {
 						</CardContent>
 					</Card>
 
-					{groups.length === 0 ? (
+					{entries.length === 0 ? (
 						<Empty className="border border-dashed">
 							<EmptyHeader>
 								<EmptyMedia variant="icon">
@@ -129,50 +247,14 @@ function TimecardPage() {
 								</EmptyDescription>
 							</EmptyHeader>
 						</Empty>
-					) : null}
-
-					{groups.map((group) => (
-						<Card key={group.label}>
-							<CardHeader>
-								<div className="flex items-center justify-between gap-3">
-									<CardTitle>{group.label}</CardTitle>
-									<p className="font-medium text-muted-foreground text-sm tabular-nums">
-										{formatDurationMs(group.totalMs)}
-									</p>
-								</div>
-							</CardHeader>
-							<CardContent className="flex flex-col">
-								{group.entries.map((entry) => {
-									const open = entry.clockedOutAt === null;
-									const durationMs = open
-										? nowMs - new Date(entry.clockedInAt).getTime()
-										: new Date(entry.clockedOutAt ?? "").getTime() -
-											new Date(entry.clockedInAt).getTime();
-									return (
-										<div
-											key={entry.id}
-											className="flex items-center justify-between gap-3 border-t py-3 first:border-t-0 first:pt-0 last:pb-0"
-										>
-											<div className="min-w-0">
-												<p className="font-medium text-sm">
-													{entry.positionName}
-												</p>
-												<p className="text-muted-foreground text-sm tabular-nums">
-													{formatClockTime(entry.clockedInAt)} –{" "}
-													{open
-														? "on the clock"
-														: formatClockTime(entry.clockedOutAt ?? undefined)}
-													{" · "}
-													{formatDurationMs(durationMs)}
-												</p>
-											</div>
-											{open ? <Badge>Open</Badge> : null}
-										</div>
-									);
-								})}
-							</CardContent>
-						</Card>
-					))}
+					) : (
+						<DataTable
+							columns={columns}
+							data={entries}
+							getRowId={(row) => row.id}
+							fill={false}
+						/>
+					)}
 
 					{entries.length > 0 ? (
 						<p className="text-center text-muted-foreground text-xs">
@@ -181,35 +263,16 @@ function TimecardPage() {
 					) : null}
 				</>
 			) : null}
-		</section>
+		</AppDocument>
 	);
 }
 
 function formatDayLabel(iso: string): string {
 	return new Date(iso).toLocaleDateString(undefined, {
+		weekday: "long",
 		month: "short",
 		day: "numeric",
 	});
-}
-
-function groupByDay(entries: TimecardEntry[], now: number): DayGroup[] {
-	const map = new Map<string, DayGroup>();
-	for (const entry of entries) {
-		const date = new Date(entry.clockedInAt);
-		const label = date.toLocaleDateString(undefined, {
-			weekday: "long",
-			month: "short",
-			day: "numeric",
-		});
-		const group = map.get(label) ?? { label, totalMs: 0, entries: [] };
-		const end = entry.clockedOutAt
-			? new Date(entry.clockedOutAt).getTime()
-			: now;
-		group.totalMs += Math.max(0, end - new Date(entry.clockedInAt).getTime());
-		group.entries.push(entry);
-		map.set(label, group);
-	}
-	return [...map.values()];
 }
 
 function mondayStart(from: Date, weekStartDay: number): Date {

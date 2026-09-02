@@ -16,6 +16,7 @@ import {
 	requireSession,
 } from "../context";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../errors";
+import { fillPlaceFromAddress } from "../geocode";
 import { firstRow } from "../rows";
 
 function assertTimeZone(timezone: string) {
@@ -56,7 +57,13 @@ export const workplacesRoutes = new Elysia({
 		"/workplaces",
 		async ({ headers, body }) => {
 			const { profile } = await requireSession(headers.authorization);
-			const timezone = body.location.timezone ?? "America/Chicago";
+			const filled = await fillPlaceFromAddress({
+				addressLine: body.location.addressLine,
+				latitude: body.location.latitude,
+				longitude: body.location.longitude,
+			});
+			const timezone =
+				body.location.timezone ?? filled.timezone ?? "America/Chicago";
 			assertTimeZone(timezone);
 
 			return db.transaction(async (tx) => {
@@ -115,6 +122,9 @@ export const workplacesRoutes = new Elysia({
 							workplaceId: workplace.id,
 							name: body.location.name,
 							timezone,
+							addressLine: body.location.addressLine?.trim() || null,
+							latitude: filled.latitude,
+							longitude: filled.longitude,
 						})
 						.returning(),
 				);
@@ -147,6 +157,9 @@ export const workplacesRoutes = new Elysia({
 				location: t.Object({
 					name: t.String({ minLength: 1, maxLength: 120 }),
 					timezone: t.Optional(t.String({ default: "America/Chicago" })),
+					addressLine: t.Optional(t.String({ maxLength: 200 })),
+					latitude: t.Optional(t.Union([t.String(), t.Null()])),
+					longitude: t.Optional(t.Union([t.String(), t.Null()])),
 				}),
 				position: t.Object({
 					name: t.String({ minLength: 1, maxLength: 120 }),
@@ -180,6 +193,9 @@ export const workplacesRoutes = new Elysia({
 					weekStartDay: workplace.weekStartDay,
 					payPeriodType: workplace.payPeriodType,
 					payPeriodAnchor: workplace.payPeriodAnchor,
+					earlyClockInMinutes: workplace.earlyClockInMinutes,
+					clockRoundMinutes: workplace.clockRoundMinutes,
+					overtimeWeeklyMinutes: workplace.overtimeWeeklyMinutes,
 				},
 			};
 		},
@@ -218,6 +234,12 @@ export const workplacesRoutes = new Elysia({
 							body.payPeriodAnchor === undefined
 								? existing.payPeriodAnchor
 								: body.payPeriodAnchor,
+						earlyClockInMinutes:
+							body.earlyClockInMinutes ?? existing.earlyClockInMinutes,
+						clockRoundMinutes:
+							body.clockRoundMinutes ?? existing.clockRoundMinutes,
+						overtimeWeeklyMinutes:
+							body.overtimeWeeklyMinutes ?? existing.overtimeWeeklyMinutes,
 						updatedAt: new Date(),
 					})
 					.where(eq(workplaces.id, existing.id))
@@ -232,6 +254,9 @@ export const workplacesRoutes = new Elysia({
 					weekStartDay: updated.weekStartDay,
 					payPeriodType: updated.payPeriodType,
 					payPeriodAnchor: updated.payPeriodAnchor,
+					earlyClockInMinutes: updated.earlyClockInMinutes,
+					clockRoundMinutes: updated.clockRoundMinutes,
+					overtimeWeeklyMinutes: updated.overtimeWeeklyMinutes,
 				},
 			};
 		},
@@ -252,6 +277,13 @@ export const workplacesRoutes = new Elysia({
 				),
 				payPeriodAnchor: t.Optional(
 					t.Union([t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }), t.Null()]),
+				),
+				earlyClockInMinutes: t.Optional(
+					t.Integer({ minimum: 0, maximum: 180 }),
+				),
+				clockRoundMinutes: t.Optional(t.Integer({ minimum: 0, maximum: 30 })),
+				overtimeWeeklyMinutes: t.Optional(
+					t.Integer({ minimum: 0, maximum: 10_080 }),
 				),
 			}),
 			detail: {

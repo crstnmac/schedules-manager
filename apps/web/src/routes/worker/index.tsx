@@ -29,24 +29,17 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@SchedulesManager/ui/components/empty";
-import {
-	Item,
-	ItemActions,
-	ItemContent,
-	ItemDescription,
-	ItemGroup,
-	ItemTitle,
-} from "@SchedulesManager/ui/components/item";
-import {
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetFooter,
-	SheetHeader,
-	SheetTitle,
-} from "@SchedulesManager/ui/components/sheet";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@SchedulesManager/ui/components/dialog";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
 	ArrowLeftRightIcon,
@@ -55,18 +48,26 @@ import {
 	EyeIcon,
 	TimerIcon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ConfirmAction } from "@/components/confirm-action";
+import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import { api } from "@/lib/api";
 import {
+	type DayRosterEntry,
+	type SwapDetailDto,
 	useAcknowledge,
+	useCancelSwap,
 	useClockIn,
 	useClockOut,
 	useDayRoster,
 	useMySchedule,
+	useMySwaps,
 	useProposeSwap,
 	useRequestRelease,
 	useRespondToAcceptance,
+	useRespondToSwap,
+	useShiftTasks,
 } from "@/lib/queries";
 import {
 	CLOCK_IN_EARLY_MS,
@@ -77,10 +78,30 @@ import {
 	formatTimerMs,
 } from "@/lib/time";
 import { useWorkplace } from "@/lib/use-workplace";
+import { AppDocument } from "@/components/app-page";
 
 export const Route = createFileRoute("/worker/")({
 	component: WorkerHome,
 });
+
+type WorkerShift = NonNullable<
+	NonNullable<ReturnType<typeof useMySchedule>["data"]>["currentWeek"]
+>["shifts"][number];
+type AcceptanceRow = NonNullable<
+	NonNullable<ReturnType<typeof useMySchedule>["data"]>["pendingAcceptances"]
+>[number];
+type HistoryRow = NonNullable<
+	NonNullable<ReturnType<typeof useMySchedule>["data"]>["history"]
+>[number];
+type SwapRow = { direction: "outgoing" | "incoming"; swap: SwapDetailDto };
+type ShiftTask = { id: string; title: string; completed: boolean };
+
+const acceptanceHelper = createDataColumnHelper<AcceptanceRow>();
+const shiftHelper = createDataColumnHelper<WorkerShift>();
+const historyHelper = createDataColumnHelper<HistoryRow>();
+const swapHelper = createDataColumnHelper<SwapRow>();
+const taskHelper = createDataColumnHelper<ShiftTask>();
+const coworkerHelper = createDataColumnHelper<DayRosterEntry>();
 
 function WorkerHome() {
 	const { workplace } = useWorkplace();
@@ -98,6 +119,21 @@ function WorkerHome() {
 	const currentWeek = schedule.data?.currentWeek ?? null;
 	const nextWeek = schedule.data?.nextWeek ?? null;
 	const nextShift = schedule.data?.nextShift ?? null;
+	const shiftTasks = useShiftTasks(nextShift?.id);
+	const queryClient = useQueryClient();
+	const completeTask = useMutation({
+		mutationFn: (taskId: string) =>
+			api(`/v1/my/version-shifts/${nextShift?.id}/tasks/${taskId}/complete`, {
+				method: "POST",
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["shift-tasks", nextShift?.id],
+			});
+			toast.success("Shift Task completed.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
 	const entry = nextShift?.timeEntry ?? null;
 	const onClock = entry !== null && entry.clockedOutAt === null;
 	const roster = useDayRoster(workplace?.id, swapShift?.date);
@@ -122,18 +158,253 @@ function WorkerHome() {
 			return sum + end - shift.startMinute;
 		}, 0) ?? 0) / 60;
 
-	const shiftsByDay = new Map<
-		string,
-		NonNullable<typeof currentWeek>["shifts"]
-	>();
-	for (const shift of currentWeek?.shifts ?? []) {
-		const list = shiftsByDay.get(shift.date) ?? [];
-		list.push(shift);
-		shiftsByDay.set(shift.date, list);
-	}
+	const acceptanceColumns = useMemo(
+		() =>
+			acceptanceHelper.columns([
+				acceptanceHelper.accessor(
+					(row) => `${formatDay(row.date)} · ${formatMinute(row.startMinute)}`,
+					{
+						id: "when",
+						header: "When",
+						cell: ({ getValue }) => (
+							<span className="font-medium">{getValue()}</span>
+						),
+					},
+				),
+				acceptanceHelper.accessor("positionName", { header: "Position" }),
+				acceptanceHelper.accessor("changeSummary", { header: "Change" }),
+				acceptanceHelper.display({
+					id: "actions",
+					header: "Actions",
+					enableSorting: false,
+					cell: ({ row }) => (
+						<div className="flex flex-wrap items-center justify-end gap-2">
+							<Button
+								size="sm"
+								disabled={respond.isPending}
+								onClick={() =>
+									respond.mutate(
+										{ acceptanceId: row.original.id, decision: "accept" },
+										{
+											onSuccess: () => toast.success("Shift accepted."),
+											onError: (error) =>
+												toast.error((error as Error).message),
+										},
+									)
+								}
+							>
+								{respond.isPending ? (
+									<Spinner data-icon="inline-start" />
+								) : null}
+								Accept shift
+							</Button>
+							<ConfirmAction
+								trigger="Decline"
+								disabled={respond.isPending}
+								title="Decline this shift change?"
+								description="Your manager will see that you declined this late material change."
+								confirmLabel="Decline shift"
+								destructive
+								onConfirm={() =>
+									respond.mutate(
+										{ acceptanceId: row.original.id, decision: "decline" },
+										{
+											onError: (error) =>
+												toast.error((error as Error).message),
+										},
+									)
+								}
+							/>
+						</div>
+					),
+				}),
+			]),
+		[respond],
+	);
+	const weekShiftColumns = useMemo(
+		() =>
+			shiftHelper.columns([
+				shiftHelper.accessor((row) => formatDay(row.date), {
+					id: "date",
+					header: "Date",
+					cell: ({ getValue }) => (
+						<span className="font-medium">{getValue()}</span>
+					),
+				}),
+				shiftHelper.accessor(
+					(row) =>
+						formatShiftRange(row.startMinute, row.endMinute, row.overnight),
+					{
+						id: "window",
+						header: "Shift",
+						cell: ({ getValue }) => (
+							<span className="tabular-nums text-muted-foreground">
+								{getValue()}
+							</span>
+						),
+					},
+				),
+				shiftHelper.accessor(
+					(row) => `${row.positionName}${row.note ? ` · ${row.note}` : ""}`,
+					{ id: "position", header: "Position" },
+				),
+				shiftHelper.display({
+					id: "actions",
+					header: "Actions",
+					enableSorting: false,
+					cell: ({ row }) => {
+						const shift = row.original;
+						return (
+							<div className="flex flex-wrap items-center justify-end gap-2">
+								<Button
+									size="sm"
+									variant="outline"
+									disabled={new Date(shift.startsAt).getTime() <= nowMs}
+									onClick={() => setSwapShift(shift)}
+								>
+									<ArrowLeftRightIcon data-icon="inline-start" />
+									Propose swap
+								</Button>
+								<ConfirmAction
+									trigger={
+										shift.releaseStatus === "pending"
+											? "Release pending"
+											: "Request release"
+									}
+									disabled={
+										release.isPending || shift.releaseStatus === "pending"
+									}
+									title="Release this shift?"
+									description="Your manager must approve the release. You remain responsible for the shift until then."
+									confirmLabel="Request release"
+									onConfirm={() =>
+										release.mutate(shift.id, {
+											onSuccess: () =>
+												toast.success(
+													"Release requested. You remain responsible until a manager approves.",
+												),
+											onError: (error) =>
+												toast.error((error as Error).message),
+										})
+									}
+								/>
+							</div>
+						);
+					},
+				}),
+			]),
+		[nowMs, release],
+	);
+	const nextWeekColumns = useMemo(
+		() =>
+			shiftHelper.columns([
+				shiftHelper.accessor((row) => formatDay(row.date), {
+					id: "date",
+					header: "Date",
+					cell: ({ getValue }) => (
+						<span className="font-medium">{getValue()}</span>
+					),
+				}),
+				shiftHelper.accessor(
+					(row) =>
+						formatShiftRange(row.startMinute, row.endMinute, row.overnight),
+					{
+						id: "window",
+						header: "Shift",
+						cell: ({ getValue }) => (
+							<span className="tabular-nums text-muted-foreground">
+								{getValue()}
+							</span>
+						),
+					},
+				),
+				shiftHelper.accessor("positionName", { header: "Position" }),
+			]),
+		[],
+	);
+	const historyColumns = useMemo(
+		() =>
+			historyHelper.columns([
+				historyHelper.accessor((row) => formatDay(row.weekStart), {
+					id: "week",
+					header: "Week",
+					cell: ({ getValue, row }) => (
+						<span className="font-medium">
+							Week of {getValue()} · v{row.original.versionNumber}
+						</span>
+					),
+				}),
+				historyHelper.accessor("publishedAt", {
+					header: "Published",
+					cell: ({ getValue }) =>
+						new Date(getValue()).toLocaleString(),
+				}),
+				historyHelper.display({
+					id: "actions",
+					header: "Actions",
+					enableSorting: false,
+					cell: ({ row }) => (
+						<div className="flex justify-end">
+							<Button
+								size="sm"
+								variant="outline"
+								nativeButton={false}
+								render={
+									<Link
+										to="/worker/history/$versionId"
+										params={{ versionId: row.original.versionId }}
+									/>
+								}
+							>
+								View
+							</Button>
+						</div>
+					),
+				}),
+			]),
+		[],
+	);
+	const taskColumns = useMemo(
+		() =>
+			taskHelper.columns([
+				taskHelper.accessor("title", {
+					header: "Task",
+					cell: ({ row }) => (
+						<span
+							className={
+								row.original.completed
+									? "text-primary-foreground/70 text-sm line-through"
+									: "text-sm"
+							}
+						>
+							{row.original.title}
+						</span>
+					),
+				}),
+				taskHelper.display({
+					id: "actions",
+					header: "Actions",
+					enableSorting: false,
+					cell: ({ row }) => (
+						<div className="flex justify-end">
+							<Button
+								size="sm"
+								variant="outline"
+								className="border-primary-foreground/60 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+								disabled={row.original.completed || completeTask.isPending}
+								onClick={() => completeTask.mutate(row.original.id)}
+							>
+								{row.original.completed ? "Completed" : "Complete"}
+							</Button>
+						</div>
+					),
+				}),
+			]),
+		[completeTask],
+	);
 
 	return (
-		<section className="flex flex-col gap-4">
+		<AppDocument>
 			{schedule.isLoading ? (
 				<div className="flex flex-col gap-3">
 					<Skeleton className="h-28" />
@@ -253,6 +524,18 @@ function WorkerHome() {
 						</p>
 					) : null}
 
+					{(shiftTasks.data?.tasks.length ?? 0) > 0 ? (
+						<div className="grid gap-2 border-primary-foreground/30 border-t pt-4">
+							<p className="font-medium text-sm">Shift Tasks</p>
+							<DataTable
+								fill={false}
+								columns={taskColumns}
+								data={shiftTasks.data?.tasks ?? []}
+								getRowId={(row) => row.id}
+							/>
+						</div>
+					) : null}
+
 					<Button
 						variant="ghost"
 						className="self-start text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground"
@@ -349,68 +632,17 @@ function WorkerHome() {
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<ItemGroup>
-							{pendingAcceptances.map((acceptance) => (
-								<Item key={acceptance.id} variant="outline" role="listitem">
-									<ItemContent>
-										<ItemTitle>
-											{formatDay(acceptance.date)} ·{" "}
-											{formatMinute(acceptance.startMinute)}
-										</ItemTitle>
-										<ItemDescription>
-											{acceptance.positionName} · {acceptance.changeSummary}
-										</ItemDescription>
-									</ItemContent>
-									<ItemActions>
-										<Button
-											size="sm"
-											disabled={respond.isPending}
-											onClick={() =>
-												respond.mutate(
-													{
-														acceptanceId: acceptance.id,
-														decision: "accept",
-													},
-													{
-														onSuccess: () => toast.success("Shift accepted."),
-														onError: (error) =>
-															toast.error((error as Error).message),
-													},
-												)
-											}
-										>
-											{respond.isPending ? (
-												<Spinner data-icon="inline-start" />
-											) : null}
-											Accept shift
-										</Button>
-										<ConfirmAction
-											trigger="Decline"
-											disabled={respond.isPending}
-											title="Decline this shift change?"
-											description="Your manager will see that you declined this late material change."
-											confirmLabel="Decline shift"
-											destructive
-											onConfirm={() =>
-												respond.mutate(
-													{
-														acceptanceId: acceptance.id,
-														decision: "decline",
-													},
-													{
-														onError: (error) =>
-															toast.error((error as Error).message),
-													},
-												)
-											}
-										/>
-									</ItemActions>
-								</Item>
-							))}
-						</ItemGroup>
+						<DataTable
+							fill={false}
+							columns={acceptanceColumns}
+							data={pendingAcceptances}
+							getRowId={(row) => row.id}
+						/>
 					</CardContent>
 				</Card>
 			) : null}
+
+			<WorkerSwapsCard workplaceId={workplace?.id} />
 
 			{currentChanges.length > 0 ? (
 				<Alert>
@@ -469,66 +701,13 @@ function WorkerHome() {
 							</p>
 						</div>
 					</CardHeader>
-					<CardContent className="flex flex-col gap-4">
-						{[...shiftsByDay.entries()].map(([date, shifts]) => (
-							<div key={date} className="grid gap-2 sm:grid-cols-[7rem_1fr]">
-								<p className="pt-2 font-medium text-sm">{formatDay(date)}</p>
-								<ItemGroup>
-									{shifts.map((shift) => (
-										<Item key={shift.id} variant="outline" role="listitem">
-											<ItemContent>
-												<ItemTitle>
-													{formatShiftRange(
-														shift.startMinute,
-														shift.endMinute,
-														shift.overnight,
-													)}
-												</ItemTitle>
-												<ItemDescription>
-													{shift.positionName}
-													{shift.note ? ` · ${shift.note}` : ""}
-												</ItemDescription>
-											</ItemContent>
-											<ItemActions>
-												<Button
-													size="sm"
-													variant="outline"
-													disabled={new Date(shift.startsAt).getTime() <= nowMs}
-													onClick={() => setSwapShift(shift)}
-												>
-													<ArrowLeftRightIcon data-icon="inline-start" />
-													Propose swap
-												</Button>
-												<ConfirmAction
-													trigger={
-														shift.releaseStatus === "pending"
-															? "Release pending"
-															: "Request release"
-													}
-													disabled={
-														release.isPending ||
-														shift.releaseStatus === "pending"
-													}
-													title="Release this shift?"
-													description="Your manager must approve the release. You remain responsible for the shift until then."
-													confirmLabel="Request release"
-													onConfirm={() =>
-														release.mutate(shift.id, {
-															onSuccess: () =>
-																toast.success(
-																	"Release requested. You remain responsible until a manager approves.",
-																),
-															onError: (error) =>
-																toast.error((error as Error).message),
-														})
-													}
-												/>
-											</ItemActions>
-										</Item>
-									))}
-								</ItemGroup>
-							</div>
-						))}
+					<CardContent>
+						<DataTable
+							fill={false}
+							columns={weekShiftColumns}
+							data={currentWeek.shifts}
+							getRowId={(row) => row.id}
+						/>
 					</CardContent>
 					<CardFooter>
 						<p className="text-muted-foreground text-xs">
@@ -558,22 +737,13 @@ function WorkerHome() {
 							Week of {formatDay(nextWeek.weekStart)}
 						</CardDescription>
 					</CardHeader>
-					<CardContent className="flex flex-col gap-3">
-						{nextWeek.shifts.map((shift) => (
-							<Item key={shift.id} variant="outline" role="listitem">
-								<ItemContent>
-									<ItemTitle>
-										{formatDay(shift.date)} ·{" "}
-										{formatShiftRange(
-											shift.startMinute,
-											shift.endMinute,
-											shift.overnight,
-										)}
-									</ItemTitle>
-									<ItemDescription>{shift.positionName}</ItemDescription>
-								</ItemContent>
-							</Item>
-						))}
+					<CardContent>
+						<DataTable
+							fill={false}
+							columns={nextWeekColumns}
+							data={nextWeek.shifts}
+							getRowId={(row) => row.id}
+						/>
 					</CardContent>
 				</Card>
 			) : null}
@@ -587,36 +757,12 @@ function WorkerHome() {
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<ItemGroup>
-							{history.map((entry) => (
-								<Item key={entry.versionId} variant="outline" role="listitem">
-									<ItemContent>
-										<ItemTitle>
-											Week of {formatDay(entry.weekStart)} · v
-											{entry.versionNumber}
-										</ItemTitle>
-										<ItemDescription>
-											Published {new Date(entry.publishedAt).toLocaleString()}
-										</ItemDescription>
-									</ItemContent>
-									<ItemActions>
-										<Button
-											size="sm"
-											variant="outline"
-											nativeButton={false}
-											render={
-												<Link
-													to="/worker/history/$versionId"
-													params={{ versionId: entry.versionId }}
-												/>
-											}
-										>
-											View
-										</Button>
-									</ItemActions>
-								</Item>
-							))}
-						</ItemGroup>
+						<DataTable
+							fill={false}
+							columns={historyColumns}
+							data={history}
+							getRowId={(row) => row.versionId}
+						/>
 					</CardContent>
 				</Card>
 			) : null}
@@ -635,13 +781,172 @@ function WorkerHome() {
 					</EmptyHeader>
 				</Empty>
 			) : null}
-		</section>
+		</AppDocument>
 	);
 }
 
-type WorkerShift = NonNullable<
-	NonNullable<ReturnType<typeof useMySchedule>["data"]>["currentWeek"]
->["shifts"][number];
+const SWAP_STATUS_LABELS = {
+	pending_counterpart: "Waiting for coworker",
+	pending_manager: "Awaiting manager approval",
+	approved: "Approved",
+	declined_by_counterpart: "Declined by coworker",
+	declined_by_manager: "Declined by manager",
+	cancelled: "Cancelled",
+} as const;
+
+function formatSwapShift(shift: {
+	positionName: string;
+	startsAt: string;
+	endsAt: string;
+}) {
+	return `${formatDay(shift.startsAt)} · ${formatClockTime(shift.startsAt)}–${formatClockTime(shift.endsAt)} · ${shift.positionName}`;
+}
+
+function WorkerSwapsCard({ workplaceId }: { workplaceId: string | undefined }) {
+	const swaps = useMySwaps(workplaceId);
+	const respond = useRespondToSwap();
+	const cancel = useCancelSwap();
+	const items = (swaps.data?.swaps ?? []).filter(
+		(item) =>
+			item.swap.status === "pending_counterpart" ||
+			item.swap.status === "pending_manager",
+	);
+
+	if (swaps.isLoading || items.length === 0) return null;
+
+	const columns = swapHelper.columns([
+		swapHelper.accessor(
+			(row) =>
+				row.direction === "incoming" &&
+				row.swap.status === "pending_counterpart"
+					? `${row.swap.requester.name} proposed a swap`
+					: `Swap with ${row.swap.counterpart.name}`,
+			{
+				id: "title",
+				header: "Swap",
+				cell: ({ getValue }) => (
+					<span className="font-medium">{getValue()}</span>
+				),
+			},
+		),
+		swapHelper.accessor((row) => SWAP_STATUS_LABELS[row.swap.status], {
+			id: "status",
+			header: "Status",
+		}),
+		swapHelper.accessor(
+			(row) => {
+				const incoming =
+					row.direction === "incoming" &&
+					row.swap.status === "pending_counterpart";
+				const give = incoming
+					? row.swap.counterpartShift
+					: row.swap.requesterShift;
+				const take = incoming
+					? row.swap.requesterShift
+					: row.swap.counterpartShift;
+				return `Give ${formatSwapShift(give)} · take ${formatSwapShift(take)}`;
+			},
+			{ id: "details", header: "Exchange" },
+		),
+		swapHelper.display({
+			id: "actions",
+			header: "Actions",
+			enableSorting: false,
+			cell: ({ row }) => {
+				const { direction, swap } = row.original;
+				const incoming =
+					direction === "incoming" && swap.status === "pending_counterpart";
+				const canCancel =
+					direction === "outgoing" &&
+					(swap.status === "pending_counterpart" ||
+						swap.status === "pending_manager");
+				return (
+					<div className="flex flex-wrap items-center justify-end gap-2">
+						{incoming ? (
+							<>
+								<ConfirmAction
+									trigger="Accept"
+									disabled={respond.isPending}
+									title="Accept this swap?"
+									description="A manager still has to approve. If they do, you will exchange these shift assignments."
+									confirmLabel="Accept swap"
+									onConfirm={() =>
+										respond.mutate(
+											{ swapId: swap.id, decision: "accept" },
+											{
+												onSuccess: () =>
+													toast.success(
+														"Accepted. A manager can now approve the swap.",
+													),
+												onError: (error) =>
+													toast.error((error as Error).message),
+											},
+										)
+									}
+								/>
+								<ConfirmAction
+									trigger="Decline"
+									disabled={respond.isPending}
+									title="Decline this swap?"
+									description="You will keep your current shift assignment."
+									confirmLabel="Decline swap"
+									destructive
+									onConfirm={() =>
+										respond.mutate(
+											{ swapId: swap.id, decision: "decline" },
+											{
+												onSuccess: () => toast.success("Swap declined."),
+												onError: (error) =>
+													toast.error((error as Error).message),
+											},
+										)
+									}
+								/>
+							</>
+						) : null}
+						{canCancel ? (
+							<ConfirmAction
+								trigger="Cancel"
+								disabled={cancel.isPending}
+								title="Cancel this swap?"
+								description="Your coworker will be notified. Everyone keeps their current assignment."
+								confirmLabel="Cancel swap"
+								destructive
+								onConfirm={() =>
+									cancel.mutate(swap.id, {
+										onSuccess: () => toast.success("Swap cancelled."),
+										onError: (error) =>
+											toast.error((error as Error).message),
+									})
+								}
+							/>
+						) : null}
+					</div>
+				);
+			},
+		}),
+	]);
+
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle>Shift swaps</CardTitle>
+				<CardDescription>
+					A swap only takes effect after your coworker agrees and a manager
+					approves. Until then everyone keeps their own shift.
+				</CardDescription>
+			</CardHeader>
+			<CardContent>
+				<DataTable
+					fill={false}
+					columns={columns}
+					data={items}
+					getRowId={(row) => row.swap.id}
+				/>
+			</CardContent>
+		</Card>
+	);
+}
 
 function SwapSheet({
 	shift,
@@ -666,19 +971,69 @@ function SwapSheet({
 	const selected = coworkers.find(
 		(row) => row.versionShiftId === selectedShiftId,
 	);
+	const coworkerColumns = useMemo(
+		() =>
+			coworkerHelper.columns([
+				coworkerHelper.accessor("workerName", {
+					header: "Worker",
+					cell: ({ getValue }) => (
+						<span className="font-medium">{getValue()}</span>
+					),
+				}),
+				coworkerHelper.accessor(
+					(row) =>
+						`${formatClockTime(row.startsAt)}–${formatClockTime(row.endsAt)}`,
+					{
+						id: "window",
+						header: "Shift",
+						cell: ({ getValue }) => (
+							<span className="tabular-nums text-muted-foreground">
+								{getValue()}
+							</span>
+						),
+					},
+				),
+				coworkerHelper.accessor("positionName", { header: "Position" }),
+				coworkerHelper.display({
+					id: "select",
+					header: "Select",
+					enableSorting: false,
+					cell: ({ row }) => {
+						const isSelected = selectedShiftId === row.original.versionShiftId;
+						return (
+							<div className="flex justify-end">
+								<Button
+									size="sm"
+									variant={isSelected ? "secondary" : "outline"}
+									onClick={() =>
+										setSelectedShiftId(row.original.versionShiftId)
+									}
+								>
+									{isSelected ? (
+										<CheckIcon data-icon="inline-start" />
+									) : null}
+									{isSelected ? "Selected" : "Select"}
+								</Button>
+							</div>
+						);
+					},
+				}),
+			]),
+		[selectedShiftId],
+	);
 
 	return (
-		<Sheet
+		<Dialog
 			open={open}
 			onOpenChange={(nextOpen) => {
 				if (!nextOpen) setSelectedShiftId(null);
 				onOpenChange(nextOpen);
 			}}
 		>
-			<SheetContent className="w-full sm:max-w-md">
-				<SheetHeader>
-					<SheetTitle>Propose a shift swap</SheetTitle>
-					<SheetDescription>
+			<DialogContent className="flex max-h-[min(36rem,90vh)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+				<DialogHeader className="border-b px-6 py-4 pr-12">
+					<DialogTitle>Propose a shift swap</DialogTitle>
+					<DialogDescription>
 						{shift
 							? `You give ${formatDay(shift.startsAt)}, ${formatShiftRange(
 									shift.startMinute,
@@ -686,14 +1041,10 @@ function SwapSheet({
 									shift.overnight,
 								)} · ${shift.positionName}`
 							: "Choose a coworker's shift to exchange."}
-					</SheetDescription>
-				</SheetHeader>
+					</DialogDescription>
+				</DialogHeader>
 
-				<div
-					className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 pb-4"
-					role="radiogroup"
-					aria-label="Coworker shifts"
-				>
+				<div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 py-4">
 					{roster.isLoading ? (
 						<div className="flex items-center gap-2 py-8 text-muted-foreground text-sm">
 							<Spinner /> Loading coworker shifts…
@@ -707,43 +1058,22 @@ function SwapSheet({
 							</AlertDescription>
 						</Alert>
 					) : null}
-					{!roster.isLoading && !roster.isError && coworkers.length === 0 ? (
-						<p className="py-8 text-muted-foreground text-sm">
-							No coworkers have an eligible shift on this day.
-						</p>
+					{!roster.isLoading && !roster.isError ? (
+						<DataTable
+							fill={false}
+							columns={coworkerColumns}
+							data={coworkers}
+							getRowId={(row) => row.versionShiftId}
+							empty={
+								<p className="text-muted-foreground text-sm">
+									No coworkers have an eligible shift on this day.
+								</p>
+							}
+						/>
 					) : null}
-					{coworkers.map((row) => {
-						const selected = selectedShiftId === row.versionShiftId;
-						return (
-							<label
-								key={row.versionShiftId}
-								className="flex min-h-16 w-full cursor-pointer items-center gap-3 rounded-xl border bg-card p-3 text-left transition-colors duration-150 hover:bg-accent has-focus-visible:ring-2 has-focus-visible:ring-ring data-[selected=true]:border-primary data-[selected=true]:bg-primary/5"
-								data-selected={selected}
-							>
-								<input
-									type="radio"
-									name="coworker-shift"
-									value={row.versionShiftId}
-									checked={selected}
-									onChange={() => setSelectedShiftId(row.versionShiftId)}
-									className="sr-only"
-								/>
-								<div className="min-w-0 flex-1">
-									<p className="font-medium text-sm">{row.workerName}</p>
-									<p className="text-muted-foreground text-xs">
-										Offers {formatClockTime(row.startsAt)}–
-										{formatClockTime(row.endsAt)} · {row.positionName}
-									</p>
-								</div>
-								{selected ? (
-									<CheckIcon className="size-4 text-primary" />
-								) : null}
-							</label>
-						);
-					})}
 				</div>
 
-				<SheetFooter>
+				<DialogFooter className="border-t px-6 py-4 sm:justify-start">
 					<Button
 						disabled={
 							!shift || !selected?.employmentId || proposeSwap.isPending
@@ -773,8 +1103,8 @@ function SwapSheet({
 						)}
 						Send swap proposal
 					</Button>
-				</SheetFooter>
-			</SheetContent>
-		</Sheet>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }

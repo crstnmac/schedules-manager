@@ -1,3 +1,4 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Button } from "@SchedulesManager/ui/components/button";
 import {
 	Card,
@@ -13,23 +14,46 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@SchedulesManager/ui/components/empty";
-import {
-	Item,
-	ItemContent,
-	ItemDescription,
-	ItemGroup,
-	ItemTitle,
-} from "@SchedulesManager/ui/components/item";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
-import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeftIcon, CalendarDaysIcon } from "lucide-react";
 
 import { usePublishedVersion } from "@/lib/queries";
 import { formatDay, formatShiftRange } from "@/lib/time";
+import { AppDocument } from "@/components/app-page";
+import { createDataColumnHelper, DataTable } from "@/components/data-table";
 
 export const Route = createFileRoute("/worker/history/$versionId")({
 	component: WorkerHistory,
 });
+
+type HistoryShift = NonNullable<
+	NonNullable<ReturnType<typeof usePublishedVersion>["data"]>["shifts"]
+>[number];
+
+const historyShiftHelper = createDataColumnHelper<HistoryShift>();
+
+const historyShiftColumns = historyShiftHelper.columns([
+	historyShiftHelper.accessor((row) => formatDay(row.date), {
+		id: "date",
+		header: "Date",
+		cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
+	}),
+	historyShiftHelper.accessor(
+		(row) => formatShiftRange(row.startMinute, row.endMinute, row.overnight),
+		{
+			id: "window",
+			header: "Shift",
+			cell: ({ getValue }) => (
+				<span className="tabular-nums text-muted-foreground">{getValue()}</span>
+			),
+		},
+	),
+	historyShiftHelper.accessor("positionName", { header: "Position" }),
+	historyShiftHelper.accessor("note", {
+		header: "Note",
+		cell: ({ getValue }) => getValue() ?? "—",
+	}),
+]);
 
 function WorkerHistory() {
 	const { versionId } = Route.useParams();
@@ -37,7 +61,7 @@ function WorkerHistory() {
 	const data = version.data;
 
 	return (
-		<section className="flex flex-col gap-4">
+		<AppDocument>
 			<Button
 				variant="ghost"
 				size="sm"
@@ -76,35 +100,20 @@ function WorkerHistory() {
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="flex flex-col gap-3">
-						{(data.shifts?.length ?? 0) === 0 ? (
-							<p className="text-muted-foreground text-sm">
-								You had no shifts on this published version.
-							</p>
-						) : (
-							<ItemGroup>
-								{data.shifts.map((shift) => (
-									<Item key={shift.id} variant="outline" role="listitem">
-										<ItemContent>
-											<ItemTitle>
-												{formatDay(shift.date)} ·{" "}
-												{formatShiftRange(
-													shift.startMinute,
-													shift.endMinute,
-													shift.overnight,
-												)}
-											</ItemTitle>
-											<ItemDescription>
-												{shift.positionName}
-												{shift.note ? ` · ${shift.note}` : ""}
-											</ItemDescription>
-										</ItemContent>
-									</Item>
-								))}
-							</ItemGroup>
-						)}
+						<DataTable
+							fill={false}
+							columns={historyShiftColumns}
+							data={data.shifts}
+							getRowId={(row) => row.id}
+							empty={
+								<p className="text-muted-foreground text-sm">
+									You had no shifts on this published version.
+								</p>
+							}
+						/>
 					</CardContent>
 				</Card>
 			) : null}
-		</section>
+		</AppDocument>
 	);
 }

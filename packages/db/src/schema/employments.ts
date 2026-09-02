@@ -1,8 +1,10 @@
 import { relations } from "drizzle-orm";
 import {
+	integer,
 	pgEnum,
 	pgTable,
 	primaryKey,
+	text,
 	timestamp,
 	unique,
 	uuid,
@@ -30,6 +32,10 @@ export const employments = pgTable(
 		profileId: uuid("profile_id").notNull(),
 		kind: employmentKindEnum("kind").notNull().default("worker"),
 		status: employmentStatusEnum("status").notNull().default("active"),
+		hourlyWageCents: integer("hourly_wage_cents"),
+		kioskPinHash: text("kiosk_pin_hash"),
+		emergencyContactName: text("emergency_contact_name"),
+		emergencyContactPhone: text("emergency_contact_phone"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),

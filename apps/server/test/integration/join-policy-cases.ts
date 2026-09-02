@@ -68,7 +68,7 @@ export function registerJoinPolicyTests(getContext: () => Context) {
 		]);
 		const [workplace] = await database.db
 			.insert(database.workplaces)
-			.values({ name: "Existing restaurant" })
+			.values({ name: "Existing workplace" })
 			.returning();
 		if (!workplace) throw new Error("Missing workplace");
 		await database.db.insert(database.employments).values({
@@ -113,7 +113,7 @@ export function registerJoinPolicyTests(getContext: () => Context) {
 		]);
 		const [workplace] = await database.db
 			.insert(database.workplaces)
-			.values({ name: "Staffed restaurant" })
+			.values({ name: "Staffed workplace" })
 			.returning();
 		if (!workplace) throw new Error("Missing workplace");
 		await database.db.insert(database.employments).values([
@@ -172,7 +172,7 @@ export function registerJoinPolicyTests(getContext: () => Context) {
 		]);
 		const [workplace] = await database.db
 			.insert(database.workplaces)
-			.values({ name: "Expired-invite restaurant" })
+			.values({ name: "Expired-invite workplace" })
 			.returning();
 		if (!workplace) throw new Error("Missing workplace");
 		await database.db.insert(database.employments).values({

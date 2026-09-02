@@ -9,5 +9,6 @@ export function useWorkplace() {
 		isLoading: me.isLoading,
 		workplace: employment?.workplace ?? null,
 		kind: employment?.kind ?? null,
+		employmentId: employment?.id ?? null,
 	};
 }

@@ -19,7 +19,8 @@
 				"monochromeImage": "./assets/images/android-icon-monochrome.png"
 			},
 			"predictiveBackGestureEnabled": false,
-			"package": "com.jooling.schedulesmanager"
+			"package": "com.jooling.schedulesmanager",
+			"permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
 		},
 		"web": {
 			"output": "static",
@@ -27,6 +28,12 @@
 		},
 		"plugins": [
 			"expo-router",
+			[
+				"expo-location",
+				{
+					"locationWhenInUsePermission": "jooling uses your location to confirm you are at the workplace when you start a shift."
+				}
+			],
 			[
 				"expo-notifications",
 				{

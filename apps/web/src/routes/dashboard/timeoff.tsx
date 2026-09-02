@@ -11,12 +11,6 @@ import {
 import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import {
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
-} from "@SchedulesManager/ui/components/card";
-import {
 	Empty,
 	EmptyDescription,
 	EmptyHeader,
@@ -29,13 +23,6 @@ import {
 	FieldLabel,
 } from "@SchedulesManager/ui/components/field";
 import { Input } from "@SchedulesManager/ui/components/input";
-import {
-	Item,
-	ItemActions,
-	ItemContent,
-	ItemDescription,
-	ItemTitle,
-} from "@SchedulesManager/ui/components/item";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import {
@@ -46,12 +33,17 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { CalendarOffIcon } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { ProgressiveItemGroup } from "@/components/progressive-item-group";
+import {
+	AppPage,
+	AppPageBody,
+	AppPageHeader,
+} from "@/components/app-page";
+import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { api } from "@/lib/api";
-import { useTimeOff } from "@/lib/queries";
+import { type TimeOffRequestDto, useTimeOff } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
 
 export const Route = createFileRoute("/dashboard/timeoff")({
@@ -59,6 +51,8 @@ export const Route = createFileRoute("/dashboard/timeoff")({
 });
 
 type Decision = "approved" | "declined";
+
+const columnHelper = createDataColumnHelper<TimeOffRequestDto>();
 
 function TimeOffPage() {
 	const { workplace } = useWorkplace();
@@ -102,16 +96,113 @@ function TimeOffPage() {
 		filter === "pending" ? request.status === "pending" : true,
 	);
 
+	const columns = useMemo(
+		() =>
+			columnHelper.columns([
+				columnHelper.accessor(
+					(row) => row.worker.fullName ?? row.worker.email,
+					{
+						id: "worker",
+						header: "Worker",
+						cell: ({ getValue }) => (
+							<span className="font-medium">{getValue()}</span>
+						),
+					},
+				),
+				columnHelper.accessor(
+					(row) =>
+						`${new Date(row.startsAt).toLocaleString()} → ${new Date(row.endsAt).toLocaleString()}`,
+					{
+						id: "window",
+						header: "Dates",
+						cell: ({ getValue }) => (
+							<span className="tabular-nums text-muted-foreground">
+								{getValue()}
+							</span>
+						),
+					},
+				),
+				columnHelper.accessor((row) => row.leaveTypeName ?? "", {
+					id: "leaveType",
+					header: "Leave type",
+					cell: ({ getValue }) => getValue() || "—",
+				}),
+				columnHelper.accessor((row) => row.reason ?? "", {
+					id: "reason",
+					header: "Reason",
+					cell: ({ getValue }) => (
+						<span className="text-muted-foreground">{getValue() || "—"}</span>
+					),
+				}),
+				columnHelper.accessor("status", {
+					header: "Status",
+					cell: ({ getValue }) => {
+						const status = getValue();
+						return (
+							<Badge
+								className="capitalize"
+								variant={
+									status === "declined"
+										? "destructive"
+										: status === "approved"
+											? "default"
+											: "secondary"
+								}
+							>
+								{status}
+							</Badge>
+						);
+					},
+				}),
+				columnHelper.display({
+					id: "actions",
+					header: "Actions",
+					enableSorting: false,
+					cell: ({ row }) => {
+						const request = row.original;
+						if (request.status !== "pending") return null;
+						return (
+							<div className="flex flex-wrap items-center justify-end gap-2">
+								<Button
+									size="sm"
+									disabled={decide.isPending}
+									onClick={() =>
+										decide.mutate({
+											requestId: request.id,
+											decision: "approved",
+										})
+									}
+								>
+									{decide.isPending ? (
+										<Spinner data-icon="inline-start" />
+									) : null}
+									Approve
+								</Button>
+								<Button
+									size="sm"
+									variant="outline"
+									disabled={decide.isPending}
+									onClick={() => {
+										setDeclineReason("");
+										setDeclineId(request.id);
+									}}
+								>
+									Decline
+								</Button>
+							</div>
+						);
+					},
+				}),
+			]),
+		[decide],
+	);
+
 	return (
-		<section className="flex flex-col gap-4">
-			<Card>
-				<CardHeader className="flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
-					<div className="flex items-center gap-2">
-						<CardTitle>
-							{filter === "pending" ? "Pending requests" : "All requests"}
-						</CardTitle>
-						<Badge variant="secondary">{requests.length}</Badge>
-					</div>
+		<AppPage>
+			<AppPageHeader
+				title={filter === "pending" ? "Pending requests" : "All requests"}
+				badge={<Badge variant="secondary">{requests.length}</Badge>}
+				actions={
 					<Tabs
 						className="w-full sm:w-auto"
 						value={filter}
@@ -122,97 +213,41 @@ function TimeOffPage() {
 							<TabsTrigger value="all">All</TabsTrigger>
 						</TabsList>
 					</Tabs>
-				</CardHeader>
-				<CardContent>
-					{timeOff.isLoading ? (
-						<div className="flex flex-col gap-3">
-							<Skeleton className="h-16" />
-							<Skeleton className="h-16" />
-						</div>
-					) : requests.length === 0 ? (
-						<Empty>
-							<EmptyHeader>
-								<EmptyMedia variant="icon">
-									<CalendarOffIcon />
-								</EmptyMedia>
-								<EmptyTitle>
-									{filter === "pending"
-										? "No pending requests"
-										: "No time-off requests yet"}
-								</EmptyTitle>
-								<EmptyDescription>
-									{filter === "pending"
-										? "You're caught up. Switch to All to review past decisions."
-										: "When workers request time off, those requests will appear here."}
-								</EmptyDescription>
-							</EmptyHeader>
-						</Empty>
-					) : (
-						<ProgressiveItemGroup
-							key={filter}
-							items={requests}
-							renderItem={(request) => (
-								<Item key={request.id} variant="outline" role="listitem">
-									<ItemContent className="min-w-0">
-										<ItemTitle className="w-full min-w-0">
-											<span className="truncate">
-												{request.worker.fullName ?? request.worker.email}
-											</span>
-											<Badge
-												className="shrink-0 capitalize"
-												variant={
-													request.status === "declined"
-														? "destructive"
-														: request.status === "approved"
-															? "default"
-															: "secondary"
-												}
-											>
-												{request.status}
-											</Badge>
-										</ItemTitle>
-										<ItemDescription className="break-words">
-											{new Date(request.startsAt).toLocaleString()} →{" "}
-											{new Date(request.endsAt).toLocaleString()}
-											{request.reason ? ` · ${request.reason}` : ""}
-										</ItemDescription>
-									</ItemContent>
-									{request.status === "pending" ? (
-										<ItemActions className="ml-auto w-full justify-end sm:w-auto">
-											<Button
-												size="sm"
-												disabled={decide.isPending}
-												onClick={() =>
-													decide.mutate({
-														requestId: request.id,
-														decision: "approved",
-													})
-												}
-											>
-												{decide.isPending ? (
-													<Spinner data-icon="inline-start" />
-												) : null}
-												Approve
-											</Button>
-											<Button
-												size="sm"
-												variant="outline"
-												disabled={decide.isPending}
-												onClick={() => {
-													setDeclineReason("");
-													setDeclineId(request.id);
-												}}
-											>
-												Decline
-											</Button>
-										</ItemActions>
-									) : null}
-								</Item>
-							)}
-						/>
-					)}
-				</CardContent>
-			</Card>
+				}
+			/>
+			<AppPageBody scroll={false}>
+				{timeOff.isLoading ? (
+					<div className="flex flex-col gap-3 p-4">
+						<Skeleton className="h-16" />
+						<Skeleton className="h-16" />
+					</div>
+				) : (
+					<DataTable
+						columns={columns}
+						data={requests}
+						getRowId={(row) => row.id}
+						empty={
+							<Empty>
+								<EmptyHeader>
+									<EmptyMedia variant="icon">
+										<CalendarOffIcon />
+									</EmptyMedia>
+									<EmptyTitle>
+										{filter === "pending"
+											? "No pending requests"
+											: "No time-off requests yet"}
+									</EmptyTitle>
+									<EmptyDescription>
+										{filter === "pending"
+											? "You're caught up. Switch to All to review past decisions."
+											: "When workers request time off, those requests will appear here."}
+									</EmptyDescription>
+								</EmptyHeader>
+							</Empty>
+						}
+					/>
+				)}
+			</AppPageBody>
 
 			<AlertDialog
 				open={declineId !== null}
@@ -261,6 +296,6 @@ function TimeOffPage() {
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
-		</section>
+		</AppPage>
 	);
 }

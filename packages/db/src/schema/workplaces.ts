@@ -26,6 +26,11 @@ export const workplaces = pgTable("workplaces", {
 		.notNull()
 		.default("weekly"),
 	payPeriodAnchor: date("pay_period_anchor"),
+	earlyClockInMinutes: integer("early_clock_in_minutes").notNull().default(15),
+	clockRoundMinutes: integer("clock_round_minutes").notNull().default(0),
+	overtimeWeeklyMinutes: integer("overtime_weekly_minutes")
+		.notNull()
+		.default(2400),
 	createdAt: timestamp("created_at", { withTimezone: true })
 		.defaultNow()
 		.notNull(),
@@ -44,6 +49,10 @@ export const locations = pgTable(
 		name: text("name").notNull(),
 		timezone: text("timezone").notNull().default("America/Chicago"),
 		addressLine: text("address_line"),
+		latitude: text("latitude"),
+		longitude: text("longitude"),
+		geofenceRadiusMeters: integer("geofence_radius_meters"),
+		kioskPinHash: text("kiosk_pin_hash"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),

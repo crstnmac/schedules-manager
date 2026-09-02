@@ -29,9 +29,10 @@ import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { StoreIcon, UsersIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-
+import { AddressSearch } from "@/components/address-search";
 import { AuthShell } from "@/components/auth-shell";
 import { CurrentProfile } from "@/components/current-profile";
+import { TimezoneSelect } from "@/components/timezone-select";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import {
@@ -126,7 +127,7 @@ function OnboardingChoice({
 					<CardTitle>How are you joining?</CardTitle>
 					<CardDescription>
 						Managers create the first workplace. Workers wait for an invitation
-						instead of opening a restaurant by accident.
+						instead of opening a workplace by accident.
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="flex flex-col gap-4">
@@ -283,6 +284,10 @@ function WorkplaceSetup({
 	const queryClient = useQueryClient();
 	const [workplaceName, setWorkplaceName] = useState("");
 	const [locationName, setLocationName] = useState("");
+	const [locationAddress, setLocationAddress] = useState("");
+	const [locationLatitude, setLocationLatitude] = useState("");
+	const [locationLongitude, setLocationLongitude] = useState("");
+	const [timezone, setTimezone] = useState("America/Chicago");
 	const [positionName, setPositionName] = useState("");
 
 	const setup = useMutation({
@@ -293,7 +298,10 @@ function WorkplaceSetup({
 					name: workplaceName.trim(),
 					location: {
 						name: locationName.trim(),
-						timezone: "America/Chicago",
+						timezone,
+						addressLine: locationAddress.trim() || undefined,
+						latitude: locationLatitude || undefined,
+						longitude: locationLongitude || undefined,
 					},
 					position: { name: positionName.trim() },
 				},
@@ -331,7 +339,7 @@ function WorkplaceSetup({
 									id="workplace"
 									value={workplaceName}
 									onChange={(event) => setWorkplaceName(event.target.value)}
-									placeholder="Salsa Rocha Restaurant Group"
+									placeholder="Northside Operations"
 									required
 								/>
 							</Field>
@@ -344,8 +352,36 @@ function WorkplaceSetup({
 									placeholder="South Congress"
 									required
 								/>
+							</Field>
+							<Field>
+								<FieldLabel htmlFor="location-address">
+									Address (optional)
+								</FieldLabel>
+								<AddressSearch
+									id="location-address"
+									value={locationAddress}
+									onValueChange={setLocationAddress}
+									onSelect={(place) => {
+										setLocationAddress(place.addressLine);
+										setLocationLatitude(place.latitude);
+										setLocationLongitude(place.longitude);
+										if (place.timezone) setTimezone(place.timezone);
+										if (!locationName.trim() && place.name) {
+											setLocationName(place.name);
+										}
+									}}
+								/>
+							</Field>
+							<Field>
+								<FieldLabel htmlFor="location-timezone">Time zone</FieldLabel>
+								<TimezoneSelect
+									id="location-timezone"
+									value={timezone}
+									onValueChange={setTimezone}
+								/>
 								<FieldDescription>
-									Time zone is set to America/Chicago for Austin restaurants.
+									Used for shift times at this Location. You can change the
+									Geofence later in settings.
 								</FieldDescription>
 							</Field>
 							<Field>
@@ -354,7 +390,7 @@ function WorkplaceSetup({
 									id="position"
 									value={positionName}
 									onChange={(event) => setPositionName(event.target.value)}
-									placeholder="Server"
+									placeholder="Associate"
 									required
 								/>
 							</Field>

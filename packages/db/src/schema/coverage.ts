@@ -1,10 +1,11 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
 	pgEnum,
 	pgTable,
 	text,
 	timestamp,
 	unique,
+	uniqueIndex,
 	uuid,
 } from "drizzle-orm/pg-core";
 
@@ -61,7 +62,13 @@ export const openShifts = pgTable("open_shifts", {
 	offeredAt: timestamp("offered_at", { withTimezone: true })
 		.defaultNow()
 		.notNull(),
-});
+},
+(table) => [
+	uniqueIndex("open_shifts_one_open_per_shift")
+		.on(table.shiftId)
+		.where(sql`status = 'open'`),
+],
+);
 
 export const shiftPickups = pgTable(
 	"shift_pickups",

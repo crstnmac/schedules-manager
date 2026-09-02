@@ -19,6 +19,15 @@ import { Avatar, AvatarFallback } from "@SchedulesManager/ui/components/avatar";
 import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import { Card, CardHeader } from "@SchedulesManager/ui/components/card";
+import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuGroup,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@SchedulesManager/ui/components/dropdown-menu";
 import {
 	Empty,
 	EmptyContent,
@@ -30,21 +39,19 @@ import {
 import {
 	Field,
 	FieldDescription,
-	FieldError,
 	FieldGroup,
 	FieldLabel,
 } from "@SchedulesManager/ui/components/field";
 import { Input } from "@SchedulesManager/ui/components/input";
 import {
-	Item,
-	ItemContent,
-	ItemDescription,
-	ItemGroup,
-	ItemTitle,
-} from "@SchedulesManager/ui/components/item";
+	InputGroup,
+	InputGroupAddon,
+	InputGroupInput,
+} from "@SchedulesManager/ui/components/input-group";
 import {
 	Popover,
 	PopoverContent,
+	PopoverDescription,
 	PopoverHeader,
 	PopoverTitle,
 	PopoverTrigger,
@@ -54,17 +61,18 @@ import {
 	SelectContent,
 	SelectGroup,
 	SelectItem,
+	SelectLabel,
 	SelectTrigger,
 	SelectValue,
 } from "@SchedulesManager/ui/components/select";
 import {
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetFooter,
-	SheetHeader,
-	SheetTitle,
-} from "@SchedulesManager/ui/components/sheet";
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@SchedulesManager/ui/components/dialog";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { Textarea } from "@SchedulesManager/ui/components/textarea";
@@ -81,7 +89,6 @@ import { cn } from "@SchedulesManager/ui/lib/utils";
 import {
 	DragDropProvider,
 	type DragEndEvent,
-	useDraggable,
 	useDroppable,
 } from "@dnd-kit/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -90,41 +97,64 @@ import {
 	AlertTriangleIcon,
 	BanIcon,
 	CalendarOffIcon,
-	ChevronDownIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
-	Columns3Icon,
 	CopyIcon,
+	EllipsisIcon,
 	ListFilterIcon,
 	MapPinIcon,
 	PlusIcon,
 	SearchIcon,
 	TagsIcon,
 	Trash2Icon,
+	UserPlusIcon,
 	XIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { DatePicker } from "@/components/date-picker";
+import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import { ScheduleMonthGrid } from "@/components/schedule-month-grid";
+import { ShiftTile } from "@/components/schedule-shift-tile";
 import { TimePicker } from "@/components/time-picker";
 import { api } from "@/lib/api";
 import type {
+	AcceptancesResponse,
 	ChangePreviewResponse,
+	PublicationResponse,
 	ScheduleResponse,
 	ScheduleShiftDto,
 } from "@/lib/queries";
 import {
 	useAcceptances,
+	useApplyScheduleTemplate,
+	useEditTimeEntry,
+	useGroups,
 	useLocations,
+	useMarkAttendance,
 	usePublication,
+	useSaveScheduleTemplate,
 	useSchedule,
+	useScheduleCalendar,
+	useScheduleTemplates,
+	useTags,
+	useTimeBlocks,
 	useWorkplaceSettings,
 } from "@/lib/queries";
 import {
-	formatClockTime,
-	formatDurationMs,
+	addCalendarMonths,
+	addDays,
+	formatMonthLabel,
+	monthStartForView,
+	monthStartOf,
+	positionColor,
+	weekStartOf,
+} from "@/lib/schedule-calendar";
+import {
+	datetimeLocalToIso,
 	formatMinute,
+	isoToDatetimeLocal,
 	WEEKDAY_NAMES,
 } from "@/lib/time";
 import { useWorkplace } from "@/lib/use-workplace";
@@ -143,24 +173,165 @@ const DAY_HEADERS = [
 	"Sunday",
 ];
 
-function weekStartOf(date: Date, weekStartDay: number): string {
-	const result = new Date(date);
-	const diff = (result.getDay() - weekStartDay + 7) % 7;
-	result.setDate(result.getDate() - diff);
-	return result.toLocaleDateString("sv-SE");
+type StaffRow = ScheduleResponse["staff"][number];
+type HoursRow = ScheduleResponse["hours"][number];
+type AcceptanceRow = AcceptancesResponse["acceptances"][number];
+type PublicationRow = PublicationResponse["versions"][number];
+type ChangeRow = ChangePreviewResponse["changes"][number];
+
+const staffHelper = createDataColumnHelper<StaffRow>();
+const hoursHelper = createDataColumnHelper<HoursRow>();
+const acceptanceHelper = createDataColumnHelper<AcceptanceRow>();
+const publicationHelper = createDataColumnHelper<PublicationRow>();
+const changeHelper = createDataColumnHelper<ChangeRow>();
+
+function staffConstraintText(member: StaffRow): string {
+	const parts: string[] = [];
+	if ((member.unavailability?.length ?? 0) > 0) {
+		parts.push(
+			(member.unavailability ?? [])
+				.map((window) =>
+					window.kind === "recurring"
+						? `Can't work ${WEEKDAY_NAMES[window.weekday ?? 0]} ${formatMinute(window.startMinute)}–${formatMinute(window.endMinute)}`
+						: `Can't work ${window.date} ${formatMinute(window.startMinute)}–${formatMinute(window.endMinute)}`,
+				)
+				.join(" · "),
+		);
+	}
+	if (member.preference) parts.push(`Prefers: ${member.preference}`);
+	if ((member.timeOff?.length ?? 0) > 0) {
+		parts.push(
+			(member.timeOff ?? [])
+				.map(
+					(request) =>
+						`${request.status} time off ${new Date(request.startsAt).toLocaleDateString()}–${new Date(request.endsAt).toLocaleDateString()}`,
+				)
+				.join(" · "),
+		);
+	}
+	return parts.join(" · ");
 }
+
+const scheduleStaffColumns = staffHelper.columns([
+	staffHelper.accessor("name", {
+		header: "Worker",
+		cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
+	}),
+	staffHelper.accessor((row) => staffConstraintText(row), {
+		id: "details",
+		header: "Constraints",
+	}),
+]);
+const hoursColumns = hoursHelper.columns([
+	hoursHelper.accessor("name", {
+		header: "Worker",
+		cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
+	}),
+	hoursHelper.accessor((row) => `${(row.minutes / 60).toFixed(1)}h`, {
+		id: "total",
+		header: "Total",
+		cell: ({ getValue }) => (
+			<span className="tabular-nums">{getValue()}</span>
+		),
+	}),
+	hoursHelper.accessor(
+		(row) =>
+			row.byPosition
+				.map(
+					(byPosition) =>
+						`${byPosition.positionName} ${(byPosition.minutes / 60).toFixed(1)}h`,
+				)
+				.join(", "),
+		{ id: "byPosition", header: "By position" },
+	),
+]);
+const scheduleAcceptanceColumns = acceptanceHelper.columns([
+	acceptanceHelper.accessor(
+		(row) => `${row.workerName} · v${row.versionNumber}`,
+		{
+			id: "worker",
+			header: "Worker",
+			cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
+		},
+	),
+	acceptanceHelper.accessor("changeSummary", { header: "Change" }),
+	acceptanceHelper.accessor("status", {
+		header: "Status",
+		cell: ({ getValue }) => {
+			const status = getValue();
+			return (
+				<Badge
+					variant={
+						status === "declined"
+							? "destructive"
+							: status === "accepted"
+								? "default"
+								: "secondary"
+					}
+					className="rounded-md uppercase"
+				>
+					{status}
+				</Badge>
+			);
+		},
+	}),
+]);
+const publicationColumns = publicationHelper.columns([
+	publicationHelper.accessor("versionNumber", {
+		header: "Version",
+		cell: ({ getValue, row }) => (
+			<span className="font-medium">
+				Version {getValue()} ·{" "}
+				{new Date(row.original.publishedAt).toLocaleString()}
+			</span>
+		),
+	}),
+	publicationHelper.accessor(
+		(row) =>
+			`${row.workers.filter((worker) => worker.status === "acknowledged").length}/${row.workers.length} acknowledged`,
+		{ id: "ack", header: "Seen" },
+	),
+	publicationHelper.display({
+		id: "workers",
+		header: "Workers",
+		enableSorting: false,
+		cell: ({ row }) => (
+			<div className="flex flex-wrap gap-1.5">
+				{row.original.workers.map((worker) => (
+					<Badge
+						key={worker.employmentId}
+						title={`${worker.name} · ${worker.status}`}
+						variant={
+							worker.status === "acknowledged" ? "default" : "secondary"
+						}
+						className="rounded-md text-[11px]"
+					>
+						{worker.name} ·{" "}
+						{worker.status === "acknowledged"
+							? "Seen"
+							: worker.status === "delivered"
+								? "Delivered"
+								: "Sent"}
+					</Badge>
+				))}
+			</div>
+		),
+	}),
+]);
+const changeColumns = changeHelper.columns([
+	changeHelper.accessor("material", {
+		header: "Kind",
+		cell: ({ getValue }) =>
+			getValue() ? <Badge variant="secondary">Material</Badge> : "—",
+	}),
+	changeHelper.accessor("summary", { header: "Change" }),
+]);
 
 function orderedDayHeaders(weekStartDay: number): string[] {
 	return Array.from(
 		{ length: 7 },
 		(_, index) => DAY_HEADERS[(weekStartDay + index) % 7],
 	);
-}
-
-function addDays(dateKey: string, days: number): string {
-	const date = new Date(`${dateKey}T12:00:00`);
-	date.setDate(date.getDate() + days);
-	return date.toLocaleDateString("sv-SE");
 }
 
 function formatDayLabel(dateKey: string): string {
@@ -179,6 +350,25 @@ function formatWeekLabel(weekStart: string): string {
 	return `${fmt(start)} – ${fmt(end)}`;
 }
 
+function weekdayShort(dateKey: string): string {
+	return new Date(`${dateKey}T12:00:00`).toLocaleDateString(undefined, {
+		weekday: "short",
+	});
+}
+
+function isWeekendDate(dateKey: string): boolean {
+	const day = new Date(`${dateKey}T12:00:00`).getDay();
+	return day === 0 || day === 6;
+}
+
+function formatCents(cents: number) {
+	return new Intl.NumberFormat("en-US", {
+		style: "currency",
+		currency: "USD",
+		maximumFractionDigits: 0,
+	}).format(cents / 100);
+}
+
 interface ShiftFormState {
 	shiftId: string | null;
 	employmentId: string;
@@ -188,6 +378,8 @@ interface ShiftFormState {
 	endMinute: number;
 	note: string;
 	unavailabilityOverrideReason: string;
+	tagIds: string[];
+	taskTitles: string;
 }
 
 function emptyForm(date: string): ShiftFormState {
@@ -200,6 +392,8 @@ function emptyForm(date: string): ShiftFormState {
 		endMinute: 17 * 60,
 		note: "",
 		unavailabilityOverrideReason: "",
+		tagIds: [],
+		taskTitles: "",
 	};
 }
 
@@ -272,6 +466,49 @@ function positionsForWorker(
 	);
 }
 
+function workerNeedsPositionApproval(
+	member: ScheduleResponse["staff"][number] | undefined,
+	positionId: string,
+): boolean {
+	if (!positionId) return false;
+	const positionIds = member?.kind === "worker" ? member.positionIds : undefined;
+	if (!positionIds || positionIds.length === 0) return false;
+	return !positionIds.includes(positionId);
+}
+
+type PositionApproval =
+	| {
+			kind: "save";
+			form: ShiftFormState;
+			workerName: string;
+			positionName: string;
+			shiftCount: number;
+	  }
+	| {
+			kind: "move";
+			shift: ScheduleShiftDto;
+			employmentId: string;
+			date: string;
+			workerName: string;
+			positionName: string;
+	  };
+
+function positionApprovalCopy(approval: PositionApproval) {
+	const consequence =
+		approval.kind === "move"
+			? "moves this shift"
+			: approval.shiftCount > 1
+				? `adds ${approval.shiftCount} shifts`
+				: approval.form.shiftId
+					? "saves this shift"
+					: "adds this shift";
+	return {
+		title: `Add ${approval.positionName} to ${approval.workerName}?`,
+		description: `${approval.workerName} isn’t approved for ${approval.positionName} yet. Confirming adds this Position to their Employment, then ${consequence}.`,
+		confirmLabel: `Add ${approval.positionName} and ${approval.kind === "move" ? "move" : "save"}`,
+	};
+}
+
 function positionsLabel(count: number): string {
 	if (count === 0) return "All positions";
 	return `${count} position${count === 1 ? "" : "s"}`;
@@ -324,169 +561,6 @@ function cellConstraints(
 		});
 	}
 	return constraints;
-}
-
-const POSITION_PALETTE = [
-	{
-		block: "bg-card text-category-1-foreground hover:bg-category-1/35",
-		dot: "bg-category-1-marker",
-	},
-	{
-		block: "bg-card text-category-2-foreground hover:bg-category-2/35",
-		dot: "bg-category-2-marker",
-	},
-	{
-		block: "bg-card text-category-3-foreground hover:bg-category-3/35",
-		dot: "bg-category-3-marker",
-	},
-	{
-		block: "bg-card text-category-4-foreground hover:bg-category-4/35",
-		dot: "bg-category-4-marker",
-	},
-	{
-		block: "bg-card text-category-5-foreground hover:bg-category-5/35",
-		dot: "bg-category-5-marker",
-	},
-	{
-		block: "bg-card text-category-6-foreground hover:bg-category-6/35",
-		dot: "bg-category-6-marker",
-	},
-] as const;
-
-function positionColor(name: string) {
-	let hash = 0;
-	for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
-	return POSITION_PALETTE[Math.abs(hash) % POSITION_PALETTE.length];
-}
-
-function formatCompactMinute(minute: number): string {
-	const normalizedMinute = minute % 1440;
-	const hours = Math.floor(normalizedMinute / 60);
-	const minutes = normalizedMinute % 60;
-	const displayHour = hours % 12 === 0 ? 12 : hours % 12;
-	const minuteLabel =
-		minutes === 0 ? "" : `:${String(minutes).padStart(2, "0")}`;
-	return `${displayHour}${minuteLabel}${hours >= 12 ? "p" : "a"}`;
-}
-
-function formatCompactShiftRange(
-	startMinute: number,
-	endMinute: number,
-	overnight: boolean,
-): string {
-	return `${formatCompactMinute(startMinute)}–${formatCompactMinute(endMinute)}${overnight ? " +1" : ""}`;
-}
-
-function ShiftTile({
-	shift,
-	onOpen,
-	compact = false,
-	disabled = false,
-	timeclock,
-}: {
-	shift: ScheduleShiftDto;
-	onOpen: (shift: ScheduleShiftDto) => void;
-	compact?: boolean;
-	disabled?: boolean;
-	timeclock?: ScheduleResponse["timeclock"][number];
-}) {
-	const hasConflicts = shift.conflicts.length > 0;
-	const color = positionColor(shift.positionName);
-	const NO_PUNCH_GRACE_MS = 15 * 60 * 1000;
-	const scheduledMinutes =
-		(new Date(shift.endsAt).getTime() - new Date(shift.startsAt).getTime()) /
-		60_000;
-	const varianceMinutes =
-		timeclock?.workedMinutes != null
-			? timeclock.workedMinutes - Math.round(scheduledMinutes)
-			: null;
-	const missedPunch =
-		timeclock != null &&
-		timeclock.status === null &&
-		new Date(shift.endsAt).getTime() + NO_PUNCH_GRACE_MS < Date.now();
-	const { ref, isDragging, isDropping } = useDraggable({
-		id: `shift:${shift.id}`,
-		type: "schedule-shift",
-		data: { shiftId: shift.id },
-		disabled,
-	});
-	return (
-		<Button
-			ref={ref}
-			type="button"
-			variant="ghost"
-			data-press="subtle"
-			aria-label={`${formatCompactShiftRange(shift.startMinute, shift.endMinute, shift.overnight)}, ${shift.positionName}. Activate to edit or move this shift.`}
-			onClick={() => onOpen(shift)}
-			className={cn(
-				"relative h-auto w-full cursor-grab touch-none flex-col items-start gap-1 overflow-hidden whitespace-normal rounded-md border py-2 pr-2 pl-3 text-left shadow-xs transition-[background-color,border-color,box-shadow,opacity] hover:shadow-sm active:cursor-grabbing motion-reduce:transition-none",
-				compact ? "min-h-11" : "min-h-14",
-				(isDragging || isDropping) && "opacity-45 ring-2 ring-primary/30",
-				hasConflicts
-					? "border-destructive/35 bg-destructive/5 text-destructive hover:bg-destructive/10"
-					: cn("border-border/80", color.block),
-			)}
-		>
-			<span
-				className={cn(
-					"absolute inset-y-0 left-0 w-1",
-					hasConflicts ? "bg-destructive" : color.dot,
-				)}
-				aria-hidden
-			/>
-			<span className="flex w-full items-center gap-1.5 leading-none">
-				<span className="font-semibold text-[11px] tabular-nums">
-					{formatCompactShiftRange(
-						shift.startMinute,
-						shift.endMinute,
-						shift.overnight,
-					)}
-				</span>
-				{hasConflicts ? (
-					<AlertTriangleIcon className="ml-auto size-3 shrink-0" />
-				) : null}
-			</span>
-			<span className="w-full truncate text-[11px] text-muted-foreground leading-tight">
-				{shift.positionName}
-			</span>
-			{timeclock?.status === "open" ? (
-				<span className="flex items-center gap-1.5 font-medium text-[11px] text-primary leading-none">
-					<span
-						className="size-1.5 shrink-0 rounded-full bg-primary"
-						aria-hidden
-					/>
-					On clock
-					{timeclock.clockedInAt
-						? ` · since ${formatClockTime(timeclock.clockedInAt)}`
-						: ""}
-				</span>
-			) : null}
-			{timeclock?.status === "closed" && timeclock.workedMinutes != null ? (
-				<span className="font-medium text-[11px] text-foreground/80 leading-none">
-					Worked {formatDurationMs(timeclock.workedMinutes * 60_000)}
-					{varianceMinutes != null && Math.abs(varianceMinutes) > 10 ? (
-						<span
-							className={
-								varianceMinutes > 0 ? "text-destructive" : "text-amber-600"
-							}
-						>
-							{" "}
-							{varianceMinutes > 0 ? "+" : "−"}
-							{Math.abs(varianceMinutes)}m
-						</span>
-					) : null}
-				</span>
-			) : null}
-			{missedPunch ? (
-				<span className="font-medium text-[11px] text-destructive leading-none">
-					No punch
-				</span>
-			) : null}
-			{hasConflicts && !compact ? (
-				<span className="font-medium text-[11px] leading-none">Conflict</span>
-			) : null}
-		</Button>
-	);
 }
 
 function ScheduleDropCell({
@@ -545,7 +619,7 @@ type GridDensity = "compact" | "comfortable";
 
 function ScheduleGridSkeleton() {
 	return (
-		<Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+		<div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
 			<div className="grid min-w-[1144px] grid-cols-[220px_repeat(7,minmax(132px,1fr))] border-b">
 				<div className="p-3">
 					<Skeleton className="h-3 w-14" />
@@ -564,7 +638,7 @@ function ScheduleGridSkeleton() {
 				>
 					<div className="flex items-center gap-2 p-3">
 						<Skeleton className="size-8 rounded-full" />
-						<div className="flex-1 space-y-1.5">
+						<div className="flex flex-1 flex-col gap-1.5">
 							<Skeleton className="h-3 w-24" />
 							<Skeleton className="h-2.5 w-16" />
 						</div>
@@ -572,13 +646,42 @@ function ScheduleGridSkeleton() {
 					{SKELETON_DAYS.map((day) => (
 						<div key={`${row}-${day}`} className="min-h-24 p-2">
 							{(day.charCodeAt(0) + row.charCodeAt(0)) % 4 === 0 ? (
-								<Skeleton className="h-14 w-full" />
+								<Skeleton className="h-14 w-full rounded-md" />
 							) : null}
 						</div>
 					))}
 				</div>
 			))}
-		</Card>
+		</div>
+	);
+}
+
+function ScheduleMetric({
+	value,
+	label,
+	tone = "default",
+}: {
+	value: string | number;
+	label: string;
+	tone?: "default" | "emphasis" | "danger";
+}) {
+	return (
+		<Badge
+			variant={tone === "danger" ? "destructive" : "outline"}
+			className={cn(
+				"h-6 gap-1 rounded-md px-2 font-normal tabular-nums",
+				tone === "emphasis" && "border-primary/30 bg-primary/5 text-foreground",
+			)}
+		>
+			<span className="font-semibold">{value}</span>
+			<span
+				className={cn(
+					tone === "danger" ? "opacity-90" : "text-muted-foreground",
+				)}
+			>
+				{label}
+			</span>
+		</Badge>
 	);
 }
 
@@ -597,6 +700,34 @@ function SchedulePage() {
 	const [visibleStaffCount, setVisibleStaffCount] = useState(40);
 	const [workerQuery, setWorkerQuery] = useState("");
 	const [positionFilter, setPositionFilter] = useState("all");
+	const [todayFocus, setTodayFocus] = useState(false);
+	const [viewMode, setViewMode] = useState<"week" | "day" | "month">("week");
+	const [monthAnchor, setMonthAnchor] = useState(() =>
+		monthStartOf(new Date().toLocaleDateString("sv-SE")),
+	);
+	const [selectedDay, setSelectedDay] = useState(() =>
+		new Date().toLocaleDateString("sv-SE"),
+	);
+	const [groupFilter, setGroupFilter] = useState("all");
+	const [tagFilter, setTagFilter] = useState("all");
+	const [dayPartFilter, setDayPartFilter] = useState("all");
+	const [selectedShiftIds, setSelectedShiftIds] = useState<string[]>([]);
+	const [copiedShifts, setCopiedShifts] = useState<
+		{
+			positionId: string;
+			startMinute: number;
+			endMinute: number;
+			note: string | null;
+		}[]
+	>([]);
+	const [salesDollars, setSalesDollars] = useState("");
+	const [repeatWeeks, setRepeatWeeks] = useState("1");
+	const [templateName, setTemplateName] = useState("");
+	const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+	const [punchReason, setPunchReason] = useState("");
+	const [punchInLocal, setPunchInLocal] = useState("");
+	const [punchOutLocal, setPunchOutLocal] = useState("");
+	const [punchStillOpen, setPunchStillOpen] = useState(false);
 	const [staffStateFilter, setStaffStateFilter] = useState("all");
 	const [gridDensity, setGridDensity] = useState<GridDensity>("comfortable");
 	const locations = useLocations(workplace?.id);
@@ -604,11 +735,26 @@ function SchedulePage() {
 
 	const activeLocationId = locationId ?? locations.data?.[0]?.id;
 	const schedule = useSchedule(activeLocationId, weekStart);
+	const calendar = useScheduleCalendar(
+		activeLocationId,
+		monthAnchor,
+		viewMode === "month",
+	);
+	const templates = useScheduleTemplates(activeLocationId);
+	const saveTemplate = useSaveScheduleTemplate(activeLocationId);
+	const applyTemplate = useApplyScheduleTemplate(activeLocationId);
+	const groups = useGroups(workplace?.id);
+	const tags = useTags(workplace?.id);
+	const timeBlocks = useTimeBlocks(activeLocationId);
+	const markAttendance = useMarkAttendance(workplace?.id);
+	const editTimeEntry = useEditTimeEntry(workplace?.id);
 	const publication = usePublication(schedule.data?.schedule.id);
 	const acceptances = useAcceptances(schedule.data?.schedule.id);
 	const queryClient = useQueryClient();
 	const [form, setForm] = useState<ShiftFormState | null>(null);
 	const [addDates, setAddDates] = useState<string[]>([]);
+	const [positionApproval, setPositionApproval] =
+		useState<PositionApproval | null>(null);
 	const [publishPreview, setPublishPreview] =
 		useState<ChangePreviewResponse | null>(null);
 	useEffect(() => {
@@ -617,14 +763,18 @@ function SchedulePage() {
 
 	async function invalidate() {
 		await queryClient.invalidateQueries({ queryKey: ["schedule"] });
+		await queryClient.invalidateQueries({ queryKey: ["schedule-calendar"] });
 		await queryClient.refetchQueries({
 			queryKey: ["schedule", activeLocationId, weekStart],
 		});
 	}
 
 	const createOrUpdate = useMutation({
-		mutationFn: async (state: ShiftFormState) => {
+		mutationFn: async (
+			state: ShiftFormState & { approvePosition?: boolean },
+		) => {
 			if (!activeLocationId) throw new Error("No location selected");
+			const approvePosition = state.approvePosition === true;
 			if (state.shiftId) {
 				await api(`/v1/shifts/${state.shiftId}`, {
 					method: "PATCH",
@@ -637,9 +787,24 @@ function SchedulePage() {
 						note: state.note || null,
 						unavailabilityOverrideReason:
 							state.unavailabilityOverrideReason.trim() || null,
+						...(approvePosition ? { approvePosition: true } : {}),
 					},
 				});
-				return { count: 1 };
+				await api(`/v1/shifts/${state.shiftId}/tags`, {
+					method: "POST",
+					body: { tagIds: state.tagIds },
+				});
+				const titles = state.taskTitles
+					.split("\n")
+					.map((line) => line.trim())
+					.filter(Boolean);
+				if (titles.length > 0) {
+					await api(`/v1/shifts/${state.shiftId}/tasks`, {
+						method: "POST",
+						body: { titles },
+					});
+				}
+				return { count: 1, approvePosition };
 			}
 			const dates = addDates.length > 0 ? addDates : [state.date];
 			await Promise.all(
@@ -657,17 +822,24 @@ function SchedulePage() {
 								note: state.note || undefined,
 								unavailabilityOverrideReason:
 									state.unavailabilityOverrideReason.trim() || undefined,
+								...(approvePosition ? { approvePosition: true } : {}),
 							},
 						},
 					),
 				),
 			);
-			return { count: dates.length };
+			return { count: dates.length, approvePosition };
 		},
 		onSuccess: async (result) => {
 			setForm(null);
 			setAddDates([]);
+			setPositionApproval(null);
 			await invalidate();
+			if (result.approvePosition) {
+				await queryClient.invalidateQueries({
+					queryKey: ["workplaces", workplace?.id, "workers"],
+				});
+			}
 			toast.success(
 				result.count > 1 ? `${result.count} shifts added.` : "Shift saved.",
 			);
@@ -691,10 +863,12 @@ function SchedulePage() {
 			shift,
 			employmentId,
 			date,
+			approvePosition,
 		}: {
 			shift: ScheduleShiftDto;
 			employmentId: string | null;
 			date: string;
+			approvePosition?: boolean;
 		}) => {
 			await api(`/v1/shifts/${shift.id}`, {
 				method: "PATCH",
@@ -707,11 +881,19 @@ function SchedulePage() {
 					note: shift.note,
 					unavailabilityOverrideReason:
 						shift.unavailabilityOverrideReason ?? null,
+					...(approvePosition ? { approvePosition: true } : {}),
 				},
 			});
+			return { approvePosition: approvePosition === true };
 		},
-		onSuccess: async () => {
+		onSuccess: async (result) => {
+			setPositionApproval(null);
 			await invalidate();
+			if (result.approvePosition) {
+				await queryClient.invalidateQueries({
+					queryKey: ["workplaces", workplace?.id, "workers"],
+				});
+			}
 			toast.success("Shift moved.");
 		},
 		onError: (error) => toast.error((error as Error).message),
@@ -726,6 +908,91 @@ function SchedulePage() {
 		onSuccess: async () => {
 			await invalidate();
 			toast.success("Previous week copied.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	const autoAssign = useMutation({
+		mutationFn: () =>
+			api<{ assigned: number }>(
+				`/v1/locations/${activeLocationId}/schedules/${weekStart}/auto-assign`,
+				{ method: "POST" },
+			),
+		onSuccess: async (result) => {
+			await invalidate();
+			toast.success(
+				result.assigned === 0
+					? "No unassigned Shifts could be filled."
+					: `Assigned ${result.assigned} Shift${result.assigned === 1 ? "" : "s"}.`,
+			);
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	const bulkShifts = useMutation({
+		mutationFn: (body: {
+			shiftIds: string[];
+			delete?: boolean;
+			employmentId?: string | null;
+		}) =>
+			api(
+				`/v1/locations/${activeLocationId}/schedules/${weekStart}/bulk`,
+				{ method: "POST", body },
+			),
+		onSuccess: async () => {
+			setSelectedShiftIds([]);
+			await invalidate();
+			toast.success("Bulk change saved.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	const pasteShifts = useMutation({
+		mutationFn: (date: string) =>
+			api<{ pasted: number }>(
+				`/v1/locations/${activeLocationId}/schedules/${weekStart}/paste`,
+				{
+					method: "POST",
+					body: { date, shifts: copiedShifts },
+				},
+			),
+		onSuccess: async (result: { pasted: number }) => {
+			await invalidate();
+			toast.success(`Pasted ${result.pasted} Shift${result.pasted === 1 ? "" : "s"}.`);
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	const saveSales = useMutation({
+		mutationFn: ({
+			day,
+			amountCents,
+		}: {
+			day: string;
+			amountCents: number;
+		}) =>
+			api(`/v1/locations/${activeLocationId}/sales/${day}`, {
+				method: "PUT",
+				body: { amountCents },
+			}),
+		onSuccess: async () => {
+			await invalidate();
+			toast.success("Daily sales saved.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	const repeatShift = useMutation({
+		mutationFn: (input: { shiftId: string; weeks: number }) =>
+			api<{ copied: number }>(`/v1/shifts/${input.shiftId}/repeat`, {
+				method: "POST",
+				body: { weeks: input.weeks },
+			}),
+		onSuccess: async (result: { copied: number }) => {
+			await invalidate();
+			toast.success(
+				`Copied this Shift onto ${result.copied} later week${result.copied === 1 ? "" : "s"}.`,
+			);
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
@@ -804,20 +1071,52 @@ function SchedulePage() {
 			shiftCountByEmploymentId,
 		};
 	}, [data?.hours, data?.shifts]);
-	const conflictCount =
-		data?.shifts.reduce((sum, shift) => sum + shift.conflicts.length, 0) ?? 0;
+	const summaryShifts =
+		viewMode === "month"
+			? (calendar.data?.shifts ?? [])
+			: (data?.shifts ?? []);
+	const conflictCount = summaryShifts.reduce(
+		(sum, shift) => sum + shift.conflicts.length,
+		0,
+	);
 	const timeclockByShiftId = useMemo(() => {
 		const map = new Map<string, ScheduleResponse["timeclock"][number]>();
 		for (const entry of data?.timeclock ?? []) {
 			map.set(entry.shiftId, entry);
 		}
+		for (const entry of calendar.data?.timeclock ?? []) {
+			if (!map.has(entry.shiftId)) map.set(entry.shiftId, entry);
+		}
 		return map;
-	}, [data?.timeclock]);
+	}, [calendar.data?.timeclock, data?.timeclock]);
+
+	function syncPunchFields(shift: ScheduleShiftDto | undefined) {
+		const timezone = data?.schedule.timezone ?? "America/Chicago";
+		const timeclock = shift ? timeclockByShiftId.get(shift.id) : undefined;
+		setPunchInLocal(
+			isoToDatetimeLocal(
+				timeclock?.clockedInAt ?? shift?.startsAt ?? "",
+				timezone,
+			),
+		);
+		setPunchOutLocal(
+			isoToDatetimeLocal(
+				timeclock?.clockedOutAt ?? shift?.endsAt ?? "",
+				timezone,
+			),
+		);
+		setPunchStillOpen(timeclock?.status === "open");
+		setPunchReason("");
+	}
 	const dayHeaders = orderedDayHeaders(weekStartDay);
-	const onClockCount =
-		data?.timeclock.filter((entry) => entry.status === "open").length ?? 0;
-	const openShiftCount =
-		data?.shifts.filter((shift) => shift.employmentId === null).length ?? 0;
+	const onClockCount = (
+		viewMode === "month"
+			? (calendar.data?.timeclock ?? [])
+			: (data?.timeclock ?? [])
+	).filter((entry) => entry.status === "open").length;
+	const openShiftCount = summaryShifts.filter(
+		(shift) => shift.employmentId === null,
+	).length;
 	const staffIds = useMemo(
 		() => new Set((data?.staff ?? []).map((member) => member.employmentId)),
 		[data?.staff],
@@ -839,8 +1138,6 @@ function SchedulePage() {
 		}
 		return index;
 	}, [offRosterShifts]);
-	const totalHours =
-		data?.hours.reduce((sum, entry) => sum + entry.minutes, 0) ?? 0;
 	const daySummaries = useMemo(() => {
 		const summaries = new Map<string, { shifts: number; minutes: number }>();
 		for (const shift of data?.shifts ?? []) {
@@ -856,6 +1153,28 @@ function SchedulePage() {
 		}
 		return summaries;
 	}, [data?.shifts]);
+	const salesByDate = useMemo(() => {
+		const map = new Map<string, number>();
+		for (const row of data?.labor?.byDate ?? []) {
+			map.set(row.date, row.amountCents);
+		}
+		return map;
+	}, [data?.labor?.byDate]);
+
+	function prepareDaySales(day: string) {
+		setSelectedDay(day);
+		const cents = salesByDate.get(day) ?? 0;
+		setSalesDollars(cents > 0 ? String(cents / 100) : "");
+	}
+
+	function submitDaySales(day: string) {
+		const dollars = Number(salesDollars);
+		if (!Number.isFinite(dollars) || dollars < 0) {
+			toast.error("Enter daily sales as a dollar amount");
+			return;
+		}
+		saveSales.mutate({ day, amountCents: Math.round(dollars * 100) });
+	}
 	const filteredStaff = useMemo(() => {
 		const query = workerQuery.trim().toLocaleLowerCase();
 		return (data?.staff ?? []).filter((member) => {
@@ -870,6 +1189,11 @@ function SchedulePage() {
 				!member.positionIds.includes(positionFilter)
 			)
 				return false;
+			if (
+				groupFilter !== "all" &&
+				!member.groupIds.includes(groupFilter)
+			)
+				return false;
 			const minutes =
 				scheduleIndex.hoursByEmploymentId.get(member.employmentId) ?? 0;
 			const hasConstraints =
@@ -882,6 +1206,7 @@ function SchedulePage() {
 		});
 	}, [
 		data?.staff,
+		groupFilter,
 		positionFilter,
 		scheduleIndex.hoursByEmploymentId,
 		staffStateFilter,
@@ -891,22 +1216,77 @@ function SchedulePage() {
 	const hasStaffFilters =
 		workerQuery.trim().length > 0 ||
 		positionFilter !== "all" ||
-		staffStateFilter !== "all";
+		staffStateFilter !== "all" ||
+		groupFilter !== "all" ||
+		tagFilter !== "all" ||
+		dayPartFilter !== "all";
 	const activeSelectFilterCount =
-		Number(positionFilter !== "all") + Number(staffStateFilter !== "all");
+		Number(positionFilter !== "all") +
+		Number(staffStateFilter !== "all") +
+		Number(groupFilter !== "all") +
+		Number(tagFilter !== "all") +
+		Number(dayPartFilter !== "all");
 	const clearStaffFilters = () => {
 		setWorkerQuery("");
 		setPositionFilter("all");
 		setStaffStateFilter("all");
+		setGroupFilter("all");
+		setTagFilter("all");
+		setDayPartFilter("all");
 		setVisibleStaffCount(40);
 	};
+
+	function shiftMatchesSurfaceFilters(shift: ScheduleShiftDto) {
+		if (tagFilter !== "all" && !shift.tagIds.includes(tagFilter)) return false;
+		if (dayPartFilter !== "all") {
+			const part = (timeBlocks.data?.dayParts ?? []).find(
+				(row) => row.id === dayPartFilter,
+			);
+			if (
+				part &&
+				(shift.startMinute < part.startMinute ||
+					shift.startMinute >= part.endMinute)
+			)
+				return false;
+		}
+		return true;
+	}
+
+	function shiftMatchesCalendarFilters(shift: ScheduleShiftDto) {
+		if (!shiftMatchesSurfaceFilters(shift)) return false;
+		if (positionFilter !== "all" && shift.positionId !== positionFilter) {
+			return false;
+		}
+		const query = workerQuery.trim().toLowerCase();
+		if (query) {
+			const haystack = `${shift.workerName ?? "open"} ${shift.positionName}`.toLowerCase();
+			if (!haystack.includes(query)) return false;
+		}
+		if (groupFilter !== "all") {
+			const member = (data?.staff ?? []).find(
+				(row) => row.employmentId === shift.employmentId,
+			);
+			if (!member?.groupIds.includes(groupFilter)) return false;
+		}
+		return true;
+	}
 
 	const days = Array.from({ length: 7 }, (_, index) =>
 		addDays(weekStart, index),
 	);
+	const todayKey = new Date().toLocaleDateString("sv-SE");
+	const visibleDays =
+		viewMode === "day"
+			? days.includes(selectedDay)
+				? [selectedDay]
+				: [weekStart]
+			: todayFocus && days.includes(todayKey)
+				? days.filter((day) => day === todayKey)
+				: days;
 
 	function openEdit(shift: ScheduleShiftDto) {
 		setAddDates([]);
+		syncPunchFields(shift);
 		setForm({
 			shiftId: shift.id,
 			employmentId: shift.employmentId ?? "",
@@ -916,7 +1296,17 @@ function SchedulePage() {
 			endMinute: shift.endMinute,
 			note: shift.note ?? "",
 			unavailabilityOverrideReason: shift.unavailabilityOverrideReason ?? "",
+			tagIds: shift.tagIds,
+			taskTitles: "",
 		});
+	}
+
+	function toggleShiftSelect(shiftId: string) {
+		setSelectedShiftIds((current) =>
+			current.includes(shiftId)
+				? current.filter((id) => id !== shiftId)
+				: [...current, shiftId],
+		);
 	}
 
 	function openCreate(date: string) {
@@ -930,14 +1320,35 @@ function SchedulePage() {
 			draft.positionId = data.positions[0]?.id ?? "";
 		}
 		setAddDates([date]);
+		syncPunchFields(undefined);
 		setForm(draft);
+	}
+
+	function queueShiftSave(state: ShiftFormState) {
+		const member = data?.staff.find(
+			(candidate) => candidate.employmentId === state.employmentId,
+		);
+		if (workerNeedsPositionApproval(member, state.positionId)) {
+			const positionName =
+				data?.positions.find((position) => position.id === state.positionId)
+					?.name ?? "this position";
+			setPositionApproval({
+				kind: "save",
+				form: state,
+				workerName: member?.name ?? "this worker",
+				positionName,
+				shiftCount: state.shiftId ? 1 : addDates.length || 1,
+			});
+			return;
+		}
+		createOrUpdate.mutate(state);
 	}
 
 	function submit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		if (!form) return;
 		if (!canSave) return;
-		createOrUpdate.mutate(form);
+		queueShiftSave(form);
 	}
 
 	function toggleAddDate(date: string) {
@@ -973,6 +1384,29 @@ function SchedulePage() {
 		)
 			return;
 
+		const targetMember =
+			typeof targetData.employmentId === "string"
+				? data?.staff.find(
+						(member) => member.employmentId === targetData.employmentId,
+					)
+				: undefined;
+		if (
+			typeof targetData.employmentId === "string" &&
+			workerNeedsPositionApproval(targetMember, shift.positionId)
+		) {
+			const suspended = event.suspend();
+			suspended.abort();
+			setPositionApproval({
+				kind: "move",
+				shift,
+				employmentId: targetData.employmentId,
+				date: targetData.date,
+				workerName: targetMember?.name ?? "this worker",
+				positionName: shift.positionName,
+			});
+			return;
+		}
+
 		const suspended = event.suspend();
 		try {
 			await moveShift.mutateAsync({
@@ -1006,11 +1440,9 @@ function SchedulePage() {
 			)
 		: [];
 	const needsOverride = overlappingWindows.length > 0;
-	const positionBlocked = Boolean(
-		form?.positionId &&
-			selectedStaff &&
-			selectedStaff.positionIds.length > 0 &&
-			!selectedStaff.positionIds.includes(form.positionId),
+	const positionNeedsApproval = workerNeedsPositionApproval(
+		selectedStaff,
+		form?.positionId ?? "",
 	);
 	const overlappingShift = form?.employmentId
 		? (data?.shifts ?? []).find((shift) => {
@@ -1061,11 +1493,13 @@ function SchedulePage() {
 		form?.positionId &&
 			(form.shiftId || addDates.length > 0) &&
 			form.startMinute !== form.endMinute &&
-			!positionBlocked &&
 			(!needsOverride || form.unavailabilityOverrideReason.trim()),
 	);
 
-	const todayKey = new Date().toLocaleDateString("sv-SE");
+	const selectedShiftTimeclock = form?.shiftId
+		? timeclockByShiftId.get(form.shiftId)
+		: undefined;
+	const selectedShiftAssigned = Boolean(form?.employmentId);
 	const constrainedStaff = (data?.staff ?? []).filter(
 		(member) =>
 			(member.unavailability?.length ?? 0) > 0 ||
@@ -1089,29 +1523,32 @@ function SchedulePage() {
 			value: member.employmentId,
 		})),
 	];
-	const positionSource =
-		positionBlocked && form?.positionId
-			? (data?.positions ?? []).filter(
-					(position) =>
-						position.id === form.positionId ||
-						allowedPositions.some((allowed) => allowed.id === position.id),
-				)
-			: allowedPositions;
 	const positionItems = [
 		{ label: "Choose…", value: null },
-		...positionSource.map((position) => ({
+		...(data?.positions ?? []).map((position) => ({
 			label: position.name,
 			value: position.id,
 		})),
 	];
+	const otherPositions = (data?.positions ?? []).filter(
+		(position) =>
+			!allowedPositions.some((allowed) => allowed.id === position.id),
+	);
+	const showPositionGroups =
+		Boolean(selectedStaff) &&
+		allowedPositions.length > 0 &&
+		otherPositions.length > 0;
+	const approvalCopy = positionApproval
+		? positionApprovalCopy(positionApproval)
+		: null;
 	return (
 		<section className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
 			<h1 className="sr-only">Schedule</h1>
 			<div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-none">
 				{headerTarget
 					? createPortal(
-							<div className="grid w-full min-w-0 grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-								<div className="flex min-w-0 flex-1 items-center gap-2">
+							<div className="flex w-full min-w-0 items-center justify-between gap-3">
+								<div className="flex min-w-0 items-center gap-1">
 									<Select
 										items={locationItems}
 										value={activeLocationId ?? null}
@@ -1123,8 +1560,10 @@ function SchedulePage() {
 									>
 										<SelectTrigger
 											aria-label="Location"
-											className="h-9 min-w-0 max-w-40 flex-1 border-transparent bg-muted/60 font-medium sm:w-40 sm:flex-none"
+											size="sm"
+											className="min-w-0 max-w-36 border-transparent bg-transparent font-medium shadow-none hover:bg-muted"
 										>
+											<MapPinIcon />
 											<SelectValue placeholder="Location" />
 										</SelectTrigger>
 										<SelectContent alignItemWithTrigger={false}>
@@ -1137,42 +1576,37 @@ function SchedulePage() {
 											</SelectGroup>
 										</SelectContent>
 									</Select>
-									<div className="flex shrink-0 items-center gap-1">
-										<Tooltip>
-											<TooltipTrigger
-												render={
-													<Button
-														variant="ghost"
-														size="icon-sm"
-														className="size-9"
-														onClick={() => {
-															setWeekStart((c) => addDays(c, -7));
-															setForm(null);
-														}}
-													/>
-												}
-											>
-												<ChevronLeftIcon className="size-4" />
-												<span className="sr-only">Previous week</span>
-											</TooltipTrigger>
-											<TooltipContent>Previous week</TooltipContent>
-										</Tooltip>
+									<div className="flex shrink-0 items-center">
 										<Button
 											variant="ghost"
-											size="sm"
-											className="hidden h-9 px-3 font-semibold text-sm tabular-nums sm:inline-flex"
+											size="icon-sm"
+											aria-label={
+												viewMode === "month"
+													? "Previous month"
+													: "Previous week"
+											}
 											onClick={() => {
-												setWeekStart(weekStartOf(new Date(), weekStartDay));
+												if (viewMode === "month") {
+													setMonthAnchor((current) =>
+														addCalendarMonths(current, -1),
+													);
+												} else {
+													setWeekStart((current) => addDays(current, -7));
+												}
 												setForm(null);
 											}}
 										>
-											Today
+											<ChevronLeftIcon />
 										</Button>
 										<DatePicker
 											id="schedule-week"
-											value={weekStart}
-											displayValue={formatWeekLabel(weekStart)}
-											buttonClassName="h-9 w-auto border-transparent bg-transparent px-3 font-semibold text-sm tabular-nums shadow-none hover:bg-muted"
+											value={viewMode === "month" ? monthAnchor : weekStart}
+											displayValue={
+												viewMode === "month"
+													? formatMonthLabel(monthAnchor)
+													: formatWeekLabel(weekStart)
+											}
+											buttonClassName="h-8 w-auto min-w-0 border-transparent bg-transparent px-1.5 font-medium tabular-nums shadow-none hover:bg-muted"
 											onValueChange={(date) => {
 												setWeekStart(
 													weekStartOf(
@@ -1180,67 +1614,181 @@ function SchedulePage() {
 														weekStartDay,
 													),
 												);
+												setMonthAnchor(monthStartOf(date));
+												setSelectedDay(date);
 												setForm(null);
 											}}
 										/>
-										<Tooltip>
-											<TooltipTrigger
-												render={
-													<Button
-														variant="ghost"
-														size="icon-sm"
-														className="size-9"
-														onClick={() => {
-															setWeekStart((c) => addDays(c, 7));
-															setForm(null);
-														}}
-													/>
+										<Button
+											variant="ghost"
+											size="icon-sm"
+											aria-label={
+												viewMode === "month" ? "Next month" : "Next week"
+											}
+											onClick={() => {
+												if (viewMode === "month") {
+													setMonthAnchor((current) =>
+														addCalendarMonths(current, 1),
+													);
+												} else {
+													setWeekStart((current) => addDays(current, 7));
 												}
-											>
-												<ChevronRightIcon className="size-4" />
-												<span className="sr-only">Next week</span>
-											</TooltipTrigger>
-											<TooltipContent>Next week</TooltipContent>
-										</Tooltip>
+												setForm(null);
+											}}
+										>
+											<ChevronRightIcon />
+										</Button>
+										<Button
+											variant="ghost"
+											size="sm"
+											onClick={() => {
+												const today = new Date();
+												setWeekStart(weekStartOf(today, weekStartDay));
+												setMonthAnchor(
+													monthStartOf(today.toLocaleDateString("sv-SE")),
+												);
+												setSelectedDay(today.toLocaleDateString("sv-SE"));
+												setViewMode((current) =>
+													current === "month" ? "week" : current,
+												);
+												setTodayFocus(false);
+												setForm(null);
+											}}
+										>
+											Today
+										</Button>
 									</div>
 								</div>
 
-								<div className="flex min-w-0 flex-wrap items-center gap-2 sm:shrink-0 sm:flex-nowrap">
-									{publicationState?.latestVersionNumber == null ? (
-										<Badge variant="outline" className="font-medium">
+								<div className="flex shrink-0 items-center gap-1.5">
+									{publicationState?.latestVersionNumber == null ||
+									publicationState.hasUnpublishedChanges ? (
+										<span className="px-1 text-muted-foreground text-xs">
 											Draft
-										</Badge>
-									) : publicationState.hasUnpublishedChanges ? (
-										<Badge variant="secondary" className="font-medium">
-											Draft v{publicationState.latestVersionNumber}
-										</Badge>
-									) : (
-										<Badge className="font-medium">
-											Published v{publicationState.latestVersionNumber}
-										</Badge>
-									)}
-									<Tooltip>
-										<TooltipTrigger
+										</span>
+									) : null}
+									<Select
+										items={[
+											{ label: "Week", value: "week" },
+											{ label: "Day", value: "day" },
+											{ label: "Month", value: "month" },
+										]}
+										value={viewMode}
+										onValueChange={(value) => {
+											if (
+												value === "week" ||
+												value === "day" ||
+												value === "month"
+											) {
+												setViewMode(value);
+												setTodayFocus(value === "day");
+												if (value === "month") {
+													setMonthAnchor(monthStartForView(weekStart));
+												}
+												if (value === "day" && !days.includes(selectedDay)) {
+													setSelectedDay(weekStart);
+												}
+											}
+										}}
+									>
+										<SelectTrigger
+											aria-label="Schedule view"
+											size="sm"
+											className="w-[5.5rem]"
+										>
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent alignItemWithTrigger={false}>
+											<SelectGroup>
+												<SelectItem value="week">Week</SelectItem>
+												<SelectItem value="day">Day</SelectItem>
+												<SelectItem value="month">Month</SelectItem>
+											</SelectGroup>
+										</SelectContent>
+									</Select>
+									<DropdownMenu>
+										<DropdownMenuTrigger
 											render={
 												<Button
 													variant="ghost"
 													size="icon-sm"
-													className="size-9 rounded-lg"
-													disabled={copyPrevious.isPending || !activeLocationId}
-													onClick={() => copyPrevious.mutate()}
+													disabled={!activeLocationId}
 												/>
 											}
 										>
-											{copyPrevious.isPending ? <Spinner /> : <CopyIcon />}
-											<span className="sr-only">Copy last week</span>
-										</TooltipTrigger>
-										<TooltipContent>
-											Copy last week into this draft
-										</TooltipContent>
-									</Tooltip>
+											<EllipsisIcon />
+											<span className="sr-only">More schedule actions</span>
+										</DropdownMenuTrigger>
+										<DropdownMenuContent align="end" className="min-w-56">
+											<DropdownMenuGroup>
+												<DropdownMenuItem
+													disabled={
+														copyPrevious.isPending || !activeLocationId
+													}
+													onClick={() => copyPrevious.mutate()}
+												>
+													{copyPrevious.isPending ? <Spinner /> : null}
+													Copy last week
+												</DropdownMenuItem>
+												<DropdownMenuItem
+													disabled={
+														saveTemplate.isPending ||
+														!data ||
+														data.shifts.length === 0
+													}
+													onClick={() => {
+														setTemplateName("");
+														setSaveTemplateOpen(true);
+													}}
+												>
+													Save as template
+												</DropdownMenuItem>
+												<DropdownMenuItem
+													disabled={
+														autoAssign.isPending ||
+														!data ||
+														openShiftCount === 0
+													}
+													onClick={() => autoAssign.mutate()}
+												>
+													Auto-assign open shifts
+												</DropdownMenuItem>
+											</DropdownMenuGroup>
+											{(templates.data ?? []).length > 0 ? (
+												<>
+													<DropdownMenuSeparator />
+													<DropdownMenuGroup>
+														{(templates.data ?? []).map((template) => (
+															<DropdownMenuItem
+																key={template.id}
+																disabled={applyTemplate.isPending}
+																onClick={() =>
+																	applyTemplate.mutate(
+																		{
+																			weekStart,
+																			templateId: template.id,
+																		},
+																		{
+																			onSuccess: () =>
+																				toast.success(
+																					`Applied “${template.name}”. Review the draft before publishing.`,
+																				),
+																			onError: (error) =>
+																				toast.error((error as Error).message),
+																		},
+																	)
+																}
+															>
+																Apply {template.name}
+															</DropdownMenuItem>
+														))}
+													</DropdownMenuGroup>
+												</>
+											) : null}
+										</DropdownMenuContent>
+									</DropdownMenu>
 									<Button
 										size="sm"
-										className="h-9 bg-primary px-4 font-medium text-primary-foreground hover:bg-primary-hover"
 										disabled={
 											previewPublish.isPending ||
 											!schedule.data ||
@@ -1252,142 +1800,145 @@ function SchedulePage() {
 										{previewPublish.isPending ? (
 											<Spinner data-icon="inline-start" />
 										) : null}
-										<span className="hidden sm:inline">Review & publish</span>
-										<span className="sm:hidden">Publish</span>
+										Publish
 									</Button>
 									<Button
 										size="sm"
 										variant="outline"
-										className="h-9 px-4 font-medium"
 										disabled={!data || data.positions.length === 0}
 										onClick={() => openCreate(defaultAddDate(weekStart))}
 									>
 										<PlusIcon data-icon="inline-start" />
-										<span className="hidden sm:inline">Add shifts</span>
-										<span className="sm:hidden">Add</span>
+										Add
 									</Button>
 								</div>
 							</div>,
 							headerTarget,
 						)
 					: null}
-				<div className="border-b bg-background print:hidden">
-					<div className="grid grid-cols-1 items-center gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-[14rem_auto_minmax(18rem,1fr)_auto]">
-						{data && data.staff.length > 0 ? (
-							<div className="relative order-1 min-w-0 xl:col-start-1 xl:row-start-1">
-								<SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-								<Input
-									aria-label="Search workers"
-									className="h-9 pl-8"
-									placeholder="Search workers"
-									value={workerQuery}
-									onChange={(event) => {
-										setWorkerQuery(event.target.value);
-										setVisibleStaffCount(40);
-									}}
-								/>
-							</div>
-						) : null}
-						{data ? (
-							<div className="order-3 flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 border-border text-muted-foreground text-xs tabular-nums sm:col-span-2 xl:col-span-1 xl:col-start-3 xl:row-start-1 xl:flex-nowrap xl:border-l xl:pl-4">
-								<span className="shrink-0 whitespace-nowrap">
-									<span className="font-semibold text-foreground">
-										{data.shifts.length}
-									</span>{" "}
-									shifts
-								</span>
-								<span className="text-muted-foreground/40">·</span>
-								<span className="shrink-0 whitespace-nowrap">
-									<span className="font-semibold text-foreground">
-										{(totalHours / 60).toFixed(1)}h
-									</span>{" "}
-									scheduled
-								</span>
-								<span className="text-muted-foreground/40">·</span>
-								<span
-									className={cn(
-										"shrink-0 whitespace-nowrap",
-										openShiftCount > 0 && "font-medium text-primary",
-									)}
-								>
-									{openShiftCount} open
-								</span>
-								<span className="text-muted-foreground/40">·</span>
-								<span
-									className={cn(
-										"shrink-0 whitespace-nowrap",
-										conflictCount > 0 && "font-medium text-destructive",
-									)}
-								>
-									{conflictCount} conflict{conflictCount === 1 ? "" : "s"}
-								</span>
-								{onClockCount > 0 ? (
-									<>
-										<span className="text-muted-foreground/40">·</span>
-										<span className="shrink-0 whitespace-nowrap font-medium text-primary">
-											{onClockCount} on clock
-										</span>
-									</>
-								) : null}
-								{offRosterShifts.length > 0 ? (
-									<>
-										<span className="text-muted-foreground/40">·</span>
-										<span className="shrink-0 whitespace-nowrap">
-											{offRosterShifts.length} off-roster
-										</span>
-									</>
-								) : null}
-								<span className="hidden min-w-0 truncate whitespace-nowrap 2xl:inline">
-									{data.schedule.timezone}
-								</span>
-							</div>
-						) : null}
+				<div className="flex min-w-0 items-center gap-2 border-b bg-background px-3 py-1.5 print:hidden">
 						{data && data.staff.length > 0 ? (
 							<>
-								<div className="order-2 flex items-center gap-1 xl:col-start-2 xl:row-start-1">
-									<Popover>
-										<PopoverTrigger
-											render={
-												<Button
-													variant="outline"
-													size="sm"
-													className="h-9 min-w-28 justify-start"
-												/>
-											}
-										>
-											<ListFilterIcon data-icon="inline-start" />
-											Filters
+								<InputGroup className="max-w-52 min-w-36 flex-1 sm:flex-none">
+									<InputGroupAddon align="inline-start">
+										<SearchIcon />
+									</InputGroupAddon>
+									<InputGroupInput
+										aria-label="Search workers"
+										placeholder="Search"
+										value={workerQuery}
+										onChange={(event) => {
+											setWorkerQuery(event.target.value);
+											setVisibleStaffCount(40);
+										}}
+									/>
+								</InputGroup>
+								<Popover>
+									<PopoverTrigger
+										render={<Button variant="ghost" size="sm" />}
+									>
+										<ListFilterIcon data-icon="inline-start" />
+										Filters
+										{activeSelectFilterCount > 0 ? (
 											<Badge
-												aria-hidden={activeSelectFilterCount === 0}
-												className={cn(
-													"ml-auto size-5 px-0 tabular-nums",
-													activeSelectFilterCount === 0 && "invisible",
-												)}
 												variant="secondary"
+												className="ml-1 size-5 px-0 tabular-nums"
 											>
 												{activeSelectFilterCount}
 											</Badge>
-											<ChevronDownIcon data-icon="inline-end" />
-										</PopoverTrigger>
-										<PopoverContent align="end" className="w-72 rounded-xl">
-											<PopoverHeader>
-												<PopoverTitle>Filter workers</PopoverTitle>
-											</PopoverHeader>
-											<div className="grid gap-3">
+										) : null}
+									</PopoverTrigger>
+									<PopoverContent align="start" className="w-72">
+										<PopoverHeader>
+											<PopoverTitle>Filters</PopoverTitle>
+										</PopoverHeader>
+										<FieldGroup className="gap-3">
+											<Field>
+												<FieldLabel>Position</FieldLabel>
+												<Select
+													items={[
+														{ label: "All positions", value: "all" },
+														...data.positions.map((position) => ({
+															label: position.name,
+															value: position.id,
+														})),
+													]}
+													value={positionFilter}
+													onValueChange={(value) => {
+														if (!value) return;
+														setPositionFilter(value);
+														setVisibleStaffCount(40);
+													}}
+												>
+													<SelectTrigger className="w-full">
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent alignItemWithTrigger={false}>
+														<SelectGroup>
+															<SelectItem value="all">All positions</SelectItem>
+															{data.positions.map((position) => (
+																<SelectItem
+																	key={position.id}
+																	value={position.id}
+																>
+																	{position.name}
+																</SelectItem>
+															))}
+														</SelectGroup>
+													</SelectContent>
+												</Select>
+											</Field>
+											<Field>
+												<FieldLabel>Schedule state</FieldLabel>
+												<Select
+													items={[
+														{ label: "All workers", value: "all" },
+														{ label: "Scheduled", value: "scheduled" },
+														{ label: "Unscheduled", value: "unscheduled" },
+														{
+															label: "Has constraints",
+															value: "constraints",
+														},
+													]}
+													value={staffStateFilter}
+													onValueChange={(value) => {
+														if (!value) return;
+														setStaffStateFilter(value);
+														setVisibleStaffCount(40);
+													}}
+												>
+													<SelectTrigger className="w-full">
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent alignItemWithTrigger={false}>
+														<SelectGroup>
+															<SelectItem value="all">All workers</SelectItem>
+															<SelectItem value="scheduled">Scheduled</SelectItem>
+															<SelectItem value="unscheduled">
+																Unscheduled
+															</SelectItem>
+															<SelectItem value="constraints">
+																Has constraints
+															</SelectItem>
+														</SelectGroup>
+													</SelectContent>
+												</Select>
+											</Field>
+											{(groups.data?.groups ?? []).length > 0 ? (
 												<Field>
-													<FieldLabel>Position</FieldLabel>
+													<FieldLabel>Worker group</FieldLabel>
 													<Select
 														items={[
-															{ label: "All positions", value: "all" },
-															...data.positions.map((position) => ({
-																label: position.name,
-																value: position.id,
+															{ label: "All groups", value: "all" },
+															...(groups.data?.groups ?? []).map((group) => ({
+																label: group.name,
+																value: group.id,
 															})),
 														]}
-														value={positionFilter}
+														value={groupFilter}
 														onValueChange={(value) => {
 															if (!value) return;
-															setPositionFilter(value);
+															setGroupFilter(value);
 															setVisibleStaffCount(40);
 														}}
 													>
@@ -1396,38 +1947,32 @@ function SchedulePage() {
 														</SelectTrigger>
 														<SelectContent alignItemWithTrigger={false}>
 															<SelectGroup>
-																<SelectItem value="all">
-																	All positions
-																</SelectItem>
-																{data.positions.map((position) => (
-																	<SelectItem
-																		key={position.id}
-																		value={position.id}
-																	>
-																		{position.name}
+																<SelectItem value="all">All groups</SelectItem>
+																{(groups.data?.groups ?? []).map((group) => (
+																	<SelectItem key={group.id} value={group.id}>
+																		{group.name}
 																	</SelectItem>
 																))}
 															</SelectGroup>
 														</SelectContent>
 													</Select>
 												</Field>
+											) : null}
+											{(tags.data?.tags ?? []).length > 0 ? (
 												<Field>
-													<FieldLabel>Schedule state</FieldLabel>
+													<FieldLabel>Shift tag</FieldLabel>
 													<Select
 														items={[
-															{ label: "All workers", value: "all" },
-															{ label: "Scheduled", value: "scheduled" },
-															{ label: "Unscheduled", value: "unscheduled" },
-															{
-																label: "Has constraints",
-																value: "constraints",
-															},
+															{ label: "All tags", value: "all" },
+															...(tags.data?.tags ?? []).map((tag) => ({
+																label: tag.name,
+																value: tag.id,
+															})),
 														]}
-														value={staffStateFilter}
+														value={tagFilter}
 														onValueChange={(value) => {
 															if (!value) return;
-															setStaffStateFilter(value);
-															setVisibleStaffCount(40);
+															setTagFilter(value);
 														}}
 													>
 														<SelectTrigger className="w-full">
@@ -1435,100 +1980,161 @@ function SchedulePage() {
 														</SelectTrigger>
 														<SelectContent alignItemWithTrigger={false}>
 															<SelectGroup>
-																<SelectItem value="all">All workers</SelectItem>
-																<SelectItem value="scheduled">
-																	Scheduled
-																</SelectItem>
-																<SelectItem value="unscheduled">
-																	Unscheduled
-																</SelectItem>
-																<SelectItem value="constraints">
-																	Has constraints
-																</SelectItem>
+																<SelectItem value="all">All tags</SelectItem>
+																{(tags.data?.tags ?? []).map((tag) => (
+																	<SelectItem key={tag.id} value={tag.id}>
+																		{tag.name}
+																	</SelectItem>
+																))}
 															</SelectGroup>
 														</SelectContent>
 													</Select>
 												</Field>
-											</div>
-										</PopoverContent>
-									</Popover>
-									{hasStaffFilters ? (
-										<Button
-											variant="ghost"
-											size="sm"
-											className="h-9"
-											onClick={clearStaffFilters}
-										>
-											<XIcon data-icon="inline-start" />
-											Clear
-										</Button>
-									) : null}
-								</div>
-								<div className="order-4 flex min-w-0 items-center justify-between gap-3 sm:col-span-2 xl:col-span-1 xl:col-start-4 xl:row-start-1 xl:justify-end">
-									<span className="whitespace-nowrap text-muted-foreground text-xs tabular-nums">
-										{filteredStaff.length} of {data.staff.length} workers
-									</span>
-									<div className="flex shrink-0 items-center gap-1.5">
-										<Columns3Icon className="size-3.5 text-muted-foreground" />
-										<ToggleGroup
-											aria-label="Schedule grid density"
-											value={[gridDensity]}
-											variant="outline"
-											size="sm"
-											spacing={0}
-											onValueChange={(value) => {
-												const next = value[0];
-												if (next === "compact" || next === "comfortable") {
-													setGridDensity(next);
-												}
-											}}
-										>
-											<ToggleGroupItem className="h-9" value="compact">
-												Compact
-											</ToggleGroupItem>
-											<ToggleGroupItem className="h-9" value="comfortable">
-												Comfortable
-											</ToggleGroupItem>
-										</ToggleGroup>
-									</div>
-								</div>
+											) : null}
+											{(timeBlocks.data?.dayParts ?? []).length > 0 ? (
+												<Field>
+													<FieldLabel>Day part</FieldLabel>
+													<Select
+														items={[
+															{ label: "All day parts", value: "all" },
+															...(timeBlocks.data?.dayParts ?? []).map(
+																(part) => ({
+																	label: part.name,
+																	value: part.id,
+																}),
+															),
+														]}
+														value={dayPartFilter}
+														onValueChange={(value) => {
+															if (!value) return;
+															setDayPartFilter(value);
+														}}
+													>
+														<SelectTrigger className="w-full">
+															<SelectValue />
+														</SelectTrigger>
+														<SelectContent alignItemWithTrigger={false}>
+															<SelectGroup>
+																<SelectItem value="all">All day parts</SelectItem>
+																{(timeBlocks.data?.dayParts ?? []).map(
+																	(part) => (
+																		<SelectItem key={part.id} value={part.id}>
+																			{part.name}
+																		</SelectItem>
+																	),
+																)}
+															</SelectGroup>
+														</SelectContent>
+													</Select>
+												</Field>
+											) : null}
+											{viewMode !== "month" ? (
+												<Field>
+													<FieldLabel>Density</FieldLabel>
+													<ToggleGroup
+														aria-label="Schedule grid density"
+														value={[gridDensity]}
+														variant="outline"
+														size="sm"
+														spacing={0}
+														className="w-full"
+														onValueChange={(value) => {
+															const next = value[0];
+															if (
+																next === "compact" ||
+																next === "comfortable"
+															) {
+																setGridDensity(next);
+															}
+														}}
+													>
+														<ToggleGroupItem
+															className="flex-1"
+															value="compact"
+														>
+															Compact
+														</ToggleGroupItem>
+														<ToggleGroupItem
+															className="flex-1"
+															value="comfortable"
+														>
+															Comfortable
+														</ToggleGroupItem>
+													</ToggleGroup>
+												</Field>
+											) : null}
+											{data.positions.length > 0 ? (
+												<Field>
+													<FieldLabel>Position colors</FieldLabel>
+													<ul
+														className="flex list-none flex-wrap gap-x-3 gap-y-1.5"
+														aria-label="Position colors"
+													>
+														{data.positions.map((position) => (
+															<li
+																key={position.id}
+																className="flex items-center gap-1.5 text-muted-foreground text-xs"
+															>
+																<span
+																	className={cn(
+																		"size-1.5 rounded-full",
+																		positionColor(position.name).dot,
+																	)}
+																	aria-hidden
+																/>
+																{position.name}
+															</li>
+														))}
+													</ul>
+												</Field>
+											) : null}
+										</FieldGroup>
+									</PopoverContent>
+								</Popover>
+								{hasStaffFilters ? (
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={clearStaffFilters}
+									>
+										<XIcon data-icon="inline-start" />
+										Clear
+									</Button>
+								) : null}
 							</>
 						) : null}
-					</div>
-					{data && data.positions.length > 0 ? (
-						<div className="grid min-h-8 grid-cols-1 items-center px-3 pt-0 pb-2 xl:grid-cols-[14rem_auto_minmax(18rem,1fr)_auto]">
-							<div className="flex min-w-0 items-center gap-3 overflow-x-auto overscroll-x-contain xl:col-span-2 xl:col-start-3">
-								<span className="shrink-0 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
-									Positions
-								</span>
-								<ul
-									className="flex list-none items-center gap-3"
-									aria-label="Position colors"
-								>
-									{data.positions.map((position) => (
-										<li
-											key={position.id}
-											className="flex shrink-0 items-center gap-1.5 text-xs"
-										>
-											<span
-												className={cn(
-													"h-3 w-1 rounded-full",
-													positionColor(position.name).dot,
-												)}
-												aria-hidden
-											/>
-											{position.name}
-										</li>
-									))}
-								</ul>
+
+						{data &&
+						(openShiftCount > 0 || conflictCount > 0 || onClockCount > 0) ? (
+							<div className="ml-auto flex min-w-0 items-center gap-1.5">
+								{openShiftCount > 0 ? (
+									<ScheduleMetric
+										value={openShiftCount}
+										label="open"
+										tone="emphasis"
+									/>
+								) : null}
+								{conflictCount > 0 ? (
+									<ScheduleMetric
+										value={conflictCount}
+										label={conflictCount === 1 ? "conflict" : "conflicts"}
+										tone="danger"
+									/>
+								) : null}
+								{onClockCount > 0 ? (
+									<ScheduleMetric
+										value={onClockCount}
+										label="on clock"
+										tone="emphasis"
+									/>
+								) : null}
 							</div>
-						</div>
-					) : null}
+						) : null}
 				</div>
 
-				<div className="flex min-h-0 flex-1 flex-col gap-3">
+				<div className="flex min-h-0 flex-1 flex-col">
 					{schedule.isError ? (
-						<Alert variant="destructive">
+						<Alert variant="destructive" className="mx-3 mt-3">
 							<AlertTriangleIcon />
 							<AlertTitle>We couldn’t load this schedule</AlertTitle>
 							<AlertDescription className="flex flex-col items-start gap-3">
@@ -1545,7 +2151,7 @@ function SchedulePage() {
 					) : null}
 
 					{!locations.isLoading && (locations.data?.length ?? 0) === 0 ? (
-						<Empty className="rounded-2xl border border-dashed">
+						<Empty className="m-3 border border-dashed">
 							<EmptyHeader>
 								<EmptyMedia variant="icon">
 									<MapPinIcon />
@@ -1553,13 +2159,13 @@ function SchedulePage() {
 								<EmptyTitle>Add a location to start scheduling</EmptyTitle>
 								<EmptyDescription>
 									Schedules are drafted per location and workweek. Add the first
-									restaurant location, then you can place shifts here.
+									location, then you can place shifts here.
 								</EmptyDescription>
 							</EmptyHeader>
 							<EmptyContent>
 								<Button
 									nativeButton={false}
-									render={<Link to="/dashboard/settings" />}
+									render={<Link to="/dashboard/settings/locations" />}
 								>
 									Go to settings
 								</Button>
@@ -1571,21 +2177,21 @@ function SchedulePage() {
 					(locations.data?.length ?? 0) > 0 &&
 					data &&
 					data.positions.length === 0 ? (
-						<Empty className="rounded-2xl border border-dashed">
+						<Empty className="m-3 border border-dashed">
 							<EmptyHeader>
 								<EmptyMedia variant="icon">
 									<TagsIcon />
 								</EmptyMedia>
 								<EmptyTitle>Add a position before placing shifts</EmptyTitle>
 								<EmptyDescription>
-									Every shift needs a position such as server, cook, or
-									bartender.
+									Every shift needs a position such as cashier, nurse, or
+									technician.
 								</EmptyDescription>
 							</EmptyHeader>
 							<EmptyContent>
 								<Button
 									nativeButton={false}
-									render={<Link to="/dashboard/settings" />}
+									render={<Link to="/dashboard/settings/positions" />}
 								>
 									Go to settings
 								</Button>
@@ -1593,32 +2199,35 @@ function SchedulePage() {
 						</Empty>
 					) : null}
 
-					<Sheet
+					<Dialog
 						open={form !== null && data !== undefined}
 						onOpenChange={(open) => {
 							if (!open) {
+								if (positionApproval) return;
 								setForm(null);
 								setAddDates([]);
 							}
 						}}
 					>
-						<SheetContent
-							side="right"
-							className="w-full gap-0 sm:max-w-lg"
+						<DialogContent
+							className="flex max-h-[min(40rem,90vh)] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
 							showCloseButton
 						>
 							{form && data ? (
-								<form onSubmit={submit} className="flex h-full flex-col">
-									<SheetHeader>
-										<SheetTitle>
+								<form
+									onSubmit={submit}
+									className="flex min-h-0 flex-1 flex-col"
+								>
+									<DialogHeader className="border-b px-6 py-4 pr-12">
+										<DialogTitle>
 											{form.shiftId ? "Edit shift" : "Add shifts"}
-										</SheetTitle>
-										<SheetDescription>
+										</DialogTitle>
+										<DialogDescription>
 											Times are in {data.schedule.timezone}. Leave the worker
 											open if you have not assigned anyone yet.
-										</SheetDescription>
-									</SheetHeader>
-									<div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+										</DialogDescription>
+									</DialogHeader>
+									<div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
 										<FieldGroup>
 											<Field>
 												<FieldLabel htmlFor="shift-worker">Worker</FieldLabel>
@@ -1631,21 +2240,15 @@ function SchedulePage() {
 															(candidate) =>
 																candidate.employmentId === nextEmploymentId,
 														);
-														const allowed = positionsForWorker(
-															data.positions,
-															member,
-														);
 														let positionId = form.positionId;
-														if (allowed.length === 1) {
-															positionId = allowed[0]?.id ?? "";
-														} else if (
-															positionId &&
-															allowed.length > 0 &&
-															!allowed.some(
-																(position) => position.id === positionId,
-															)
-														) {
-															positionId = "";
+														if (!positionId) {
+															const allowed = positionsForWorker(
+																data.positions,
+																member,
+															);
+															if (allowed.length === 1) {
+																positionId = allowed[0]?.id ?? "";
+															}
 														}
 														setForm({
 															...form,
@@ -1672,7 +2275,7 @@ function SchedulePage() {
 													</SelectContent>
 												</Select>
 											</Field>
-											<Field data-invalid={positionBlocked || undefined}>
+											<Field>
 												<FieldLabel htmlFor="shift-position">
 													Position
 												</FieldLabel>
@@ -1686,31 +2289,75 @@ function SchedulePage() {
 													<SelectTrigger
 														id="shift-position"
 														className="w-full"
-														aria-invalid={positionBlocked || undefined}
 													>
 														<SelectValue />
 													</SelectTrigger>
 													<SelectContent alignItemWithTrigger={false}>
 														<SelectGroup>
-															{positionItems.map((item) => (
-																<SelectItem
-																	key={item.value ?? "choose"}
-																	value={item.value}
-																>
-																	{item.label}
-																</SelectItem>
-															))}
+															<SelectItem value={null}>Choose…</SelectItem>
 														</SelectGroup>
+														{showPositionGroups ? (
+															<>
+																<SelectGroup>
+																	<SelectLabel>
+																		Approved for {selectedStaff?.name}
+																	</SelectLabel>
+																	{allowedPositions.map((position) => (
+																		<SelectItem
+																			key={position.id}
+																			value={position.id}
+																		>
+																			{position.name}
+																		</SelectItem>
+																	))}
+																</SelectGroup>
+																<SelectGroup>
+																	<SelectLabel>Other positions</SelectLabel>
+																	{otherPositions.map((position) => (
+																		<SelectItem
+																			key={position.id}
+																			value={position.id}
+																		>
+																			{position.name}
+																		</SelectItem>
+																	))}
+																</SelectGroup>
+															</>
+														) : (
+															<SelectGroup>
+																{(data.positions ?? []).map((position) => (
+																	<SelectItem
+																		key={position.id}
+																		value={position.id}
+																	>
+																		{position.name}
+																	</SelectItem>
+																))}
+															</SelectGroup>
+														)}
 													</SelectContent>
 												</Select>
-												{positionBlocked ? (
-													<FieldError>
-														This worker is not approved for that position.
-													</FieldError>
-												) : allowedPositions.length === 0 &&
-													form.employmentId ? (
+												{positionNeedsApproval ? (
+													<Alert className="mt-1">
+														<UserPlusIcon />
+														<AlertTitle>
+															{selectedStaff?.name} isn’t approved for{" "}
+															{data.positions.find(
+																(position) => position.id === form.positionId,
+															)?.name ?? "this position"}
+														</AlertTitle>
+														<AlertDescription>
+															You can add this Position to their Employment when
+															you save. It will apply to future shifts too.
+														</AlertDescription>
+													</Alert>
+												) : selectedStaff &&
+												  selectedStaff.kind === "worker" &&
+												  selectedStaff.positionIds.length > 0 &&
+												  allowedPositions.length === 0 ? (
 													<FieldDescription>
-														This worker has no approved positions.
+														This worker has no matching approved positions.
+														Choose one to add it when you save.
 													</FieldDescription>
 												) : null}
 											</Field>
@@ -1744,14 +2391,14 @@ function SchedulePage() {
 																		? "default"
 																		: "outline"
 																}
-																className="h-auto min-h-12 flex-col gap-0 px-1 py-1.5 tabular-nums"
+																className="h-auto min-h-11 flex-col gap-0.5 px-1 py-1.5 tabular-nums"
 																aria-pressed={addDates.includes(date)}
 																onClick={() => toggleAddDate(date)}
 															>
-																<span className="text-[0.6875rem]">
+																<span className="text-[10px] text-muted-foreground">
 																	{dayHeaders[index]?.slice(0, 3)}
 																</span>
-																<span>
+																<span className="font-medium">
 																	{new Date(`${date}T12:00:00`).getDate()}
 																</span>
 															</Button>
@@ -1804,6 +2451,188 @@ function SchedulePage() {
 													maxLength={200}
 												/>
 											</Field>
+											<details className="group rounded-lg border border-border/70">
+												<summary className="cursor-pointer list-none px-3 py-2 font-medium text-sm marker:content-none [&::-webkit-details-marker]:hidden">
+													<span className="flex items-center justify-between gap-2">
+														More options
+														<span className="text-muted-foreground text-xs font-normal group-open:hidden">
+															Templates, tags, tasks…
+														</span>
+													</span>
+												</summary>
+												<div className="flex flex-col gap-4 border-t px-3 py-3">
+											{(timeBlocks.data?.timeBlocks ?? []).length > 0 ? (
+												<Field>
+													<FieldLabel>Time Block</FieldLabel>
+													<Select
+														items={(timeBlocks.data?.timeBlocks ?? []).map(
+															(block) => ({
+																label: `${block.name} · ${formatMinute(block.startMinute)}–${formatMinute(block.endMinute)}`,
+																value: block.id,
+															}),
+														)}
+														value={null}
+														onValueChange={(value) => {
+															const block = (
+																timeBlocks.data?.timeBlocks ?? []
+															).find((row) => row.id === value);
+															if (!block) return;
+															setForm({
+																...form,
+																startMinute: block.startMinute,
+																endMinute: block.endMinute,
+															});
+														}}
+													>
+														<SelectTrigger className="w-full">
+															<SelectValue placeholder="Apply a Time Block" />
+														</SelectTrigger>
+														<SelectContent alignItemWithTrigger={false}>
+															<SelectGroup>
+																{(timeBlocks.data?.timeBlocks ?? []).map(
+																	(block) => (
+																		<SelectItem key={block.id} value={block.id}>
+																			{block.name}
+																		</SelectItem>
+																	),
+																)}
+															</SelectGroup>
+														</SelectContent>
+													</Select>
+												</Field>
+											) : null}
+											{(timeBlocks.data?.shiftTemplates ?? []).length > 0 ? (
+												<Field>
+													<FieldLabel>Shift Template</FieldLabel>
+													<Select
+														items={(timeBlocks.data?.shiftTemplates ?? []).map(
+															(template) => ({
+																label: template.name,
+																value: template.id,
+															}),
+														)}
+														value={null}
+														onValueChange={(value) => {
+															const template = (
+																timeBlocks.data?.shiftTemplates ?? []
+															).find((row) => row.id === value);
+															if (!template) return;
+															setForm({
+																...form,
+																positionId: template.positionId,
+																startMinute: template.startMinute,
+																endMinute: template.endMinute,
+																note: template.note ?? form.note,
+															});
+														}}
+													>
+														<SelectTrigger className="w-full">
+															<SelectValue placeholder="Apply a Shift Template" />
+														</SelectTrigger>
+														<SelectContent alignItemWithTrigger={false}>
+															<SelectGroup>
+																{(timeBlocks.data?.shiftTemplates ?? []).map(
+																	(template) => (
+																		<SelectItem
+																			key={template.id}
+																			value={template.id}
+																		>
+																			{template.name}
+																		</SelectItem>
+																	),
+																)}
+															</SelectGroup>
+														</SelectContent>
+													</Select>
+												</Field>
+											) : null}
+											{(tags.data?.tags ?? []).length > 0 && form.shiftId ? (
+												<Field>
+													<FieldLabel>Shift Tags</FieldLabel>
+													<div className="flex flex-wrap gap-2">
+														{(tags.data?.tags ?? []).map((tag) => (
+															<Button
+																key={tag.id}
+																type="button"
+																size="sm"
+																variant={
+																	form.tagIds.includes(tag.id)
+																		? "secondary"
+																		: "outline"
+																}
+																onClick={() =>
+																	setForm({
+																		...form,
+																		tagIds: form.tagIds.includes(tag.id)
+																			? form.tagIds.filter((id) => id !== tag.id)
+																			: [...form.tagIds, tag.id],
+																	})
+																}
+															>
+																{tag.name}
+															</Button>
+														))}
+													</div>
+												</Field>
+											) : null}
+											{form.shiftId ? (
+												<Field>
+													<FieldLabel htmlFor="shift-tasks">
+														Shift Tasks
+													</FieldLabel>
+													<Textarea
+														id="shift-tasks"
+														value={form.taskTitles}
+														onChange={(event) =>
+															setForm({
+																...form,
+																taskTitles: event.target.value,
+															})
+														}
+														placeholder="One checklist item per line"
+													/>
+													<FieldDescription>
+														Saving replaces the checklist on this Shift.
+													</FieldDescription>
+												</Field>
+											) : null}
+											{form.shiftId ? (
+												<Field>
+													<FieldLabel htmlFor="shift-repeat">
+														Repeat into later weeks
+													</FieldLabel>
+													<div className="flex gap-2">
+														<Input
+															id="shift-repeat"
+															type="number"
+															min={1}
+															max={12}
+															value={repeatWeeks}
+															onChange={(event) =>
+																setRepeatWeeks(event.target.value)
+															}
+														/>
+														<Button
+															type="button"
+															variant="outline"
+															disabled={repeatShift.isPending}
+															onClick={() =>
+																repeatShift.mutate({
+																	shiftId: form.shiftId ?? "",
+																	weeks: Math.max(
+																		1,
+																		Math.min(12, Number(repeatWeeks) || 1),
+																	),
+																})
+															}
+														>
+															Copy forward
+														</Button>
+													</div>
+												</Field>
+											) : null}
+												</div>
+											</details>
 											{needsOverride ? (
 												<Field>
 													<FieldLabel htmlFor="shift-override">
@@ -1857,9 +2686,202 @@ function SchedulePage() {
 													</AlertDescription>
 												</Alert>
 											) : null}
+											{selectedShiftTimeclock?.versionShiftId &&
+											selectedShiftAssigned ? (
+												<Field>
+													<FieldLabel>Today operations</FieldLabel>
+													<FieldDescription>
+														These marks stay on the published Shift. They do not
+														change the schedule. Punch times use{" "}
+														{data.schedule.timezone}.
+													</FieldDescription>
+													{selectedShiftTimeclock.attendance ? (
+														<Badge variant="destructive">
+															{selectedShiftTimeclock.attendance === "no_show"
+																? "No-show"
+																: selectedShiftTimeclock.attendance === "sick"
+																	? "Sick"
+																	: "Late"}
+														</Badge>
+													) : null}
+													<div className="flex flex-wrap gap-2">
+														<Button
+															type="button"
+															size="sm"
+															variant="outline"
+															disabled={markAttendance.isPending}
+															onClick={() =>
+																markAttendance.mutate(
+																	{
+																		versionShiftId:
+																			selectedShiftTimeclock.versionShiftId,
+																		kind: "late",
+																	},
+																	{
+																		onSuccess: () =>
+																			toast.success("Marked late."),
+																		onError: (error) =>
+																			toast.error((error as Error).message),
+																	},
+																)
+															}
+														>
+															Late
+														</Button>
+														<Button
+															type="button"
+															size="sm"
+															variant="outline"
+															disabled={markAttendance.isPending}
+															onClick={() =>
+																markAttendance.mutate(
+																	{
+																		versionShiftId:
+																			selectedShiftTimeclock.versionShiftId,
+																		kind: "no_show",
+																	},
+																	{
+																		onSuccess: () =>
+																			toast.success("Marked no-show."),
+																		onError: (error) =>
+																			toast.error((error as Error).message),
+																	},
+																)
+															}
+														>
+															No-show
+														</Button>
+														<Button
+															type="button"
+															size="sm"
+															variant="outline"
+															disabled={markAttendance.isPending}
+															onClick={() =>
+																markAttendance.mutate(
+																	{
+																		versionShiftId:
+																			selectedShiftTimeclock.versionShiftId,
+																		kind: "sick",
+																	},
+																	{
+																		onSuccess: () =>
+																			toast.success("Marked sick."),
+																		onError: (error) =>
+																			toast.error((error as Error).message),
+																	},
+																)
+															}
+														>
+															Sick
+														</Button>
+													</div>
+													<Field>
+														<FieldLabel htmlFor="punch-in">Clock in</FieldLabel>
+														<Input
+															id="punch-in"
+															type="datetime-local"
+															step={60}
+															className="h-9"
+															value={punchInLocal}
+															onChange={(event) =>
+																setPunchInLocal(event.target.value)
+															}
+														/>
+													</Field>
+													<Field>
+														<FieldLabel htmlFor="punch-out">
+															Clock out
+														</FieldLabel>
+														<Input
+															id="punch-out"
+															type="datetime-local"
+															step={60}
+															className="h-9"
+															disabled={punchStillOpen}
+															value={punchOutLocal}
+															onChange={(event) =>
+																setPunchOutLocal(event.target.value)
+															}
+														/>
+													</Field>
+													<Field orientation="horizontal">
+														<Checkbox
+															id="punch-open"
+															checked={punchStillOpen}
+															onCheckedChange={(checked) =>
+																setPunchStillOpen(checked === true)
+															}
+														/>
+														<FieldLabel
+															htmlFor="punch-open"
+															className="font-normal"
+														>
+															Still on the clock
+														</FieldLabel>
+													</Field>
+													<Input
+														aria-label="Time Entry correction reason"
+														placeholder="Reason for punch correction"
+														value={punchReason}
+														onChange={(event) =>
+															setPunchReason(event.target.value)
+														}
+													/>
+													<Button
+														type="button"
+														size="sm"
+														variant="outline"
+														disabled={
+															editTimeEntry.isPending ||
+															punchReason.trim().length < 3 ||
+															!punchInLocal ||
+															(!punchStillOpen && !punchOutLocal)
+														}
+														onClick={() => {
+															const timezone = data.schedule.timezone;
+															const clockedInAt = datetimeLocalToIso(
+																punchInLocal,
+																timezone,
+															);
+															if (!clockedInAt) {
+																toast.error("Clock-in time is not valid");
+																return;
+															}
+															const clockedOutAt = punchStillOpen
+																? null
+																: datetimeLocalToIso(punchOutLocal, timezone);
+															if (!punchStillOpen && !clockedOutAt) {
+																toast.error("Clock-out time is not valid");
+																return;
+															}
+															editTimeEntry.mutate(
+																{
+																	versionShiftId:
+																		selectedShiftTimeclock.versionShiftId,
+																	clockedInAt,
+																	clockedOutAt,
+																	reason: punchReason.trim(),
+																},
+																{
+																	onSuccess: () => {
+																		setPunchReason("");
+																		toast.success("Time Entry saved.");
+																	},
+																	onError: (error) =>
+																		toast.error((error as Error).message),
+																},
+															);
+														}}
+													>
+														{selectedShiftTimeclock.status
+															? "Correct Time Entry"
+															: "Record missed punch"}
+													</Button>
+												</Field>
+											) : null}
 										</FieldGroup>
 									</div>
-									<SheetFooter className="flex-row flex-wrap">
+									<DialogFooter className="flex-row flex-wrap border-t px-6 py-4 sm:justify-start">
 										<Button
 											type="submit"
 											size="sm"
@@ -1879,7 +2901,7 @@ function SchedulePage() {
 												size="sm"
 												disabled={createOrUpdate.isPending || !canSave}
 												onClick={() =>
-													createOrUpdate.mutate({ ...form, shiftId: null })
+													queueShiftSave({ ...form, shiftId: null })
 												}
 											>
 												<CopyIcon data-icon="inline-start" />
@@ -1922,73 +2944,288 @@ function SchedulePage() {
 												</AlertDialogContent>
 											</AlertDialog>
 										) : null}
-									</SheetFooter>
+									</DialogFooter>
 								</form>
 							) : null}
-						</SheetContent>
-					</Sheet>
+						</DialogContent>
+					</Dialog>
 
-					{/* Week grid — borderless canvas, color-coded blocks */}
-					{schedule.isPending && !data ? <ScheduleGridSkeleton /> : null}
+					{copiedShifts.length > 0 && viewMode !== "month" ? (
+						<div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-3 py-2 print:hidden">
+							<span className="text-muted-foreground text-xs tabular-nums">
+								{copiedShifts.length} shift
+								{copiedShifts.length === 1 ? "" : "s"} copied
+							</span>
+							<Select
+								items={[
+									{ label: "Paste onto day", value: null },
+									...days.map((day) => ({
+										label: formatDayLabel(day),
+										value: day,
+									})),
+								]}
+								value={null}
+								onValueChange={(value) => {
+									if (value) pasteShifts.mutate(value);
+								}}
+							>
+								<SelectTrigger aria-label="Paste copied shifts onto a day">
+									<SelectValue placeholder="Paste onto day" />
+								</SelectTrigger>
+								<SelectContent alignItemWithTrigger={false}>
+									<SelectGroup>
+										{days.map((day) => (
+											<SelectItem key={day} value={day}>
+												{formatDayLabel(day)}
+											</SelectItem>
+										))}
+									</SelectGroup>
+								</SelectContent>
+							</Select>
+							<Button
+								size="sm"
+								variant="ghost"
+								onClick={() => setCopiedShifts([])}
+							>
+								Clear
+							</Button>
+						</div>
+					) : null}
 
-					{data ? (
+					{selectedShiftIds.length > 0 ? (
+						<div className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-3 py-2 print:hidden">
+							<Badge variant="secondary" className="tabular-nums">
+								{selectedShiftIds.length} selected
+							</Badge>
+							<Button
+								size="sm"
+								variant="outline"
+								onClick={() => {
+									const picked = (data?.shifts ?? []).filter((shift) =>
+										selectedShiftIds.includes(shift.id),
+									);
+									setCopiedShifts(
+										picked.map((shift) => ({
+											positionId: shift.positionId,
+											startMinute: shift.startMinute,
+											endMinute: shift.endMinute,
+											note: shift.note,
+										})),
+									);
+									toast.success("Shifts copied.");
+								}}
+							>
+								Copy
+							</Button>
+							<Button
+								size="sm"
+								variant="destructive"
+								disabled={bulkShifts.isPending}
+								onClick={() =>
+									bulkShifts.mutate({
+										shiftIds: selectedShiftIds,
+										delete: true,
+									})
+								}
+							>
+								Delete
+							</Button>
+							<Button
+								size="sm"
+								variant="ghost"
+								onClick={() => setSelectedShiftIds([])}
+							>
+								Clear
+							</Button>
+							<p className="text-muted-foreground text-xs">
+								Shift-click or ⌘-click a shift to select.
+							</p>
+						</div>
+					) : null}
+
+					{viewMode === "month" ? (
+						<div className="flex min-h-0 flex-1 flex-col">
+							<ScheduleMonthGrid
+								monthStart={monthAnchor}
+								weekStartDay={weekStartDay}
+								todayKey={todayKey}
+								shifts={calendar.data?.shifts ?? []}
+								timeclockByShiftId={timeclockByShiftId}
+								filterShift={shiftMatchesCalendarFilters}
+								isPending={calendar.isPending && !calendar.data}
+								onSelectDay={(day) => {
+									setWeekStart(
+										weekStartOf(new Date(`${day}T12:00:00`), weekStartDay),
+									);
+									setSelectedDay(day);
+									setMonthAnchor(monthStartOf(day));
+									setViewMode("day");
+									setTodayFocus(false);
+									setForm(null);
+								}}
+								onOpenShift={(shift) => {
+									setWeekStart(
+										weekStartOf(
+											new Date(`${shift.date}T12:00:00`),
+											weekStartDay,
+										),
+									);
+									setSelectedDay(shift.date);
+									openEdit(shift);
+								}}
+							/>
+						</div>
+					) : null}
+
+					{viewMode !== "month" && schedule.isPending && !data ? (
+						<div className="flex min-h-0 flex-1 flex-col">
+							<ScheduleGridSkeleton />
+						</div>
+					) : null}
+
+					{viewMode !== "month" && data ? (
 						<DragDropProvider onDragEnd={handleShiftDragEnd}>
-							<div className="relative flex min-h-0 flex-1 flex-col overflow-hidden border border-border/70 bg-background shadow-sm print:border print:shadow-none">
+							<div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
 								<div className="schedule-grid-scroll min-h-0 min-w-0 flex-1 overflow-auto overscroll-none">
 									<div
-										className={cn(
-											"grid",
-											gridDensity === "compact"
-												? "min-w-[1032px] grid-cols-[200px_repeat(7,minmax(118px,1fr))]"
-												: "min-w-[1144px] grid-cols-[220px_repeat(7,minmax(132px,1fr))]",
-										)}
+										className="grid"
+										style={{
+											gridTemplateColumns:
+												gridDensity === "compact"
+													? `200px repeat(${visibleDays.length}, minmax(118px, 1fr))`
+													: `220px repeat(${visibleDays.length}, minmax(132px, 1fr))`,
+											minWidth:
+												visibleDays.length === 1
+													? undefined
+													: gridDensity === "compact"
+														? 1032
+														: 1144,
+										}}
 									>
-										{/* Header */}
-										<div className="sticky top-0 left-0 z-30 flex items-end border-border/70 border-r border-b bg-background px-4 pt-3 pb-2.5 shadow-[4px_0_12px_-12px_var(--foreground)]">
+										<div className="sticky top-0 left-0 z-30 flex items-center border-border border-r border-b bg-background px-3 py-2">
 											<span className="font-medium text-muted-foreground text-xs">
-												{hasStaffFilters
-													? `${filteredStaff.length} of ${data.staff.length}`
-													: data.staff.length}{" "}
-												on roster
+												Staff
 											</span>
 										</div>
-										{days.map((day, index) => {
+										{visibleDays.map((day) => {
 											const isToday = day === todayKey;
-											const isWeekend = index >= 5;
+											const isWeekend = isWeekendDate(day);
 											const summary = daySummaries.get(day);
+											const daySalesCents = salesByDate.get(day) ?? 0;
+											const hoursLabel =
+												summary && summary.minutes > 0
+													? `${(summary.minutes / 60).toFixed(1)}h`
+													: null;
 											return (
 												<div
 													key={day}
 													className={cn(
-														"sticky top-0 z-20 border-border/70 border-r border-b bg-background px-2 pt-3 pb-2.5 text-center last:border-r-0",
-														isWeekend && "bg-muted/30",
-														isToday && "bg-accent/55",
+														"group/day sticky top-0 z-20 flex flex-col items-center gap-0.5 border-border border-r border-b bg-background px-1.5 py-2 last:border-r-0",
+														isWeekend && "bg-muted",
 													)}
 												>
-													<div className="flex items-center justify-center gap-1.5">
-														<p className="font-medium text-muted-foreground text-xs">
-															{dayHeaders[index]?.slice(0, 3)}
-														</p>
-														<span
-															className={cn(
-																"inline-flex size-6 items-center justify-center rounded-full font-semibold text-xs tabular-nums",
-																isToday &&
-																	"bg-primary text-primary-foreground shadow-sm",
-															)}
-														>
-															{new Date(`${day}T12:00:00`).getDate()}
+													<span
+														className={cn(
+															"text-[11px] font-medium leading-none",
+															isToday
+																? "text-primary"
+																: "text-muted-foreground",
+														)}
+													>
+														{weekdayShort(day)}
+													</span>
+													<span
+														className={cn(
+															"flex size-7 items-center justify-center text-sm font-semibold tabular-nums leading-none",
+															isToday &&
+																"rounded-full bg-primary text-primary-foreground",
+														)}
+													>
+														{new Date(`${day}T12:00:00`).getDate()}
+													</span>
+													{hoursLabel ? (
+														<span className="text-[10px] text-muted-foreground/80 tabular-nums leading-none">
+															{hoursLabel}
 														</span>
-													</div>
-													<p className="mt-1 text-[10px] text-muted-foreground tabular-nums">
-														{summary
-															? `${summary.shifts} shift${summary.shifts === 1 ? "" : "s"} · ${(summary.minutes / 60).toFixed(1)}h`
-															: "No shifts"}
-													</p>
+													) : null}
+													<Popover
+														onOpenChange={(open) => {
+															if (open) prepareDaySales(day);
+														}}
+													>
+														<PopoverTrigger
+															render={
+																<Button
+																	variant="ghost"
+																	size="xs"
+																	aria-label={`Sales for ${formatDayLabel(day)}`}
+																	className={cn(
+																		"h-4 px-1 font-normal text-[10px] text-muted-foreground tabular-nums",
+																		daySalesCents > 0
+																			? undefined
+																			: "opacity-0 transition-opacity group-hover/day:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-60",
+																	)}
+																/>
+															}
+														>
+															{daySalesCents > 0
+																? formatCents(daySalesCents)
+																: "Sales"}
+														</PopoverTrigger>
+														<PopoverContent
+															align="center"
+															className="w-64"
+															sideOffset={6}
+														>
+															<PopoverHeader>
+																<PopoverTitle>
+																	Sales · {formatDayLabel(day)}
+																</PopoverTitle>
+																<PopoverDescription>
+																	Used for labor percent on this day.
+																</PopoverDescription>
+															</PopoverHeader>
+															<FieldGroup className="gap-3">
+																<Field>
+																	<FieldLabel htmlFor={`day-sales-${day}`}>
+																		Amount
+																	</FieldLabel>
+																	<InputGroup>
+																		<InputGroupAddon align="inline-start">
+																			$
+																		</InputGroupAddon>
+																		<InputGroupInput
+																			id={`day-sales-${day}`}
+																			inputMode="decimal"
+																			placeholder="0"
+																			value={
+																				selectedDay === day ? salesDollars : ""
+																			}
+																			onChange={(event) =>
+																				setSalesDollars(event.target.value)
+																			}
+																		/>
+																	</InputGroup>
+																</Field>
+																<Button
+																	size="sm"
+																	disabled={
+																		saveSales.isPending || !activeLocationId
+																	}
+																	onClick={() => submitDaySales(day)}
+																>
+																	{saveSales.isPending ? (
+																		<Spinner data-icon="inline-start" />
+																	) : null}
+																	Save sales
+																</Button>
+															</FieldGroup>
+														</PopoverContent>
+													</Popover>
 												</div>
 											);
 										})}
 
-										{/* Worker rows */}
 										{visibleStaff.map((member) => {
 											const hasConstraints =
 												(member.unavailability?.length ?? 0) > 0 ||
@@ -2005,13 +3242,13 @@ function SchedulePage() {
 												<div key={member.employmentId} className="contents">
 													<div
 														className={cn(
-															"sticky left-0 z-10 flex items-center gap-3 border-border/70 border-r border-b bg-background px-3 py-3 shadow-[4px_0_12px_-12px_var(--foreground)]",
+															"sticky left-0 z-10 flex items-center gap-2.5 border-border border-r border-b bg-background px-3 py-2.5",
 															gridDensity === "compact"
-																? "min-h-20"
-																: "min-h-[104px]",
+																? "min-h-[4.5rem]"
+																: "min-h-24",
 														)}
 													>
-														<Avatar className="shrink-0 shadow-[0_0_0_2px_var(--background)]">
+														<Avatar size="sm" className="shrink-0">
 															<AvatarFallback
 																className={cn(
 																	member.kind === "manager" &&
@@ -2021,9 +3258,9 @@ function SchedulePage() {
 																{initials(member.name)}
 															</AvatarFallback>
 														</Avatar>
-														<div className="min-w-0 flex-1 space-y-1">
+														<div className="min-w-0 flex-1 flex flex-col gap-0.5">
 															<p
-																className="truncate font-semibold text-sm leading-tight"
+																className="truncate font-medium text-sm leading-tight"
 																title={member.name}
 															>
 																{member.name}
@@ -2037,9 +3274,9 @@ function SchedulePage() {
 																{memberShiftCount === 1 ? "" : "s"}
 															</p>
 														</div>
-														<div className="flex shrink-0 flex-col items-end gap-2">
+														<div className="flex shrink-0 flex-col items-end gap-1">
 															<span
-																className="font-semibold text-xs tabular-nums"
+																className="font-medium text-xs tabular-nums"
 																title={`${(minutes / 60).toFixed(1)} scheduled hours`}
 															>
 																{(minutes / 60).toFixed(1)}h
@@ -2048,7 +3285,7 @@ function SchedulePage() {
 																<Tooltip>
 																	<TooltipTrigger
 																		render={
-																			<span className="inline-flex size-6 items-center justify-center text-muted-foreground">
+																			<span className="inline-flex size-5 items-center justify-center text-muted-foreground">
 																				<BanIcon className="size-3.5" />
 																				<span className="sr-only">
 																					Has scheduling constraints
@@ -2063,16 +3300,18 @@ function SchedulePage() {
 															) : null}
 														</div>
 													</div>
-													{days.map((day, dayIndex) => {
-														const workerShifts =
+													{visibleDays.map((day) => {
+														const workerShifts = (
 															scheduleIndex.shiftsByWorkerDay.get(
 																`${member.employmentId}:${day}`,
-															) ?? [];
+															) ?? []
+														).filter(shiftMatchesSurfaceFilters);
 														const constraints = cellConstraints(member, day);
 														const isEmptyCell =
 															workerShifts.length === 0 &&
 															constraints.length === 0;
 														const isToday = day === todayKey;
+														const dayIndex = days.indexOf(day);
 														const isWeekend = dayIndex >= 5;
 														return (
 															<ScheduleDropCell
@@ -2080,27 +3319,27 @@ function SchedulePage() {
 																employmentId={member.employmentId}
 																date={day}
 																className={cn(
-																	"group relative border-border/60 border-r border-b p-2 transition-colors last:border-r-0 hover:bg-accent/30",
+																	"group relative border-border/70 border-r border-b p-1.5 transition-colors last:border-r-0 hover:bg-accent/25",
 																	gridDensity === "compact"
-																		? "min-h-20"
-																		: "min-h-[104px]",
-																	isWeekend && "bg-muted/30",
-																	isToday && "bg-accent/25",
+																		? "min-h-[4.5rem]"
+																		: "min-h-24",
+																	isWeekend && "bg-muted/20",
+																	isToday && "bg-accent/20",
 																)}
 															>
 																{constraints.length > 0 ? (
-																	<div className="mb-1.5 space-y-1">
+																	<div className="mb-1 flex flex-col gap-1">
 																		{constraints.map((constraint) => (
 																			<Badge
 																				key={constraint.key}
 																				variant="outline"
-																				className="max-w-full gap-1 border-border border-dashed px-1.5 py-0 font-normal text-[10px] text-muted-foreground"
+																				className="max-w-full gap-1 border-dashed px-1.5 font-normal text-[10px] text-muted-foreground"
 																			>
 																				{constraint.kind ===
 																				"unavailability" ? (
-																					<BanIcon className="size-3 shrink-0" />
+																					<BanIcon data-icon="inline-start" />
 																				) : (
-																					<CalendarOffIcon className="size-3 shrink-0" />
+																					<CalendarOffIcon data-icon="inline-start" />
 																				)}
 																				<span className="truncate">
 																					{constraint.label}
@@ -2109,12 +3348,18 @@ function SchedulePage() {
 																		))}
 																	</div>
 																) : null}
-																<div className="space-y-1.5">
+																<div className="flex flex-col gap-1">
 																	{workerShifts.map((shift) => (
 																		<ShiftTile
 																			key={shift.id}
 																			shift={shift}
 																			onOpen={openEdit}
+																			onToggleSelect={() =>
+																				toggleShiftSelect(shift.id)
+																			}
+																			selected={selectedShiftIds.includes(
+																				shift.id,
+																			)}
 																			compact={gridDensity === "compact"}
 																			disabled={moveShift.isPending}
 																			timeclock={timeclockByShiftId.get(
@@ -2126,13 +3371,13 @@ function SchedulePage() {
 																<Button
 																	type="button"
 																	aria-label={`Add shift for ${member.name} on ${dayHeaders[dayIndex]}`}
-																	variant={isEmptyCell ? "outline" : "ghost"}
+																	variant={isEmptyCell ? "outline" : "secondary"}
 																	size={isEmptyCell ? "sm" : "icon-xs"}
 																	className={cn(
-																		"schedule-cell-add absolute rounded-md border border-border/60 bg-card/90 text-muted-foreground opacity-0 shadow-xs transition-[opacity,background-color,color] hover:bg-action hover:text-action-foreground focus-visible:opacity-100 group-hover:opacity-100",
+																		"schedule-cell-add absolute text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100",
 																		isEmptyCell &&
-																			"schedule-cell-add-empty inset-0 m-auto h-8 w-fit border-dashed bg-transparent px-2.5 opacity-100 shadow-none",
-																		!isEmptyCell && "right-1.5 bottom-1.5",
+																			"schedule-cell-add-empty inset-0 m-auto h-7 w-fit border-dashed bg-transparent shadow-none",
+																		!isEmptyCell && "right-1 bottom-1",
 																	)}
 																	disabled={
 																		!data || data.positions.length === 0
@@ -2155,7 +3400,7 @@ function SchedulePage() {
 																		}
 																	/>
 																	{isEmptyCell ? (
-																		<span>Add shift</span>
+																		<span>Add</span>
 																	) : (
 																		<span className="sr-only">
 																			Add shift for {member.name} on{" "}
@@ -2170,7 +3415,7 @@ function SchedulePage() {
 											);
 										})}
 										{filteredStaff.length === 0 ? (
-											<div className="col-span-8 flex flex-col items-center gap-2 border-b bg-background p-6 text-center">
+											<div className="col-span-8 flex flex-col items-center gap-2 border-b bg-background p-8 text-center">
 												<p className="font-medium text-sm">
 													No workers match these filters
 												</p>
@@ -2202,11 +3447,10 @@ function SchedulePage() {
 											</div>
 										) : null}
 
-										{/* Open shifts row */}
 										{data.positions.length > 0 ? (
 											<>
-												<div className="sticky left-0 z-10 flex min-h-20 items-center border-border/70 border-r border-b bg-accent/60 px-4 py-3 shadow-[4px_0_12px_-12px_var(--foreground)]">
-													<div>
+												<div className="sticky left-0 z-10 flex min-h-20 items-center border-border border-r border-b bg-accent px-3 py-3">
+													<div className="flex flex-col gap-0.5">
 														<p className="font-medium text-sm leading-tight">
 															Open shifts
 														</p>
@@ -2217,33 +3461,43 @@ function SchedulePage() {
 														</p>
 													</div>
 												</div>
-												{days.map((day, dayIndex) => {
-													const isWeekend = dayIndex >= 5;
+												{visibleDays.map((day) => {
+													const isWeekend = days.indexOf(day) >= 5;
 													return (
 														<ScheduleDropCell
 															key={day}
 															employmentId={null}
 															date={day}
 															className={cn(
-																"min-h-20 border-border/60 border-r border-b bg-accent/25 p-2 last:border-r-0",
-																isWeekend && "bg-muted/30",
+																"min-h-20 border-border/70 border-r border-b bg-accent/20 p-1.5 last:border-r-0",
+																isWeekend && "bg-muted/20",
 															)}
 														>
-															<div className="space-y-1.5">
+															<div className="flex flex-col gap-1">
 																{(
 																	scheduleIndex.shiftsByWorkerDay.get(
 																		`open:${day}`,
 																	) ?? []
-																).map((shift) => (
-																	<ShiftTile
-																		key={shift.id}
-																		shift={shift}
-																		onOpen={openEdit}
-																		compact={gridDensity === "compact"}
-																		disabled={moveShift.isPending}
-																		timeclock={timeclockByShiftId.get(shift.id)}
-																	/>
-																))}
+																)
+																	.filter(shiftMatchesSurfaceFilters)
+																	.map((shift) => (
+																		<ShiftTile
+																			key={shift.id}
+																			shift={shift}
+																			onOpen={openEdit}
+																			onToggleSelect={() =>
+																				toggleShiftSelect(shift.id)
+																			}
+																			selected={selectedShiftIds.includes(
+																				shift.id,
+																			)}
+																			compact={gridDensity === "compact"}
+																			disabled={moveShift.isPending}
+																			timeclock={timeclockByShiftId.get(
+																				shift.id,
+																			)}
+																		/>
+																	))}
 															</div>
 														</ScheduleDropCell>
 													);
@@ -2251,11 +3505,10 @@ function SchedulePage() {
 											</>
 										) : null}
 
-										{/* Off-roster row */}
 										{offRosterShifts.length > 0 ? (
 											<>
-												<div className="sticky left-0 z-10 flex min-h-20 items-center border-border/70 border-r border-b bg-muted/60 px-4 py-3 shadow-[4px_0_12px_-12px_var(--foreground)]">
-													<div>
+												<div className="sticky left-0 z-10 flex min-h-20 items-center border-border border-r border-b bg-muted px-3 py-3">
+													<div className="flex flex-col gap-0.5">
 														<p className="font-medium text-sm leading-tight">
 															Off-roster
 														</p>
@@ -2264,31 +3517,38 @@ function SchedulePage() {
 														</p>
 													</div>
 												</div>
-												{days.map((day, dayIndex) => {
-													const isWeekend = dayIndex >= 5;
+												{visibleDays.map((day) => {
+													const isWeekend = days.indexOf(day) >= 5;
 													return (
 														<div
 															key={day}
 															className={cn(
-																"min-h-20 border-border/60 border-r border-b bg-muted/30 p-2 last:border-r-0",
-																isWeekend && "bg-muted/40",
+																"min-h-20 border-border/70 border-r border-b bg-muted/20 p-1.5 last:border-r-0",
+																isWeekend && "bg-muted/30",
 															)}
 														>
-															<div className="space-y-1.5">
-																{(offRosterShiftsByDay.get(day) ?? []).map(
-																	(shift) => (
+															<div className="flex flex-col gap-1">
+																{(offRosterShiftsByDay.get(day) ?? [])
+																	.filter(shiftMatchesSurfaceFilters)
+																	.map((shift) => (
 																		<ShiftTile
 																			key={shift.id}
 																			shift={shift}
 																			onOpen={openEdit}
+																			onToggleSelect={() =>
+																				toggleShiftSelect(shift.id)
+																			}
+																			selected={selectedShiftIds.includes(
+																				shift.id,
+																			)}
 																			compact={gridDensity === "compact"}
 																			disabled={moveShift.isPending}
+																			showWorker
 																			timeclock={timeclockByShiftId.get(
 																				shift.id,
 																			)}
 																		/>
-																	),
-																)}
+																	))}
 															</div>
 														</div>
 													);
@@ -2334,46 +3594,13 @@ function SchedulePage() {
 											unless you record an override. Preferences are guidance
 											only.
 										</p>
-										<ItemGroup className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-											{constrainedStaff.map((member) => (
-												<Item
-													key={member.employmentId}
-													variant="outline"
-													role="listitem"
-													className="rounded-xl"
-												>
-													<ItemContent>
-														<ItemTitle className="text-sm">
-															{member.name}
-														</ItemTitle>
-														<ItemDescription className="text-xs">
-															{(member.unavailability?.length ?? 0) > 0
-																? (member.unavailability ?? [])
-																		.map((window) =>
-																			window.kind === "recurring"
-																				? `Can't work ${WEEKDAY_NAMES[window.weekday ?? 0]} ${formatMinute(window.startMinute)}–${formatMinute(window.endMinute)}`
-																				: `Can't work ${window.date} ${formatMinute(window.startMinute)}–${formatMinute(window.endMinute)}`,
-																		)
-																		.join(" · ")
-																: null}
-															{member.preference
-																? `${(member.unavailability?.length ?? 0) > 0 ? " · " : ""}Prefers: ${member.preference}`
-																: ""}
-															{(member.timeOff?.length ?? 0) > 0
-																? `${(member.unavailability?.length ?? 0) > 0 || member.preference ? " · " : ""}${(
-																		member.timeOff ?? []
-																	)
-																		.map(
-																			(request) =>
-																				`${request.status} time off ${new Date(request.startsAt).toLocaleDateString()}–${new Date(request.endsAt).toLocaleDateString()}`,
-																		)
-																		.join(" · ")}`
-																: ""}
-														</ItemDescription>
-													</ItemContent>
-												</Item>
-											))}
-										</ItemGroup>
+										<DataTable
+											fill={false}
+											bounded
+											columns={scheduleStaffColumns}
+											data={constrainedStaff}
+											getRowId={(row) => row.employmentId}
+										/>
 									</section>
 								) : null}
 
@@ -2388,31 +3615,13 @@ function SchedulePage() {
 										<p className="mb-3 text-muted-foreground text-xs">
 											Totals for the draft week, split by position.
 										</p>
-										<ItemGroup className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-											{(data?.hours ?? []).map((entry) => (
-												<Item
-													key={entry.employmentId}
-													variant="outline"
-													role="listitem"
-													className="rounded-xl"
-												>
-													<ItemContent>
-														<ItemTitle className="text-sm tabular-nums">
-															{(entry.minutes / 60).toFixed(1)}h
-														</ItemTitle>
-														<ItemDescription className="text-xs">
-															{entry.name} ·{" "}
-															{entry.byPosition
-																.map(
-																	(byPosition) =>
-																		`${byPosition.positionName} ${(byPosition.minutes / 60).toFixed(1)}h`,
-																)
-																.join(", ")}
-														</ItemDescription>
-													</ItemContent>
-												</Item>
-											))}
-										</ItemGroup>
+										<DataTable
+											fill={false}
+											bounded
+											columns={hoursColumns}
+											data={data?.hours ?? []}
+											getRowId={(row) => row.employmentId}
+										/>
 									</section>
 								) : null}
 
@@ -2436,40 +3645,13 @@ function SchedulePage() {
 											Late material changes require the worker's explicit
 											acceptance. Acceptance is separate from acknowledgement.
 										</p>
-										<ItemGroup className="grid gap-2 sm:grid-cols-2">
-											{(acceptances.data?.acceptances ?? []).map(
-												(acceptance) => (
-													<Item
-														key={acceptance.id}
-														variant="outline"
-														role="listitem"
-														className="rounded-xl"
-													>
-														<ItemContent>
-															<ItemTitle className="text-sm">
-																{acceptance.workerName} · v
-																{acceptance.versionNumber}
-															</ItemTitle>
-															<ItemDescription className="text-xs">
-																{acceptance.changeSummary}
-															</ItemDescription>
-														</ItemContent>
-														<Badge
-															variant={
-																acceptance.status === "declined"
-																	? "destructive"
-																	: acceptance.status === "accepted"
-																		? "default"
-																		: "secondary"
-															}
-															className="rounded-md uppercase"
-														>
-															{acceptance.status}
-														</Badge>
-													</Item>
-												),
-											)}
-										</ItemGroup>
+										<DataTable
+											fill={false}
+											bounded
+											columns={scheduleAcceptanceColumns}
+											data={acceptances.data?.acceptances ?? []}
+											getRowId={(row) => row.id}
+										/>
 									</section>
 								) : null}
 
@@ -2485,57 +3667,13 @@ function SchedulePage() {
 											Acknowledgement means a worker saw the schedule. It does
 											not mean they accepted the shifts.
 										</p>
-										<ItemGroup className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-											{(publication.data?.versions ?? [])
-												.slice(0, 3)
-												.map((version) => {
-													const acknowledged = version.workers.filter(
-														(worker) => worker.status === "acknowledged",
-													).length;
-													return (
-														<Item
-															key={version.id}
-															variant="outline"
-															role="listitem"
-															className="items-start rounded-xl"
-														>
-															<ItemContent>
-																<ItemTitle className="text-sm">
-																	Version {version.versionNumber} ·{" "}
-																	{new Date(
-																		version.publishedAt,
-																	).toLocaleString()}
-																</ItemTitle>
-																<ItemDescription className="text-xs">
-																	{acknowledged}/{version.workers.length}{" "}
-																	acknowledged
-																</ItemDescription>
-																<div className="mt-2 flex flex-wrap gap-1.5">
-																	{version.workers.map((worker) => (
-																		<Badge
-																			key={worker.employmentId}
-																			title={`${worker.name} · ${worker.status}`}
-																			variant={
-																				worker.status === "acknowledged"
-																					? "default"
-																					: "secondary"
-																			}
-																			className="rounded-md text-[11px]"
-																		>
-																			{worker.name} ·{" "}
-																			{worker.status === "acknowledged"
-																				? "Seen"
-																				: worker.status === "delivered"
-																					? "Delivered"
-																					: "Sent"}
-																		</Badge>
-																	))}
-																</div>
-															</ItemContent>
-														</Item>
-													);
-												})}
-										</ItemGroup>
+										<DataTable
+											fill={false}
+											bounded
+											columns={publicationColumns}
+											data={(publication.data?.versions ?? []).slice(0, 3)}
+											getRowId={(row) => row.id}
+										/>
 									</section>
 								) : null}
 							</CardHeader>
@@ -2543,6 +3681,61 @@ function SchedulePage() {
 					) : null}
 				</div>
 			</div>
+			<AlertDialog
+				open={positionApproval !== null}
+				onOpenChange={(open) => {
+					if (!open && !createOrUpdate.isPending && !moveShift.isPending) {
+						setPositionApproval(null);
+					}
+				}}
+			>
+				<AlertDialogContent>
+					{positionApproval && approvalCopy ? (
+						<>
+							<AlertDialogHeader>
+								<AlertDialogMedia>
+									<UserPlusIcon />
+								</AlertDialogMedia>
+								<AlertDialogTitle>{approvalCopy.title}</AlertDialogTitle>
+								<AlertDialogDescription>
+									{approvalCopy.description}
+								</AlertDialogDescription>
+							</AlertDialogHeader>
+							<AlertDialogFooter>
+								<AlertDialogCancel
+									disabled={createOrUpdate.isPending || moveShift.isPending}
+								>
+									Cancel
+								</AlertDialogCancel>
+								<AlertDialogAction
+									disabled={createOrUpdate.isPending || moveShift.isPending}
+									onClick={(event) => {
+										event.preventDefault();
+										if (positionApproval.kind === "save") {
+											createOrUpdate.mutate({
+												...positionApproval.form,
+												approvePosition: true,
+											});
+											return;
+										}
+										moveShift.mutate({
+											shift: positionApproval.shift,
+											employmentId: positionApproval.employmentId,
+											date: positionApproval.date,
+											approvePosition: true,
+										});
+									}}
+								>
+									{createOrUpdate.isPending || moveShift.isPending ? (
+										<Spinner data-icon="inline-start" />
+									) : null}
+									{approvalCopy.confirmLabel}
+								</AlertDialogAction>
+							</AlertDialogFooter>
+						</>
+					) : null}
+				</AlertDialogContent>
+			</AlertDialog>
 			<AlertDialog
 				open={publishPreview !== null}
 				onOpenChange={(open) => {
@@ -2560,14 +3753,13 @@ function SchedulePage() {
 					</AlertDialogHeader>
 					{publishPreview?.hasPublishedVersion &&
 					publishPreview.changes.length > 0 ? (
-						<ul className="flex max-h-48 flex-col gap-1 overflow-auto text-muted-foreground text-xs">
-							{publishPreview.changes.map((change) => (
-								<li key={change.summary}>
-									{change.material ? "• " : "  "}
-									{change.summary}
-								</li>
-							))}
-						</ul>
+						<DataTable
+							fill={false}
+							bounded
+							columns={changeColumns}
+							data={publishPreview.changes}
+							getRowId={(row, index) => `${row.kind}-${row.summary}-${index}`}
+						/>
 					) : null}
 					{publishPreview && publishPreview.wouldRequireAcceptance > 0 ? (
 						<p className="text-muted-foreground text-xs">
@@ -2584,6 +3776,53 @@ function SchedulePage() {
 						>
 							{publish.isPending ? <Spinner data-icon="inline-start" /> : null}
 							Publish now
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+			<AlertDialog open={saveTemplateOpen} onOpenChange={setSaveTemplateOpen}>
+				<AlertDialogContent size="sm">
+					<AlertDialogHeader>
+						<AlertDialogTitle>Save this week as a template</AlertDialogTitle>
+						<AlertDialogDescription>
+							Stores this draft’s Shift times, Positions, and assignments so you
+							can apply them to another week. Applying replaces that week’s
+							draft.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<Field>
+						<FieldLabel htmlFor="template-name">Template name</FieldLabel>
+						<Input
+							id="template-name"
+							value={templateName}
+							onChange={(event) => setTemplateName(event.target.value)}
+							placeholder="Weekday opening"
+						/>
+					</Field>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={
+								saveTemplate.isPending || templateName.trim().length === 0
+							}
+							onClick={(event) => {
+								event.preventDefault();
+								saveTemplate.mutate(
+									{ weekStart, name: templateName.trim() },
+									{
+										onSuccess: () => {
+											setSaveTemplateOpen(false);
+											toast.success("Template saved.");
+										},
+										onError: (error) => toast.error((error as Error).message),
+									},
+								);
+							}}
+						>
+							{saveTemplate.isPending ? (
+								<Spinner data-icon="inline-start" />
+							) : null}
+							Save template
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

@@ -8,11 +8,11 @@ web
 
 ## Users
 
-Managers of independent full-service restaurants plan and communicate weekly work by location. Workers need to understand their next shift, the rest of their published week, and any action that requires their response.
+Managers of hourly workplaces plan and communicate weekly work by location. Workers need to understand their next shift, the rest of their published week, and any action that requires their response.
 
 ## Product Purpose
 
-jooling gives managers and workers one dependable source of truth for scheduled work. Success means a manager can build and publish a normal week without a spreadsheet or chat thread, and a worker can understand what they work next within seconds.
+jooling gives managers and workers one dependable source of truth for scheduled work. Success means a manager can build and publish a normal week in minutes without a spreadsheet or chat thread, and a worker can understand what they work next within seconds.
 
 ## Positioning
 
@@ -20,7 +20,7 @@ Published schedules are immutable versions. Managers prepare successor drafts, w
 
 ## Operating Context
 
-The product is used by independent full-service restaurants. Managers work in a weekly schedule builder organized around locations, workers, positions, shifts, constraints, and publication. Workers check schedules quickly, often from a phone, and may request release or pickup of shifts.
+The product is used by shift-based teams in any industry. Managers work in a weekly schedule builder organized around locations, workers, positions, shifts, constraints, and publication. Workers check schedules quickly, often from a phone, and may request release or pickup of shifts.
 
 ## Capabilities and Constraints
 
@@ -38,6 +38,7 @@ Repository domain language lives in `CONTEXT.md`. Product scope and acceptance c
 ## Product Principles
 
 - Make the next required action obvious.
+- Get a published week on the board in minutes.
 - Keep the full workweek scannable without hiding conflicts.
 - Preserve a clear boundary between draft work and published truth.
 - Explain responsibility-changing actions in plain language.

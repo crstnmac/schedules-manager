@@ -1,6 +1,6 @@
 # jooling
 
-jooling is a workforce scheduling platform for restaurants. Managers build, publish, and operate schedules from the web, while managers and workers use the Expo mobile app for daily schedule access, coverage, availability, requests, and notifications.
+jooling is a fast workforce scheduling platform for hourly teams in any industry. Managers build, publish, and operate schedules from the web, while managers and workers use the Expo mobile app for daily schedule access, coverage, availability, requests, and notifications.
 
 The product treats a published schedule as an immutable operational record. Later changes create a new version, affected workers receive explicit notifications, and material late changes can require acceptance.
 
@@ -176,7 +176,7 @@ Account signup stays open so a manager can create the first Workplace and an inv
 
 - `POST /v1/workplaces` creates the caller's first Workplace as a manager only when they have no Employment (including deactivated) and no unexpired pending invitation.
 - Joining an existing Workplace happens by accepting an invitation. A deactivated Employment still cannot open a new Workplace. The invite page lets a new person create an account with the invited email locked.
-- Web and mobile onboarding ask whether you manage a workplace or are waiting for an invite, so workers are not pushed into restaurant setup.
+- Web and mobile onboarding ask whether you manage a workplace or are waiting for an invite, so workers are not pushed into workplace setup.
 
 Open registration of *accounts* is acceptable for the pilot because it does not grant Workplace membership.
 

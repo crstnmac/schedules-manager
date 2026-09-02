@@ -23,29 +23,60 @@ export default function MoreScreen() {
 	const displayName =
 		profile?.fullName?.trim() || profile?.email || "Your account";
 	const initials = getInitials(profile?.fullName, profile?.email);
-	const tools = isManager
-		? [
-				{
-					label: "Team",
-					detail: "People, roles, and invitations",
-					icon: "people-outline" as const,
-					path: "/team" as const,
-				},
-			]
-		: [
-				{
-					label: "Timecard",
-					detail: "Punches and worked hours",
-					icon: "stopwatch-outline" as const,
-					path: "/timecard" as const,
-				},
-				{
-					label: "Availability",
-					detail: "Blocked times, preferences, and time off",
-					icon: "time-outline" as const,
-					path: "/worker-availability" as const,
-				},
-			];
+	const tools: {
+		label: string;
+		detail: string;
+		icon: React.ComponentProps<typeof Ionicons>["name"];
+		path:
+			| "/team"
+			| "/timecard"
+			| "/worker-availability"
+			| "/announcements"
+			| "/messages"
+			| "/kiosk";
+	}[] = [
+		{
+			label: "Announcements",
+			detail: "Updates shared across the Workplace",
+			icon: "megaphone-outline",
+			path: "/announcements",
+		},
+		{
+			label: "Messages",
+			detail: "Workplace conversations",
+			icon: "chatbubbles-outline",
+			path: "/messages",
+		},
+		...(isManager
+			? [
+					{
+						label: "Team",
+						detail: "People, roles, and invitations",
+						icon: "people-outline" as const,
+						path: "/team" as const,
+					},
+					{
+						label: "Kiosk",
+						detail: "Clock Workers with Location PINs",
+						icon: "keypad-outline" as const,
+						path: "/kiosk" as const,
+					},
+				]
+			: [
+					{
+						label: "Timecard",
+						detail: "Punches and worked hours",
+						icon: "stopwatch-outline" as const,
+						path: "/timecard" as const,
+					},
+					{
+						label: "Availability",
+						detail: "Blocked times, preferences, and time off",
+						icon: "time-outline" as const,
+						path: "/worker-availability" as const,
+					},
+				]),
+	];
 
 	function confirmSignOut() {
 		Alert.alert(
@@ -127,7 +158,7 @@ export default function MoreScreen() {
 						key={item.label}
 						{...item}
 						onPress={() => router.push(item.path)}
-						last={employments.length <= 1}
+						last={employments.length <= 1 && item === tools.at(-1)}
 					/>
 				))}
 				{employments.length > 1 ? (

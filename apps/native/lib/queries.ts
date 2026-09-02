@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as Location from "expo-location";
 
 import { api } from "./api";
 import { useSelectedWorkplaceId } from "./workplace-store";
@@ -127,11 +128,13 @@ export function useClockIn() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: (versionShiftId: string) =>
-			api<{ timeEntry: { id: string; clockedInAt: string } }>(
+		mutationFn: async (versionShiftId: string) => {
+			const coordinates = await requestForegroundCoordinates();
+			return api<{ timeEntry: { id: string; clockedInAt: string } }>(
 				`/v1/my/shifts/${versionShiftId}/clock-in`,
-				{ method: "POST" },
-			),
+				{ method: "POST", body: coordinates },
+			);
+		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 			queryClient.invalidateQueries({ queryKey: ["timecard"] });
@@ -174,6 +177,181 @@ export function useMyTimeEntries(workplaceId: string | undefined) {
 			),
 		enabled: Boolean(workplaceId),
 	});
+}
+
+export function useStartBreak() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (timeEntryId: string) =>
+			api(`/v1/my/time-entries/${timeEntryId}/breaks/start`, {
+				method: "POST",
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["timecard"] });
+		},
+	});
+}
+
+export function useEndBreak() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (timeEntryId: string) =>
+			api(`/v1/my/time-entries/${timeEntryId}/breaks/end`, {
+				method: "POST",
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["timecard"] });
+		},
+	});
+}
+
+export interface ShiftTask {
+	id: string;
+	title: string;
+	completed: boolean;
+}
+
+export function useShiftTasks(versionShiftId: string | undefined) {
+	return useQuery({
+		queryKey: ["shift-tasks", versionShiftId],
+		queryFn: () =>
+			api<{ tasks: ShiftTask[] }>(`/v1/my/shifts/${versionShiftId}/tasks`).then(
+				(data) => data.tasks,
+			),
+		enabled: Boolean(versionShiftId),
+	});
+}
+
+export function useCompleteShiftTask(versionShiftId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (taskId: string) =>
+			api(`/v1/my/version-shifts/${versionShiftId}/tasks/${taskId}/complete`, {
+				method: "POST",
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["shift-tasks", versionShiftId],
+			});
+		},
+	});
+}
+
+export interface Announcement {
+	id: string;
+	title: string;
+	body: string;
+	author: string;
+	createdAt: string;
+}
+
+export function useAnnouncements(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["announcements", workplaceId],
+		queryFn: () =>
+			api<{ announcements: Announcement[] }>(
+				`/v1/workplaces/${workplaceId}/announcements`,
+			).then((data) => data.announcements),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export interface WorkplaceConversation {
+	id: string;
+	kind: "workplace" | "direct";
+	title: string;
+}
+
+export interface WorkplaceMessage {
+	id: string;
+	body: string;
+	author: string;
+	createdAt: string;
+}
+
+export function useConversations(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["conversations", workplaceId],
+		queryFn: () =>
+			api<{ conversations: WorkplaceConversation[] }>(
+				`/v1/workplaces/${workplaceId}/conversations`,
+			).then((data) => data.conversations),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useConversationMessages(conversationId: string | undefined) {
+	return useQuery({
+		queryKey: ["conversation-messages", conversationId],
+		queryFn: () =>
+			api<{ messages: WorkplaceMessage[] }>(
+				`/v1/conversations/${conversationId}/messages`,
+			).then((data) => data.messages),
+		enabled: Boolean(conversationId),
+	});
+}
+
+export function useSendConversationMessage(conversationId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (body: string) =>
+			api(`/v1/conversations/${conversationId}/messages`, {
+				method: "POST",
+				body: { body },
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["conversation-messages", conversationId],
+			});
+		},
+	});
+}
+
+export interface WorkplaceLocation {
+	id: string;
+	name: string;
+	timezone: string;
+}
+
+export function useWorkplaceLocations(
+	workplaceId: string | undefined,
+	enabled = true,
+) {
+	return useQuery({
+		queryKey: ["manager", workplaceId, "locations"],
+		queryFn: () =>
+			api<{ locations: WorkplaceLocation[] }>(
+				`/v1/workplaces/${workplaceId}/locations`,
+			).then((data) => data.locations),
+		enabled: Boolean(workplaceId) && enabled,
+	});
+}
+
+export async function requestForegroundCoordinates(): Promise<{
+	latitude?: number;
+	longitude?: number;
+}> {
+	try {
+		const result = await Promise.race([
+			(async () => {
+				const permission = await Location.requestForegroundPermissionsAsync();
+				if (permission.status !== "granted") return {};
+				const position = await Location.getCurrentPositionAsync({
+					accuracy: Location.Accuracy.Balanced,
+				});
+				return {
+					latitude: position.coords.latitude,
+					longitude: position.coords.longitude,
+				};
+			})(),
+			new Promise<Record<string, never>>((resolve) =>
+				setTimeout(() => resolve({}), 5_000),
+			),
+		]);
+		return result;
+	} catch {
+		return {};
+	}
 }
 
 export interface SwapDetail {
@@ -224,6 +402,49 @@ export function useRespondToSwap() {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["swaps"] });
 			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
+			queryClient.invalidateQueries({ queryKey: ["coverage-swaps"] });
+		},
+	});
+}
+
+export function useCancelSwap() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (swapId: string) =>
+			api(`/v1/my/swaps/${swapId}/cancel`, { method: "POST" }),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["swaps"] });
+			queryClient.invalidateQueries({ queryKey: ["coverage-swaps"] });
+		},
+	});
+}
+
+export function useCoverageSwaps(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["coverage-swaps", workplaceId],
+		queryFn: () =>
+			api<{ swaps: SwapDetail[] }>(
+				`/v1/workplaces/${workplaceId}/coverage/swaps`,
+			).then((data) => data.swaps),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useSwapDecision(workplaceId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			swapId: string;
+			decision: "approved" | "declined";
+		}) =>
+			api(`/v1/workplaces/${workplaceId}/swaps/${input.swapId}/decision`, {
+				method: "POST",
+				body: { decision: input.decision },
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["coverage-swaps"] });
+			queryClient.invalidateQueries({ queryKey: ["schedule"] });
+			queryClient.invalidateQueries({ queryKey: ["swaps"] });
 		},
 	});
 }
@@ -473,6 +694,26 @@ export function useManagerTimeOff(workplaceId: string | undefined) {
 		queryFn: () =>
 			api<ManagerTimeOffResponse>(`/v1/workplaces/${workplaceId}/time-off`),
 		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useMarkAttendance(workplaceId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			versionShiftId: string;
+			kind: "late" | "no_show" | "sick";
+		}) =>
+			api(
+				`/v1/workplaces/${workplaceId}/version-shifts/${input.versionShiftId}/attendance`,
+				{
+					method: "POST",
+					body: { kind: input.kind },
+				},
+			),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["manager", "schedule"] });
+		},
 	});
 }
 

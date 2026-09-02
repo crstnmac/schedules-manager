@@ -360,7 +360,7 @@ function WorkplaceSetup({ onBack }: { onBack: () => void }) {
 			>
 				<SetupField
 					label="Workplace name"
-					placeholder="Juniper Kitchen"
+					placeholder="Northside Operations"
 					value={workplace}
 					onChange={setWorkplace}
 					theme={theme}
@@ -374,7 +374,7 @@ function WorkplaceSetup({ onBack }: { onBack: () => void }) {
 				/>
 				<SetupField
 					label="First position"
-					placeholder="Server"
+					placeholder="Associate"
 					value={position}
 					onChange={setPosition}
 					theme={theme}

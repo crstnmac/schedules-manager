@@ -91,6 +91,10 @@ export const workersRoutes = new Elysia({
 					kind: employment.kind,
 					status: employment.status,
 					joinedAt: employment.createdAt.toISOString(),
+					hourlyWageCents: employment.hourlyWageCents,
+					emergencyContactName: employment.emergencyContactName,
+					emergencyContactPhone: employment.emergencyContactPhone,
+					kioskEnabled: Boolean(employment.kioskPinHash),
 					profile: {
 						id: person.id,
 						email: person.email,

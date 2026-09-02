@@ -10,11 +10,15 @@ export type {
 	NewTimeOffRequest,
 	NewUnavailability,
 	NewWorkPreference,
+	LeaveType,
+	PtoBalance,
 	TimeOffRequest,
 	Unavailability,
 	WorkPreference,
 } from "./constraints";
 export {
+	leaveTypes,
+	ptoBalances,
 	timeOffRequests,
 	timeOffStatusEnum,
 	unavailability,
@@ -36,6 +40,24 @@ export {
 	shiftPickups,
 	shiftReleases,
 } from "./coverage";
+export type {
+	NewAttendanceMark,
+	AttendanceMark,
+} from "./attendance-marks";
+export {
+	attendanceMarkKindEnum,
+	attendanceMarks,
+} from "./attendance-marks";
+export type {
+	NewScheduleTemplate,
+	NewTemplateShift,
+	ScheduleTemplate,
+	TemplateShift,
+} from "./schedule-templates";
+export {
+	scheduleTemplates,
+	templateShifts,
+} from "./schedule-templates";
 export {
 	emailDeliveries,
 	emailDeliveryStatusEnum,
@@ -100,8 +122,12 @@ export type { NewSchedule, NewShift, Schedule, Shift } from "./schedules";
 export { schedules, shifts } from "./schedules";
 export type { NewShiftSwap, ShiftSwap } from "./shift-swaps";
 export { shiftSwaps, swapStatusEnum } from "./shift-swaps";
-export type { NewTimeEntry, TimeEntry } from "./time-entries";
-export { timeEntries } from "./time-entries";
+export type { NewTimeEntry, TimeEntry, TimeEntryBreak } from "./time-entries";
+export {
+	timeEntries,
+	timeEntryBreaks,
+	timesheetApprovalEnum,
+} from "./time-entries";
 export type {
 	Location,
 	NewLocation,
@@ -116,3 +142,34 @@ export {
 	positions,
 	workplaces,
 } from "./workplaces";
+export type {
+	Announcement,
+	Conversation,
+	DayPart,
+	EmploymentDocument,
+	LocationSale,
+	ShiftTag,
+	ShiftTask,
+	ShiftTemplate,
+	TimeBlock,
+	WorkerGroup,
+	WorkplaceMessage,
+} from "./surface";
+export {
+	announcements,
+	conversationKindEnum,
+	conversationMembers,
+	conversations,
+	dayParts,
+	employmentDocuments,
+	employmentGroups,
+	locationSales,
+	shiftTagAssignments,
+	shiftTags,
+	shiftTaskCompletions,
+	shiftTasks,
+	shiftTemplates,
+	timeBlocks,
+	workerGroups,
+	workplaceMessages,
+} from "./surface";

@@ -1,4 +1,5 @@
 import {
+	attendanceMarks,
 	db,
 	employments,
 	locations,
@@ -14,10 +15,14 @@ import { Elysia, t } from "elysia";
 
 import {
 	locationScopeFor,
+	requireManager,
 	requireSession,
 	requireWorkplaceMember,
 	weekStartDayFor,
 } from "../context";
+import { BadRequestError, NotFoundError } from "../errors";
+import { withIdempotency } from "../idempotency";
+import { notifyEmployments, writeAudit } from "../notify";
 import { weekStartOfDateKey } from "../time";
 
 function zonedDateKey(instant: Date, timezone: string): string {
@@ -166,6 +171,117 @@ export const rosterRoutes = new Elysia({
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "The pay period containing today",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.post(
+		"/workplaces/:workplaceId/version-shifts/:versionShiftId/attendance",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			return withIdempotency({
+				actorProfileId: profile.id,
+				scope: `attendance.mark:${params.versionShiftId}`,
+				key: headers["idempotency-key"],
+				request: body,
+				execute: async () => {
+					const [row] = await db
+						.select({
+							versionShiftId: versionShifts.id,
+							employmentId: versionShifts.employmentId,
+							workplaceId: locations.workplaceId,
+						})
+						.from(versionShifts)
+						.innerJoin(
+							scheduleVersions,
+							eq(scheduleVersions.id, versionShifts.versionId),
+						)
+						.innerJoin(schedules, eq(schedules.id, scheduleVersions.scheduleId))
+						.innerJoin(locations, eq(locations.id, schedules.locationId))
+						.where(
+							and(
+								eq(versionShifts.id, params.versionShiftId),
+								eq(locations.workplaceId, params.workplaceId),
+							),
+						)
+						.limit(1);
+					if (!row) throw new NotFoundError("Shift not found");
+					if (!row.employmentId) {
+						throw new BadRequestError(
+							"Mark attendance on an assigned published Shift",
+						);
+					}
+
+					const [mark] = await db
+						.insert(attendanceMarks)
+						.values({
+							versionShiftId: params.versionShiftId,
+							kind: body.kind,
+							markedByProfileId: profile.id,
+							note: body.note ?? null,
+						})
+						.onConflictDoUpdate({
+							target: attendanceMarks.versionShiftId,
+							set: {
+								kind: body.kind,
+								markedByProfileId: profile.id,
+								note: body.note ?? null,
+								updatedAt: new Date(),
+							},
+						})
+						.returning();
+					if (!mark) throw new NotFoundError("Shift not found");
+
+					const labels = {
+						late: "late",
+						no_show: "no-show",
+						sick: "sick",
+					} as const;
+					await notifyEmployments([row.employmentId], {
+						kind: "attendance_mark",
+						title: `Marked ${labels[body.kind]}`,
+						body: `A manager marked this shift as ${labels[body.kind]}. The published schedule did not change.`,
+					});
+					await writeAudit({
+						workplaceId: params.workplaceId,
+						actorProfileId: profile.id,
+						action: "attendance.marked",
+						entityType: "attendance_mark",
+						entityId: mark.id,
+						summary: `Marked a published Shift as ${labels[body.kind]}`,
+					});
+					return {
+						attendance: {
+							kind: mark.kind,
+							note: mark.note,
+						},
+					};
+				},
+			});
+		},
+		{
+			headers: t.Object({
+				authorization: t.String(),
+				"idempotency-key": t.Optional(
+					t.String({ minLength: 8, maxLength: 200 }),
+				),
+			}),
+			params: t.Object({
+				workplaceId: t.String({ format: "uuid" }),
+				versionShiftId: t.String({ format: "uuid" }),
+			}),
+			body: t.Object({
+				kind: t.Union([
+					t.Literal("late"),
+					t.Literal("no_show"),
+					t.Literal("sick"),
+				]),
+				note: t.Optional(t.String({ maxLength: 240 })),
+			}),
+			detail: {
+				summary:
+					"Mark a published Shift late, no-show, or sick without changing the schedule (Manager)",
 				security: [{ bearerAuth: [] }],
 			},
 		},

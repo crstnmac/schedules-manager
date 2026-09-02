@@ -11,25 +11,27 @@ import {
 	NotFoundError,
 	RateLimitError,
 } from "./errors";
-import {
-	getReadinessReport,
-	type ReadinessReport,
-} from "./readiness";
+import { getReadinessReport, type ReadinessReport } from "./readiness";
 import { newRequestId, writeRequestLog } from "./request-log";
 import { changesRoutes } from "./routes/changes";
 import { constraintsRoutes } from "./routes/constraints";
 import { coverageRoutes } from "./routes/coverage";
 import { emailDeliveryRoutes } from "./routes/email-delivery";
 import { invitationsRoutes } from "./routes/invitations";
+import { kioskRoutes } from "./routes/kiosk";
 import { locationsRoutes } from "./routes/locations";
 import { meRoutes } from "./routes/me";
 import { notificationsRoutes } from "./routes/notifications";
 import { pilotRoutes } from "./routes/pilot";
+import { placesRoutes } from "./routes/places";
 import { positionsRoutes } from "./routes/positions";
 import { publicationRoutes } from "./routes/publication";
+import { reportRoutes } from "./routes/reports";
 import { rosterRoutes } from "./routes/roster";
 import { schedulesRoutes } from "./routes/schedules";
+import { surfaceRoutes } from "./routes/surface";
 import { swapRoutes } from "./routes/swaps";
+import { templateRoutes } from "./routes/templates";
 import { timeEntryRoutes } from "./routes/time-entries";
 import { workersRoutes } from "./routes/workers";
 import { workplacesRoutes } from "./routes/workplaces";
@@ -60,7 +62,7 @@ export function createApp(options: CreateAppOptions = {}) {
 					info: {
 						title: "jooling API",
 						version: "0.1.0",
-						description: "Authoritative API for restaurant scheduling.",
+						description: "Authoritative API for hourly workforce scheduling.",
 					},
 					components: {
 						securitySchemes: {
@@ -180,12 +182,14 @@ export function createApp(options: CreateAppOptions = {}) {
 		.use(meRoutes)
 		.use(workplacesRoutes)
 		.use(locationsRoutes)
+		.use(placesRoutes)
 		.use(positionsRoutes)
 		.use(pilotRoutes)
 		.use(workersRoutes)
 		.use(invitationsRoutes)
 		.use(constraintsRoutes)
 		.use(schedulesRoutes)
+		.use(templateRoutes)
 		.use(publicationRoutes)
 		.use(changesRoutes)
 		.use(coverageRoutes)
@@ -193,5 +197,8 @@ export function createApp(options: CreateAppOptions = {}) {
 		.use(notificationsRoutes)
 		.use(timeEntryRoutes)
 		.use(swapRoutes)
-		.use(rosterRoutes);
+		.use(rosterRoutes)
+		.use(surfaceRoutes)
+		.use(kioskRoutes)
+		.use(reportRoutes);
 }

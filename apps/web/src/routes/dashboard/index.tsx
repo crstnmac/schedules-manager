@@ -34,11 +34,85 @@ import {
 	usePositions,
 	useSchedule,
 	useWorkers,
+	type AcceptancesResponse,
+	type ScheduleResponse,
 } from "@/lib/queries";
 import { formatMinute, WEEKDAY_NAMES } from "@/lib/time";
 import { useWorkplace } from "@/lib/use-workplace";
+import { AppDocument } from "@/components/app-page";
+import { createDataColumnHelper, DataTable } from "@/components/data-table";
 
 export const Route = createFileRoute("/dashboard/")({ component: Overview });
+
+type StaffRow = ScheduleResponse["staff"][number];
+type AcceptanceRow = AcceptancesResponse["acceptances"][number];
+const staffHelper = createDataColumnHelper<StaffRow>();
+const acceptanceHelper = createDataColumnHelper<AcceptanceRow>();
+
+function staffConstraintText(member: StaffRow): string {
+	const parts: string[] = [];
+	if ((member.unavailability?.length ?? 0) > 0) {
+		parts.push(
+			(member.unavailability ?? [])
+				.map((window) =>
+					window.kind === "recurring"
+						? `Can't work ${WEEKDAY_NAMES[window.weekday ?? 0]} ${formatMinute(window.startMinute)}–${formatMinute(window.endMinute)}`
+						: `Can't work ${window.date} ${formatMinute(window.startMinute)}–${formatMinute(window.endMinute)}`,
+				)
+				.join(" · "),
+		);
+	}
+	if (member.preference) {
+		parts.push(`Prefers: ${member.preference}`);
+	}
+	if ((member.timeOff?.length ?? 0) > 0) {
+		parts.push(
+			`${member.timeOff?.length} time-off request${member.timeOff?.length === 1 ? "" : "s"}`,
+		);
+	}
+	return parts.join(" · ");
+}
+
+const staffColumns = staffHelper.columns([
+	staffHelper.accessor("name", {
+		header: "Worker",
+		cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
+	}),
+	staffHelper.accessor((row) => staffConstraintText(row), {
+		id: "details",
+		header: "Constraints",
+	}),
+]);
+const overviewAcceptanceColumns = acceptanceHelper.columns([
+	acceptanceHelper.accessor(
+		(row) => `${row.workerName} · v${row.versionNumber}`,
+		{
+			id: "worker",
+			header: "Worker",
+			cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
+		},
+	),
+	acceptanceHelper.accessor("changeSummary", { header: "Change" }),
+	acceptanceHelper.accessor("status", {
+		header: "Status",
+		cell: ({ getValue }) => {
+			const status = getValue();
+			return (
+				<Badge
+					variant={
+						status === "declined"
+							? "destructive"
+							: status === "accepted"
+								? "default"
+								: "secondary"
+					}
+				>
+					{status}
+				</Badge>
+			);
+		},
+	}),
+]);
 
 function currentWeekStart(): string {
 	const date = new Date();
@@ -96,13 +170,13 @@ function Overview() {
 		{
 			label: "Locations",
 			value: locations.data?.length ?? 0,
-			to: "/dashboard/settings" as const,
+			to: "/dashboard/settings/locations" as const,
 			icon: MapPinIcon,
 		},
 		{
 			label: "Positions",
 			value: positions.data?.length ?? 0,
-			to: "/dashboard/settings" as const,
+			to: "/dashboard/settings/positions" as const,
 			icon: TagsIcon,
 		},
 		{
@@ -123,12 +197,12 @@ function Overview() {
 		{
 			label: "Add your first location",
 			done: (pilotCounts?.locations ?? 0) > 0,
-			to: "/dashboard/settings" as const,
+			to: "/dashboard/settings/locations" as const,
 		},
 		{
-			label: "Add restaurant positions",
+			label: "Add positions",
 			done: (pilotCounts?.positions ?? 0) > 0,
-			to: "/dashboard/settings" as const,
+			to: "/dashboard/settings/positions" as const,
 		},
 		{
 			label: "Import or invite your team",
@@ -164,7 +238,7 @@ function Overview() {
 		constrainedStaff.length > 0 || outstandingAcceptances.length > 0;
 
 	return (
-		<section className="flex flex-col gap-4">
+		<AppDocument widthClassName="max-w-5xl">
 			{isLoading ? (
 				<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
 					{["locations", "positions", "workers", "invitations"].map((key) => (
@@ -262,31 +336,13 @@ function Overview() {
 									</h3>
 									<Badge variant="secondary">{constrainedStaff.length}</Badge>
 								</div>
-								<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-									{constrainedStaff.slice(0, 6).map((member) => (
-										<div
-											key={member.employmentId}
-											className="rounded-xl border p-3"
-										>
-											<p className="font-medium text-sm">{member.name}</p>
-											<p className="mt-1 text-muted-foreground text-xs">
-												{(member.unavailability ?? [])
-													.map((window) =>
-														window.kind === "recurring"
-															? `Can't work ${WEEKDAY_NAMES[window.weekday ?? 0]} ${formatMinute(window.startMinute)}–${formatMinute(window.endMinute)}`
-															: `Can't work ${window.date} ${formatMinute(window.startMinute)}–${formatMinute(window.endMinute)}`,
-													)
-													.join(" · ")}
-												{member.preference
-													? `${(member.unavailability?.length ?? 0) > 0 ? " · " : ""}Prefers: ${member.preference}`
-													: ""}
-												{(member.timeOff?.length ?? 0) > 0
-													? `${(member.unavailability?.length ?? 0) > 0 || member.preference ? " · " : ""}${member.timeOff?.length} time-off request${member.timeOff?.length === 1 ? "" : "s"}`
-													: ""}
-											</p>
-										</div>
-									))}
-								</div>
+								<DataTable
+									fill={false}
+									bounded
+									columns={staffColumns}
+									data={constrainedStaff.slice(0, 6)}
+									getRowId={(row) => row.employmentId}
+								/>
 							</section>
 						) : null}
 						{outstandingAcceptances.length > 0 ? (
@@ -297,34 +353,13 @@ function Overview() {
 								>
 									Shift acceptances
 								</h3>
-								<div className="grid gap-2 sm:grid-cols-2">
-									{outstandingAcceptances.slice(0, 6).map((acceptance) => (
-										<div
-											key={acceptance.id}
-											className="flex items-start justify-between gap-3 rounded-xl border p-3"
-										>
-											<div>
-												<p className="font-medium text-sm">
-													{acceptance.workerName} · v{acceptance.versionNumber}
-												</p>
-												<p className="mt-1 text-muted-foreground text-xs">
-													{acceptance.changeSummary}
-												</p>
-											</div>
-											<Badge
-												variant={
-													acceptance.status === "declined"
-														? "destructive"
-														: acceptance.status === "accepted"
-															? "default"
-															: "secondary"
-												}
-											>
-												{acceptance.status}
-											</Badge>
-										</div>
-									))}
-								</div>
+								<DataTable
+									fill={false}
+									bounded
+									columns={overviewAcceptanceColumns}
+									data={outstandingAcceptances.slice(0, 6)}
+									getRowId={(row) => row.id}
+								/>
 							</section>
 						) : null}
 					</CardContent>
@@ -379,6 +414,6 @@ function Overview() {
 					</div>
 				</CardContent>
 			</Card>
-		</section>
+		</AppDocument>
 	);
 }

@@ -12,6 +12,7 @@ export const defaultRateLimitPolicies = {
 	invitationResend: { limit: 20, windowMs: 10 * 60 * 1000 },
 	invitationImport: { limit: 10, windowMs: 10 * 60 * 1000 },
 	zeptomailWebhook: { limit: 120, windowMs: 60 * 1000 },
+	placeSearch: { limit: 40, windowMs: 60 * 1000 },
 } as const satisfies Record<string, RateLimitPolicy>;
 
 export type RateLimitPolicyName = keyof typeof defaultRateLimitPolicies;
@@ -57,11 +58,13 @@ export function tryConsumeRateLimit(
 	key: string,
 	policy: RateLimitPolicy,
 	now = Date.now(),
-): { allowed: true; remaining: number; resetAt: number } | {
-	allowed: false;
-	remaining: 0;
-	resetAt: number;
-} {
+):
+	| { allowed: true; remaining: number; resetAt: number }
+	| {
+			allowed: false;
+			remaining: 0;
+			resetAt: number;
+	  } {
 	const existing = buckets.get(key);
 	if (!existing || existing.resetAt <= now) {
 		const resetAt = now + policy.windowMs;

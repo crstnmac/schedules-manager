@@ -1,21 +1,22 @@
 import {
 	db,
 	employments,
+	locations,
 	positions,
 	schedules,
 	scheduleVersions,
 	timeEntries,
 	versionShifts,
+	workplaces,
 } from "@SchedulesManager/db";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
-import { requireSession, requireWorkplaceMember } from "../context";
+import { requireManager, requireSession, requireWorkplaceMember } from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
+import { isInsideGeofence, roundToMinutes } from "../geo";
 import { withIdempotency } from "../idempotency";
 import { writeAudit } from "../notify";
-
-const CLOCK_IN_EARLY_WINDOW_MS = 15 * 60 * 1000;
 
 type MyShift = {
 	id: string;
@@ -80,12 +81,22 @@ function toPayload(entry: typeof timeEntries.$inferSelect) {
 	};
 }
 
-async function clockIn(profileId: string, versionShiftId: string) {
+async function clockIn(
+	profileId: string,
+	versionShiftId: string,
+	coords?: { latitude?: number; longitude?: number },
+) {
 	const { shift, workplaceId } = await myVersionShift(
 		profileId,
 		versionShiftId,
 	);
 	const now = new Date();
+	const [workplace] = await db
+		.select()
+		.from(workplaces)
+		.where(eq(workplaces.id, workplaceId))
+		.limit(1);
+	const earlyMs = (workplace?.earlyClockInMinutes ?? 15) * 60_000;
 	await db
 		.select({ id: schedules.id })
 		.from(schedules)
@@ -102,14 +113,39 @@ async function clockIn(profileId: string, versionShiftId: string) {
 			"This shift belongs to an outdated Schedule Version",
 		);
 	}
-	if (now.getTime() < shift.startsAt.getTime() - CLOCK_IN_EARLY_WINDOW_MS) {
+	if (now.getTime() < shift.startsAt.getTime() - earlyMs) {
 		throw new BadRequestError(
-			"You can start this shift up to 15 minutes before it begins",
+			`You can start this shift up to ${workplace?.earlyClockInMinutes ?? 15} minutes before it begins`,
 		);
 	}
 	if (now.getTime() > shift.endsAt.getTime()) {
 		throw new BadRequestError("This shift has already ended");
 	}
+
+	const [location] = await db
+		.select()
+		.from(locations)
+		.innerJoin(schedules, eq(schedules.locationId, locations.id))
+		.where(eq(schedules.id, shift.scheduleId))
+		.limit(1);
+	const loc = location?.locations;
+	if (loc?.latitude && loc.longitude && loc.geofenceRadiusMeters) {
+		if (coords?.latitude == null || coords.longitude == null) {
+			throw new BadRequestError("This Location requires a Geofence check");
+		}
+		if (
+			!isInsideGeofence({
+				latitude: coords.latitude,
+				longitude: coords.longitude,
+				centerLatitude: Number(loc.latitude),
+				centerLongitude: Number(loc.longitude),
+				radiusMeters: loc.geofenceRadiusMeters,
+			})
+		) {
+			throw new BadRequestError("You are outside this Location's Geofence");
+		}
+	}
+	const clockedInAt = roundToMinutes(now, workplace?.clockRoundMinutes ?? 0);
 	await db.execute(
 		sql`select pg_advisory_xact_lock(hashtextextended(${`clock:${shift.shiftId ?? shift.id}`}, 0))`,
 	);
@@ -132,7 +168,7 @@ async function clockIn(profileId: string, versionShiftId: string) {
 		.values({
 			versionShiftId: shift.id,
 			employmentId: shift.employmentId,
-			clockedInAt: now,
+			clockedInAt,
 		})
 		.onConflictDoNothing({ target: timeEntries.versionShiftId })
 		.returning();
@@ -162,9 +198,19 @@ async function clockOut(profileId: string, versionShiftId: string) {
 	if (!entry) throw new NotFoundError("No Time Entry for this shift");
 	if (entry.clockedOutAt) return { timeEntry: toPayload(entry) };
 
+	const [workplace] = await db
+		.select()
+		.from(workplaces)
+		.where(eq(workplaces.id, workplaceId))
+		.limit(1);
+	const clockedOutAt = roundToMinutes(
+		new Date(),
+		workplace?.clockRoundMinutes ?? 0,
+	);
+
 	const [updated] = await db
 		.update(timeEntries)
-		.set({ clockedOutAt: new Date() })
+		.set({ clockedOutAt })
 		.where(and(eq(timeEntries.id, entry.id), isNull(timeEntries.clockedOutAt)))
 		.returning();
 	if (!updated) {
@@ -193,14 +239,18 @@ export const timeEntryRoutes = new Elysia({
 })
 	.post(
 		"/my/shifts/:versionShiftId/clock-in",
-		async ({ headers, params }) => {
+		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers.authorization);
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `time-entry.clock-in:${params.versionShiftId}`,
 				key: headers["idempotency-key"],
-				request: { versionShiftId: params.versionShiftId },
-				execute: () => clockIn(profile.id, params.versionShiftId),
+				request: { versionShiftId: params.versionShiftId, ...body },
+				execute: () =>
+					clockIn(profile.id, params.versionShiftId, {
+						latitude: body?.latitude,
+						longitude: body?.longitude,
+					}),
 			});
 		},
 		{
@@ -211,6 +261,12 @@ export const timeEntryRoutes = new Elysia({
 				),
 			}),
 			params: t.Object({ versionShiftId: t.String({ format: "uuid" }) }),
+			body: t.Optional(
+				t.Object({
+					latitude: t.Optional(t.Number()),
+					longitude: t.Optional(t.Number()),
+				}),
+			),
 			detail: {
 				summary: "Start work on an assigned shift (Time Entry)",
 				security: [{ bearerAuth: [] }],
@@ -289,6 +345,123 @@ export const timeEntryRoutes = new Elysia({
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Recent Time Entries for the signed-in employment",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.put(
+		"/workplaces/:workplaceId/version-shifts/:versionShiftId/time-entry",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			return withIdempotency({
+				actorProfileId: profile.id,
+				scope: `time-entry.edit:${params.versionShiftId}`,
+				key: headers["idempotency-key"],
+				request: body,
+				execute: async () => {
+					const reason = body.reason.trim();
+					if (reason.length < 3) {
+						throw new BadRequestError("Record why this Time Entry is changing");
+					}
+					const clockedInAt = new Date(body.clockedInAt);
+					const clockedOutAt =
+						body.clockedOutAt === null ? null : new Date(body.clockedOutAt);
+					if (Number.isNaN(clockedInAt.getTime())) {
+						throw new BadRequestError("Clock-in time is not valid");
+					}
+					if (clockedOutAt !== null && Number.isNaN(clockedOutAt.getTime())) {
+						throw new BadRequestError("Clock-out time is not valid");
+					}
+					if (clockedOutAt && clockedOutAt.getTime() <= clockedInAt.getTime()) {
+						throw new BadRequestError("Clock-out must be after clock-in");
+					}
+
+					const [row] = await db
+						.select({
+							versionShift: versionShifts,
+							employmentId: versionShifts.employmentId,
+							workplaceId: locations.workplaceId,
+						})
+						.from(versionShifts)
+						.innerJoin(
+							scheduleVersions,
+							eq(scheduleVersions.id, versionShifts.versionId),
+						)
+						.innerJoin(schedules, eq(schedules.id, scheduleVersions.scheduleId))
+						.innerJoin(locations, eq(locations.id, schedules.locationId))
+						.where(
+							and(
+								eq(versionShifts.id, params.versionShiftId),
+								eq(locations.workplaceId, params.workplaceId),
+							),
+						)
+						.limit(1);
+					if (!row?.employmentId) {
+						throw new NotFoundError("Published shift not found");
+					}
+
+					const [existing] = await db
+						.select()
+						.from(timeEntries)
+						.where(eq(timeEntries.versionShiftId, params.versionShiftId))
+						.limit(1);
+
+					const values = {
+						clockedInAt,
+						clockedOutAt,
+						editedAt: new Date(),
+						editedByProfileId: profile.id,
+						editReason: reason,
+					};
+
+					const [entry] = existing
+						? await db
+								.update(timeEntries)
+								.set(values)
+								.where(eq(timeEntries.id, existing.id))
+								.returning()
+						: await db
+								.insert(timeEntries)
+								.values({
+									versionShiftId: params.versionShiftId,
+									employmentId: row.employmentId,
+									...values,
+								})
+								.returning();
+					if (!entry) throw new ConflictError("Time Entry could not be saved");
+
+					await writeAudit({
+						workplaceId: row.workplaceId,
+						actorProfileId: profile.id,
+						action: "time_entry.edited",
+						entityType: "time_entry",
+						entityId: entry.id,
+						summary: `Edited a Time Entry: ${reason}`,
+					});
+					return { timeEntry: toPayload(entry) };
+				},
+			});
+		},
+		{
+			headers: t.Object({
+				authorization: t.String(),
+				"idempotency-key": t.Optional(
+					t.String({ minLength: 8, maxLength: 200 }),
+				),
+			}),
+			params: t.Object({
+				workplaceId: t.String({ format: "uuid" }),
+				versionShiftId: t.String({ format: "uuid" }),
+			}),
+			body: t.Object({
+				clockedInAt: t.String(),
+				clockedOutAt: t.Union([t.String(), t.Null()]),
+				reason: t.String({ minLength: 3, maxLength: 240 }),
+			}),
+			detail: {
+				summary:
+					"Create or correct a Time Entry on a published Shift, with a reason (Manager)",
 				security: [{ bearerAuth: [] }],
 			},
 		},

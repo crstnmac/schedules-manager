@@ -22,9 +22,12 @@ import {
 import { api } from "@/lib/api";
 import { confirmAction } from "@/lib/confirm-action";
 import {
+	useCoverageSwaps,
 	useCurrentEmployment,
 	useManagerTimeOff,
 	useManagerWorkers,
+	useMarkAttendance,
+	useSwapDecision,
 } from "@/lib/queries";
 
 // ── Shared metric ───────────────────────────────────────────────────────
@@ -121,8 +124,16 @@ export function ManagerOverview() {
 
 // ── Schedule (read-only compact) ───────────────────────────────────────
 type Location = { id: string; name: string; timezone: string };
+type TimeclockRow = {
+	shiftId: string;
+	versionShiftId: string;
+	status: "open" | "closed" | null;
+	clockedInAt: string | null;
+	attendance: "late" | "no_show" | "sick" | null;
+};
 type Schedule = {
 	publication: { state?: string; versionNumber?: number } | null;
+	timeclock?: TimeclockRow[];
 	shifts: {
 		id: string;
 		date: string;
@@ -143,6 +154,22 @@ function mondayKey() {
 	return `${d.getFullYear()}-${month}-${date}`;
 }
 
+function zonedDateKey(timeZone: string) {
+	return new Intl.DateTimeFormat("en-CA", {
+		timeZone,
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+	}).format(new Date());
+}
+
+function attendanceLabel(kind: TimeclockRow["attendance"]) {
+	if (kind === "no_show") return "No-show";
+	if (kind === "sick") return "Sick";
+	if (kind === "late") return "Late";
+	return null;
+}
+
 export function ManagerSchedule() {
 	const { theme } = useAppTheme();
 	const { workplaceId } = useCurrentEmployment();
@@ -153,28 +180,135 @@ export function ManagerSchedule() {
 		enabled: Boolean(workplaceId),
 	});
 	const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
+	const [todayFocus, setTodayFocus] = useState(true);
 	const locationId = selectedLocation ?? locations.data?.locations[0]?.id;
+	const timezone =
+		locations.data?.locations.find((location) => location.id === locationId)
+			?.timezone ?? "America/Chicago";
+	const todayKey = zonedDateKey(timezone);
 	const schedule = useQuery({
 		queryKey: ["manager", "schedule", locationId, mondayKey()],
 		queryFn: () =>
 			api<Schedule>(`/v1/locations/${locationId}/schedules/${mondayKey()}`),
 		enabled: Boolean(locationId),
 	});
+	const markAttendance = useMarkAttendance(workplaceId);
 
-	// Group shifts by date for scannable day sections (Week Stays a Week)
+	const timeclockByShiftId = new Map(
+		(schedule.data?.timeclock ?? []).map((row) => [row.shiftId, row]),
+	);
+	const visibleShifts = (schedule.data?.shifts ?? []).filter(
+		(shift) => !todayFocus || shift.date === todayKey,
+	);
 	const byDate = new Map<string, Schedule["shifts"]>();
-	for (const sh of schedule.data?.shifts ?? []) {
-		const arr = byDate.get(sh.date) ?? [];
-		arr.push(sh);
-		byDate.set(sh.date, arr);
+	for (const shift of visibleShifts) {
+		const arr = byDate.get(shift.date) ?? [];
+		arr.push(shift);
+		byDate.set(shift.date, arr);
+	}
+
+	function promptAttendance(versionShiftId: string, workerName: string) {
+		Alert.alert(
+			"Attendance mark",
+			`Mark ${workerName} without changing the published schedule.`,
+			[
+				{
+					text: "Late",
+					onPress: () =>
+						markAttendance.mutate(
+							{ versionShiftId, kind: "late" },
+							{
+								onSuccess: () => Alert.alert("Saved", "Marked late."),
+								onError: (error) =>
+									Alert.alert("Could not save", (error as Error).message),
+							},
+						),
+				},
+				{
+					text: "No-show",
+					style: "destructive",
+					onPress: () =>
+						markAttendance.mutate(
+							{ versionShiftId, kind: "no_show" },
+							{
+								onSuccess: () => Alert.alert("Saved", "Marked no-show."),
+								onError: (error) =>
+									Alert.alert("Could not save", (error as Error).message),
+							},
+						),
+				},
+				{
+					text: "Sick",
+					onPress: () =>
+						markAttendance.mutate(
+							{ versionShiftId, kind: "sick" },
+							{
+								onSuccess: () => Alert.alert("Saved", "Marked sick."),
+								onError: (error) =>
+									Alert.alert("Could not save", (error as Error).message),
+							},
+						),
+				},
+				{ text: "Cancel", style: "cancel" },
+			],
+		);
 	}
 
 	return (
 		<AppScreen>
 			<PageHeader
 				title="Schedule"
-				description="Compact read-only view of the live Successor Draft. Use the web workspace to edit and publish the next Schedule Version."
+				description={
+					todayFocus
+						? "Today’s published Shifts. Mark late, no-show, or sick without changing the schedule. Edit the draft on web."
+						: "Compact read-only view of the live Successor Draft. Use the web workspace to edit and publish the next Schedule Version."
+				}
 			/>
+
+			<View style={s.chipsRow}>
+				<Pressable
+					accessibilityRole="button"
+					accessibilityState={{ selected: todayFocus }}
+					onPress={() => setTodayFocus(true)}
+					style={[
+						s.chip,
+						{
+							borderColor: todayFocus ? theme.primary : theme.border,
+							backgroundColor: todayFocus ? theme.primary : "transparent",
+						},
+					]}
+				>
+					<Text
+						style={[
+							s.chipText,
+							{ color: todayFocus ? theme.onPrimary : theme.text },
+						]}
+					>
+						Today
+					</Text>
+				</Pressable>
+				<Pressable
+					accessibilityRole="button"
+					accessibilityState={{ selected: !todayFocus }}
+					onPress={() => setTodayFocus(false)}
+					style={[
+						s.chip,
+						{
+							borderColor: !todayFocus ? theme.primary : theme.border,
+							backgroundColor: !todayFocus ? theme.primary : "transparent",
+						},
+					]}
+				>
+					<Text
+						style={[
+							s.chipText,
+							{ color: !todayFocus ? theme.onPrimary : theme.text },
+						]}
+					>
+						Week
+					</Text>
+				</Pressable>
+			</View>
 
 			{locations.data && locations.data.locations.length > 1 ? (
 				<View style={s.chipsRow}>
@@ -216,8 +350,8 @@ export function ManagerSchedule() {
 						<View style={{ flex: 1 }}>
 							<Metric
 								icon="time-outline"
-								value={schedule.data.shifts.length}
-								label="Draft Shifts"
+								value={visibleShifts.length}
+								label={todayFocus ? "Today’s Shifts" : "Draft Shifts"}
 							/>
 						</View>
 						<View style={{ flex: 1 }}>
@@ -229,13 +363,15 @@ export function ManagerSchedule() {
 						</View>
 					</View>
 
-					{schedule.data.shifts.length === 0 ? (
+					{visibleShifts.length === 0 ? (
 						<Card>
 							<Text style={[s.cardTitle, { color: theme.text }]}>
-								No Shifts yet
+								{todayFocus ? "Nothing on today" : "No Shifts yet"}
 							</Text>
 							<Text style={[s.body, { color: theme.muted }]}>
-								Open the manager web workspace to build this week’s Schedule.
+								{todayFocus
+									? "Switch to Week to see the rest of the draft, or open the manager web workspace to publish."
+									: "Open the manager web workspace to build this week’s Schedule."}
 							</Text>
 						</Card>
 					) : (
@@ -244,24 +380,52 @@ export function ManagerSchedule() {
 								<Text style={[s.dayLabel, { color: theme.muted }]}>
 									{formatDay(date)}
 								</Text>
-								{shifts.map((sh) => (
-									<View
-										key={sh.id}
-										style={[s.scheduleShiftRow, { borderColor: theme.border }]}
-									>
-										<Text style={[s.shiftTime, { color: theme.text }]}>
-											{formatMinute(sh.startMinute)}–
-											{formatMinute(sh.endMinute)} · {sh.positionName}
-										</Text>
-										{sh.workerName ? (
-											<Text style={[s.hint, { color: theme.muted }]}>
-												{sh.workerName}
+								{shifts.map((sh) => {
+									const timeclock = timeclockByShiftId.get(sh.id);
+									const mark = attendanceLabel(timeclock?.attendance ?? null);
+									return (
+										<View
+											key={sh.id}
+											style={[
+												s.scheduleShiftRow,
+												{ borderColor: theme.border },
+											]}
+										>
+											<Text style={[s.shiftTime, { color: theme.text }]}>
+												{formatMinute(sh.startMinute)}–
+												{formatMinute(sh.endMinute)} · {sh.positionName}
 											</Text>
-										) : (
-											<Badge label="Open Shift" variant="amber" />
-										)}
-									</View>
-								))}
+											{sh.workerName ? (
+												<Text style={[s.hint, { color: theme.muted }]}>
+													{sh.workerName}
+												</Text>
+											) : (
+												<Badge label="Open Shift" variant="amber" />
+											)}
+											<View style={s.chipsRow}>
+												{timeclock?.status === "open" ? (
+													<Badge label="On clock" variant="success" />
+												) : null}
+												{timeclock?.status === "closed" ? (
+													<Badge label="Clocked out" variant="outline" />
+												) : null}
+												{mark ? <Badge label={mark} variant="danger" /> : null}
+											</View>
+											{timeclock?.versionShiftId && sh.workerName ? (
+												<SecondaryButton
+													label="Mark attendance"
+													disabled={markAttendance.isPending}
+													onPress={() =>
+														promptAttendance(
+															timeclock.versionShiftId,
+															sh.workerName ?? "this worker",
+														)
+													}
+												/>
+											) : null}
+										</View>
+									);
+								})}
 							</Card>
 						))
 					)}
@@ -348,6 +512,7 @@ export function ManagerRequests() {
 	const { theme } = useAppTheme();
 	const { workplaceId } = useCurrentEmployment();
 	const requests = useManagerTimeOff(workplaceId);
+	const swaps = useCoverageSwaps(workplaceId);
 	const client = useQueryClient();
 	const decide = useMutation({
 		mutationFn: ({
@@ -367,24 +532,101 @@ export function ManagerRequests() {
 			}),
 		onError: (e) => Alert.alert("Could not save", (e as Error).message),
 	});
+	const decideSwap = useSwapDecision(workplaceId);
+	const pendingTimeOff =
+		requests.data?.requests.filter((r) => r.status === "pending") ?? [];
+	const pendingSwaps = swaps.data ?? [];
+	const empty =
+		!requests.isLoading &&
+		!swaps.isLoading &&
+		pendingTimeOff.length === 0 &&
+		pendingSwaps.length === 0;
 
 	return (
 		<AppScreen>
 			<PageHeader
-				title="Time-off Requests"
-				description="Approve or decline before you build the week. A Time-off Request is distinct from Unavailability."
+				title="Requests"
+				description="Approve Time-off Requests and agreed Shift Swaps. A swap republishes the schedule."
 			/>
-			{requests.isLoading ? <ActivityIndicator color={theme.primary} /> : null}
-			{requests.data?.requests.length === 0 ? (
+			{requests.isLoading || swaps.isLoading ? (
+				<ActivityIndicator color={theme.primary} />
+			) : null}
+			{empty ? (
 				<Card>
 					<Text style={[s.cardTitle, { color: theme.text }]}>
 						You’re all caught up
 					</Text>
 					<Text style={[s.body, { color: theme.muted }]}>
-						New Time-off Requests will appear here.
+						New Time-off Requests and agreed Shift Swaps will appear here.
 					</Text>
 				</Card>
 			) : null}
+			{pendingSwaps.map((swap) => (
+				<Card key={swap.id}>
+					<View style={s.rowBetween}>
+						<Text style={[s.cardTitle, { color: theme.text }]}>
+							{swap.requester.name} ⇄ {swap.counterpart.name}
+						</Text>
+						<Badge label="swap" variant="default" />
+					</View>
+					<Text style={[s.body, { color: theme.text }]}>
+						{swap.requester.name} gives{" "}
+						{new Date(swap.requesterShift.startsAt).toLocaleString()} (
+						{swap.requesterShift.positionName})
+					</Text>
+					<Text style={[s.body, { color: theme.text }]}>
+						{swap.counterpart.name} gives{" "}
+						{new Date(swap.counterpartShift.startsAt).toLocaleString()} (
+						{swap.counterpartShift.positionName})
+					</Text>
+					<View style={s.actions}>
+						<View style={{ flex: 1 }}>
+							<PrimaryButton
+								label="Approve & publish"
+								disabled={decideSwap.isPending}
+								onPress={() =>
+									confirmAction({
+										title: "Approve swap and publish?",
+										message:
+											"This exchanges both assignments and may publish a new schedule version immediately.",
+										confirmLabel: "Approve & publish",
+										onConfirm: () =>
+											decideSwap.mutate({
+												swapId: swap.id,
+												decision: "approved",
+											}),
+									})
+								}
+							/>
+						</View>
+						<View style={{ flex: 1 }}>
+							<SecondaryButton
+								label="Decline"
+								disabled={decideSwap.isPending}
+								onPress={() =>
+									confirmAction({
+										title: "Decline this swap?",
+										message:
+											"Both workers will keep their current assignments.",
+										confirmLabel: "Decline swap",
+										destructive: true,
+										onConfirm: () =>
+											decideSwap.mutate({
+												swapId: swap.id,
+												decision: "declined",
+											}),
+									})
+								}
+							/>
+						</View>
+					</View>
+					{decideSwap.isError ? (
+						<Text style={[s.hint, { color: theme.notification }]}>
+							{(decideSwap.error as Error).message}
+						</Text>
+					) : null}
+				</Card>
+			))}
 			{requests.data?.requests.map((r) => (
 				<Card key={r.id}>
 					<View style={s.rowBetween}>

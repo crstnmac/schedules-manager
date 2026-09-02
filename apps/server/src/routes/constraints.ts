@@ -1,12 +1,14 @@
 import {
 	db,
 	employments,
+	leaveTypes,
 	profiles,
+	ptoBalances,
 	timeOffRequests,
 	unavailability,
 	workPreferences,
 } from "@SchedulesManager/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import {
 	requireManager,
@@ -75,6 +77,7 @@ export const constraintsRoutes = new Elysia({
 						reason: row.reason,
 						status: row.status,
 						decisionReason: row.decisionReason,
+						leaveTypeId: row.leaveTypeId,
 					}))
 					.sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
 			};
@@ -244,6 +247,7 @@ export const constraintsRoutes = new Elysia({
 						startsAt,
 						endsAt,
 						reason: body.reason ?? null,
+						leaveTypeId: body.leaveTypeId ?? null,
 					})
 					.returning(),
 			);
@@ -270,6 +274,7 @@ export const constraintsRoutes = new Elysia({
 				startsAt: t.String({ format: "date-time" }),
 				endsAt: t.String({ format: "date-time" }),
 				reason: t.Optional(t.String({ maxLength: 300 })),
+				leaveTypeId: t.Optional(t.String({ format: "uuid" })),
 			}),
 			detail: {
 				summary: "Submit a Time-off Request",
@@ -331,6 +336,7 @@ export const constraintsRoutes = new Elysia({
 					request: timeOffRequests,
 					email: profiles.email,
 					fullName: profiles.fullName,
+					leaveTypeName: leaveTypes.name,
 				})
 				.from(timeOffRequests)
 				.innerJoin(
@@ -338,6 +344,7 @@ export const constraintsRoutes = new Elysia({
 					eq(employments.id, timeOffRequests.employmentId),
 				)
 				.innerJoin(profiles, eq(profiles.id, employments.profileId))
+				.leftJoin(leaveTypes, eq(leaveTypes.id, timeOffRequests.leaveTypeId))
 				.where(eq(employments.workplaceId, params.workplaceId));
 
 			return {
@@ -351,6 +358,8 @@ export const constraintsRoutes = new Elysia({
 						status: row.request.status,
 						decisionReason: row.request.decisionReason,
 						createdAt: row.request.createdAt.toISOString(),
+						leaveTypeId: row.request.leaveTypeId,
+						leaveTypeName: row.leaveTypeName,
 					}))
 					.sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
 			};
@@ -402,6 +411,33 @@ export const constraintsRoutes = new Elysia({
 					.where(eq(timeOffRequests.id, request.request.id))
 					.returning(),
 			);
+
+			if (body.decision === "approved" && request.request.leaveTypeId) {
+				const minutes = Math.round(
+					(request.request.endsAt.getTime() -
+						request.request.startsAt.getTime()) /
+						60_000,
+				);
+				await db
+					.insert(ptoBalances)
+					.values({
+						employmentId: request.request.employmentId,
+						leaveTypeId: request.request.leaveTypeId,
+						minutes: 0,
+					})
+					.onConflictDoNothing();
+				await db
+					.update(ptoBalances)
+					.set({
+						minutes: sql`greatest(${ptoBalances.minutes} - ${minutes}, 0)`,
+					})
+					.where(
+						and(
+							eq(ptoBalances.employmentId, request.request.employmentId),
+							eq(ptoBalances.leaveTypeId, request.request.leaveTypeId),
+						),
+					);
+			}
 
 			await notifyEmployments([request.request.employmentId], {
 				kind:

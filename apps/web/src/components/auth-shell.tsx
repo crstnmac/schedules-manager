@@ -51,13 +51,13 @@ export function AuthShell({ children }: { children: ReactNode }) {
 								jooling
 							</span>
 							<span className="text-sidebar-foreground/70 text-xs">
-								Workforce scheduling for restaurants
+								Fast scheduling for hourly teams
 							</span>
 						</div>
 					</div>
 					<div className="flex max-w-md flex-col gap-3">
 						<h2 className="font-semibold text-2xl tracking-tight">
-							The calm service board for your team
+							The schedule board for your team
 						</h2>
 						<p className="text-sidebar-foreground/70 text-sm leading-relaxed">
 							Build, publish, and operate schedules from one operational
@@ -93,7 +93,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
 							jooling
 						</span>
 						<span className="text-muted-foreground text-xs">
-							Restaurant workforce scheduling
+							Fast scheduling for hourly teams
 						</span>
 					</div>
 				</div>

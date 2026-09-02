@@ -14,6 +14,8 @@ import {
 	Clock3Icon,
 	InboxIcon,
 	LogOutIcon,
+	MegaphoneIcon,
+	MessageSquareIcon,
 	TimerIcon,
 } from "lucide-react";
 import { useEffect } from "react";
@@ -34,6 +36,8 @@ const navigation = [
 	{ to: "/worker/availability", label: "Availability", icon: Clock3Icon },
 	{ to: "/worker/openshifts", label: "Open shifts", icon: InboxIcon },
 	{ to: "/worker/timecard", label: "Timecard", icon: TimerIcon },
+	{ to: "/worker/messages", label: "Messages", icon: MessageSquareIcon },
+	{ to: "/worker/announcements", label: "Announcements", icon: MegaphoneIcon },
 	{ to: "/worker/inbox", label: "Inbox", icon: BellIcon },
 ] as const;
 
@@ -82,9 +86,9 @@ function WorkerLayout() {
 	if (kind === "manager") return <Navigate to="/dashboard" replace />;
 
 	return (
-		<div className="flex min-h-svh flex-col bg-background">
-			<header className="border-b">
-				<div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-4">
+		<div className="flex h-svh min-h-0 flex-col overflow-hidden bg-background">
+			<header className="shrink-0 border-b">
+				<div className="flex flex-col gap-3 px-4 py-3">
 					<div className="flex items-center justify-between gap-2 sm:gap-3">
 						<div className="min-w-0">
 							<p className="truncate font-medium text-lg">{workplace.name}</p>
@@ -143,7 +147,7 @@ function WorkerLayout() {
 			<main
 				id="main-content"
 				tabIndex={-1}
-				className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 md:p-6"
+				className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
 			>
 				<Outlet />
 			</main>

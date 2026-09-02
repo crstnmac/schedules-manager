@@ -1,3 +1,6 @@
 {
-	"extends": "@SchedulesManager/config/tsconfig.base.json"
+	"extends": "@SchedulesManager/config/tsconfig.base.json",
+	"compilerOptions": {
+		"noEmit": true
+	}
 }

@@ -3,11 +3,13 @@ import {
 	employmentLocations,
 	employments,
 	locations,
+	openShifts,
 	positions,
 	profiles,
 	schedules,
 	scheduleVersions,
 	shiftAcceptances,
+	shiftPickups,
 	shiftReleases,
 	shifts,
 	timeEntries,
@@ -45,6 +47,90 @@ async function scheduleContext(scheduleId: string) {
 		.limit(1);
 	if (!row) throw new NotFoundError("Schedule not found");
 	return row;
+}
+
+async function syncPublishedOpenShifts(
+	tx: PublicationTransaction,
+	input: {
+		workplaceId: string;
+		locationId: string;
+		draftShifts: (typeof shifts.$inferSelect)[];
+	},
+) {
+	const shiftIds = input.draftShifts.map((shift) => shift.id);
+	if (shiftIds.length === 0) return;
+
+	const existingOpen =
+		shiftIds.length > 0
+			? await tx
+					.select()
+					.from(openShifts)
+					.where(
+						and(
+							inArray(openShifts.shiftId, shiftIds),
+							eq(openShifts.status, "open"),
+						),
+					)
+			: [];
+	const openByShiftId = new Map(
+		existingOpen.map((row) => [row.shiftId, row] as const),
+	);
+
+	const newlyOffered = input.draftShifts.filter(
+		(shift) => shift.employmentId === null && !openByShiftId.has(shift.id),
+	);
+	const assignedOpenIds = input.draftShifts.flatMap((shift) => {
+		if (shift.employmentId === null) return [];
+		const existing = openByShiftId.get(shift.id);
+		return existing ? [existing.id] : [];
+	});
+
+	if (assignedOpenIds.length > 0) {
+		await tx
+			.update(openShifts)
+			.set({ status: "closed" })
+			.where(inArray(openShifts.id, assignedOpenIds));
+		await tx
+			.update(shiftPickups)
+			.set({ status: "declined", decidedAt: new Date() })
+			.where(
+				and(
+					inArray(shiftPickups.openShiftId, assignedOpenIds),
+					eq(shiftPickups.status, "pending"),
+				),
+			);
+	}
+
+	if (newlyOffered.length === 0) return;
+
+	await tx.insert(openShifts).values(
+		newlyOffered.map((shift) => ({
+			shiftId: shift.id,
+			locationId: input.locationId,
+			positionId: shift.positionId,
+			note: shift.note,
+		})),
+	);
+
+	const workers = await tx
+		.select({ id: employments.id })
+		.from(employments)
+		.where(
+			and(
+				eq(employments.workplaceId, input.workplaceId),
+				eq(employments.kind, "worker"),
+				eq(employments.status, "active"),
+			),
+		);
+	await notifyEmployments(
+		workers.map((worker) => worker.id),
+		{
+			kind: "open_shift",
+			title: "An open shift is available",
+			body: "An unassigned shift was published and is open for pickup.",
+		},
+		tx,
+	);
 }
 
 async function accessibleLocationIds(
@@ -252,6 +338,12 @@ export async function publishScheduleNow(
 					.filter((id): id is string => id !== null),
 			),
 		];
+
+		await syncPublishedOpenShifts(tx, {
+			workplaceId: location.workplaceId,
+			locationId: location.id,
+			draftShifts,
+		});
 
 		await writeAudit(
 			{

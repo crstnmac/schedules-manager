@@ -77,6 +77,75 @@ export function toIsoDate(date: Date): string {
 	return date.toLocaleDateString("sv-SE");
 }
 
+function tzOffsetMinutes(instant: Date, timeZone: string): number {
+	const dtf = new Intl.DateTimeFormat("en-US", {
+		timeZone,
+		hour12: false,
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+	});
+	const map = new Map<string, number>();
+	for (const part of dtf.formatToParts(instant)) {
+		if (part.type !== "literal") map.set(part.type, Number(part.value));
+	}
+	let hour = map.get("hour") ?? 0;
+	if (hour === 24) hour = 0;
+	const asUtc = Date.UTC(
+		map.get("year") ?? 0,
+		(map.get("month") ?? 1) - 1,
+		map.get("day") ?? 1,
+		hour,
+		map.get("minute") ?? 0,
+		map.get("second") ?? 0,
+	);
+	return (asUtc - instant.getTime()) / 60_000;
+}
+
+export function isoToDatetimeLocal(iso: string, timeZone: string): string {
+	if (!iso) return "";
+	const parts = new Intl.DateTimeFormat("en-CA", {
+		timeZone,
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+		hour: "2-digit",
+		minute: "2-digit",
+		hourCycle: "h23",
+	}).formatToParts(new Date(iso));
+	const get = (type: Intl.DateTimeFormatPartTypes) =>
+		parts.find((part) => part.type === type)?.value ?? "";
+	const hour = get("hour") === "24" ? "00" : get("hour");
+	return `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}`;
+}
+
+export function datetimeLocalToIso(
+	value: string,
+	timeZone: string,
+): string | null {
+	const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/.exec(value.trim());
+	if (!match) return null;
+	const dateKey = match[1] ?? "";
+	const hour = Number(match[2]);
+	const minute = Number(match[3]);
+	if (hour > 23 || minute > 59) return null;
+	const year = Number(dateKey.slice(0, 4));
+	const month = Number(dateKey.slice(5, 7));
+	const day = Number(dateKey.slice(8, 10));
+	const naive = new Date(Date.UTC(year, month - 1, day, hour, minute));
+	const offset1 = tzOffsetMinutes(naive, timeZone);
+	const candidate = new Date(naive.getTime() - offset1 * 60_000);
+	const offset2 = tzOffsetMinutes(candidate, timeZone);
+	const instant =
+		offset2 !== offset1
+			? new Date(naive.getTime() - offset2 * 60_000)
+			: candidate;
+	return instant.toISOString();
+}
+
 export const WEEKDAY_NAMES = [
 	"Sunday",
 	"Monday",

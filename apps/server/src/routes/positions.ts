@@ -5,6 +5,13 @@ import { requireManager, requireSession } from "../context";
 import { NotFoundError } from "../errors";
 import { firstRow } from "../rows";
 
+function serializePosition(position: typeof positions.$inferSelect) {
+	return {
+		id: position.id,
+		name: position.name,
+	};
+}
+
 export const positionsRoutes = new Elysia({
 	prefix: "/v1",
 	tags: ["Position"],
@@ -21,10 +28,7 @@ export const positionsRoutes = new Elysia({
 				.where(eq(positions.workplaceId, params.workplaceId));
 
 			return {
-				positions: rows.map((position) => ({
-					id: position.id,
-					name: position.name,
-				})),
+				positions: rows.map(serializePosition),
 			};
 		},
 		{
@@ -52,7 +56,7 @@ export const positionsRoutes = new Elysia({
 					.returning(),
 			);
 
-			return { position: { id: position.id, name: position.name } };
+			return { position: serializePosition(position) };
 		},
 		{
 			headers: t.Object({ authorization: t.String() }),
@@ -91,7 +95,7 @@ export const positionsRoutes = new Elysia({
 					.returning(),
 			);
 
-			return { position: { id: position.id, name: position.name } };
+			return { position: serializePosition(position) };
 		},
 		{
 			headers: t.Object({ authorization: t.String() }),

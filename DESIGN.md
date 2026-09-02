@@ -1,6 +1,6 @@
 ---
 name: jooling
-description: A calm, operational scheduling system for restaurant managers and workers.
+description: A fast, operational scheduling system for hourly teams.
 colors:
   cool-canvas: "oklch(0.978 0.008 245)"
   navy-ink: "oklch(0.22 0.03 255)"
@@ -96,7 +96,7 @@ components:
 
 **Creative North Star: "The Calm Service Board"**
 
-jooling should feel like the dependable operations board at the center of a well-run restaurant: warm enough to belong in hospitality, disciplined enough to support staffing decisions, and quiet enough for dense weekly scanning. The interface favors explicit status, compact controls, strong alignment, and plain-language consequences over decorative display.
+jooling should feel like the dependable operations board at the center of a well-run workplace: fast enough to staff a week or a last-minute gap, disciplined enough to support staffing decisions, and quiet enough for dense weekly scanning. The interface favors explicit status, compact controls, strong alignment, and plain-language consequences over decorative display.
 
 The web manager experience is a high-density workspace built around a worker-by-day week grid. Worker experiences reverse that density: the next shift leads, required responses follow, and the current week provides context. Native preserves platform-appropriate touch sizing and a clear blue action color while sharing the same hierarchy and responsibility language.
 

@@ -1,19 +1,25 @@
 import type { Location, Shift } from "@SchedulesManager/db";
 import {
+	attendanceMarks,
 	db,
+	employmentGroups,
 	employmentLocations,
 	employmentPositions,
 	employments,
+	locationSales,
 	locations,
 	positions,
 	profiles,
 	schedules,
 	scheduleVersions,
+	shiftTagAssignments,
+	shiftTasks,
 	shifts,
 	timeEntries,
 	timeOffRequests,
 	unavailability,
 	versionShifts,
+	workplaces,
 	workPreferences,
 } from "@SchedulesManager/db";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -25,13 +31,16 @@ import {
 	weekStartDayFor,
 } from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
+import { laborCents, laborPercent } from "../labor";
 import { firstRow } from "../rows";
 import {
 	assertWeekStartDay,
 	shiftDays,
 	wallToInstant,
+	weekStartOfDateKey,
 	zonedDayInfo,
 } from "../time";
+import { assertEligible } from "./coverage";
 
 type ShiftRow = Shift;
 export interface Conflict {
@@ -427,6 +436,51 @@ async function loadSchedulePayload(location: Location, weekStart: string) {
 				: a.startsAt.localeCompare(b.startsAt),
 		);
 
+	const shiftIds = shiftRows.map((shift) => shift.id);
+	const tagRows =
+		shiftIds.length === 0
+			? []
+			: await db
+					.select()
+					.from(shiftTagAssignments)
+					.where(inArray(shiftTagAssignments.shiftId, shiftIds));
+	const taskRows =
+		shiftIds.length === 0
+			? []
+			: await db
+					.select()
+					.from(shiftTasks)
+					.where(inArray(shiftTasks.shiftId, shiftIds));
+	const tagsByShift = new Map<string, string[]>();
+	for (const row of tagRows) {
+		const list = tagsByShift.get(row.shiftId) ?? [];
+		list.push(row.tagId);
+		tagsByShift.set(row.shiftId, list);
+	}
+	const taskCountByShift = new Map<string, number>();
+	for (const row of taskRows) {
+		taskCountByShift.set(row.shiftId, (taskCountByShift.get(row.shiftId) ?? 0) + 1);
+	}
+
+	const groupRows =
+		workforce.employmentRows.length === 0
+			? []
+			: await db
+					.select()
+					.from(employmentGroups)
+					.where(
+						inArray(
+							employmentGroups.employmentId,
+							workforce.employmentRows.map((row) => row.employment.id),
+						),
+					);
+	const groupsByEmployment = new Map<string, string[]>();
+	for (const row of groupRows) {
+		const list = groupsByEmployment.get(row.employmentId) ?? [];
+		list.push(row.groupId);
+		groupsByEmployment.set(row.employmentId, list);
+	}
+
 	const hours = new Map<
 		string,
 		{
@@ -457,6 +511,45 @@ async function loadSchedulePayload(location: Location, weekStart: string) {
 		hours.set(shift.employmentId, entry);
 	}
 
+	const [workplace] = await db
+		.select()
+		.from(workplaces)
+		.where(eq(workplaces.id, location.workplaceId))
+		.limit(1);
+	const overtimeWeeklyMinutes = workplace?.overtimeWeeklyMinutes ?? 2400;
+	let scheduledCents = 0;
+	let overtimeCents = 0;
+	for (const entry of hours.values()) {
+		const wage =
+			workforce.employmentRows.find(
+				(row) => row.employment.id === entry.employmentId,
+			)?.employment.hourlyWageCents ?? 0;
+		const cost = laborCents({
+			minutes: entry.minutes,
+			hourlyWageCents: wage ?? 0,
+			overtimeWeeklyMinutes,
+		});
+		scheduledCents += cost.totalCents;
+		overtimeCents += cost.overtimeCents;
+	}
+	const weekDates = Array.from({ length: 7 }, (_, index) =>
+		shiftDays(weekStart, index),
+	);
+	const salesRows = await db
+		.select()
+		.from(locationSales)
+		.where(
+			and(
+				eq(locationSales.locationId, location.id),
+				inArray(locationSales.saleDate, weekDates),
+			),
+		);
+	const salesCents = salesRows.reduce((sum, row) => sum + row.amountCents, 0);
+	const salesByDate = salesRows.map((row) => ({
+		date: row.saleDate,
+		amountCents: row.amountCents,
+	}));
+
 	const publication = await publicationSummary(schedule.id, shiftRows);
 
 	return {
@@ -469,7 +562,18 @@ async function loadSchedulePayload(location: Location, weekStart: string) {
 		},
 		publication,
 		timeclock,
-		shifts: serialized,
+		labor: {
+			scheduledCents,
+			overtimeCents,
+			salesCents,
+			laborPercent: laborPercent(scheduledCents, salesCents),
+			byDate: salesByDate,
+		},
+		shifts: serialized.map((shift) => ({
+			...shift,
+			tagIds: tagsByShift.get(shift.id) ?? [],
+			taskCount: taskCountByShift.get(shift.id) ?? 0,
+		})),
 		staff: workforce.employmentRows
 			.filter(({ employment }) =>
 				employment.kind === "manager"
@@ -481,6 +585,8 @@ async function loadSchedulePayload(location: Location, weekStart: string) {
 				name: profile.fullName ?? profile.email,
 				email: profile.email,
 				kind: employment.kind,
+				hourlyWageCents: employment.hourlyWageCents,
+				groupIds: groupsByEmployment.get(employment.id) ?? [],
 				positionIds: workforce.positionScope.get(employment.id) ?? [],
 				preference: workforce.preferenceByEmployment.get(employment.id) ?? null,
 				unavailability: workforce.unavailabilityRows
@@ -563,6 +669,7 @@ async function assertAssignmentValid(
 	location: Location,
 	employmentId: string,
 	positionId: string,
+	options: { approvePosition?: boolean } = {},
 ) {
 	const [employment] = await db
 		.select()
@@ -598,7 +705,24 @@ async function assertAssignmentValid(
 			positionRows.length > 0 &&
 			!positionRows.some((row) => row.positionId === positionId)
 		) {
-			throw new BadRequestError("Worker is not approved for this position");
+			if (!options.approvePosition) {
+				throw new BadRequestError("Worker is not approved for this position");
+			}
+			const [position] = await db
+				.select({ id: positions.id })
+				.from(positions)
+				.where(
+					and(
+						eq(positions.id, positionId),
+						eq(positions.workplaceId, location.workplaceId),
+					),
+				)
+				.limit(1);
+			if (!position) throw new BadRequestError("Position not found");
+			await db
+				.insert(employmentPositions)
+				.values({ employmentId, positionId })
+				.onConflictDoNothing();
 		}
 	}
 }
@@ -615,12 +739,18 @@ async function timeclockSummary(scheduleId: string) {
 	const rows = await db
 		.select({
 			shiftId: versionShifts.shiftId,
+			versionShiftId: versionShifts.id,
 			entryId: timeEntries.id,
 			clockedInAt: timeEntries.clockedInAt,
 			clockedOutAt: timeEntries.clockedOutAt,
+			attendanceKind: attendanceMarks.kind,
 		})
 		.from(versionShifts)
 		.leftJoin(timeEntries, eq(timeEntries.versionShiftId, versionShifts.id))
+		.leftJoin(
+			attendanceMarks,
+			eq(attendanceMarks.versionShiftId, versionShifts.id),
+		)
 		.where(and(eq(versionShifts.versionId, latest.id)));
 
 	return rows
@@ -631,9 +761,12 @@ async function timeclockSummary(scheduleId: string) {
 			if (!row.entryId || !row.clockedInAt) {
 				return {
 					shiftId: row.shiftId,
+					versionShiftId: row.versionShiftId,
 					status: null as "open" | "closed" | null,
 					clockedInAt: null as string | null,
+					clockedOutAt: null as string | null,
 					workedMinutes: null as number | null,
+					attendance: row.attendanceKind,
 				};
 			}
 			const workedMinutes = Math.max(
@@ -646,9 +779,12 @@ async function timeclockSummary(scheduleId: string) {
 			);
 			return {
 				shiftId: row.shiftId,
+				versionShiftId: row.versionShiftId,
 				status: row.clockedOutAt ? ("closed" as const) : ("open" as const),
 				clockedInAt: row.clockedInAt.toISOString(),
+				clockedOutAt: row.clockedOutAt?.toISOString() ?? null,
 				workedMinutes,
+				attendance: row.attendanceKind,
 			};
 		});
 }
@@ -696,10 +832,151 @@ async function publicationSummary(scheduleId: string, draftShifts: ShiftRow[]) {
 	};
 }
 
+function calendarMonthKeys(monthStart: string, weekStartDay: number): string[] {
+	const firstWeekday = new Date(`${monthStart}T00:00:00Z`).getUTCDay();
+	const offset = (firstWeekday - weekStartDay + 7) % 7;
+	const start = shiftDays(monthStart, -offset);
+	return Array.from({ length: 42 }, (_, index) => shiftDays(start, index));
+}
+
+async function loadCalendarPayload(location: Location, monthStart: string) {
+	if (!/^\d{4}-\d{2}-01$/.test(monthStart)) {
+		throw new BadRequestError("Month must be the first day, like 2026-09-01");
+	}
+	const weekStartDay = await weekStartDayFor(location.workplaceId);
+	const days = calendarMonthKeys(monthStart, weekStartDay);
+	const weekStarts = [
+		...new Set(days.map((day) => weekStartOfDateKey(day, weekStartDay))),
+	];
+
+	const existing = await db
+		.select()
+		.from(schedules)
+		.where(
+			and(
+				eq(schedules.locationId, location.id),
+				inArray(schedules.weekStartDate, weekStarts),
+			),
+		);
+	if (existing.length === 0) {
+		return { monthStart, shifts: [], timeclock: [] };
+	}
+
+	const scheduleIds = existing.map((row) => row.id);
+	const [shiftRows, positionRows, workforce] = await Promise.all([
+		db.select().from(shifts).where(inArray(shifts.scheduleId, scheduleIds)),
+		db
+			.select()
+			.from(positions)
+			.where(eq(positions.workplaceId, location.workplaceId)),
+		loadWorkforce(location.workplaceId),
+	]);
+
+	const conflicts = computeConflicts(location, shiftRows, workforce);
+	const workerInfoById = new Map(
+		workforce.employmentRows.map((row) => [
+			row.employment.id,
+			{
+				name: row.profile.fullName ?? row.profile.email,
+				email: row.profile.email,
+			},
+		]),
+	);
+	const positionNameById = new Map(
+		positionRows.map((position) => [position.id, position.name]),
+	);
+	const serialized = shiftRows
+		.map((shift) =>
+			serializeShift(
+				shift,
+				location,
+				conflicts,
+				workerInfoById.get(shift.employmentId ?? "") ?? null,
+				positionNameById.get(shift.positionId) ?? "Unknown",
+			),
+		)
+		.sort((a, b) =>
+			a.startsAt === b.startsAt
+				? (a.workerName ?? "").localeCompare(b.workerName ?? "")
+				: a.startsAt.localeCompare(b.startsAt),
+		);
+
+	const shiftIds = shiftRows.map((shift) => shift.id);
+	const tagRows =
+		shiftIds.length === 0
+			? []
+			: await db
+					.select()
+					.from(shiftTagAssignments)
+					.where(inArray(shiftTagAssignments.shiftId, shiftIds));
+	const tagsByShift = new Map<string, string[]>();
+	for (const row of tagRows) {
+		const list = tagsByShift.get(row.shiftId) ?? [];
+		list.push(row.tagId);
+		tagsByShift.set(row.shiftId, list);
+	}
+	const taskRows =
+		shiftIds.length === 0
+			? []
+			: await db
+					.select()
+					.from(shiftTasks)
+					.where(inArray(shiftTasks.shiftId, shiftIds));
+	const taskCountByShift = new Map<string, number>();
+	for (const row of taskRows) {
+		taskCountByShift.set(
+			row.shiftId,
+			(taskCountByShift.get(row.shiftId) ?? 0) + 1,
+		);
+	}
+
+	const timeclock = (
+		await Promise.all(scheduleIds.map((id) => timeclockSummary(id)))
+	).flat();
+
+	return {
+		monthStart,
+		shifts: serialized.map((shift) => ({
+			...shift,
+			tagIds: tagsByShift.get(shift.id) ?? [],
+			taskCount: taskCountByShift.get(shift.id) ?? 0,
+		})),
+		timeclock,
+	};
+}
+
 export const schedulesRoutes = new Elysia({
 	prefix: "/v1",
 	tags: ["Schedule"],
 })
+	.get(
+		"/locations/:locationId/calendar/:monthStart",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireLocationAccess(profile.id, params.locationId);
+
+			const [location] = await db
+				.select()
+				.from(locations)
+				.where(eq(locations.id, params.locationId))
+				.limit(1);
+			if (!location) throw new NotFoundError("Location not found");
+
+			return loadCalendarPayload(location, params.monthStart);
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({
+				locationId: t.String({ format: "uuid" }),
+				monthStart: dateSchema,
+			}),
+			detail: {
+				summary:
+					"Read Shifts across a calendar month without creating draft Schedules",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
 	.get(
 		"/locations/:locationId/schedules/:weekStart",
 		async ({ headers, params }) => {
@@ -751,13 +1028,6 @@ export const schedulesRoutes = new Elysia({
 
 			const schedule = await getOrCreateSchedule(location.id, params.weekStart);
 			assertDateInWeek(body.date, params.weekStart);
-			if (body.employmentId) {
-				await assertAssignmentValid(
-					location,
-					body.employmentId,
-					body.positionId,
-				);
-			}
 			const { startsAt, endsAt } = resolveShiftTimes(body, location.timezone);
 			const unavailabilityOverrideReason = await overrideReasonIfNeeded(
 				location,
@@ -767,20 +1037,30 @@ export const schedulesRoutes = new Elysia({
 				body.unavailabilityOverrideReason,
 			);
 
-			const shift = firstRow(
-				await db
-					.insert(shifts)
-					.values({
-						scheduleId: schedule.id,
-						employmentId: body.employmentId ?? null,
-						positionId: body.positionId,
-						startsAt,
-						endsAt,
-						note: body.note ?? null,
-						unavailabilityOverrideReason,
-					})
-					.returning(),
-			);
+			const shift = await db.transaction(async () => {
+				if (body.employmentId) {
+					await assertAssignmentValid(
+						location,
+						body.employmentId,
+						body.positionId,
+						{ approvePosition: body.approvePosition === true },
+					);
+				}
+				return firstRow(
+					await db
+						.insert(shifts)
+						.values({
+							scheduleId: schedule.id,
+							employmentId: body.employmentId ?? null,
+							positionId: body.positionId,
+							startsAt,
+							endsAt,
+							note: body.note ?? null,
+							unavailabilityOverrideReason,
+						})
+						.returning(),
+				);
+			});
 
 			return { shiftId: shift.id };
 		},
@@ -802,6 +1082,7 @@ export const schedulesRoutes = new Elysia({
 				unavailabilityOverrideReason: t.Optional(
 					t.String({ minLength: 1, maxLength: 300 }),
 				),
+				approvePosition: t.Optional(t.Boolean()),
 			}),
 			detail: {
 				summary: "Add a Shift to the draft Schedule (Manager)",
@@ -829,10 +1110,6 @@ export const schedulesRoutes = new Elysia({
 					: body.employmentId;
 			const positionId = body.positionId ?? existing.positionId;
 
-			if (employmentId) {
-				await assertAssignmentValid(location, employmentId, positionId);
-			}
-
 			const date =
 				body.date ?? zonedDayInfo(existing.startsAt, location.timezone).dateKey;
 			assertDateInWeek(date, schedule.weekStartDate);
@@ -858,18 +1135,25 @@ export const schedulesRoutes = new Elysia({
 				submittedOverride,
 			);
 
-			await db
-				.update(shifts)
-				.set({
-					employmentId,
-					positionId,
-					startsAt,
-					endsAt,
-					note: body.note === undefined ? existing.note : body.note,
-					unavailabilityOverrideReason,
-					updatedAt: new Date(),
-				})
-				.where(eq(shifts.id, existing.id));
+			await db.transaction(async () => {
+				if (employmentId) {
+					await assertAssignmentValid(location, employmentId, positionId, {
+						approvePosition: body.approvePosition === true,
+					});
+				}
+				await db
+					.update(shifts)
+					.set({
+						employmentId,
+						positionId,
+						startsAt,
+						endsAt,
+						note: body.note === undefined ? existing.note : body.note,
+						unavailabilityOverrideReason,
+						updatedAt: new Date(),
+					})
+					.where(eq(shifts.id, existing.id));
+			});
 
 			return { ok: true as const };
 		},
@@ -888,6 +1172,7 @@ export const schedulesRoutes = new Elysia({
 				unavailabilityOverrideReason: t.Optional(
 					t.Union([t.String({ minLength: 1, maxLength: 300 }), t.Null()]),
 				),
+				approvePosition: t.Optional(t.Boolean()),
 			}),
 			detail: {
 				summary: "Update a draft Shift (Manager)",
@@ -993,6 +1278,262 @@ export const schedulesRoutes = new Elysia({
 			detail: {
 				summary:
 					"Copy the previous week's Shifts into this week's draft (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.post(
+		"/locations/:locationId/schedules/:weekStart/auto-assign",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const [location] = await db
+				.select()
+				.from(locations)
+				.where(eq(locations.id, params.locationId))
+				.limit(1);
+			if (!location) throw new NotFoundError("Location not found");
+			await requireManager(profile.id, location.workplaceId);
+			const [schedule] = await db
+				.select()
+				.from(schedules)
+				.where(
+					and(
+						eq(schedules.locationId, location.id),
+						eq(schedules.weekStartDate, params.weekStart),
+					),
+				)
+				.limit(1);
+			if (!schedule) throw new NotFoundError("Schedule not found");
+			const draft = await db
+				.select()
+				.from(shifts)
+				.where(eq(shifts.scheduleId, schedule.id));
+			const unassigned = draft.filter((shift) => shift.employmentId === null);
+			const workers = await db
+				.select()
+				.from(employments)
+				.where(
+					and(
+						eq(employments.workplaceId, location.workplaceId),
+						eq(employments.kind, "worker"),
+						eq(employments.status, "active"),
+					),
+				);
+			let assigned = 0;
+			for (const shift of unassigned) {
+				for (const worker of workers) {
+					const overlap = draft.some(
+						(other) =>
+							other.employmentId === worker.id &&
+							other.startsAt < shift.endsAt &&
+							shift.startsAt < other.endsAt,
+					);
+					if (overlap) continue;
+					try {
+						await assertEligible(
+							worker.id,
+							location.id,
+							shift.positionId,
+							shift.startsAt,
+							shift.endsAt,
+						);
+					} catch {
+						continue;
+					}
+					await db
+						.update(shifts)
+						.set({ employmentId: worker.id, updatedAt: new Date() })
+						.where(eq(shifts.id, shift.id));
+					shift.employmentId = worker.id;
+					assigned += 1;
+					break;
+				}
+			}
+			return { assigned };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({
+				locationId: t.String({ format: "uuid" }),
+				weekStart: dateSchema,
+			}),
+			detail: {
+				summary: "Auto-assign unassigned draft Shifts (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.post(
+		"/locations/:locationId/schedules/:weekStart/bulk",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const [location] = await db
+				.select()
+				.from(locations)
+				.where(eq(locations.id, params.locationId))
+				.limit(1);
+			if (!location) throw new NotFoundError("Location not found");
+			await requireManager(profile.id, location.workplaceId);
+			if (body.shiftIds.length === 0) return { updated: 0 };
+			if (body.delete) {
+				await db.delete(shifts).where(inArray(shifts.id, body.shiftIds));
+				return { updated: body.shiftIds.length };
+			}
+			const rows = await db
+				.select()
+				.from(shifts)
+				.where(inArray(shifts.id, body.shiftIds));
+			for (const shift of rows) {
+				const date = zonedDayInfo(shift.startsAt, location.timezone).dateKey;
+				const startMinute = body.startMinute ??
+					zonedDayInfo(shift.startsAt, location.timezone).minuteOfDay;
+				const endMinute = body.endMinute ??
+					zonedDayInfo(shift.endsAt, location.timezone).minuteOfDay;
+				const { startsAt, endsAt } = resolveShiftTimes(
+					{ date, startMinute, endMinute },
+					location.timezone,
+				);
+				await db
+					.update(shifts)
+					.set({
+						startsAt,
+						endsAt,
+						employmentId:
+							body.employmentId === undefined
+								? shift.employmentId
+								: body.employmentId,
+						updatedAt: new Date(),
+					})
+					.where(eq(shifts.id, shift.id));
+			}
+			return { updated: rows.length };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({
+				locationId: t.String({ format: "uuid" }),
+				weekStart: dateSchema,
+			}),
+			body: t.Object({
+				shiftIds: t.Array(t.String({ format: "uuid" })),
+				delete: t.Optional(t.Boolean()),
+				startMinute: t.Optional(minuteSchema),
+				endMinute: t.Optional(minuteSchema),
+				employmentId: t.Optional(
+					t.Union([t.String({ format: "uuid" }), t.Null()]),
+				),
+			}),
+			detail: {
+				summary: "Bulk edit or delete draft Shifts (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.post(
+		"/locations/:locationId/schedules/:weekStart/paste",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const [location] = await db
+				.select()
+				.from(locations)
+				.where(eq(locations.id, params.locationId))
+				.limit(1);
+			if (!location) throw new NotFoundError("Location not found");
+			await requireManager(profile.id, location.workplaceId);
+			assertDateInWeek(body.date, params.weekStart);
+			const schedule = await getOrCreateSchedule(location.id, params.weekStart);
+			const created = [];
+			for (const item of body.shifts) {
+				const { startsAt, endsAt } = resolveShiftTimes(
+					{
+						date: body.date,
+						startMinute: item.startMinute,
+						endMinute: item.endMinute,
+					},
+					location.timezone,
+				);
+				created.push({
+					scheduleId: schedule.id,
+					employmentId: body.employmentId ?? null,
+					positionId: item.positionId,
+					startsAt,
+					endsAt,
+					note: item.note ?? null,
+				});
+			}
+			if (created.length > 0) await db.insert(shifts).values(created);
+			return { pasted: created.length };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({
+				locationId: t.String({ format: "uuid" }),
+				weekStart: dateSchema,
+			}),
+			body: t.Object({
+				date: dateSchema,
+				employmentId: t.Optional(
+					t.Union([t.String({ format: "uuid" }), t.Null()]),
+				),
+				shifts: t.Array(
+					t.Object({
+						positionId: t.String({ format: "uuid" }),
+						startMinute: minuteSchema,
+						endMinute: minuteSchema,
+						note: t.Optional(t.String({ maxLength: 200 })),
+					}),
+				),
+			}),
+			detail: {
+				summary: "Paste copied Shift skeletons onto a day (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.post(
+		"/shifts/:shiftId/repeat",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const { location, schedule } = await shiftContext(params.shiftId);
+			await requireManager(profile.id, location.workplaceId);
+			const [existing] = await db
+				.select()
+				.from(shifts)
+				.where(eq(shifts.id, params.shiftId))
+				.limit(1);
+			if (!existing) throw new NotFoundError("Shift not found");
+			const startInfo = zonedDayInfo(existing.startsAt, location.timezone);
+			const endInfo = zonedDayInfo(existing.endsAt, location.timezone);
+			let copied = 0;
+			for (let week = 1; week <= body.weeks; week++) {
+				const weekStart = shiftDays(schedule.weekStartDate, week * 7);
+				const target = await getOrCreateSchedule(location.id, weekStart);
+				await db.insert(shifts).values({
+					scheduleId: target.id,
+					employmentId: existing.employmentId,
+					positionId: existing.positionId,
+					startsAt: wallToInstant(
+						shiftDays(startInfo.dateKey, week * 7),
+						startInfo.minuteOfDay,
+						location.timezone,
+					),
+					endsAt: wallToInstant(
+						shiftDays(endInfo.dateKey, week * 7),
+						endInfo.minuteOfDay,
+						location.timezone,
+					),
+					note: existing.note,
+				});
+				copied += 1;
+			}
+			return { copied };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ shiftId: t.String({ format: "uuid" }) }),
+			body: t.Object({ weeks: t.Integer({ minimum: 1, maximum: 12 }) }),
+			detail: {
+				summary: "Copy this draft Shift forward by N weeks (Manager)",
 				security: [{ bearerAuth: [] }],
 			},
 		},

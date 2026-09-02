@@ -55,6 +55,15 @@ export default function RootLayout() {
 									/>
 									<Stack.Screen name="team" options={{ headerShown: false }} />
 									<Stack.Screen
+										name="announcements"
+										options={{ headerShown: false }}
+									/>
+									<Stack.Screen
+										name="messages"
+										options={{ headerShown: false }}
+									/>
+									<Stack.Screen name="kiosk" options={{ headerShown: false }} />
+									<Stack.Screen
 										name="shift-detail"
 										options={{ headerShown: false, presentation: "card" }}
 									/>

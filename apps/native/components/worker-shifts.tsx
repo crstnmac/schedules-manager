@@ -17,10 +17,13 @@ import {
 	type DayRosterEntry,
 	type PublishedWeek,
 	type SwapDetail,
+	useCancelSwap,
+	useCompleteShiftTask,
 	useDayRoster,
 	useMySwaps,
 	useProposeSwap,
 	useRespondToSwap,
+	useShiftTasks,
 } from "@/lib/queries";
 
 export type WeekShift = PublishedWeek["shifts"][number];
@@ -71,6 +74,8 @@ export function ShiftDetailScreen({
 	const queryClient = useQueryClient();
 	const [mode, setMode] = useState<"info" | "swap">("info");
 	const roster = useDayRoster(workplaceId, shift?.date);
+	const tasks = useShiftTasks(shift.id);
+	const completeTask = useCompleteShiftTask(shift.id);
 	const release = useMutation({
 		mutationFn: (versionShiftId: string) =>
 			api("/v1/my/releases", {
@@ -135,6 +140,71 @@ export function ShiftDetailScreen({
 
 				{mode === "info" ? (
 					<>
+						<Text style={[styles.sectionTitle, { color: theme.muted }]}>
+							SHIFT TASKS
+						</Text>
+						{tasks.isLoading ? (
+							<ActivityIndicator color={theme.primary} />
+						) : (
+							<View style={styles.rosterList}>
+								{(tasks.data ?? []).map((task) => (
+									<Pressable
+										key={task.id}
+										accessibilityRole="checkbox"
+										accessibilityState={{
+											checked: task.completed,
+											disabled: task.completed || completeTask.isPending,
+										}}
+										disabled={task.completed || completeTask.isPending}
+										onPress={() => completeTask.mutate(task.id)}
+										style={styles.taskRow}
+									>
+										<View
+											style={[
+												styles.taskCheck,
+												{
+													borderColor: task.completed
+														? theme.success
+														: theme.border,
+													backgroundColor: task.completed
+														? theme.success
+														: "transparent",
+												},
+											]}
+										>
+											{task.completed ? (
+												<Text style={{ color: theme.onSuccess }}>✓</Text>
+											) : null}
+										</View>
+										<Text
+											style={[
+												styles.rosterName,
+												{
+													color: task.completed ? theme.muted : theme.text,
+													textDecorationLine: task.completed
+														? "line-through"
+														: "none",
+												},
+											]}
+										>
+											{task.title}
+										</Text>
+									</Pressable>
+								))}
+								{tasks.data?.length === 0 ? (
+									<Text style={[styles.rosterEmpty, { color: theme.muted }]}>
+										No tasks for this Shift.
+									</Text>
+								) : null}
+								{tasks.isError || completeTask.isError ? (
+									<Text
+										style={[styles.rosterEmpty, { color: theme.notification }]}
+									>
+										{((tasks.error ?? completeTask.error) as Error).message}
+									</Text>
+								) : null}
+							</View>
+						)}
 						<Text style={[styles.sectionTitle, { color: theme.muted }]}>
 							WHO ELSE IS WORKING
 						</Text>
@@ -315,6 +385,12 @@ const STATUS_LABELS: Record<SwapDetail["status"], string> = {
 	cancelled: "Cancelled",
 };
 
+function swapGiveTake(direction: "incoming" | "outgoing", swap: SwapDetail) {
+	return direction === "incoming"
+		? { give: swap.counterpartShift, take: swap.requesterShift }
+		: { give: swap.requesterShift, take: swap.counterpartShift };
+}
+
 export function SwapsCard({
 	workplaceId,
 }: {
@@ -323,88 +399,120 @@ export function SwapsCard({
 	const { theme } = useAppTheme();
 	const swaps = useMySwaps(workplaceId);
 	const respond = useRespondToSwap();
+	const cancel = useCancelSwap();
 
-	const items = swaps.data?.swaps ?? [];
-	if (swaps.isLoading || items.length === 0) return null;
-
-	const actionable = items.filter(
+	const items = (swaps.data?.swaps ?? []).filter(
 		(item) =>
-			item.direction === "incoming" &&
-			item.swap.status === "pending_counterpart",
+			item.swap.status === "pending_counterpart" ||
+			item.swap.status === "pending_manager",
 	);
+	if (swaps.isLoading || items.length === 0) return null;
 
 	return (
 		<View style={{ gap: 12 }}>
-			{actionable.map(({ swap }) => (
-				<View
-					key={swap.id}
-					style={[
-						styles.swapCard,
-						{ backgroundColor: theme.card, borderColor: theme.primary },
-					]}
-				>
-					<Text style={[styles.swapTitle, { color: theme.text }]}>
-						Swap request from {swap.requester.name}
-					</Text>
-					<Text style={[styles.swapLine, { color: theme.muted }]}>
-						You would give: {formatDay(swap.counterpartShift.startsAt)} ·{" "}
-						{formatClock(swap.counterpartShift.startsAt)} –{" "}
-						{formatClock(swap.counterpartShift.endsAt)} ·{" "}
-						{swap.counterpartShift.positionName}
-					</Text>
-					<Text style={[styles.swapLine, { color: theme.muted }]}>
-						You would take: {formatDay(swap.requesterShift.startsAt)} ·{" "}
-						{formatClock(swap.requesterShift.startsAt)} –{" "}
-						{formatClock(swap.requesterShift.endsAt)} ·{" "}
-						{swap.requesterShift.positionName}
-					</Text>
-					<View style={styles.actions}>
-						<SecondaryButton
-							label="Decline"
-							disabled={respond.isPending}
-							onPress={() =>
-								confirmAction({
-									title: "Decline this swap?",
-									message: "You will keep your current shift assignment.",
-									confirmLabel: "Decline swap",
-									destructive: true,
-									onConfirm: () =>
-										respond.mutate({ swapId: swap.id, decision: "decline" }),
-								})
-							}
-							style={{ flex: 1 }}
-						/>
-						<PrimaryButton
-							label="Accept"
-							disabled={respond.isPending}
-							onPress={() =>
-								confirmAction({
-									title: "Accept this swap?",
-									message:
-										"If your Manager approves it, you will exchange these shift assignments.",
-									confirmLabel: "Accept swap",
-									onConfirm: () =>
-										respond.mutate({ swapId: swap.id, decision: "accept" }),
-								})
-							}
-							style={{ flex: 1 }}
-						/>
-					</View>
-					{respond.isError ? (
-						<Text style={[styles.swapLine, { color: theme.notification }]}>
-							{(respond.error as Error).message}
+			{items.map(({ direction, swap }) => {
+				const incoming =
+					direction === "incoming" && swap.status === "pending_counterpart";
+				const canCancel =
+					direction === "outgoing" &&
+					(swap.status === "pending_counterpart" ||
+						swap.status === "pending_manager");
+				const { give, take } = swapGiveTake(direction, swap);
+				return (
+					<View
+						key={swap.id}
+						style={[
+							styles.swapCard,
+							{ backgroundColor: theme.card, borderColor: theme.primary },
+						]}
+					>
+						<Text style={[styles.swapTitle, { color: theme.text }]}>
+							{incoming
+								? `Swap request from ${swap.requester.name}`
+								: `Swap with ${swap.counterpart.name}`}
 						</Text>
-					) : null}
-				</View>
-			))}
-			{items.length > 0 ? (
-				<View style={styles.swapStatusFooter}>
-					<Text style={[styles.swapLine, { color: theme.muted }]}>
-						{items.length} swap{items.length === 1 ? "" : "s"} ·{" "}
-						{STATUS_LABELS[items[items.length - 1].swap.status]}
-					</Text>
-				</View>
-			) : null}
+						<Text style={[styles.swapLine, { color: theme.muted }]}>
+							{STATUS_LABELS[swap.status]}
+						</Text>
+						<Text style={[styles.swapLine, { color: theme.muted }]}>
+							You would give: {formatDay(give.startsAt)} ·{" "}
+							{formatClock(give.startsAt)} – {formatClock(give.endsAt)} ·{" "}
+							{give.positionName}
+						</Text>
+						<Text style={[styles.swapLine, { color: theme.muted }]}>
+							You would take: {formatDay(take.startsAt)} ·{" "}
+							{formatClock(take.startsAt)} – {formatClock(take.endsAt)} ·{" "}
+							{take.positionName}
+						</Text>
+						{incoming ? (
+							<View style={styles.actions}>
+								<SecondaryButton
+									label="Decline"
+									disabled={respond.isPending}
+									onPress={() =>
+										confirmAction({
+											title: "Decline this swap?",
+											message: "You will keep your current shift assignment.",
+											confirmLabel: "Decline swap",
+											destructive: true,
+											onConfirm: () =>
+												respond.mutate({
+													swapId: swap.id,
+													decision: "decline",
+												}),
+										})
+									}
+									style={{ flex: 1 }}
+								/>
+								<PrimaryButton
+									label="Accept"
+									disabled={respond.isPending}
+									onPress={() =>
+										confirmAction({
+											title: "Accept this swap?",
+											message:
+												"If your Manager approves it, you will exchange these shift assignments.",
+											confirmLabel: "Accept swap",
+											onConfirm: () =>
+												respond.mutate({
+													swapId: swap.id,
+													decision: "accept",
+												}),
+										})
+									}
+									style={{ flex: 1 }}
+								/>
+							</View>
+						) : null}
+						{canCancel ? (
+							<SecondaryButton
+								label="Cancel request"
+								disabled={cancel.isPending}
+								onPress={() =>
+									confirmAction({
+										title: "Cancel this swap?",
+										message:
+											"Your coworker will be notified. Everyone keeps their current assignment.",
+										confirmLabel: "Cancel swap",
+										destructive: true,
+										onConfirm: () => cancel.mutate(swap.id),
+									})
+								}
+							/>
+						) : null}
+						{respond.isError ? (
+							<Text style={[styles.swapLine, { color: theme.notification }]}>
+								{(respond.error as Error).message}
+							</Text>
+						) : null}
+						{cancel.isError ? (
+							<Text style={[styles.swapLine, { color: theme.notification }]}>
+								{(cancel.error as Error).message}
+							</Text>
+						) : null}
+					</View>
+				);
+			})}
 		</View>
 	);
 }
@@ -453,6 +561,20 @@ const styles = StyleSheet.create({
 		paddingVertical: 10,
 	},
 	rosterDot: { width: 8, height: 8, borderRadius: 4 },
+	taskRow: {
+		minHeight: 44,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 10,
+	},
+	taskCheck: {
+		width: 22,
+		height: 22,
+		borderWidth: 1.5,
+		borderRadius: 6,
+		alignItems: "center",
+		justifyContent: "center",
+	},
 	rosterName: { fontSize: 15, fontWeight: "600" },
 	rosterMeta: { fontSize: 13, lineHeight: 18 },
 	rosterEmpty: { fontSize: 14, lineHeight: 20 },

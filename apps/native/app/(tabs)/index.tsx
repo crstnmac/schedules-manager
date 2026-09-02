@@ -29,6 +29,7 @@ import {
 	useAcknowledge,
 	useClockIn,
 	useClockOut,
+	useCoverageSwaps,
 	useCurrentEmployment,
 	useMe,
 	useMySchedule,
@@ -57,6 +58,7 @@ function ManagerHome() {
 	const { employment, workplaceId } = useCurrentEmployment();
 	const workers = useManagerWorkers(workplaceId);
 	const timeOff = useManagerTimeOff(workplaceId);
+	const swaps = useCoverageSwaps(workplaceId);
 
 	const active =
 		workers.data?.workers.filter(
@@ -65,7 +67,8 @@ function ManagerHome() {
 	const pendingInvites =
 		workers.data?.invitations.filter((i) => i.status === "pending").length ?? 0;
 	const pendingRequests =
-		timeOff.data?.requests.filter((r) => r.status === "pending").length ?? 0;
+		(timeOff.data?.requests.filter((r) => r.status === "pending").length ?? 0) +
+		(swaps.data?.length ?? 0);
 
 	return (
 		<AppScreen>
@@ -89,7 +92,7 @@ function ManagerHome() {
 					<Metric
 						icon="calendar-outline"
 						value={pendingRequests}
-						label="Time-off Requests"
+						label="Open Requests"
 					/>
 				</View>
 			</View>
@@ -107,7 +110,7 @@ function ManagerHome() {
 				<Text style={[s.cardTitle, { color: theme.text }]}>What to do now</Text>
 				<View style={{ gap: 6 }}>
 					<Text style={[s.body, { color: theme.muted }]}>
-						• Review pending Time-off Requests before you publish.
+						• Review Time-off Requests and agreed Shift Swaps before you publish.
 					</Text>
 					<Text style={[s.body, { color: theme.muted }]}>
 						• Open Shifts with no Worker still need coverage.

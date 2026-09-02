@@ -24,7 +24,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 			},
 			{
 				name: "description",
-				content: "jooling is a workforce scheduling application",
+				content: "jooling is fast scheduling for hourly teams",
 			},
 		],
 		links: [

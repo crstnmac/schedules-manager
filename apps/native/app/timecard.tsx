@@ -2,18 +2,28 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
 	ActivityIndicator,
+	Alert,
 	Pressable,
 	StyleSheet,
 	Text,
 	View,
 } from "react-native";
 
-import { AppScreen, Card, PageHeader, useAppTheme } from "@/components/ui";
+import {
+	AppScreen,
+	Card,
+	PageHeader,
+	PrimaryButton,
+	SecondaryButton,
+	useAppTheme,
+} from "@/components/ui";
 import { positionColor } from "@/lib/position-color";
 import {
 	useCurrentEmployment,
+	useEndBreak,
 	useMyTimeEntries,
 	usePayPeriod,
+	useStartBreak,
 } from "@/lib/queries";
 
 export default function TimecardScreen() {
@@ -22,6 +32,8 @@ export default function TimecardScreen() {
 	const { workplaceId } = useCurrentEmployment();
 	const timecard = useMyTimeEntries(workplaceId);
 	const payPeriod = usePayPeriod(workplaceId);
+	const startBreak = useStartBreak();
+	const endBreak = useEndBreak();
 
 	const entries = timecard.data?.timeEntries ?? [];
 	const groups = groupByDay(entries);
@@ -150,34 +162,71 @@ export default function TimecardScreen() {
 							: new Date(entry.clockedOutAt ?? "").getTime() -
 								new Date(entry.clockedInAt).getTime();
 						return (
-							<View key={entry.id} style={styles.entryRow}>
-								<View
-									style={[
-										styles.positionDot,
-										{ backgroundColor: positionColor(entry.positionName) },
-									]}
-									aria-hidden
-								/>
-								<View style={styles.entryCopy}>
-									<Text style={[styles.entryTitle, { color: theme.text }]}>
-										{entry.positionName}
-									</Text>
-									<Text style={[styles.entryMeta, { color: theme.muted }]}>
-										{formatClock(entry.clockedInAt)} –{" "}
-										{open
-											? "on the clock"
-											: formatClock(entry.clockedOutAt ?? undefined)}
-										{" · "}
-										{formatHours(durationMs)}
-									</Text>
+							<View key={entry.id}>
+								<View style={styles.entryRow}>
+									<View
+										style={[
+											styles.positionDot,
+											{ backgroundColor: positionColor(entry.positionName) },
+										]}
+										aria-hidden
+									/>
+									<View style={styles.entryCopy}>
+										<Text style={[styles.entryTitle, { color: theme.text }]}>
+											{entry.positionName}
+										</Text>
+										<Text style={[styles.entryMeta, { color: theme.muted }]}>
+											{formatClock(entry.clockedInAt)} –{" "}
+											{open
+												? "on the clock"
+												: formatClock(entry.clockedOutAt ?? undefined)}
+											{" · "}
+											{formatHours(durationMs)}
+										</Text>
+									</View>
+									{open ? (
+										<View
+											style={[styles.pill, { backgroundColor: theme.primary }]}
+										>
+											<Text
+												style={[styles.pillText, { color: theme.onPrimary }]}
+											>
+												OPEN
+											</Text>
+										</View>
+									) : null}
 								</View>
 								{open ? (
-									<View
-										style={[styles.pill, { backgroundColor: theme.primary }]}
-									>
-										<Text style={[styles.pillText, { color: theme.onPrimary }]}>
-											OPEN
-										</Text>
+									<View style={styles.breakActions}>
+										<PrimaryButton
+											label="Start Break"
+											loading={startBreak.isPending}
+											disabled={endBreak.isPending}
+											onPress={() =>
+												startBreak.mutate(entry.id, {
+													onError: (error) =>
+														Alert.alert(
+															"Could not start Break",
+															(error as Error).message,
+														),
+												})
+											}
+											style={{ flex: 1 }}
+										/>
+										<SecondaryButton
+											label="End Break"
+											disabled={startBreak.isPending || endBreak.isPending}
+											onPress={() =>
+												endBreak.mutate(entry.id, {
+													onError: (error) =>
+														Alert.alert(
+															"Could not end Break",
+															(error as Error).message,
+														),
+												})
+											}
+											style={{ flex: 1 }}
+										/>
 									</View>
 								) : null}
 							</View>
@@ -349,6 +398,7 @@ const styles = StyleSheet.create({
 		gap: 10,
 	},
 	entryCopy: { flex: 1, gap: 2 },
+	breakActions: { flexDirection: "row", gap: 10, paddingBottom: 6 },
 	entryTitle: { fontSize: 15, fontWeight: "600" },
 	entryMeta: { fontSize: 13, lineHeight: 19 },
 	pillText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.8 },

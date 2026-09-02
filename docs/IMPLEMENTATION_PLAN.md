@@ -1,26 +1,26 @@
 # MVP Implementation Plan
 
-## Current implementation status — August 30, 2026
+## Current implementation status — September 2, 2026
 
-The repository now contains the complete product path described in Phases 1–6 across the Drizzle schema, Elysia API, manager web application, and worker web/native clients. Those phases are **feature-complete in code**, but their acceptance criteria are not considered pilot-verified until integration tests and the end-to-end acceptance scenarios exist.
+The repository contains the complete product path described in Phases 1–6 across the Drizzle schema, Elysia API, manager web application, and worker web/native clients. Phase 7 has closed most delivery and reliability gaps: invitation email, idempotency, rate limits, readiness/logging, push, invitation-led join policy, and a PostgreSQL integration suite. Phases 1–6 remain **feature-complete in code**; pilot readiness still needs ops drills, broader acceptance coverage, client hardening, and metrics.
 
 | Phase | Status | Evidence in the repository |
 | --- | --- | --- |
-| 1. Identity and Workplace setup | Feature-complete | Auth bootstrap, onboarding, Workplace/Location/Position management, scoped Employments, invitation acceptance, Worker directory, and sign-out |
+| 1. Identity and Workplace setup | Feature-complete | Auth bootstrap, invitation-led onboarding, Workplace/Location/Position management, scoped Employments, invite create/accept, Worker directory, and sign-out |
 | 2. Worker constraints and requests | Feature-complete | Unavailability, preferences, time-off requests and decisions, Manager constraint views, and override reasons |
 | 3. Schedule drafting | Feature-complete | Weekly Location grid, shift CRUD/copy, previous-week copy, server conflict checks, overnight support, and hours summaries |
 | 4. Publication and acknowledgement | Feature-complete | Immutable version tables, atomic publication flow, Worker schedules/history, delivery state, and explicit acknowledgement |
 | 5. Successor drafts and late changes | Feature-complete | Change previews, version comparisons, notice-window classification, Worker acceptance/decline, and Manager acceptance status |
 | 6. Basic shift coverage | Feature-complete | Release, open-shift, pickup, eligibility, Manager decision, notification, audit, and successor publication flows |
-| 7. Notifications and pilot hardening | In progress | In-app inbox and audit log exist; delivery infrastructure, reliability controls, automated verification, operations, and metrics remain |
+| 7. Notifications and pilot hardening | In progress | Inbox, audit, email outbox, push, idempotency, rate limits, `/ready`, request logs, join policy, and integration tests exist; ops restore, error alerting, a11y/native drills, and pilot metrics remain |
 
 “Feature-complete” describes repository coverage, not production readiness. Database migrations must still be exercised against a clean environment and a migrated pilot-like environment.
 
 ## Product boundary
 
-Build the authoritative scheduling system for independent full-service restaurants in Austin, Texas. Managers use the web application; Workers use the Expo mobile application. The Workplace pays and Workers use the product for free.
+Build the authoritative scheduling system for hourly teams in any industry. Managers use the web application; Workers use the Expo mobile application. The Workplace pays and Workers use the product for free.
 
-The MVP includes scheduling, publication, acknowledgement, late-change acceptance, and basic shift coverage. It excludes payroll, attendance, time clocks, tips, hiring, performance management, forecasting, and complex labor optimization.
+The MVP includes scheduling, publication, acknowledgement, late-change acceptance, basic shift coverage, time clock, labor visibility, and the compared Sling operations surfaces. It excludes payroll runs, Toast/POS sync, SMS, hiring, performance management, forecasting, and AI scheduling.
 
 ## Delivery principles
 
@@ -33,7 +33,7 @@ The MVP includes scheduling, publication, acknowledgement, late-change acceptanc
 
 ## Phase 1 — Identity and Workplace setup
 
-**Status:** Feature-complete in code; invitation email delivery and automated authorization coverage remain under Phase 7.
+**Status:** Feature-complete in code; broader end-to-end acceptance scenarios remain under Phase 7.
 
 **Outcome:** A Manager can create a Workplace, add its first Location, define Positions, and invite Workers by email. An invited Worker can sign in and see the correct Workplace.
 
@@ -135,7 +135,7 @@ The MVP includes scheduling, publication, acknowledgement, late-change acceptanc
 
 ## Phase 4 — Immutable publication and acknowledgement
 
-**Status:** Feature-complete in code; database immutability and atomic rollback need integration tests against PostgreSQL.
+**Status:** Feature-complete in code; publication immutability and concurrent publication are covered by integration tests; fuller phase acceptance scenarios remain under Phase 7.
 
 **Outcome:** A Manager publishes the complete Location workweek atomically. Workers see exactly one current version and can explicitly acknowledge “I saw this.”
 
@@ -192,7 +192,7 @@ The MVP includes scheduling, publication, acknowledgement, late-change acceptanc
 
 ## Phase 6 — Basic shift coverage
 
-**Status:** Feature-complete in code; concurrency and eligibility race cases need integration tests.
+**Status:** Feature-complete in code; competing pickup and swap serialization are covered by integration tests; fuller phase acceptance scenarios remain under Phase 7.
 
 **Outcome:** A Worker can request release from a Shift, another eligible Worker can request pickup, and a Manager makes the final assignment decision.
 
@@ -218,7 +218,7 @@ The MVP includes scheduling, publication, acknowledgement, late-change acceptanc
 
 ## Phase 7 — Notifications and pilot hardening
 
-**Outcome:** The product reliably communicates published work and is safe to pilot with Austin restaurants.
+**Outcome:** The product reliably communicates published work and is safe to pilot with hourly workplaces.
 
 ### Completed
 
@@ -227,22 +227,30 @@ The MVP includes scheduling, publication, acknowledgement, late-change acceptanc
 - Manager activity view backed by an audit log
 - Notifications emitted for core publication, change, and coverage workflows
 - Persistent client sessions and explicit sign-out with user-cache cleanup
-- Expo push notifications: mobile device-token registration and fan-out on every notification
-- Invitation-led Workplace membership: open account signup, refused Workplace create when any Employment or pending invitation exists, and a waiting-for-invite onboarding path
+- Expo push notifications: mobile device-token registration, outbox fan-out, and receipt polling
+- ZeptoMail invitation email outbox with retries, bounce/delivered webhook handling, and manager delivery reports
+- Idempotency keys and replay-safe behavior for invitation, publication, acknowledgement, acceptance, coverage, swaps, time clock, and unacknowledged-schedule reminders
+- In-process rate limits on invitation create/resend/import and ZeptoMail webhooks
+- `GET /ready` database readiness check and structured JSON request logs with `x-request-id`
+- PostgreSQL integration suite covering publication immutability, concurrent publication/swaps/pickups, invitations, email delivery, rate limits, readiness, reminders, time clock, push receipts, and join policy
+- Unit coverage for Notice Window boundaries, overnight minutes, and DST overnight durations
+- Invitation-led Workplace membership: open account signup; `POST /v1/workplaces` refused when any Employment or pending invitation exists; web/mobile waiting-for-invite onboarding; invite-page create-account with locked email
 
 ### Remaining before pilot
 
-- Send real invitation and schedule emails; define retry, bounce, and delivery-status handling
-- Add idempotency keys and replay-safe behavior for invitation, publication, acknowledgement, acceptance, release, pickup, and Manager decision commands
-- Add rate limits to authentication-adjacent, invitation, and other abuse-sensitive endpoints
-- Add structured request logs, error tracking, health/readiness checks, and alerting
+- Error tracking and alerting beyond structured request logs
 - Document and test database backup restoration, not only backup creation
-- Add focused API integration tests; the repository currently has no automated test suite
-- Add end-to-end acceptance scenarios for each phase, including authorization boundaries and deactivated Employments
-- Test DST transitions, overnight Shifts, Notice Window boundaries, concurrent publication/coverage decisions, and transactional rollback
+- Staging validation of ZeptoMail credentials, webhook events, and Expo device receipts before rollout
+- Broader end-to-end acceptance scenarios for each phase, including authorization boundaries and deactivated Employments
+- Expand edge-case coverage where still thin: Notice Window API flows, additional concurrent publication/coverage decisions, and transactional rollback proofs
 - Run accessibility checks and keyboard/screen-reader testing on manager and worker web flows
 - Test native offline/read-only behavior, slow networks, expired sessions, notification permission denial, and recovery after reconnect
 - Instrument pilot metrics: time to publish, acknowledgement rate, late-change acceptance time, release/pickup resolution time, missed-shift reports, and weekly active Workers
+
+### Known deferrals
+
+- Global worker-lock protocol for concurrent policy and eligibility changes across unrelated writes
+- Attendance Marks (late / no-show / sick), manager Time Entry correction, Breaks, punch rounding, and Timesheet Approval exist
 
 ## Recommended implementation order inside each phase
 
@@ -256,14 +264,33 @@ The MVP includes scheduling, publication, acknowledgement, late-change acceptanc
 
 ## Immediate next slice
 
-Close the largest production-readiness gap with a pilot verification slice:
+Close the remaining pilot-readiness gaps in this order:
 
-1. Establish the test harness with an isolated PostgreSQL database and authenticated Manager/Worker fixtures.
-2. Add Phase 1 authorization tests and one full setup → invitation → acceptance scenario.
-3. Add atomic publication tests covering success, rollback, immutable history, acknowledgement, and successor versions.
-4. Add late-change and coverage concurrency tests so duplicate or competing commands cannot create contradictory versions.
-5. Introduce idempotency for the tested write commands and prove replay behavior in integration tests.
-6. Connect invitation email delivery with observable retries and delivery failures.
-7. Run the clean-database migration, backup/restore, accessibility, DST, and slow-network pilot checklist.
+1. Document backup restore and run a restore drill against a disposable database.
+2. Add error tracking and alerting on the API (and wire it to the existing request-id logs).
+3. Validate ZeptoMail and Expo delivery in a staging environment with real provider events and device receipts.
+4. Run the web accessibility and keyboard/screen-reader checklist on manager and worker flows.
+5. Run the native resilience checklist: offline/read-only, slow network, expired session, notification permission denial, reconnect.
+6. Fill remaining acceptance gaps: deactivated Employment boundaries and any missing concurrent coverage/publication cases.
+7. Instrument pilot metrics and a simple weekly readout for pilot workplaces.
 
-After this slice, add push delivery and pilot metrics. Do not add more scheduling scope until the existing Phases 1–6 pass their acceptance scenarios.
+Do not add AI scheduling, Toast/POS sync, SMS, or blob file storage until a pilot demonstrates a concrete need. Compared Sling rows (including Auto-assign, Workplace Messages, Announcements, hours CSV, Kiosk, Geofence, Labor Cost, and Daily Sales) are implemented.
+
+## Shipped after Phase 7 (2 Sep 2026)
+
+Manager gaps vs Sling, now in schema/API/clients:
+
+- Publishing an unassigned Shift offers it for pickup (no duplicate open row on republish)
+- **Shift Swap** propose / accept / decline / manager approve on web and native
+- **Today** focus on the week grid, **Attendance Marks**, and native today roster actions
+- Named **Schedule Templates** (save a week, apply to a draft; not RRULE recurrence)
+- Manager **Time Entry** create/correct with clock-in/out times, reason, and audit
+- **Worker Groups**, **Shift Tags**, **Leave Types**, **PTO Balances**
+- Day / week / month schedule views, bulk edit, copy/paste, **Time Blocks**, **Day Parts**, **Shift Templates**, repeat N weeks, **Auto-assign**
+- Dedicated **Daily Roster** with print, **Breaks**, punch rounding, **Timesheet Approval**
+- Configurable early clock-in, **Geofence**, **Kiosk** PIN clock
+- **Wage Rate**, overtime, **Labor Cost**, manual **Daily Sales**, hours CSV
+- **Shift Tasks**, **Announcements**, **Workplace Messages**
+- Employment wages, emergency contacts, Worker PIN, **Employment Documents** (title/url/note)
+
+Honest limits: no Toast/POS API, no SMS, no blob file storage, Auto-assign is eligibility-based rather than AI.

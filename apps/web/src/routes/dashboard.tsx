@@ -38,12 +38,16 @@ import {
 	BellIcon,
 	CalendarDaysIcon,
 	ChevronsUpDownIcon,
+	ClipboardListIcon,
 	Clock3Icon,
 	LayoutDashboardIcon,
 	LogOutIcon,
+	MegaphoneIcon,
+	MessageSquareIcon,
 	Settings2Icon,
 	UsersIcon,
 	WorkflowIcon,
+	TimerIcon,
 } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
@@ -54,6 +58,7 @@ import { PilotFeedback } from "@/components/pilot-feedback";
 import { useAuth } from "@/lib/auth";
 import { useMe, useNotifications } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
+import { settingsSectionLabel } from "@/components/settings/nav";
 
 export const Route = createFileRoute("/dashboard")({
 	component: DashboardLayout,
@@ -67,11 +72,21 @@ const navigation = [
 		exact: true,
 	},
 	{ to: "/dashboard/schedule", label: "Schedule", icon: CalendarDaysIcon },
+	{ to: "/dashboard/roster", label: "Roster", icon: ClipboardListIcon },
 	{ to: "/dashboard/workers", label: "Workers", icon: UsersIcon },
 	{ to: "/dashboard/timeoff", label: "Time off", icon: Clock3Icon },
+	{ to: "/dashboard/timesheets", label: "Timesheets", icon: TimerIcon },
 	{ to: "/dashboard/coverage", label: "Coverage", icon: WorkflowIcon },
+	{ to: "/dashboard/messages", label: "Messages", icon: MessageSquareIcon },
+	{ to: "/dashboard/announcements", label: "Announcements", icon: MegaphoneIcon },
+	{ to: "/dashboard/reports", label: "Reports", icon: Settings2Icon },
 	{ to: "/dashboard/activity", label: "Activity", icon: BellIcon },
-	{ to: "/dashboard/settings", label: "Settings", icon: Settings2Icon },
+	{
+		to: "/dashboard/settings/workplace",
+		label: "Settings",
+		icon: Settings2Icon,
+		match: "/dashboard/settings",
+	},
 ] as const;
 
 function DashboardLayout() {
@@ -85,16 +100,26 @@ function DashboardLayout() {
 		select: (state) => state.location.pathname,
 	});
 	const isSchedule = pathname.startsWith("/dashboard/schedule");
+	const isSettings = pathname.startsWith("/dashboard/settings");
+	const settingsLabel = isSettings
+		? settingsSectionLabel(pathname)
+		: undefined;
 	const activePage =
-		navigation.find((item) =>
-			"exact" in item && item.exact
-				? pathname === item.to
-				: pathname.startsWith(item.to),
-		)?.label ?? "Overview";
+		navigation.find((item) => {
+			const matchPath =
+				"match" in item && item.match ? item.match : item.to;
+			return "exact" in item && item.exact
+				? pathname === matchPath
+				: pathname.startsWith(matchPath);
+		})?.label ?? "Overview";
+	const headerLabel =
+		isSettings && settingsLabel
+			? `Settings / ${settingsLabel}`
+			: activePage;
 
 	useEffect(() => {
-		document.title = `${activePage} · jooling`;
-	}, [activePage]);
+		document.title = `${headerLabel} · jooling`;
+	}, [headerLabel]);
 	const handleSignOut = async () => {
 		try {
 			await signOut();
@@ -147,17 +172,24 @@ function DashboardLayout() {
 							<nav aria-label="Manager navigation">
 								<SidebarMenu>
 									{navigation.map((item) => {
-										const active =
-											"exact" in item && item.exact
-												? pathname === item.to
-												: pathname.startsWith(item.to);
+										const exact = "exact" in item && item.exact;
+										const matchPath =
+											"match" in item && item.match ? item.match : item.to;
+										const active = exact
+											? pathname === matchPath
+											: pathname.startsWith(matchPath);
 										return (
 											<SidebarMenuItem key={item.to}>
 												<SidebarMenuButton
 													isActive={active}
 													aria-current={active ? "page" : undefined}
 													tooltip={item.label}
-													render={<Link to={item.to} />}
+													render={
+														<Link
+															to={item.to}
+															activeOptions={{ exact: Boolean(exact) }}
+														/>
+													}
 												>
 													<item.icon />
 													<span>{item.label}</span>
@@ -241,30 +273,22 @@ function DashboardLayout() {
 					isSchedule && "bg-muted/20",
 				)}
 			>
-				<header
-					className={cn(
-						"sticky top-0 z-40 flex h-14 min-h-14 shrink-0 items-center gap-2 border-b bg-background px-3 shadow-xs",
-						isSchedule && "h-auto flex-wrap py-1.5 sm:h-14 sm:flex-nowrap",
-					)}
-				>
+				<header className="sticky top-0 z-40 flex h-14 min-h-14 shrink-0 items-center gap-2 border-b bg-background px-3 shadow-xs">
 					<SidebarTrigger className="-ml-1 shrink-0" />
-					<span className="shrink-0 font-medium text-sm">{activePage}</span>
+					{isSchedule ? null : (
+						<span className="shrink-0 font-medium text-sm">{headerLabel}</span>
+					)}
 					{isSchedule ? (
 						<div
 							id="schedule-header-controls"
-							className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-nowrap"
+							className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto overscroll-x-contain"
 						/>
 					) : null}
 				</header>
 				<main
 					id="main-content"
 					tabIndex={-1}
-					className={cn(
-						"flex min-h-0 min-w-0 flex-1 flex-col",
-						isSchedule
-							? "overflow-hidden p-0!"
-							: "gap-6 overflow-auto p-4 md:p-6 lg:p-8",
-					)}
+					className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-0!"
 				>
 					<Outlet />
 				</main>

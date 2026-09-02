@@ -1,0 +1,1335 @@
+import {
+	announcements,
+	conversationMembers,
+	conversations,
+	db,
+	dayParts,
+	employmentDocuments,
+	employmentGroups,
+	employments,
+	leaveTypes,
+	locationSales,
+	locations,
+	profiles,
+	ptoBalances,
+	schedules,
+	shiftTagAssignments,
+	shiftTags,
+	shiftTaskCompletions,
+	shiftTasks,
+	shiftTemplates,
+	shifts,
+	timeBlocks,
+	timeEntries,
+	timeEntryBreaks,
+	versionShifts,
+	workerGroups,
+	workplaceMessages,
+} from "@SchedulesManager/db";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { Elysia, t } from "elysia";
+
+import {
+	requireManager,
+	requireSession,
+	requireWorkplaceMember,
+} from "../context";
+import { BadRequestError, ConflictError, NotFoundError } from "../errors";
+import { notifyEmployments, writeAudit } from "../notify";
+import { hashPin } from "../pin";
+import { firstRow } from "../rows";
+
+const uuid = t.String({ format: "uuid" });
+const minuteSchema = t.Integer({ minimum: 0, maximum: 1440 });
+
+async function locationForManager(profileId: string, locationId: string) {
+	const [location] = await db
+		.select()
+		.from(locations)
+		.where(eq(locations.id, locationId))
+		.limit(1);
+	if (!location) throw new NotFoundError("Location not found");
+	await requireManager(profileId, location.workplaceId);
+	return location;
+}
+
+async function workplaceForShift(shiftId: string) {
+	const [row] = await db
+		.select({ workplaceId: locations.workplaceId })
+		.from(shifts)
+		.innerJoin(schedules, eq(schedules.id, shifts.scheduleId))
+		.innerJoin(locations, eq(locations.id, schedules.locationId))
+		.where(eq(shifts.id, shiftId))
+		.limit(1);
+	if (!row) throw new NotFoundError("Shift not found");
+	return row.workplaceId;
+}
+
+export const surfaceRoutes = new Elysia({ prefix: "/v1" })
+	.get(
+		"/workplaces/:workplaceId/groups",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireWorkplaceMember(profile.id, params.workplaceId);
+			const groups = await db
+				.select()
+				.from(workerGroups)
+				.where(eq(workerGroups.workplaceId, params.workplaceId));
+			const members =
+				groups.length === 0
+					? []
+					: await db
+							.select()
+							.from(employmentGroups)
+							.where(
+								inArray(
+									employmentGroups.groupId,
+									groups.map((group) => group.id),
+								),
+							);
+			return {
+				groups: groups.map((group) => ({
+					id: group.id,
+					name: group.name,
+					employmentIds: members
+						.filter((row) => row.groupId === group.id)
+						.map((row) => row.employmentId),
+				})),
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid }),
+		},
+	)
+	.post(
+		"/workplaces/:workplaceId/groups",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const group = firstRow(
+				await db
+					.insert(workerGroups)
+					.values({
+						workplaceId: params.workplaceId,
+						name: body.name.trim(),
+					})
+					.returning(),
+			);
+			if (body.employmentIds.length > 0) {
+				await db.insert(employmentGroups).values(
+					body.employmentIds.map((employmentId) => ({
+						employmentId,
+						groupId: group.id,
+					})),
+				);
+			}
+			return { group: { id: group.id, name: group.name } };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid }),
+			body: t.Object({
+				name: t.String({ minLength: 1, maxLength: 80 }),
+				employmentIds: t.Array(uuid),
+			}),
+		},
+	)
+	.put(
+		"/workplaces/:workplaceId/groups/:groupId",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const [group] = await db
+				.update(workerGroups)
+				.set({ name: body.name.trim() })
+				.where(
+					and(
+						eq(workerGroups.id, params.groupId),
+						eq(workerGroups.workplaceId, params.workplaceId),
+					),
+				)
+				.returning();
+			if (!group) throw new NotFoundError("Group not found");
+			await db
+				.delete(employmentGroups)
+				.where(eq(employmentGroups.groupId, group.id));
+			if (body.employmentIds.length > 0) {
+				await db.insert(employmentGroups).values(
+					body.employmentIds.map((employmentId) => ({
+						employmentId,
+						groupId: group.id,
+					})),
+				);
+			}
+			return { group: { id: group.id, name: group.name } };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid, groupId: uuid }),
+			body: t.Object({
+				name: t.String({ minLength: 1, maxLength: 80 }),
+				employmentIds: t.Array(uuid),
+			}),
+		},
+	)
+	.delete(
+		"/workplaces/:workplaceId/groups/:groupId",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			await db
+				.delete(workerGroups)
+				.where(
+					and(
+						eq(workerGroups.id, params.groupId),
+						eq(workerGroups.workplaceId, params.workplaceId),
+					),
+				);
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid, groupId: uuid }),
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/tags",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireWorkplaceMember(profile.id, params.workplaceId);
+			const tags = await db
+				.select()
+				.from(shiftTags)
+				.where(eq(shiftTags.workplaceId, params.workplaceId));
+			return { tags: tags.map((tag) => ({ id: tag.id, name: tag.name })) };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid }),
+		},
+	)
+	.post(
+		"/workplaces/:workplaceId/tags",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const tag = firstRow(
+				await db
+					.insert(shiftTags)
+					.values({ workplaceId: params.workplaceId, name: body.name.trim() })
+					.returning(),
+			);
+			return { tag: { id: tag.id, name: tag.name } };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid }),
+			body: t.Object({ name: t.String({ minLength: 1, maxLength: 40 }) }),
+		},
+	)
+	.delete(
+		"/workplaces/:workplaceId/tags/:tagId",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			await db
+				.delete(shiftTags)
+				.where(
+					and(
+						eq(shiftTags.id, params.tagId),
+						eq(shiftTags.workplaceId, params.workplaceId),
+					),
+				);
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid, tagId: uuid }),
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/leave-types",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireWorkplaceMember(profile.id, params.workplaceId);
+			const types = await db
+				.select()
+				.from(leaveTypes)
+				.where(eq(leaveTypes.workplaceId, params.workplaceId));
+			return {
+				leaveTypes: types.map((row) => ({
+					id: row.id,
+					name: row.name,
+					paid: row.paid,
+				})),
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid }),
+		},
+	)
+	.post(
+		"/workplaces/:workplaceId/leave-types",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const created = firstRow(
+				await db
+					.insert(leaveTypes)
+					.values({
+						workplaceId: params.workplaceId,
+						name: body.name.trim(),
+						paid: body.paid,
+					})
+					.returning(),
+			);
+			return {
+				leaveType: { id: created.id, name: created.name, paid: created.paid },
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid }),
+			body: t.Object({
+				name: t.String({ minLength: 1, maxLength: 80 }),
+				paid: t.Boolean(),
+			}),
+		},
+	)
+	.put(
+		"/workplaces/:workplaceId/employments/:employmentId/pto",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			await db
+				.insert(ptoBalances)
+				.values({
+					employmentId: params.employmentId,
+					leaveTypeId: body.leaveTypeId,
+					minutes: body.minutes,
+				})
+				.onConflictDoUpdate({
+					target: [ptoBalances.employmentId, ptoBalances.leaveTypeId],
+					set: { minutes: body.minutes },
+				});
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid, employmentId: uuid }),
+			body: t.Object({
+				leaveTypeId: uuid,
+				minutes: t.Integer({ minimum: 0, maximum: 200_000 }),
+			}),
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/employments/:employmentId/pto",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const employment = await requireWorkplaceMember(
+				profile.id,
+				params.workplaceId,
+			);
+			if (
+				employment.kind !== "manager" &&
+				employment.id !== params.employmentId
+			) {
+				throw new NotFoundError("Employment not found");
+			}
+			const rows = await db
+				.select({
+					leaveTypeId: ptoBalances.leaveTypeId,
+					name: leaveTypes.name,
+					minutes: ptoBalances.minutes,
+				})
+				.from(ptoBalances)
+				.innerJoin(leaveTypes, eq(leaveTypes.id, ptoBalances.leaveTypeId))
+				.where(eq(ptoBalances.employmentId, params.employmentId));
+			return { balances: rows };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid, employmentId: uuid }),
+		},
+	)
+	.get(
+		"/locations/:locationId/time-blocks",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const location = await locationForManager(profile.id, params.locationId);
+			const [blocks, parts, templates] = await Promise.all([
+				db
+					.select()
+					.from(timeBlocks)
+					.where(eq(timeBlocks.locationId, location.id)),
+				db.select().from(dayParts).where(eq(dayParts.locationId, location.id)),
+				db
+					.select()
+					.from(shiftTemplates)
+					.where(eq(shiftTemplates.locationId, location.id)),
+			]);
+			return {
+				timeBlocks: blocks.map((row) => ({
+					id: row.id,
+					name: row.name,
+					startMinute: row.startMinute,
+					endMinute: row.endMinute,
+				})),
+				dayParts: parts.map((row) => ({
+					id: row.id,
+					name: row.name,
+					startMinute: row.startMinute,
+					endMinute: row.endMinute,
+				})),
+				shiftTemplates: templates.map((row) => ({
+					id: row.id,
+					name: row.name,
+					positionId: row.positionId,
+					startMinute: row.startMinute,
+					endMinute: row.endMinute,
+					note: row.note,
+				})),
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ locationId: uuid }),
+		},
+	)
+	.post(
+		"/locations/:locationId/time-blocks",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await locationForManager(profile.id, params.locationId);
+			const created = firstRow(
+				await db
+					.insert(timeBlocks)
+					.values({
+						locationId: params.locationId,
+						name: body.name.trim(),
+						startMinute: body.startMinute,
+						endMinute: body.endMinute,
+					})
+					.returning(),
+			);
+			return {
+				timeBlock: {
+					id: created.id,
+					name: created.name,
+					startMinute: created.startMinute,
+					endMinute: created.endMinute,
+				},
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ locationId: uuid }),
+			body: t.Object({
+				name: t.String({ minLength: 1, maxLength: 40 }),
+				startMinute: minuteSchema,
+				endMinute: minuteSchema,
+			}),
+		},
+	)
+	.post(
+		"/locations/:locationId/day-parts",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await locationForManager(profile.id, params.locationId);
+			const created = firstRow(
+				await db
+					.insert(dayParts)
+					.values({
+						locationId: params.locationId,
+						name: body.name.trim(),
+						startMinute: body.startMinute,
+						endMinute: body.endMinute,
+					})
+					.returning(),
+			);
+			return {
+				dayPart: {
+					id: created.id,
+					name: created.name,
+					startMinute: created.startMinute,
+					endMinute: created.endMinute,
+				},
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ locationId: uuid }),
+			body: t.Object({
+				name: t.String({ minLength: 1, maxLength: 40 }),
+				startMinute: minuteSchema,
+				endMinute: minuteSchema,
+			}),
+		},
+	)
+	.post(
+		"/locations/:locationId/shift-templates",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await locationForManager(profile.id, params.locationId);
+			const created = firstRow(
+				await db
+					.insert(shiftTemplates)
+					.values({
+						locationId: params.locationId,
+						name: body.name.trim(),
+						positionId: body.positionId,
+						startMinute: body.startMinute,
+						endMinute: body.endMinute,
+						note: body.note ?? null,
+					})
+					.returning(),
+			);
+			return {
+				shiftTemplate: {
+					id: created.id,
+					name: created.name,
+					positionId: created.positionId,
+					startMinute: created.startMinute,
+					endMinute: created.endMinute,
+					note: created.note,
+				},
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ locationId: uuid }),
+			body: t.Object({
+				name: t.String({ minLength: 1, maxLength: 80 }),
+				positionId: uuid,
+				startMinute: minuteSchema,
+				endMinute: minuteSchema,
+				note: t.Optional(t.String({ maxLength: 200 })),
+			}),
+		},
+	)
+	.delete(
+		"/locations/:locationId/shift-templates/:templateId",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const location = await locationForManager(profile.id, params.locationId);
+			await db
+				.delete(shiftTemplates)
+				.where(
+					and(
+						eq(shiftTemplates.id, params.templateId),
+						eq(shiftTemplates.locationId, location.id),
+					),
+				);
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ locationId: uuid, templateId: uuid }),
+		},
+	)
+	.put(
+		"/locations/:locationId/sales/:saleDate",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await locationForManager(profile.id, params.locationId);
+			await db
+				.insert(locationSales)
+				.values({
+					locationId: params.locationId,
+					saleDate: params.saleDate,
+					amountCents: body.amountCents,
+					updatedAt: new Date(),
+				})
+				.onConflictDoUpdate({
+					target: [locationSales.locationId, locationSales.saleDate],
+					set: { amountCents: body.amountCents, updatedAt: new Date() },
+				});
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({
+				locationId: uuid,
+				saleDate: t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+			}),
+			body: t.Object({ amountCents: t.Integer({ minimum: 0 }) }),
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/announcements",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireWorkplaceMember(profile.id, params.workplaceId);
+			const rows = await db
+				.select({
+					announcement: announcements,
+					author: profiles.fullName,
+					email: profiles.email,
+				})
+				.from(announcements)
+				.innerJoin(profiles, eq(profiles.id, announcements.authorProfileId))
+				.where(eq(announcements.workplaceId, params.workplaceId))
+				.orderBy(desc(announcements.createdAt))
+				.limit(50);
+			return {
+				announcements: rows.map((row) => ({
+					id: row.announcement.id,
+					title: row.announcement.title,
+					body: row.announcement.body,
+					author: row.author ?? row.email,
+					createdAt: row.announcement.createdAt.toISOString(),
+				})),
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid }),
+		},
+	)
+	.post(
+		"/workplaces/:workplaceId/announcements",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const created = firstRow(
+				await db
+					.insert(announcements)
+					.values({
+						workplaceId: params.workplaceId,
+						authorProfileId: profile.id,
+						title: body.title.trim(),
+						body: body.body.trim(),
+					})
+					.returning(),
+			);
+			const workers = await db
+				.select({ id: employments.id })
+				.from(employments)
+				.where(
+					and(
+						eq(employments.workplaceId, params.workplaceId),
+						eq(employments.status, "active"),
+					),
+				);
+			await notifyEmployments(
+				workers.map((row) => row.id),
+				{
+					kind: "announcement",
+					title: created.title,
+					body: created.body.slice(0, 180),
+				},
+			);
+			await writeAudit({
+				workplaceId: params.workplaceId,
+				actorProfileId: profile.id,
+				action: "announcement.posted",
+				entityType: "announcement",
+				entityId: created.id,
+				summary: `Posted announcement “${created.title}”`,
+			});
+			return { announcement: { id: created.id } };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid }),
+			body: t.Object({
+				title: t.String({ minLength: 1, maxLength: 120 }),
+				body: t.String({ minLength: 1, maxLength: 4000 }),
+			}),
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/conversations",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const employment = await requireWorkplaceMember(
+				profile.id,
+				params.workplaceId,
+			);
+			const existing = await db
+				.select()
+				.from(conversations)
+				.where(
+					and(
+						eq(conversations.workplaceId, params.workplaceId),
+						eq(conversations.kind, "workplace"),
+					),
+				)
+				.limit(1);
+			const workplace =
+				existing[0] ??
+				firstRow(
+					await db
+						.insert(conversations)
+						.values({
+							workplaceId: params.workplaceId,
+							kind: "workplace",
+						})
+						.returning(),
+				);
+			const memberRows = await db
+				.select()
+				.from(conversationMembers)
+				.where(eq(conversationMembers.employmentId, employment.id));
+			const directIds = memberRows.map((row) => row.conversationId);
+			const directs =
+				directIds.length === 0
+					? []
+					: await db
+							.select()
+							.from(conversations)
+							.where(
+								and(
+									inArray(conversations.id, directIds),
+									eq(conversations.kind, "direct"),
+								),
+							);
+
+			const counterparts =
+				directIds.length === 0
+					? []
+					: await db
+							.select({
+								conversationId: conversationMembers.conversationId,
+								employmentId: employments.id,
+								name: profiles.fullName,
+								email: profiles.email,
+							})
+							.from(conversationMembers)
+							.innerJoin(
+								employments,
+								eq(employments.id, conversationMembers.employmentId),
+							)
+							.innerJoin(profiles, eq(profiles.id, employments.profileId))
+							.where(inArray(conversationMembers.conversationId, directIds));
+
+			const counterpartByConversation = new Map<
+				string,
+				{ employmentId: string; name: string; email: string }
+			>();
+			for (const row of counterparts) {
+				if (row.employmentId === employment.id) continue;
+				counterpartByConversation.set(row.conversationId, {
+					employmentId: row.employmentId,
+					name: row.name ?? row.email,
+					email: row.email,
+				});
+			}
+
+			const conversationIds = [workplace.id, ...directs.map((row) => row.id)];
+			const recentMessages =
+				conversationIds.length === 0
+					? []
+					: await db
+							.select({
+								id: workplaceMessages.id,
+								conversationId: workplaceMessages.conversationId,
+								body: workplaceMessages.body,
+								authorEmploymentId: workplaceMessages.authorEmploymentId,
+								createdAt: workplaceMessages.createdAt,
+								authorName: profiles.fullName,
+								authorEmail: profiles.email,
+							})
+							.from(workplaceMessages)
+							.innerJoin(
+								employments,
+								eq(employments.id, workplaceMessages.authorEmploymentId),
+							)
+							.innerJoin(profiles, eq(profiles.id, employments.profileId))
+							.where(inArray(workplaceMessages.conversationId, conversationIds))
+							.orderBy(desc(workplaceMessages.createdAt));
+
+			const lastMessageByConversation = new Map<
+				string,
+				{
+					id: string;
+					body: string;
+					authorEmploymentId: string;
+					author: string;
+					createdAt: string;
+					mine: boolean;
+				}
+			>();
+			for (const row of recentMessages) {
+				if (lastMessageByConversation.has(row.conversationId)) continue;
+				lastMessageByConversation.set(row.conversationId, {
+					id: row.id,
+					body: row.body,
+					authorEmploymentId: row.authorEmploymentId,
+					author: row.authorName ?? row.authorEmail,
+					createdAt: row.createdAt.toISOString(),
+					mine: row.authorEmploymentId === employment.id,
+				});
+			}
+
+			const workplaceConversation = {
+				id: workplace.id,
+				kind: "workplace" as const,
+				title: "Everyone",
+				subtitle: "Workplace channel",
+				counterpart: null,
+				lastMessage: lastMessageByConversation.get(workplace.id) ?? null,
+			};
+
+			const directConversations = directs
+				.map((row) => {
+					const counterpart = counterpartByConversation.get(row.id) ?? null;
+					return {
+						id: row.id,
+						kind: "direct" as const,
+						title: counterpart?.name ?? "Direct message",
+						subtitle: counterpart?.email ?? "Direct message",
+						counterpart,
+						lastMessage: lastMessageByConversation.get(row.id) ?? null,
+					};
+				})
+				.sort((left, right) => {
+					const leftAt = left.lastMessage?.createdAt ?? "";
+					const rightAt = right.lastMessage?.createdAt ?? "";
+					return rightAt.localeCompare(leftAt);
+				});
+
+			// One visible DM per counterpart (prefer the most recently active thread).
+			const seenCounterparts = new Set<string>();
+			const uniqueDirects = directConversations.filter((thread) => {
+				const key = thread.counterpart?.employmentId ?? thread.id;
+				if (seenCounterparts.has(key)) return false;
+				seenCounterparts.add(key);
+				return true;
+			});
+
+			return {
+				conversations: [workplaceConversation, ...uniqueDirects],
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid }),
+		},
+	)
+	.post(
+		"/workplaces/:workplaceId/conversations",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const employment = await requireWorkplaceMember(
+				profile.id,
+				params.workplaceId,
+			);
+			if (body.counterpartEmploymentId === employment.id) {
+				throw new BadRequestError("Pick someone else to message");
+			}
+
+			const myDirects = await db
+				.select({ conversationId: conversationMembers.conversationId })
+				.from(conversationMembers)
+				.innerJoin(
+					conversations,
+					eq(conversations.id, conversationMembers.conversationId),
+				)
+				.where(
+					and(
+						eq(conversationMembers.employmentId, employment.id),
+						eq(conversations.workplaceId, params.workplaceId),
+						eq(conversations.kind, "direct"),
+					),
+				);
+			const myDirectIds = myDirects.map((row) => row.conversationId);
+			if (myDirectIds.length > 0) {
+				const existing = await db
+					.select({ conversationId: conversationMembers.conversationId })
+					.from(conversationMembers)
+					.where(
+						and(
+							inArray(conversationMembers.conversationId, myDirectIds),
+							eq(
+								conversationMembers.employmentId,
+								body.counterpartEmploymentId,
+							),
+						),
+					)
+					.limit(1);
+				if (existing[0]) {
+					return { conversation: { id: existing[0].conversationId } };
+				}
+			}
+
+			const created = firstRow(
+				await db
+					.insert(conversations)
+					.values({ workplaceId: params.workplaceId, kind: "direct" })
+					.returning(),
+			);
+			await db.insert(conversationMembers).values([
+				{ conversationId: created.id, employmentId: employment.id },
+				{
+					conversationId: created.id,
+					employmentId: body.counterpartEmploymentId,
+				},
+			]);
+			return { conversation: { id: created.id } };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid }),
+			body: t.Object({ counterpartEmploymentId: uuid }),
+		},
+	)
+	.get(
+		"/conversations/:conversationId/messages",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const [conversation] = await db
+				.select()
+				.from(conversations)
+				.where(eq(conversations.id, params.conversationId))
+				.limit(1);
+			if (!conversation) throw new NotFoundError("Conversation not found");
+			await requireWorkplaceMember(profile.id, conversation.workplaceId);
+			const rows = await db
+				.select({
+					message: workplaceMessages,
+					name: profiles.fullName,
+					email: profiles.email,
+				})
+				.from(workplaceMessages)
+				.innerJoin(
+					employments,
+					eq(employments.id, workplaceMessages.authorEmploymentId),
+				)
+				.innerJoin(profiles, eq(profiles.id, employments.profileId))
+				.where(eq(workplaceMessages.conversationId, conversation.id))
+				.orderBy(workplaceMessages.createdAt)
+				.limit(200);
+			return {
+				messages: rows.map((row) => ({
+					id: row.message.id,
+					body: row.message.body,
+					author: row.name ?? row.email,
+					authorEmploymentId: row.message.authorEmploymentId,
+					createdAt: row.message.createdAt.toISOString(),
+				})),
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ conversationId: uuid }),
+		},
+	)
+	.post(
+		"/conversations/:conversationId/messages",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const [conversation] = await db
+				.select()
+				.from(conversations)
+				.where(eq(conversations.id, params.conversationId))
+				.limit(1);
+			if (!conversation) throw new NotFoundError("Conversation not found");
+			const employment = await requireWorkplaceMember(
+				profile.id,
+				conversation.workplaceId,
+			);
+			const created = firstRow(
+				await db
+					.insert(workplaceMessages)
+					.values({
+						conversationId: conversation.id,
+						authorEmploymentId: employment.id,
+						body: body.body.trim(),
+					})
+					.returning(),
+			);
+			return {
+				message: {
+					id: created.id,
+					body: created.body,
+					createdAt: created.createdAt.toISOString(),
+				},
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ conversationId: uuid }),
+			body: t.Object({ body: t.String({ minLength: 1, maxLength: 2000 }) }),
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/employments/:employmentId/documents",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const docs = await db
+				.select()
+				.from(employmentDocuments)
+				.where(eq(employmentDocuments.employmentId, params.employmentId));
+			return {
+				documents: docs.map((row) => ({
+					id: row.id,
+					title: row.title,
+					url: row.url,
+					note: row.note,
+					createdAt: row.createdAt.toISOString(),
+				})),
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid, employmentId: uuid }),
+		},
+	)
+	.post(
+		"/workplaces/:workplaceId/employments/:employmentId/documents",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const created = firstRow(
+				await db
+					.insert(employmentDocuments)
+					.values({
+						employmentId: params.employmentId,
+						title: body.title.trim(),
+						url: body.url ?? null,
+						note: body.note ?? null,
+					})
+					.returning(),
+			);
+			return { document: { id: created.id } };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid, employmentId: uuid }),
+			body: t.Object({
+				title: t.String({ minLength: 1, maxLength: 120 }),
+				url: t.Optional(t.String({ maxLength: 500 })),
+				note: t.Optional(t.String({ maxLength: 500 })),
+			}),
+		},
+	)
+	.patch(
+		"/workplaces/:workplaceId/employments/:employmentId/profile",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const values: {
+				hourlyWageCents?: number | null;
+				emergencyContactName?: string | null;
+				emergencyContactPhone?: string | null;
+				kioskPinHash?: string | null;
+			} = {};
+			if (body.hourlyWageCents !== undefined) {
+				values.hourlyWageCents = body.hourlyWageCents;
+			}
+			if (body.emergencyContactName !== undefined) {
+				values.emergencyContactName = body.emergencyContactName;
+			}
+			if (body.emergencyContactPhone !== undefined) {
+				values.emergencyContactPhone = body.emergencyContactPhone;
+			}
+			if (body.kioskPin !== undefined) {
+				if (body.kioskPin === null) values.kioskPinHash = null;
+				else {
+					if (!/^\d{4,8}$/.test(body.kioskPin)) {
+						throw new BadRequestError("Worker PIN must be 4 to 8 digits");
+					}
+					values.kioskPinHash = hashPin(body.kioskPin);
+				}
+			}
+			const [updated] = await db
+				.update(employments)
+				.set(values)
+				.where(
+					and(
+						eq(employments.id, params.employmentId),
+						eq(employments.workplaceId, params.workplaceId),
+					),
+				)
+				.returning();
+			if (!updated) throw new NotFoundError("Employment not found");
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid, employmentId: uuid }),
+			body: t.Object({
+				hourlyWageCents: t.Optional(
+					t.Union([t.Integer({ minimum: 0 }), t.Null()]),
+				),
+				emergencyContactName: t.Optional(
+					t.Union([t.String({ maxLength: 120 }), t.Null()]),
+				),
+				emergencyContactPhone: t.Optional(
+					t.Union([t.String({ maxLength: 40 }), t.Null()]),
+				),
+				kioskPin: t.Optional(t.Union([t.String(), t.Null()])),
+			}),
+		},
+	)
+	.post(
+		"/shifts/:shiftId/tags",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, await workplaceForShift(params.shiftId));
+			await db
+				.delete(shiftTagAssignments)
+				.where(eq(shiftTagAssignments.shiftId, params.shiftId));
+			if (body.tagIds.length > 0) {
+				await db.insert(shiftTagAssignments).values(
+					body.tagIds.map((tagId) => ({
+						shiftId: params.shiftId,
+						tagId,
+					})),
+				);
+			}
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ shiftId: uuid }),
+			body: t.Object({ tagIds: t.Array(uuid) }),
+		},
+	)
+	.post(
+		"/shifts/:shiftId/tasks",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, await workplaceForShift(params.shiftId));
+			await db.delete(shiftTasks).where(eq(shiftTasks.shiftId, params.shiftId));
+			if (body.titles.length > 0) {
+				await db.insert(shiftTasks).values(
+					body.titles.map((title, index) => ({
+						shiftId: params.shiftId,
+						title: title.trim(),
+						sortOrder: index,
+					})),
+				);
+			}
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ shiftId: uuid }),
+			body: t.Object({
+				titles: t.Array(t.String({ minLength: 1, maxLength: 120 })),
+			}),
+		},
+	)
+	.get(
+		"/my/shifts/:versionShiftId/tasks",
+		async ({ headers, params }) => {
+			await requireSession(headers.authorization);
+			const [shift] = await db
+				.select()
+				.from(versionShifts)
+				.where(eq(versionShifts.id, params.versionShiftId))
+				.limit(1);
+			if (!shift?.shiftId) return { tasks: [] };
+			const tasks = await db
+				.select()
+				.from(shiftTasks)
+				.where(eq(shiftTasks.shiftId, shift.shiftId));
+			const done =
+				tasks.length === 0
+					? []
+					: await db
+							.select()
+							.from(shiftTaskCompletions)
+							.where(
+								and(
+									eq(shiftTaskCompletions.versionShiftId, shift.id),
+									inArray(
+										shiftTaskCompletions.taskId,
+										tasks.map((task) => task.id),
+									),
+								),
+							);
+			const doneIds = new Set(done.map((row) => row.taskId));
+			return {
+				tasks: tasks.map((task) => ({
+					id: task.id,
+					title: task.title,
+					completed: doneIds.has(task.id),
+				})),
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ versionShiftId: uuid }),
+		},
+	)
+	.post(
+		"/my/version-shifts/:versionShiftId/tasks/:taskId/complete",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await db
+				.insert(shiftTaskCompletions)
+				.values({
+					taskId: params.taskId,
+					versionShiftId: params.versionShiftId,
+					completedByProfileId: profile.id,
+				})
+				.onConflictDoNothing();
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ versionShiftId: uuid, taskId: uuid }),
+		},
+	)
+	.post(
+		"/my/time-entries/:timeEntryId/breaks/start",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const [row] = await db
+				.select({ entry: timeEntries })
+				.from(timeEntries)
+				.innerJoin(employments, eq(employments.id, timeEntries.employmentId))
+				.where(
+					and(
+						eq(timeEntries.id, params.timeEntryId),
+						eq(employments.profileId, profile.id),
+					),
+				)
+				.limit(1);
+			if (!row?.entry || row.entry.clockedOutAt) {
+				throw new NotFoundError("Time Entry not found");
+			}
+			const [openBreak] = await db
+				.select()
+				.from(timeEntryBreaks)
+				.where(
+					and(
+						eq(timeEntryBreaks.timeEntryId, row.entry.id),
+						isNull(timeEntryBreaks.endedAt),
+					),
+				)
+				.limit(1);
+			if (openBreak) throw new ConflictError("A Break is already open");
+			const created = firstRow(
+				await db
+					.insert(timeEntryBreaks)
+					.values({ timeEntryId: row.entry.id, startedAt: new Date() })
+					.returning(),
+			);
+			return {
+				break: {
+					id: created.id,
+					startedAt: created.startedAt.toISOString(),
+				},
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ timeEntryId: uuid }),
+		},
+	)
+	.post(
+		"/my/time-entries/:timeEntryId/breaks/end",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const [row] = await db
+				.select({ entry: timeEntries })
+				.from(timeEntries)
+				.innerJoin(employments, eq(employments.id, timeEntries.employmentId))
+				.where(
+					and(
+						eq(timeEntries.id, params.timeEntryId),
+						eq(employments.profileId, profile.id),
+					),
+				)
+				.limit(1);
+			if (!row?.entry) throw new NotFoundError("Time Entry not found");
+			const [openBreak] = await db
+				.select()
+				.from(timeEntryBreaks)
+				.where(
+					and(
+						eq(timeEntryBreaks.timeEntryId, row.entry.id),
+						isNull(timeEntryBreaks.endedAt),
+					),
+				)
+				.limit(1);
+			if (!openBreak) throw new NotFoundError("No open Break");
+			await db
+				.update(timeEntryBreaks)
+				.set({ endedAt: new Date() })
+				.where(eq(timeEntryBreaks.id, openBreak.id));
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ timeEntryId: uuid }),
+		},
+	)
+	.post(
+		"/workplaces/:workplaceId/time-entries/:timeEntryId/approval",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const [updated] = await db
+				.update(timeEntries)
+				.set({
+					approvalStatus: body.decision,
+					approvedAt: new Date(),
+					approvedByProfileId: profile.id,
+				})
+				.where(eq(timeEntries.id, params.timeEntryId))
+				.returning();
+			if (!updated) throw new NotFoundError("Time Entry not found");
+			await writeAudit({
+				workplaceId: params.workplaceId,
+				actorProfileId: profile.id,
+				action: `timesheet.${body.decision}`,
+				entityType: "time_entry",
+				entityId: updated.id,
+				summary: `${body.decision === "approved" ? "Approved" : "Declined"} a Time Entry`,
+			});
+			return {
+				timeEntry: {
+					id: updated.id,
+					approvalStatus: updated.approvalStatus,
+				},
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid, timeEntryId: uuid }),
+			body: t.Object({
+				decision: t.Union([t.Literal("approved"), t.Literal("declined")]),
+			}),
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/timesheets",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const rows = await db
+				.select({
+					entry: timeEntries,
+					name: profiles.fullName,
+					email: profiles.email,
+				})
+				.from(timeEntries)
+				.innerJoin(employments, eq(employments.id, timeEntries.employmentId))
+				.innerJoin(profiles, eq(profiles.id, employments.profileId))
+				.where(eq(employments.workplaceId, params.workplaceId))
+				.orderBy(desc(timeEntries.clockedInAt))
+				.limit(100);
+			return {
+				timesheets: rows.map((row) => ({
+					id: row.entry.id,
+					worker: row.name ?? row.email,
+					clockedInAt: row.entry.clockedInAt.toISOString(),
+					clockedOutAt: row.entry.clockedOutAt?.toISOString() ?? null,
+					approvalStatus: row.entry.approvalStatus,
+				})),
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid }),
+		},
+	);

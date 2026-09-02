@@ -33,6 +33,21 @@ export interface LocationDto {
 	name: string;
 	timezone: string;
 	addressLine: string | null;
+	latitude?: string | null;
+	longitude?: string | null;
+	geofenceRadiusMeters?: number | null;
+	kioskEnabled?: boolean;
+}
+
+export interface PlaceDto {
+	osmId: string;
+	name: string;
+	addressLine: string;
+	latitude: string;
+	longitude: string;
+	timezone: string | null;
+	city: string | null;
+	state: string | null;
 }
 
 export interface PositionDto {
@@ -45,6 +60,10 @@ export interface WorkerDto {
 	kind: "manager" | "worker";
 	status: "active" | "deactivated";
 	joinedAt: string;
+	hourlyWageCents: number | null;
+	emergencyContactName: string | null;
+	emergencyContactPhone: string | null;
+	kioskEnabled: boolean;
 	profile: {
 		id: string;
 		email: string;
@@ -145,6 +164,25 @@ export function useLocations(workplaceId: string | undefined) {
 	});
 }
 
+export function usePlaceSearch(query: string, enabled: boolean) {
+	const q = query.trim();
+	return useQuery({
+		queryKey: ["places", "search", q],
+		queryFn: () =>
+			api<{ places: PlaceDto[] }>(`/v1/places?q=${encodeURIComponent(q)}`).then(
+				(data) => data.places,
+			),
+		enabled: enabled && q.length >= 3,
+		staleTime: 5 * 60_000,
+	});
+}
+
+export function reversePlace(lat: number, lon: number) {
+	return api<{ place: PlaceDto | null }>(
+		`/v1/places/reverse?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}`,
+	).then((data) => data.place);
+}
+
 export function usePositions(workplaceId: string | undefined) {
 	return useQuery({
 		queryKey: ["workplaces", workplaceId, "positions"],
@@ -165,6 +203,8 @@ export interface TimeOffRequestDto {
 	status: "pending" | "approved" | "declined";
 	decisionReason: string | null;
 	createdAt: string;
+	leaveTypeId: string | null;
+	leaveTypeName: string | null;
 }
 
 export function useTimeOff(workplaceId: string | undefined) {
@@ -193,6 +233,8 @@ export interface ScheduleShiftDto {
 	overnight: boolean;
 	note: string | null;
 	unavailabilityOverrideReason: string | null;
+	tagIds: string[];
+	taskCount: number;
 	conflicts: {
 		shiftId: string;
 		type:
@@ -220,16 +262,28 @@ export interface ScheduleResponse {
 	};
 	timeclock: {
 		shiftId: string;
+		versionShiftId: string;
 		status: "open" | "closed" | null;
 		clockedInAt: string | null;
+		clockedOutAt: string | null;
 		workedMinutes: number | null;
+		attendance: "late" | "no_show" | "sick" | null;
 	}[];
+	labor: {
+		scheduledCents: number;
+		overtimeCents: number;
+		salesCents: number;
+		laborPercent: number | null;
+		byDate: { date: string; amountCents: number }[];
+	};
 	shifts: ScheduleShiftDto[];
 	staff: {
 		employmentId: string;
 		name: string;
 		email: string;
 		kind: "manager" | "worker";
+		hourlyWageCents: number | null;
+		groupIds: string[];
 		positionIds: string[];
 		preference: string | null;
 		unavailability: {
@@ -283,6 +337,30 @@ export function useSchedule(
 	return useQuery({
 		...scheduleQueryOptions(locationId ?? "", weekStart ?? ""),
 		enabled: Boolean(locationId && weekStart),
+		placeholderData: keepPreviousData,
+	});
+}
+
+export interface ScheduleCalendarResponse {
+	monthStart: string;
+	shifts: ScheduleShiftDto[];
+	timeclock: ScheduleResponse["timeclock"];
+}
+
+export function useScheduleCalendar(
+	locationId: string | undefined,
+	monthStart: string | undefined,
+	enabled = true,
+) {
+	return useQuery({
+		queryKey: ["schedule-calendar", locationId, monthStart] as const,
+		queryFn: () =>
+			api<ScheduleCalendarResponse>(
+				`/v1/locations/${locationId}/calendar/${monthStart}`,
+			),
+		enabled: Boolean(locationId && monthStart) && enabled,
+		staleTime: SCHEDULE_STALE_TIME,
+		gcTime: SCHEDULE_CACHE_TIME,
 		placeholderData: keepPreviousData,
 	});
 }
@@ -370,6 +448,9 @@ export function useWorkplaceSettings(workplaceId: string | undefined) {
 					weekStartDay: number;
 					payPeriodType: "weekly" | "biweekly" | "semimonthly" | "monthly";
 					payPeriodAnchor: string | null;
+					earlyClockInMinutes: number;
+					clockRoundMinutes: number;
+					overtimeWeeklyMinutes: number;
 				};
 			}>(`/v1/workplaces/${workplaceId}`).then((data) => data.workplace),
 		enabled: Boolean(workplaceId),
@@ -378,7 +459,13 @@ export function useWorkplaceSettings(workplaceId: string | undefined) {
 
 export interface SwapDetailDto {
 	id: string;
-	status: string;
+	status:
+		| "pending_counterpart"
+		| "pending_manager"
+		| "approved"
+		| "declined_by_counterpart"
+		| "declined_by_manager"
+		| "cancelled";
 	requestedAt: string;
 	requester: { employmentId: string; name: string };
 	counterpart: { employmentId: string; name: string };
@@ -394,6 +481,45 @@ export interface SwapDetailDto {
 		startsAt: string;
 		endsAt: string;
 	};
+}
+
+export function useMySwaps(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["swaps", workplaceId],
+		queryFn: () =>
+			api<{
+				swaps: { direction: "outgoing" | "incoming"; swap: SwapDetailDto }[];
+			}>(`/v1/workplaces/${workplaceId}/my/swaps`),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useRespondToSwap() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: { swapId: string; decision: "accept" | "decline" }) =>
+			api(`/v1/my/swaps/${input.swapId}/respond`, {
+				method: "POST",
+				body: { decision: input.decision },
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["swaps"] });
+			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
+			queryClient.invalidateQueries({ queryKey: ["coverage-swaps"] });
+		},
+	});
+}
+
+export function useCancelSwap() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (swapId: string) =>
+			api(`/v1/my/swaps/${swapId}/cancel`, { method: "POST" }),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["swaps"] });
+			queryClient.invalidateQueries({ queryKey: ["coverage-swaps"] });
+		},
+	});
 }
 
 export function useCoverageSwaps(workplaceId: string | undefined) {
@@ -543,6 +669,7 @@ export function useProposeSwap() {
 			}),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["swaps"] });
+			queryClient.invalidateQueries({ queryKey: ["coverage-swaps"] });
 		},
 	});
 }
@@ -561,11 +688,14 @@ export function useAcknowledge() {
 export function useClockIn() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (versionShiftId: string) =>
-			api<{ timeEntry: { id: string; clockedInAt: string } }>(
+		mutationFn: async (versionShiftId: string) => {
+			const { currentCoords } = await import("./coords");
+			const coords = await currentCoords();
+			return api<{ timeEntry: { id: string; clockedInAt: string } }>(
 				`/v1/my/shifts/${versionShiftId}/clock-in`,
-				{ method: "POST" },
-			),
+				{ method: "POST", body: coords },
+			);
+		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 			queryClient.invalidateQueries({ queryKey: ["timecard"] });
@@ -692,6 +822,7 @@ export interface WorkerConstraints {
 		reason: string | null;
 		status: "pending" | "approved" | "declined";
 		decisionReason: string | null;
+		leaveTypeId: string | null;
 	}[];
 }
 
@@ -813,5 +944,275 @@ export function usePilotStatus(workplaceId: string | undefined) {
 		queryFn: () =>
 			api<PilotStatusResponse>(`/v1/workplaces/${workplaceId}/pilot-status`),
 		enabled: Boolean(workplaceId),
+	});
+}
+
+export interface ScheduleTemplateDto {
+	id: string;
+	locationId: string;
+	name: string;
+	shiftCount: number;
+	updatedAt: string;
+}
+
+export function useScheduleTemplates(locationId: string | undefined) {
+	return useQuery({
+		queryKey: ["schedule-templates", locationId],
+		queryFn: () =>
+			api<{ templates: ScheduleTemplateDto[] }>(
+				`/v1/locations/${locationId}/schedule-templates`,
+			).then((data) => data.templates),
+		enabled: Boolean(locationId),
+	});
+}
+
+export function useSaveScheduleTemplate(locationId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: { weekStart: string; name: string }) =>
+			api(
+				`/v1/locations/${locationId}/schedules/${input.weekStart}/templates`,
+				{
+					method: "POST",
+					body: { name: input.name },
+				},
+			),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["schedule-templates"] });
+		},
+	});
+}
+
+export function useApplyScheduleTemplate(locationId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: { weekStart: string; templateId: string }) =>
+			api(
+				`/v1/locations/${locationId}/schedules/${input.weekStart}/templates/${input.templateId}/apply`,
+				{ method: "POST" },
+			),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["schedule"] });
+		},
+	});
+}
+
+export function useMarkAttendance(workplaceId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			versionShiftId: string;
+			kind: "late" | "no_show" | "sick";
+			note?: string;
+		}) =>
+			api(
+				`/v1/workplaces/${workplaceId}/version-shifts/${input.versionShiftId}/attendance`,
+				{
+					method: "POST",
+					body: { kind: input.kind, note: input.note },
+				},
+			),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["schedule"] });
+		},
+	});
+}
+
+export function useEditTimeEntry(workplaceId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			versionShiftId: string;
+			clockedInAt: string;
+			clockedOutAt: string | null;
+			reason: string;
+		}) =>
+			api(
+				`/v1/workplaces/${workplaceId}/version-shifts/${input.versionShiftId}/time-entry`,
+				{
+					method: "PUT",
+					body: {
+						clockedInAt: input.clockedInAt,
+						clockedOutAt: input.clockedOutAt,
+						reason: input.reason,
+					},
+				},
+			),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["schedule"] });
+			queryClient.invalidateQueries({ queryKey: ["timecard"] });
+		},
+	});
+}
+
+export function useGroups(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["groups", workplaceId],
+		queryFn: () =>
+			api<{
+				groups: { id: string; name: string; employmentIds: string[] }[];
+			}>(`/v1/workplaces/${workplaceId}/groups`),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useTags(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["tags", workplaceId],
+		queryFn: () =>
+			api<{ tags: { id: string; name: string }[] }>(
+				`/v1/workplaces/${workplaceId}/tags`,
+			),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useLeaveTypes(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["leave-types", workplaceId],
+		queryFn: () =>
+			api<{ leaveTypes: { id: string; name: string; paid: boolean }[] }>(
+				`/v1/workplaces/${workplaceId}/leave-types`,
+			),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useTimeBlocks(locationId: string | undefined) {
+	return useQuery({
+		queryKey: ["time-blocks", locationId],
+		queryFn: () =>
+			api<{
+				timeBlocks: {
+					id: string;
+					name: string;
+					startMinute: number;
+					endMinute: number;
+				}[];
+				dayParts: {
+					id: string;
+					name: string;
+					startMinute: number;
+					endMinute: number;
+				}[];
+				shiftTemplates: {
+					id: string;
+					name: string;
+					positionId: string;
+					startMinute: number;
+					endMinute: number;
+					note: string | null;
+				}[];
+			}>(`/v1/locations/${locationId}/time-blocks`),
+		enabled: Boolean(locationId),
+	});
+}
+
+export function useAnnouncements(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["announcements", workplaceId],
+		queryFn: () =>
+			api<{
+				announcements: {
+					id: string;
+					title: string;
+					body: string;
+					author: string;
+					createdAt: string;
+				}[];
+			}>(`/v1/workplaces/${workplaceId}/announcements`),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export type ConversationDto = {
+	id: string;
+	kind: "workplace" | "direct";
+	title: string;
+	subtitle: string;
+	counterpart: {
+		employmentId: string;
+		name: string;
+		email: string;
+	} | null;
+	lastMessage: {
+		id: string;
+		body: string;
+		authorEmploymentId: string;
+		author: string;
+		createdAt: string;
+		mine: boolean;
+	} | null;
+};
+
+export type ConversationMessageDto = {
+	id: string;
+	body: string;
+	author: string;
+	authorEmploymentId: string;
+	createdAt: string;
+};
+
+export function useConversations(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["conversations", workplaceId],
+		queryFn: () =>
+			api<{ conversations: ConversationDto[] }>(
+				`/v1/workplaces/${workplaceId}/conversations`,
+			),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useMessages(conversationId: string | undefined) {
+	return useQuery({
+		queryKey: ["messages", conversationId],
+		queryFn: () =>
+			api<{ messages: ConversationMessageDto[] }>(
+				`/v1/conversations/${conversationId}/messages`,
+			),
+		enabled: Boolean(conversationId),
+	});
+}
+
+export function useTimesheets(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["timesheets", workplaceId],
+		queryFn: () =>
+			api<{
+				timesheets: {
+					id: string;
+					worker: string;
+					clockedInAt: string;
+					clockedOutAt: string | null;
+					approvalStatus: "pending" | "approved" | "declined";
+				}[];
+			}>(`/v1/workplaces/${workplaceId}/timesheets`),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function usePtoBalances(
+	workplaceId: string | undefined,
+	employmentId: string | undefined,
+) {
+	return useQuery({
+		queryKey: ["pto", workplaceId, employmentId],
+		queryFn: () =>
+			api<{
+				balances: { leaveTypeId: string; name: string; minutes: number }[];
+			}>(`/v1/workplaces/${workplaceId}/employments/${employmentId}/pto`),
+		enabled: Boolean(workplaceId && employmentId),
+	});
+}
+
+export function useShiftTasks(versionShiftId: string | undefined) {
+	return useQuery({
+		queryKey: ["shift-tasks", versionShiftId],
+		queryFn: () =>
+			api<{ tasks: { id: string; title: string; completed: boolean }[] }>(
+				`/v1/my/shifts/${versionShiftId}/tasks`,
+			),
+		enabled: Boolean(versionShiftId),
 	});
 }

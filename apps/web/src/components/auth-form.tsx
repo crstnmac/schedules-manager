@@ -205,7 +205,7 @@ export function AuthForm({
 										id="email"
 										type="email"
 										autoComplete="email"
-										placeholder="you@restaurant.com"
+										placeholder="you@workplace.com"
 										value={email}
 										onChange={(event) => {
 											if (!emailLocked) setEmail(event.target.value);

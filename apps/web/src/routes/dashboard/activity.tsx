@@ -1,34 +1,29 @@
 import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from "@SchedulesManager/ui/components/card";
-import {
 	Empty,
 	EmptyDescription,
 	EmptyHeader,
 	EmptyMedia,
 	EmptyTitle,
 } from "@SchedulesManager/ui/components/empty";
-import {
-	Item,
-	ItemActions,
-	ItemContent,
-	ItemDescription,
-	ItemTitle,
-} from "@SchedulesManager/ui/components/item";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { createFileRoute } from "@tanstack/react-router";
 import { BellIcon, ScrollTextIcon } from "lucide-react";
+import { useMemo } from "react";
 import { toast } from "sonner";
 
-import { ProgressiveItemGroup } from "@/components/progressive-item-group";
 import {
+	AppPageBody,
+	AppPageHeader,
+	AppPane,
+	AppSplit,
+} from "@/components/app-page";
+import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import {
+	type AuditEventDto,
+	type InboxNotification,
 	useAudit,
 	useMarkAllNotificationsRead,
 	useMarkNotificationRead,
@@ -40,6 +35,31 @@ export const Route = createFileRoute("/dashboard/activity")({
 	component: ActivityPage,
 });
 
+const inboxHelper = createDataColumnHelper<InboxNotification>();
+const auditHelper = createDataColumnHelper<AuditEventDto>();
+
+const auditColumns = auditHelper.columns([
+	auditHelper.accessor("summary", {
+		header: "Event",
+		cell: ({ getValue }) => (
+			<span className="font-medium">{getValue()}</span>
+		),
+	}),
+	auditHelper.accessor((row) => row.actorName ?? "", {
+		id: "actor",
+		header: "Actor",
+		cell: ({ getValue }) => getValue() || "—",
+	}),
+	auditHelper.accessor("createdAt", {
+		header: "When",
+		cell: ({ getValue }) => (
+			<span className="tabular-nums text-muted-foreground">
+				{new Date(getValue()).toLocaleString()}
+			</span>
+		),
+	}),
+]);
+
 function ActivityPage() {
 	const { workplace } = useWorkplace();
 	const inbox = useNotifications(workplace?.id);
@@ -50,23 +70,73 @@ function ActivityPage() {
 	const unreadCount = inbox.data?.unreadCount ?? 0;
 	const events = audit.data ?? [];
 
-	return (
-		<section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)]">
-			<Card>
-				<CardHeader>
-					<div className="flex flex-wrap items-start justify-between gap-3">
-						<div>
-							<div className="flex items-center gap-2">
-								<CardTitle>Inbox</CardTitle>
-								{unreadCount > 0 ? (
-									<Badge variant="secondary">{unreadCount} unread</Badge>
-								) : null}
+	const inboxColumns = useMemo(
+		() =>
+			inboxHelper.columns([
+				inboxHelper.accessor("title", {
+					header: "Notification",
+					cell: ({ getValue, row }) => (
+						<span className={row.original.readAt ? "" : "font-medium"}>
+							{getValue()}
+						</span>
+					),
+				}),
+				inboxHelper.accessor("body", {
+					header: "Detail",
+					cell: ({ getValue }) => (
+						<span className="text-muted-foreground">{getValue()}</span>
+					),
+				}),
+				inboxHelper.accessor("createdAt", {
+					header: "When",
+					cell: ({ getValue }) => (
+						<span className="tabular-nums text-muted-foreground">
+							{new Date(getValue()).toLocaleString()}
+						</span>
+					),
+				}),
+				inboxHelper.display({
+					id: "actions",
+					header: "Actions",
+					enableSorting: false,
+					cell: ({ row }) => {
+						if (row.original.readAt) return null;
+						return (
+							<div className="flex justify-end">
+								<Button
+									size="sm"
+									variant="outline"
+									disabled={markRead.isPending}
+									onClick={() =>
+										markRead.mutate(row.original.id, {
+											onError: (error) =>
+												toast.error((error as Error).message),
+										})
+									}
+								>
+									Mark read
+								</Button>
 							</div>
-							<CardDescription>
-								Coverage, schedule responses, and time-off requests.
-							</CardDescription>
-						</div>
-						{unreadCount > 0 ? (
+						);
+					},
+				}),
+			]),
+		[markRead],
+	);
+
+	return (
+		<AppSplit>
+			<AppPane>
+				<AppPageHeader
+					title="Inbox"
+					description="Coverage, schedule responses, and time-off requests."
+					badge={
+						unreadCount > 0 ? (
+							<Badge variant="secondary">{unreadCount} unread</Badge>
+						) : null
+					}
+					actions={
+						unreadCount > 0 ? (
 							<Button
 								size="sm"
 								variant="outline"
@@ -82,105 +152,70 @@ function ActivityPage() {
 								) : null}
 								Mark all read
 							</Button>
-						) : null}
-					</div>
-				</CardHeader>
-				<CardContent className="flex flex-col gap-4">
-					{inbox.isLoading ? <Skeleton className="h-20" /> : null}
-
-					{!inbox.isLoading && items.length === 0 ? (
-						<Empty>
-							<EmptyHeader>
-								<EmptyMedia variant="icon">
-									<BellIcon />
-								</EmptyMedia>
-								<EmptyTitle>No notifications</EmptyTitle>
-								<EmptyDescription>
-									Worker requests and responses will appear here.
-								</EmptyDescription>
-							</EmptyHeader>
-						</Empty>
-					) : null}
-
-					{items.length > 0 ? (
-						<ProgressiveItemGroup
-							items={items}
-							renderItem={(item) => (
-								<Item
-									key={item.id}
-									variant={item.readAt ? "default" : "outline"}
-									role="listitem"
-								>
-									<ItemContent>
-										<ItemTitle>{item.title}</ItemTitle>
-										<ItemDescription>
-											{item.body} · {new Date(item.createdAt).toLocaleString()}
-										</ItemDescription>
-									</ItemContent>
-									{item.readAt ? null : (
-										<ItemActions className="ml-auto w-full justify-end sm:w-auto">
-											<Button
-												size="sm"
-												variant="outline"
-												disabled={markRead.isPending}
-												onClick={() =>
-													markRead.mutate(item.id, {
-														onError: (error) =>
-															toast.error((error as Error).message),
-													})
-												}
-											>
-												Mark read
-											</Button>
-										</ItemActions>
-									)}
-								</Item>
-							)}
+						) : null
+					}
+				/>
+				<AppPageBody scroll={false}>
+					{inbox.isLoading ? (
+						<div className="flex flex-col gap-3 p-4">
+							<Skeleton className="h-20" />
+						</div>
+					) : (
+						<DataTable
+							columns={inboxColumns}
+							data={items}
+							getRowId={(row) => row.id}
+							empty={
+								<Empty>
+									<EmptyHeader>
+										<EmptyMedia variant="icon">
+											<BellIcon />
+										</EmptyMedia>
+										<EmptyTitle>No notifications</EmptyTitle>
+										<EmptyDescription>
+											Worker requests and responses will appear here.
+										</EmptyDescription>
+									</EmptyHeader>
+								</Empty>
+							}
 						/>
-					) : null}
-				</CardContent>
-			</Card>
+					)}
+				</AppPageBody>
+			</AppPane>
 
-			<Card>
-				<CardHeader>
-					<CardTitle>Audit trail</CardTitle>
-					<CardDescription>
-						Publication, time-off decisions, and coverage assignments.
-					</CardDescription>
-				</CardHeader>
-				<CardContent>
-					{audit.isLoading ? <Skeleton className="h-20" /> : null}
-					{!audit.isLoading && events.length === 0 ? (
-						<Empty>
-							<EmptyHeader>
-								<EmptyMedia variant="icon">
-									<ScrollTextIcon />
-								</EmptyMedia>
-								<EmptyTitle>No manager actions yet</EmptyTitle>
-								<EmptyDescription>
-									Publishing a week or deciding a request writes an audit event.
-								</EmptyDescription>
-							</EmptyHeader>
-						</Empty>
-					) : null}
-					{events.length > 0 ? (
-						<ProgressiveItemGroup
-							items={events}
-							renderItem={(event) => (
-								<Item key={event.id} variant="outline" role="listitem">
-									<ItemContent>
-										<ItemTitle>{event.summary}</ItemTitle>
-										<ItemDescription>
-											{event.actorName ? `${event.actorName} · ` : ""}
-											{new Date(event.createdAt).toLocaleString()}
-										</ItemDescription>
-									</ItemContent>
-								</Item>
-							)}
+			<AppPane className="border-t lg:max-w-md lg:border-t-0 lg:border-l">
+				<AppPageHeader
+					title="Audit trail"
+					description="Publication, time-off decisions, and coverage assignments."
+				/>
+				<AppPageBody scroll={false}>
+					{audit.isLoading ? (
+						<div className="flex flex-col gap-3 p-4">
+							<Skeleton className="h-20" />
+						</div>
+					) : (
+						<DataTable
+							columns={auditColumns}
+							data={events}
+							getRowId={(row) => row.id}
+							empty={
+								<Empty>
+									<EmptyHeader>
+										<EmptyMedia variant="icon">
+											<ScrollTextIcon />
+										</EmptyMedia>
+										<EmptyTitle>No manager actions yet</EmptyTitle>
+										<EmptyDescription>
+											Publishing a week or deciding a request writes an audit
+											event.
+										</EmptyDescription>
+									</EmptyHeader>
+								</Empty>
+							}
 						/>
-					) : null}
-				</CardContent>
-			</Card>
-		</section>
+					)}
+				</AppPageBody>
+			</AppPane>
+		</AppSplit>
 	);
 }

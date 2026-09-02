@@ -10,6 +10,12 @@ export default defineConfig({
 	},
 	resolve: {
 		tsconfigPaths: true,
+		// Prefer TypeScript sources over accidental sibling .js compile artifacts.
+		extensions: [".mjs", ".mts", ".ts", ".tsx", ".jsx", ".js", ".json"],
+		extensionAlias: {
+			".js": [".ts", ".tsx", ".js"],
+			".jsx": [".tsx", ".jsx"],
+		},
 		alias: {
 			"@SchedulesManager/auth": fileURLToPath(
 				new URL("../../packages/auth/src/index.ts", import.meta.url),

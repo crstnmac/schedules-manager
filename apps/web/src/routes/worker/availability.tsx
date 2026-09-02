@@ -16,14 +16,6 @@ import {
 } from "@SchedulesManager/ui/components/field";
 import { Input } from "@SchedulesManager/ui/components/input";
 import {
-	Item,
-	ItemActions,
-	ItemContent,
-	ItemDescription,
-	ItemGroup,
-	ItemTitle,
-} from "@SchedulesManager/ui/components/item";
-import {
 	Select,
 	SelectContent,
 	SelectGroup,
@@ -36,14 +28,22 @@ import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { Textarea } from "@SchedulesManager/ui/components/textarea";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ConfirmAction } from "@/components/confirm-action";
 import { DatePicker } from "@/components/date-picker";
+import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
 import { TimePicker } from "@/components/time-picker";
+import { AppDocument } from "@/components/app-page";
 import { api } from "@/lib/api";
-import { useMyConstraints } from "@/lib/queries";
+import {
+	useLeaveTypes,
+	useMe,
+	useMyConstraints,
+	usePtoBalances,
+	type WorkerConstraints,
+} from "@/lib/queries";
 import { formatDay, formatMinute, WEEKDAY_NAMES } from "@/lib/time";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -72,6 +72,17 @@ interface DateWindow {
 	note?: string;
 }
 
+type UnavailabilityRow = {
+	id: string;
+	kind: "weekly" | "date";
+	window: string;
+};
+
+const unavailabilityHelper = createDataColumnHelper<UnavailabilityRow>();
+const timeOffHelper = createDataColumnHelper<
+	WorkerConstraints["timeOff"][number]
+>();
+
 function windowId() {
 	return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -79,6 +90,13 @@ function windowId() {
 function AvailabilityPage() {
 	const { workplace } = useWorkplace();
 	const constraints = useMyConstraints(workplace?.id);
+	const me = useMe();
+	const leaveTypes = useLeaveTypes(workplace?.id);
+	const employmentId = me.data?.employments.find(
+		(employment) =>
+			employment.kind === "worker" && employment.workplace.id === workplace?.id,
+	)?.id;
+	const pto = usePtoBalances(workplace?.id, employmentId);
 	const queryClient = useQueryClient();
 
 	const [recurring, setRecurring] = useState<RecurringWindow[]>([]);
@@ -94,6 +112,7 @@ function AvailabilityPage() {
 	const [offStart, setOffStart] = useState(17 * 60);
 	const [offEnd, setOffEnd] = useState(23 * 60);
 	const [offReason, setOffReason] = useState("");
+	const [leaveTypeId, setLeaveTypeId] = useState("");
 
 	useEffect(() => {
 		const data = constraints.data;
@@ -185,6 +204,7 @@ function AvailabilityPage() {
 					startsAt: startsAt.toISOString(),
 					endsAt: endsAt.toISOString(),
 					reason: offReason.trim() || undefined,
+					leaveTypeId,
 				},
 			});
 		},
@@ -208,6 +228,140 @@ function AvailabilityPage() {
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
+
+	const unavailabilityRows = useMemo(
+		() => [
+			...recurring.map((item) => ({
+				id: item.id,
+				kind: "weekly" as const,
+				window: `Every ${WEEKDAY_NAMES[item.weekday]} · ${formatMinute(item.startMinute)}–${formatMinute(item.endMinute)}`,
+			})),
+			...dates.map((item) => ({
+				id: item.id,
+				kind: "date" as const,
+				window: `${formatDay(item.date)} · ${formatMinute(item.startMinute)}–${formatMinute(item.endMinute)}`,
+			})),
+		],
+		[dates, recurring],
+	);
+	const unavailabilityColumns = useMemo(
+		() =>
+			unavailabilityHelper.columns([
+				unavailabilityHelper.accessor("kind", {
+					header: "Kind",
+					cell: ({ getValue }) =>
+						getValue() === "weekly" ? "Weekly" : "Date",
+				}),
+				unavailabilityHelper.accessor("window", {
+					header: "Window",
+					cell: ({ getValue }) => (
+						<span className="font-medium">{getValue()}</span>
+					),
+				}),
+				unavailabilityHelper.display({
+					id: "actions",
+					header: "Actions",
+					enableSorting: false,
+					cell: ({ row }) => (
+						<div className="flex justify-end">
+							<Button
+								size="sm"
+								variant="ghost"
+								onClick={() => {
+									if (row.original.kind === "weekly") {
+										setRecurring((current) =>
+											current.filter((other) => other.id !== row.original.id),
+										);
+										return;
+									}
+									setDates((current) =>
+										current.filter((other) => other.id !== row.original.id),
+									);
+								}}
+							>
+								Remove
+							</Button>
+						</div>
+					),
+				}),
+			]),
+		[],
+	);
+	const timeOffColumns = useMemo(
+		() =>
+			timeOffHelper.columns([
+				timeOffHelper.accessor(
+					(row) => `${formatDay(row.startsAt)} → ${formatDay(row.endsAt)}`,
+					{
+						id: "period",
+						header: "Period",
+						cell: ({ getValue }) => (
+							<span className="font-medium">{getValue()}</span>
+						),
+					},
+				),
+				timeOffHelper.accessor("status", {
+					header: "Status",
+					cell: ({ getValue }) => {
+						const status = getValue();
+						return (
+							<Badge
+								className="uppercase"
+								variant={
+									status === "declined"
+										? "destructive"
+										: status === "approved"
+											? "default"
+											: "secondary"
+								}
+							>
+								{status}
+							</Badge>
+						);
+					},
+				}),
+				timeOffHelper.accessor(
+					(row) =>
+						[
+							leaveTypes.data?.leaveTypes.find(
+								(type) => type.id === row.leaveTypeId,
+							)?.name,
+							row.reason,
+							row.decisionReason,
+						]
+							.filter(Boolean)
+							.join(" · "),
+					{
+						id: "details",
+						header: "Details",
+						cell: ({ getValue }) => (
+							<span className="text-muted-foreground">{getValue() || "—"}</span>
+						),
+					},
+				),
+				timeOffHelper.display({
+					id: "actions",
+					header: "Actions",
+					enableSorting: false,
+					cell: ({ row }) =>
+						row.original.status === "pending" ? (
+							<div className="flex justify-end">
+								<ConfirmAction
+									trigger="Cancel request"
+									triggerVariant="ghost"
+									title="Cancel this time-off request?"
+									description="Your manager will no longer review this request. You can submit a new one later."
+									confirmLabel="Cancel request"
+									destructive
+									disabled={cancelTimeOff.isPending}
+									onConfirm={() => cancelTimeOff.mutate(row.original.id)}
+								/>
+							</div>
+						) : null,
+				}),
+			]),
+		[cancelTimeOff, leaveTypes.data?.leaveTypes],
+	);
 
 	function addRecurring() {
 		if (recurringStart >= recurringEnd) {
@@ -247,7 +401,7 @@ function AvailabilityPage() {
 	}
 
 	return (
-		<section className="flex flex-col gap-4">
+		<AppDocument>
 			<PageHeader
 				title="Availability"
 				description="Three separate actions: when you cannot work, optional preferences, and time-off requests."
@@ -266,62 +420,27 @@ function AvailabilityPage() {
 							</CardDescription>
 						</CardHeader>
 						<CardContent className="flex flex-col gap-4">
-							{recurring.length === 0 && dates.length === 0 ? (
-								<p className="text-muted-foreground text-sm">
-									No unavailability added.
-								</p>
-							) : (
-								<ItemGroup>
-									{recurring.map((item) => (
-										<Item key={item.id} variant="outline" role="listitem">
-											<ItemContent>
-												<ItemTitle>
-													Every {WEEKDAY_NAMES[item.weekday]} ·{" "}
-													{formatMinute(item.startMinute)}–
-													{formatMinute(item.endMinute)}
-												</ItemTitle>
-											</ItemContent>
-											<ItemActions>
-												<Button
-													size="sm"
-													variant="ghost"
-													onClick={() =>
-														setRecurring(
-															recurring.filter((other) => other.id !== item.id),
-														)
-													}
-												>
-													Remove
-												</Button>
-											</ItemActions>
-										</Item>
+							{(pto.data?.balances.length ?? 0) > 0 ? (
+								<div className="flex flex-wrap gap-2">
+									{pto.data?.balances.map((balance) => (
+										<Badge key={balance.leaveTypeId} variant="outline">
+											{balance.name}: {(balance.minutes / 60).toFixed(1)}h
+										</Badge>
 									))}
-									{dates.map((item) => (
-										<Item key={item.id} variant="outline" role="listitem">
-											<ItemContent>
-												<ItemTitle>
-													{formatDay(item.date)} ·{" "}
-													{formatMinute(item.startMinute)}–
-													{formatMinute(item.endMinute)}
-												</ItemTitle>
-											</ItemContent>
-											<ItemActions>
-												<Button
-													size="sm"
-													variant="ghost"
-													onClick={() =>
-														setDates(
-															dates.filter((other) => other.id !== item.id),
-														)
-													}
-												>
-													Remove
-												</Button>
-											</ItemActions>
-										</Item>
-									))}
-								</ItemGroup>
-							)}
+								</div>
+							) : null}
+							<DataTable
+								bounded
+								fill={false}
+								columns={unavailabilityColumns}
+								data={unavailabilityRows}
+								getRowId={(row) => `${row.kind}-${row.id}`}
+								empty={
+									<p className="text-muted-foreground text-sm">
+										No unavailability added.
+									</p>
+								}
+							/>
 							<FieldGroup className="grid gap-3 sm:grid-cols-4">
 								<Field>
 									<FieldLabel htmlFor="weekly-day">Every</FieldLabel>
@@ -450,56 +569,43 @@ function AvailabilityPage() {
 							</CardDescription>
 						</CardHeader>
 						<CardContent className="flex flex-col gap-4">
-							{(constraints.data?.timeOff.length ?? 0) === 0 ? (
-								<p className="text-muted-foreground text-sm">
-									No time-off requests yet.
-								</p>
-							) : (
-								<ItemGroup>
-									{(constraints.data?.timeOff ?? []).map((request) => (
-										<Item key={request.id} variant="outline" role="listitem">
-											<ItemContent>
-												<ItemTitle>
-													{formatDay(request.startsAt)} →{" "}
-													{formatDay(request.endsAt)}
-													<Badge
-														className="uppercase"
-														variant={
-															request.status === "declined"
-																? "destructive"
-																: request.status === "approved"
-																	? "default"
-																	: "secondary"
-														}
-													>
-														{request.status}
-													</Badge>
-												</ItemTitle>
-												<ItemDescription>
-													{[request.reason, request.decisionReason]
-														.filter(Boolean)
-														.join(" · ")}
-												</ItemDescription>
-											</ItemContent>
-											{request.status === "pending" ? (
-												<ItemActions>
-													<ConfirmAction
-														trigger="Cancel request"
-														triggerVariant="ghost"
-														title="Cancel this time-off request?"
-														description="Your manager will no longer review this request. You can submit a new one later."
-														confirmLabel="Cancel request"
-														destructive
-														disabled={cancelTimeOff.isPending}
-														onConfirm={() => cancelTimeOff.mutate(request.id)}
-													/>
-												</ItemActions>
-											) : null}
-										</Item>
-									))}
-								</ItemGroup>
-							)}
+							<DataTable
+								bounded
+								fill={false}
+								columns={timeOffColumns}
+								data={constraints.data?.timeOff ?? []}
+								getRowId={(row) => row.id}
+								empty={
+									<p className="text-muted-foreground text-sm">
+										No time-off requests yet.
+									</p>
+								}
+							/>
 							<FieldGroup className="grid gap-3 sm:grid-cols-2">
+								<Field>
+									<FieldLabel htmlFor="off-leave-type">Leave Type</FieldLabel>
+									<Select
+										items={(leaveTypes.data?.leaveTypes ?? []).map((type) => ({
+											label: type.name,
+											value: type.id,
+										}))}
+										value={leaveTypeId}
+										onValueChange={(value) => value && setLeaveTypeId(value)}
+									>
+										<SelectTrigger id="off-leave-type" className="w-full">
+											<SelectValue placeholder="Choose a Leave Type" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectGroup>
+												{(leaveTypes.data?.leaveTypes ?? []).map((type) => (
+													<SelectItem key={type.id} value={type.id}>
+														{type.name}
+													</SelectItem>
+												))}
+											</SelectGroup>
+										</SelectContent>
+									</Select>
+								</Field>
 								<Field>
 									<FieldLabel htmlFor="off-date">Date</FieldLabel>
 									<DatePicker
@@ -541,7 +647,7 @@ function AvailabilityPage() {
 						</CardContent>
 						<CardFooter>
 							<Button
-								disabled={requestTimeOff.isPending || !offDate}
+								disabled={requestTimeOff.isPending || !offDate || !leaveTypeId}
 								onClick={() => requestTimeOff.mutate()}
 							>
 								{requestTimeOff.isPending ? (
@@ -553,6 +659,6 @@ function AvailabilityPage() {
 					</Card>
 				</>
 			)}
-		</section>
+		</AppDocument>
 	);
 }

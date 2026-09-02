@@ -8,6 +8,7 @@ import {
 	registerEmailDeliveryTests,
 } from "./email-delivery-cases";
 import { registerJoinPolicyTests } from "./join-policy-cases";
+import { registerOpsTests } from "./ops-cases";
 import { registerPushReceiptTests } from "./push-receipt-cases";
 import { registerReadinessTests } from "./readiness-cases";
 import { registerReminderTests } from "./reminder-cases";
@@ -83,6 +84,7 @@ integrationDescribe("Schedule publication", () => {
 	registerReadinessTests(() => ({ app }));
 	registerReminderTests(() => ({ database, app, token: managerToken }));
 	registerJoinPolicyTests(() => ({ database, app, token: managerToken }));
+	registerOpsTests(() => ({ database, app, token: managerToken }));
 
 	test("republishing never changes the previous published Shift snapshot", async () => {
 		const managerProfileId = crypto.randomUUID();
@@ -1583,5 +1585,93 @@ integrationDescribe("Schedule publication", () => {
 			.from(database.notificationOutbox)
 			.where(isNull(database.notificationOutbox.processedAt));
 		expect(pendingAfterDispatch).toHaveLength(0);
+	});
+
+	test("publishing unassigned Shifts offers them for pickup", async () => {
+		const managerProfileId = crypto.randomUUID();
+		const workerProfileId = crypto.randomUUID();
+		const [workplace] = await database.db
+			.insert(database.workplaces)
+			.values({ name: "Unassigned Offer Cafe" })
+			.returning();
+		const [location] = await database.db
+			.insert(database.locations)
+			.values({
+				workplaceId: workplace?.id ?? "",
+				name: "Dining Room",
+				timezone: "America/Chicago",
+			})
+			.returning();
+		const [position] = await database.db
+			.insert(database.positions)
+			.values({ workplaceId: workplace?.id ?? "", name: "Server" })
+			.returning();
+		await database.db.insert(database.profiles).values([
+			{ id: managerProfileId, email: "unassigned-manager@example.test" },
+			{ id: workerProfileId, email: "unassigned-worker@example.test" },
+		]);
+		const employments = await database.db
+			.insert(database.employments)
+			.values([
+				{
+					workplaceId: workplace?.id ?? "",
+					profileId: managerProfileId,
+					kind: "manager",
+				},
+				{
+					workplaceId: workplace?.id ?? "",
+					profileId: workerProfileId,
+					kind: "worker",
+				},
+			])
+			.returning();
+		const worker = employments.find(
+			(row) => row.profileId === workerProfileId,
+		);
+		const [schedule] = await database.db
+			.insert(database.schedules)
+			.values({
+				locationId: location?.id ?? "",
+				weekStartDate: "2026-10-05",
+			})
+			.returning();
+		const [draftShift] = await database.db
+			.insert(database.shifts)
+			.values({
+				scheduleId: schedule?.id ?? "",
+				employmentId: null,
+				positionId: position?.id ?? "",
+				startsAt: new Date("2026-10-06T16:00:00.000Z"),
+				endsAt: new Date("2026-10-06T22:00:00.000Z"),
+			})
+			.returning();
+
+		await publishScheduleNow(schedule?.id ?? "", managerProfileId);
+		const offered = await database.db
+			.select()
+			.from(database.openShifts)
+			.where(eq(database.openShifts.shiftId, draftShift?.id ?? ""));
+		expect(offered).toHaveLength(1);
+		expect(offered[0]?.status).toBe("open");
+
+		await publishScheduleNow(schedule?.id ?? "", managerProfileId);
+		const stillOne = await database.db
+			.select()
+			.from(database.openShifts)
+			.where(eq(database.openShifts.shiftId, draftShift?.id ?? ""));
+		expect(stillOne).toHaveLength(1);
+		expect(stillOne[0]?.status).toBe("open");
+
+		await database.db
+			.update(database.shifts)
+			.set({ employmentId: worker?.id, updatedAt: new Date() })
+			.where(eq(database.shifts.id, draftShift?.id ?? ""));
+		await publishScheduleNow(schedule?.id ?? "", managerProfileId);
+		const closed = await database.db
+			.select()
+			.from(database.openShifts)
+			.where(eq(database.openShifts.shiftId, draftShift?.id ?? ""));
+		expect(closed).toHaveLength(1);
+		expect(closed[0]?.status).toBe("closed");
 	});
 });

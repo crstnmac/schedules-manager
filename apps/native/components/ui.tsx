@@ -387,12 +387,16 @@ export function NativeField({
 	onChange,
 	placeholder,
 	multiline = false,
+	secureTextEntry = false,
+	keyboardType,
 }: {
 	label: string;
 	value: string;
 	onChange: (value: string) => void;
 	placeholder?: string;
 	multiline?: boolean;
+	secureTextEntry?: boolean;
+	keyboardType?: React.ComponentProps<typeof TextInput>["keyboardType"];
 }) {
 	const { theme } = useAppTheme();
 	return (
@@ -404,6 +408,8 @@ export function NativeField({
 				placeholder={placeholder}
 				placeholderTextColor={theme.muted}
 				multiline={multiline}
+				secureTextEntry={secureTextEntry}
+				keyboardType={keyboardType}
 				style={[
 					styles.nativeField,
 					multiline && { minHeight: 96, textAlignVertical: "top" },

@@ -1,0 +1,3 @@
+# Use Photon and OpenStreetMap for Location geography
+
+Managers need to turn a Location address into coordinates so a Geofence can be checked at clock-in. Google Places and Mapbox are the usual products for this, but both require billed API keys after a trial credit. This product geocodes through Photon (OpenStreetMap, no key) behind the Elysia API, draws the Geofence with Leaflet and OSM tiles, and keeps worker GPS on the platform geolocation APIs already in the web and native clients. Photon can be pointed at a self-hosted instance with `GEOCODER_BASE_URL` if the public demo throttles us; Nominatim is not used for typeahead because its public usage policy forbids autocomplete.

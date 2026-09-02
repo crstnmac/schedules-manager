@@ -16,6 +16,7 @@ COPY package.json bun.lock ./
 COPY apps/native/package.json apps/native/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
+COPY packages/auth/package.json packages/auth/
 COPY packages/config/package.json packages/config/
 COPY packages/config/tsconfig.base.json packages/config/
 COPY packages/db/package.json packages/db/

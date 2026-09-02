@@ -1,11 +1,14 @@
 {
 	"extends": "@SchedulesManager/config/tsconfig.base.json",
 	"compilerOptions": {
+		"noEmit": true,
 		"jsx": "react-jsx",
 		"lib": ["ESNext", "DOM", "DOM.Iterable"],
 		"types": [],
 		"paths": {
-			"@SchedulesManager/ui/*": ["./src/*"]
+			"@SchedulesManager/ui/components/*": ["./src/components/*.tsx"],
+			"@SchedulesManager/ui/lib/*": ["./src/lib/*.ts"],
+			"@SchedulesManager/ui/hooks/*": ["./src/hooks/*.ts"]
 		}
 	},
 	"include": ["src/**/*.ts", "src/**/*.tsx"],

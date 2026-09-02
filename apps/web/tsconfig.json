@@ -1,5 +1,6 @@
 {
 	"compilerOptions": {
+		"noEmit": true,
 		"strict": true,
 		"esModuleInterop": true,
 		"jsx": "react-jsx",
@@ -12,7 +13,11 @@
 		"paths": {
 			"@/*": ["./src/*"],
 			"@SchedulesManager/auth": ["../../packages/auth/src/index.ts"],
-			"@SchedulesManager/ui/*": ["../../packages/ui/src/*"]
+			"@SchedulesManager/ui/components/*": [
+				"../../packages/ui/src/components/*.tsx"
+			],
+			"@SchedulesManager/ui/lib/*": ["../../packages/ui/src/lib/*.ts"],
+			"@SchedulesManager/ui/hooks/*": ["../../packages/ui/src/hooks/*.ts"]
 		}
 	}
 }

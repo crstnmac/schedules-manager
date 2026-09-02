@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { requireManager, requireSession } from "../context";
 import { BadRequestError, NotFoundError } from "../errors";
+import { fillPlaceFromAddress } from "../geocode";
+import { hashPin } from "../pin";
 import { firstRow } from "../rows";
 
 function assertTimeZone(timezone: string) {
@@ -11,6 +13,19 @@ function assertTimeZone(timezone: string) {
 	} catch {
 		throw new BadRequestError(`Unknown IANA time zone: ${timezone}`);
 	}
+}
+
+function toLocationDto(location: typeof locations.$inferSelect) {
+	return {
+		id: location.id,
+		name: location.name,
+		timezone: location.timezone,
+		addressLine: location.addressLine,
+		latitude: location.latitude,
+		longitude: location.longitude,
+		geofenceRadiusMeters: location.geofenceRadiusMeters,
+		kioskEnabled: Boolean(location.kioskPinHash),
+	};
 }
 
 export const locationsRoutes = new Elysia({
@@ -29,12 +44,7 @@ export const locationsRoutes = new Elysia({
 				.where(eq(locations.workplaceId, params.workplaceId));
 
 			return {
-				locations: rows.map((location) => ({
-					id: location.id,
-					name: location.name,
-					timezone: location.timezone,
-					addressLine: location.addressLine,
-				})),
+				locations: rows.map(toLocationDto),
 			};
 		},
 		{
@@ -53,25 +63,31 @@ export const locationsRoutes = new Elysia({
 			await requireManager(profile.id, params.workplaceId);
 			assertTimeZone(body.timezone);
 
+			const filled = await fillPlaceFromAddress({
+				addressLine: body.addressLine,
+				latitude: body.latitude,
+				longitude: body.longitude,
+			});
+			const timezone = body.timezone ?? filled.timezone;
+			assertTimeZone(timezone);
+
 			const location = firstRow(
 				await db
 					.insert(locations)
 					.values({
 						workplaceId: params.workplaceId,
 						name: body.name,
-						timezone: body.timezone,
-						addressLine: body.addressLine ?? null,
+						timezone,
+						addressLine: body.addressLine?.trim() || null,
+						latitude: filled.latitude,
+						longitude: filled.longitude,
+						geofenceRadiusMeters: body.geofenceRadiusMeters ?? null,
 					})
 					.returning(),
 			);
 
 			return {
-				location: {
-					id: location.id,
-					name: location.name,
-					timezone: location.timezone,
-					addressLine: location.addressLine,
-				},
+				location: toLocationDto(location),
 			};
 		},
 		{
@@ -81,6 +97,11 @@ export const locationsRoutes = new Elysia({
 				name: t.String({ minLength: 1, maxLength: 120 }),
 				timezone: t.String({ default: "America/Chicago" }),
 				addressLine: t.Optional(t.String({ maxLength: 200 })),
+				latitude: t.Optional(t.Union([t.String(), t.Null()])),
+				longitude: t.Optional(t.Union([t.String(), t.Null()])),
+				geofenceRadiusMeters: t.Optional(
+					t.Union([t.Integer({ minimum: 20, maximum: 5000 }), t.Null()]),
+				),
 			}),
 			detail: {
 				summary: "Create a Location (Manager)",
@@ -104,16 +125,42 @@ export const locationsRoutes = new Elysia({
 
 			if (body.timezone) assertTimeZone(body.timezone);
 
+			const addressLine =
+				body.addressLine === undefined
+					? existing.addressLine
+					: body.addressLine;
+			const filled = await fillPlaceFromAddress({
+				addressLine,
+				latitude:
+					body.latitude === undefined ? existing.latitude : body.latitude,
+				longitude:
+					body.longitude === undefined ? existing.longitude : body.longitude,
+			});
+			const timezone = body.timezone ?? filled.timezone ?? existing.timezone;
+			assertTimeZone(timezone);
+
 			const location = firstRow(
 				await db
 					.update(locations)
 					.set({
 						name: body.name ?? existing.name,
-						timezone: body.timezone ?? existing.timezone,
+						timezone,
 						addressLine:
 							body.addressLine === undefined
 								? existing.addressLine
 								: body.addressLine,
+						latitude: filled.latitude,
+						longitude: filled.longitude,
+						geofenceRadiusMeters:
+							body.geofenceRadiusMeters === undefined
+								? existing.geofenceRadiusMeters
+								: body.geofenceRadiusMeters,
+						kioskPinHash:
+							body.kioskPin === undefined
+								? existing.kioskPinHash
+								: body.kioskPin === null
+									? null
+									: hashPin(body.kioskPin),
 						updatedAt: new Date(),
 					})
 					.where(eq(locations.id, params.locationId))
@@ -121,12 +168,7 @@ export const locationsRoutes = new Elysia({
 			);
 
 			return {
-				location: {
-					id: location.id,
-					name: location.name,
-					timezone: location.timezone,
-					addressLine: location.addressLine,
-				},
+				location: toLocationDto(location),
 			};
 		},
 		{
@@ -137,6 +179,14 @@ export const locationsRoutes = new Elysia({
 				timezone: t.Optional(t.String()),
 				addressLine: t.Optional(
 					t.Union([t.String({ maxLength: 200 }), t.Null()]),
+				),
+				latitude: t.Optional(t.Union([t.String(), t.Null()])),
+				longitude: t.Optional(t.Union([t.String(), t.Null()])),
+				geofenceRadiusMeters: t.Optional(
+					t.Union([t.Integer({ minimum: 20, maximum: 5000 }), t.Null()]),
+				),
+				kioskPin: t.Optional(
+					t.Union([t.String({ minLength: 4, maxLength: 8 }), t.Null()]),
 				),
 			}),
 			detail: {
