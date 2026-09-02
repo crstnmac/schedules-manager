@@ -3689,13 +3689,10 @@ function SchedulePage() {
 					}
 				}}
 			>
-				<AlertDialogContent>
+				<AlertDialogContent className="sm:max-w-md">
 					{positionApproval && approvalCopy ? (
 						<>
 							<AlertDialogHeader>
-								<AlertDialogMedia>
-									<UserPlusIcon />
-								</AlertDialogMedia>
 								<AlertDialogTitle>{approvalCopy.title}</AlertDialogTitle>
 								<AlertDialogDescription>
 									{approvalCopy.description}
