@@ -142,6 +142,8 @@ See [CONTEXT.md](./CONTEXT.md) for the domain model and [docs/adr](./docs/adr) f
 
 ## Delivery operations
 
+The server Docker image includes Bash for Dokploy terminal access and runs as the non-root `bun` user. It contains the compiled server, not the repository or migration tooling; run database migrations from a checkout or a separate deployment job.
+
 Protected scheduling commands accept an `Idempotency-Key` header. Reuse the same key and request body when retrying a command; its mutations and saved response commit atomically. Reusing a key with a different body returns a conflict. Requests without a key remain transactional but are distinct commands. The PostgreSQL integration suite installs a test-only trigger rejecting updates and deletes of published shift snapshots.
 
 Invitation creation, resend, and import queue email in the same PostgreSQL transaction. The server dispatches queued mail and push jobs and polls Expo receipts every five seconds. Apply database migrations before starting the updated server. Email retries use exponential backoff, recover abandoned leases after five minutes, and become `failed` after eight failed attempts. A manager can resend a pending invitation to create a fresh delivery. Superseded, expired, accepted, and revoked invitation jobs are cancelled before sending.

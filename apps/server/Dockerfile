@@ -25,9 +25,10 @@ FROM deps AS build
 COPY . .
 RUN bun run --cwd apps/server compile
 
-# ---- Runtime: distroless, no shell, no node_modules ----
-FROM gcr.io/distroless/base-debian12:nonroot
+# ---- Runtime: shell-enabled for Dokploy terminal access, no node_modules ----
+FROM base AS runtime
 COPY --from=build /app/apps/server/server /usr/local/bin/server
+RUN bash --version > /dev/null
 EXPOSE 3000
-USER nonroot:nonroot
+USER bun:bun
 ENTRYPOINT ["server"]
