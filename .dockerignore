@@ -1,0 +1,45 @@
+# VCS / metadata
+.git
+.gitignore
+.DS_Store
+**/.DS_Store
+
+# Dependencies (installed inside the image)
+node_modules
+**/node_modules
+
+# Build outputs
+**/dist
+**/build
+*.tsbuildinfo
+apps/web/src/routeTree.gen.ts
+
+# Turbo / tooling caches
+.turbo
+**/.turbo
+.cache
+.impeccable
+.vscode
+.idea
+.alchemy
+.vercel
+**/.vercel
+**/.expo
+
+# Environment files (values are passed via build args / runtime env)
+.env
+**/.env
+.env.*
+**/.env.*
+!**/.env.example
+
+# Logs / testing / misc
+logs
+**/*.log
+coverage
+**/coverage
+local.db
+local.db-*
+tmp
+temp
+docs

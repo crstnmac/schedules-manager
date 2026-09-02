@@ -76,7 +76,8 @@ cp apps/native/.env.example apps/native/.env
 
 Fill the copied files with your Supabase project values:
 
-- `apps/server/.env`: set `DATABASE_URL` and `SUPABASE_URL`.
+- `apps/server/.env`: set `DATABASE_URL` and `SUPABASE_URL`. `DATABASE_POOL_MAX`
+  defaults to `5`, which stays below Supabase session-pool limits during local hot reload.
 - `apps/web/.env`: set the public Supabase URL and publishable/anon key.
 - `apps/native/.env`: set the same public URL and key, plus an API URL reachable from the device.
 
@@ -122,6 +123,8 @@ The protected `GET /v1/me` endpoint is an authentication smoke test. Send `Autho
 bun run check-types  # Type-check the workspace
 bun run build        # Build all applications
 bun run check        # Format and lint with Biome
+bun test             # Run fast unit and invariant tests
+bun run test:integration # Run isolated PostgreSQL tests (Docker required)
 bun run db:generate  # Generate database migrations
 bun run db:migrate   # Run database migrations
 bun run db:studio    # Open Drizzle Studio
@@ -136,6 +139,18 @@ bun run db:studio    # Open Drizzle Studio
 - An **acknowledgement** records a worker's response to a material change.
 
 See [CONTEXT.md](./CONTEXT.md) for the domain model and [docs/adr](./docs/adr) for accepted product and architecture decisions.
+
+## Delivery operations
+
+Protected scheduling commands accept an `Idempotency-Key` header. Reuse the same key and request body when retrying a command; its mutations and saved response commit atomically. Reusing a key with a different body returns a conflict. Requests without a key remain transactional but are distinct commands. The PostgreSQL integration suite installs a test-only trigger rejecting updates and deletes of published shift snapshots.
+
+Invitation creation, resend, and import queue email in the same PostgreSQL transaction. The server dispatches queued mail and push jobs and polls Expo receipts every five seconds. Apply database migrations before starting the updated server. Email retries use exponential backoff, recover abandoned leases after five minutes, and become `failed` after eight failed attempts. A manager can resend a pending invitation to create a fresh delivery. Superseded, expired, accepted, and revoked invitation jobs are cancelled before sending.
+
+Set `ZEPTOMAIL_WEBHOOK_SECRET` (at least 16 characters) to the ZeptoMail Agent's webhook Authentication Key. Configure the public HTTPS endpoint `/v1/webhooks/zeptomail` for Delivered, Hard bounce, and Soft bounce events. The endpoint validates the documented `producer-signature` HMAC over the decoded form payload, enforces a five-minute request timestamp tolerance, and deduplicates webhook IDs. Missing configuration fails closed. See [ZeptoMail webhook setup and signing](https://www.zoho.com/zeptomail/help/webhooks.html).
+
+`GET /v1/workplaces/:workplaceId/email-deliveries` returns the latest 100 delivery records to active managers of that workplace, without invitation tokens. `sent` means the provider accepted the send, not mailbox delivery; only a signed Delivered event marks `delivered`. Outbox delivery is at-least-once: a provider acceptance followed by a process crash before recording success can cause a duplicate email on retry. No provider or DNS configuration is performed by migrations. Validate credentials, webhook events, and device receipts in a staging environment before pilot rollout.
+
+Expo receipt `delivered` means APNs/FCM accepted the notification, not that a device displayed it. Swaps are limited to a single Schedule. Approval revalidates eligibility in its transaction; policy and unrelated cross-Schedule draft writes do not yet share a global worker-lock protocol, so concurrent policy changes need further serialization before claiming a system-wide eligibility guarantee. Attendance expansion remains deferred.
 
 ## Security notes
 

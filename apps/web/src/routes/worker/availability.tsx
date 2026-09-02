@@ -38,7 +38,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-
+import { ConfirmAction } from "@/components/confirm-action";
 import { DatePicker } from "@/components/date-picker";
 import { PageHeader } from "@/components/page-header";
 import { TimePicker } from "@/components/time-picker";
@@ -483,13 +483,16 @@ function AvailabilityPage() {
 											</ItemContent>
 											{request.status === "pending" ? (
 												<ItemActions>
-													<Button
-														size="sm"
-														variant="ghost"
-														onClick={() => cancelTimeOff.mutate(request.id)}
-													>
-														Cancel
-													</Button>
+													<ConfirmAction
+														trigger="Cancel request"
+														triggerVariant="ghost"
+														title="Cancel this time-off request?"
+														description="Your manager will no longer review this request. You can submit a new one later."
+														confirmLabel="Cancel request"
+														destructive
+														disabled={cancelTimeOff.isPending}
+														onConfirm={() => cancelTimeOff.mutate(request.id)}
+													/>
 												</ItemActions>
 											) : null}
 										</Item>

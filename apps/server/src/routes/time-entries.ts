@@ -2,20 +2,26 @@ import {
 	db,
 	employments,
 	positions,
+	schedules,
+	scheduleVersions,
 	timeEntries,
 	versionShifts,
 } from "@SchedulesManager/db";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
 import { requireSession, requireWorkplaceMember } from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
+import { withIdempotency } from "../idempotency";
 import { writeAudit } from "../notify";
 
 const CLOCK_IN_EARLY_WINDOW_MS = 15 * 60 * 1000;
 
 type MyShift = {
 	id: string;
+	shiftId: string | null;
+	versionId: string;
+	scheduleId: string;
 	employmentId: string;
 	startsAt: Date;
 	endsAt: Date;
@@ -28,12 +34,19 @@ async function myVersionShift(
 	const [row] = await db
 		.select({
 			id: versionShifts.id,
+			shiftId: versionShifts.shiftId,
+			versionId: versionShifts.versionId,
+			scheduleId: scheduleVersions.scheduleId,
 			employmentId: versionShifts.employmentId,
 			startsAt: versionShifts.startsAt,
 			endsAt: versionShifts.endsAt,
 			workplaceId: employments.workplaceId,
 		})
 		.from(versionShifts)
+		.innerJoin(
+			scheduleVersions,
+			eq(scheduleVersions.id, versionShifts.versionId),
+		)
 		.innerJoin(employments, eq(employments.id, versionShifts.employmentId))
 		.where(
 			and(
@@ -47,6 +60,9 @@ async function myVersionShift(
 	return {
 		shift: {
 			id: row.id,
+			shiftId: row.shiftId,
+			versionId: row.versionId,
+			scheduleId: row.scheduleId,
 			employmentId: row.employmentId,
 			startsAt: row.startsAt,
 			endsAt: row.endsAt,
@@ -64,6 +80,113 @@ function toPayload(entry: typeof timeEntries.$inferSelect) {
 	};
 }
 
+async function clockIn(profileId: string, versionShiftId: string) {
+	const { shift, workplaceId } = await myVersionShift(
+		profileId,
+		versionShiftId,
+	);
+	const now = new Date();
+	await db
+		.select({ id: schedules.id })
+		.from(schedules)
+		.where(eq(schedules.id, shift.scheduleId))
+		.for("share");
+	const [latestVersion] = await db
+		.select({ id: scheduleVersions.id })
+		.from(scheduleVersions)
+		.where(eq(scheduleVersions.scheduleId, shift.scheduleId))
+		.orderBy(desc(scheduleVersions.versionNumber))
+		.limit(1);
+	if (latestVersion?.id !== shift.versionId) {
+		throw new ConflictError(
+			"This shift belongs to an outdated Schedule Version",
+		);
+	}
+	if (now.getTime() < shift.startsAt.getTime() - CLOCK_IN_EARLY_WINDOW_MS) {
+		throw new BadRequestError(
+			"You can start this shift up to 15 minutes before it begins",
+		);
+	}
+	if (now.getTime() > shift.endsAt.getTime()) {
+		throw new BadRequestError("This shift has already ended");
+	}
+	await db.execute(
+		sql`select pg_advisory_xact_lock(hashtextextended(${`clock:${shift.shiftId ?? shift.id}`}, 0))`,
+	);
+	if (shift.shiftId) {
+		const [previousPunch] = await db
+			.select({ id: timeEntries.id })
+			.from(timeEntries)
+			.innerJoin(
+				versionShifts,
+				eq(versionShifts.id, timeEntries.versionShiftId),
+			)
+			.where(eq(versionShifts.shiftId, shift.shiftId))
+			.limit(1);
+		if (previousPunch)
+			throw new ConflictError("You already started this shift");
+	}
+
+	const [entry] = await db
+		.insert(timeEntries)
+		.values({
+			versionShiftId: shift.id,
+			employmentId: shift.employmentId,
+			clockedInAt: now,
+		})
+		.onConflictDoNothing({ target: timeEntries.versionShiftId })
+		.returning();
+	if (!entry) throw new ConflictError("You already started this shift");
+
+	await writeAudit({
+		workplaceId,
+		actorProfileId: profileId,
+		action: "time_entry.clocked_in",
+		entityType: "time_entry",
+		entityId: entry.id,
+		summary: "Worker started a shift",
+	});
+	return { timeEntry: toPayload(entry) };
+}
+
+async function clockOut(profileId: string, versionShiftId: string) {
+	const { shift, workplaceId } = await myVersionShift(
+		profileId,
+		versionShiftId,
+	);
+	const [entry] = await db
+		.select()
+		.from(timeEntries)
+		.where(eq(timeEntries.versionShiftId, shift.id))
+		.limit(1);
+	if (!entry) throw new NotFoundError("No Time Entry for this shift");
+	if (entry.clockedOutAt) return { timeEntry: toPayload(entry) };
+
+	const [updated] = await db
+		.update(timeEntries)
+		.set({ clockedOutAt: new Date() })
+		.where(and(eq(timeEntries.id, entry.id), isNull(timeEntries.clockedOutAt)))
+		.returning();
+	if (!updated) {
+		const [completed] = await db
+			.select()
+			.from(timeEntries)
+			.where(eq(timeEntries.id, entry.id));
+		if (!completed) throw new NotFoundError("Time Entry not found");
+		return { timeEntry: toPayload(completed) };
+	}
+
+	await writeAudit({
+		workplaceId,
+		actorProfileId: profileId,
+		action: "time_entry.clocked_out",
+		entityType: "time_entry",
+		entityId: entry.id,
+		summary: "Worker finished a shift",
+	});
+	return { timeEntry: toPayload(updated) };
+}
+
 export const timeEntryRoutes = new Elysia({
 	prefix: "/v1",
 	tags: ["Time Entries"],
@@ -72,48 +195,21 @@ export const timeEntryRoutes = new Elysia({
 		"/my/shifts/:versionShiftId/clock-in",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers.authorization);
-			const { shift, workplaceId } = await myVersionShift(
-				profile.id,
-				params.versionShiftId,
-			);
-
-			const now = new Date();
-			if (now.getTime() < shift.startsAt.getTime() - CLOCK_IN_EARLY_WINDOW_MS) {
-				throw new BadRequestError(
-					"You can start this shift up to 15 minutes before it begins",
-				);
-			}
-			if (now.getTime() > shift.endsAt.getTime()) {
-				throw new BadRequestError("This shift has already ended");
-			}
-
-			const [entry] = await db
-				.insert(timeEntries)
-				.values({
-					versionShiftId: shift.id,
-					employmentId: shift.employmentId,
-					clockedInAt: now,
-				})
-				.onConflictDoNothing({ target: timeEntries.versionShiftId })
-				.returning();
-
-			if (!entry) {
-				throw new ConflictError("You already started this shift");
-			}
-
-			await writeAudit({
-				workplaceId,
+			return withIdempotency({
 				actorProfileId: profile.id,
-				action: "time_entry.clocked_in",
-				entityType: "time_entry",
-				entityId: entry.id,
-				summary: "Worker started a shift",
+				scope: `time-entry.clock-in:${params.versionShiftId}`,
+				key: headers["idempotency-key"],
+				request: { versionShiftId: params.versionShiftId },
+				execute: () => clockIn(profile.id, params.versionShiftId),
 			});
-
-			return { timeEntry: toPayload(entry) };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({
+				authorization: t.String(),
+				"idempotency-key": t.Optional(
+					t.String({ minLength: 8, maxLength: 200 }),
+				),
+			}),
 			params: t.Object({ versionShiftId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Start work on an assigned shift (Time Entry)",
@@ -125,39 +221,21 @@ export const timeEntryRoutes = new Elysia({
 		"/my/shifts/:versionShiftId/clock-out",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers.authorization);
-			const { shift, workplaceId } = await myVersionShift(
-				profile.id,
-				params.versionShiftId,
-			);
-
-			const [entry] = await db
-				.select()
-				.from(timeEntries)
-				.where(eq(timeEntries.versionShiftId, shift.id))
-				.limit(1);
-			if (!entry) throw new NotFoundError("No Time Entry for this shift");
-			if (entry.clockedOutAt) return { timeEntry: toPayload(entry) };
-
-			const [updated] = await db
-				.update(timeEntries)
-				.set({ clockedOutAt: new Date() })
-				.where(eq(timeEntries.id, entry.id))
-				.returning();
-			if (!updated) throw new NotFoundError("Time Entry not found");
-
-			await writeAudit({
-				workplaceId,
+			return withIdempotency({
 				actorProfileId: profile.id,
-				action: "time_entry.clocked_out",
-				entityType: "time_entry",
-				entityId: entry.id,
-				summary: "Worker finished a shift",
+				scope: `time-entry.clock-out:${params.versionShiftId}`,
+				key: headers["idempotency-key"],
+				request: { versionShiftId: params.versionShiftId },
+				execute: () => clockOut(profile.id, params.versionShiftId),
 			});
-
-			return { timeEntry: toPayload(updated) };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({
+				authorization: t.String(),
+				"idempotency-key": t.Optional(
+					t.String({ minLength: 8, maxLength: 200 }),
+				),
+			}),
 			params: t.Object({ versionShiftId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Finish work on an assigned shift (Time Entry)",

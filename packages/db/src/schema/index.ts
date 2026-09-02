@@ -36,6 +36,11 @@ export {
 	shiftPickups,
 	shiftReleases,
 } from "./coverage";
+export {
+	emailDeliveries,
+	emailDeliveryStatusEnum,
+	emailWebhookEvents,
+} from "./email-delivery";
 export type { Employment, NewEmployment } from "./employments";
 export {
 	employmentKindEnum,
@@ -44,6 +49,11 @@ export {
 	employmentStatusEnum,
 	employments,
 } from "./employments";
+export type {
+	IdempotencyRecord,
+	NewIdempotencyRecord,
+} from "./idempotency";
+export { idempotencyRecords } from "./idempotency";
 export type { Invitation, NewInvitation } from "./invitations";
 export {
 	invitationLocations,
@@ -55,11 +65,18 @@ export type {
 	AuditEvent,
 	NewAuditEvent,
 	NewNotification,
+	NewNotificationOutbox,
 	NewPilotFeedback,
 	Notification,
+	NotificationOutbox,
 	PilotFeedback,
 } from "./notifications";
-export { auditEvents, notifications, pilotFeedback } from "./notifications";
+export {
+	auditEvents,
+	notificationOutbox,
+	notifications,
+	pilotFeedback,
+} from "./notifications";
 export type { NewProfile, Profile } from "./profiles";
 export { profiles } from "./profiles";
 export type {
@@ -76,6 +93,7 @@ export {
 	versionShifts,
 	workerDeliveries,
 } from "./publication";
+export { pushDeliveries } from "./push-deliveries";
 export type { NewPushToken, PushToken } from "./push-tokens";
 export { pushTokenPlatformEnum, pushTokens } from "./push-tokens";
 export type { NewSchedule, NewShift, Schedule, Shift } from "./schedules";

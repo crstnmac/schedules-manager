@@ -61,7 +61,7 @@ import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@SchedulesManager/ui/components/toggle-group";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
 	CopyIcon,
@@ -108,6 +108,9 @@ function WorkersPage() {
 			queryKey: ["workplaces", workplace?.id, "workers"],
 		});
 		queryClient.invalidateQueries({ queryKey: ["me"] });
+		queryClient.invalidateQueries({
+			queryKey: ["workplaces", workplace?.id, "email-deliveries"],
+		});
 	}
 
 	const invite = useMutation({
@@ -130,7 +133,7 @@ function WorkersPage() {
 			setSelectedLocations([]);
 			setSelectedPositions([]);
 			invalidate();
-			toast.success("Invitation created. Share the invite link.");
+			toast.success("Invitation created. Email queued for delivery.");
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
@@ -143,7 +146,7 @@ function WorkersPage() {
 			),
 		onSuccess: () => {
 			invalidate();
-			toast.success("Invitation refreshed.");
+			toast.success("Invitation refreshed. Email queued for delivery.");
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
@@ -231,8 +234,8 @@ function WorkersPage() {
 						<CardHeader>
 							<CardTitle>Invite a worker</CardTitle>
 							<CardDescription>
-								Email delivery is not configured yet, so share the invite link
-								directly after inviting.
+								We’ll email the invitation automatically. You can also copy the
+								invite link after sending.
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
@@ -530,6 +533,7 @@ function WorkersPage() {
 					</Card>
 
 					<Invitations
+						workplaceId={workplace?.id}
 						invitations={invitations}
 						onResend={(id) => resend.mutate(id)}
 						onRevoke={(id) => revoke.mutate(id)}
@@ -544,27 +548,73 @@ function inviteLink(token: string) {
 	return `${window.location.origin}/invite/${token}`;
 }
 
+type InvitationEmailDelivery = {
+	invitationId: string;
+	status:
+		| "queued"
+		| "sending"
+		| "sent"
+		| "delivered"
+		| "bounced"
+		| "failed"
+		| "cancelled";
+	attempts: number;
+	availableAt: string;
+};
+
 function Invitations({
+	workplaceId,
 	invitations,
 	onResend,
 	onRevoke,
 }: {
+	workplaceId?: string;
 	invitations: InvitationDto[];
 	onResend: (id: string) => void;
 	onRevoke: (id: string) => void;
 }) {
+	const deliveryQuery = useQuery({
+		queryKey: ["workplaces", workplaceId, "email-deliveries"],
+		enabled: Boolean(workplaceId) && invitations.length > 0,
+		queryFn: () =>
+			api<{ deliveries: InvitationEmailDelivery[] }>(
+				`/v1/workplaces/${workplaceId}/email-deliveries`,
+			),
+		refetchInterval: 15_000,
+	});
+	const latestDeliveries = new Map<string, InvitationEmailDelivery>();
+	for (const delivery of deliveryQuery.data?.deliveries ?? []) {
+		if (!latestDeliveries.has(delivery.invitationId))
+			latestDeliveries.set(delivery.invitationId, delivery);
+	}
 	if (invitations.length === 0) return null;
 
 	return (
 		<Card>
 			<CardHeader>
 				<CardTitle>Invitations</CardTitle>
-				<CardDescription>Outstanding and past invite links.</CardDescription>
+				<CardDescription>
+					Outstanding and past invite links. Latest email status refreshes every
+					15 seconds; sent does not confirm delivery.
+				</CardDescription>
+				{deliveryQuery.isError ? (
+					<p role="status">
+						Email status is unavailable.{" "}
+						<Button
+							type="button"
+							variant="link"
+							onClick={() => void deliveryQuery.refetch()}
+						>
+							Try again
+						</Button>
+					</p>
+				) : null}
 			</CardHeader>
 			<CardContent>
 				<ProgressiveItemGroup
 					items={invitations}
 					renderItem={(invitation) => {
+						const delivery = latestDeliveries.get(invitation.id);
 						const isPending =
 							invitation.status === "pending" &&
 							new Date(invitation.expiresAt).getTime() > Date.now();
@@ -590,6 +640,40 @@ function Invitations({
 										Expires{" "}
 										{new Date(invitation.expiresAt).toLocaleDateString()}
 									</ItemDescription>
+									<div className="flex flex-wrap items-center gap-2">
+										<Badge
+											variant={
+												delivery?.status === "failed" ||
+												delivery?.status === "bounced"
+													? "destructive"
+													: "outline"
+											}
+										>
+											{delivery
+												? `Email: ${delivery.status}`
+												: deliveryQuery.isPending
+													? "Loading email status…"
+													: deliveryQuery.isError
+														? "Email status unavailable"
+														: "No recent email record"}
+										</Badge>
+										{delivery ? (
+											<span className="text-muted-foreground text-sm">
+												{delivery.attempts}{" "}
+												{delivery.attempts === 1 ? "attempt" : "attempts"}
+												{delivery.status === "queued" && delivery.attempts > 0
+													? ` · Retry after ${new Date(delivery.availableAt).toLocaleString()}`
+													: ""}
+											</span>
+										) : null}
+									</div>
+									{delivery?.status === "failed" ||
+									delivery?.status === "bounced" ? (
+										<ItemDescription>
+											Check the email address, then resend or share the invite
+											link.
+										</ItemDescription>
+									) : null}
 								</ItemContent>
 								{isPending ? (
 									<ItemActions className="w-full flex-wrap justify-end sm:w-auto">

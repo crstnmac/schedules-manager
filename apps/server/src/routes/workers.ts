@@ -9,13 +9,13 @@ import {
 	locations,
 	positions,
 	profiles,
-	workplaces,
 } from "@SchedulesManager/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { requireManager, requireSession } from "../context";
+import { enqueueInvitationEmail } from "../email-outbox";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
-import { sendInvitationEmail } from "../mail";
+import { withIdempotency } from "../idempotency";
 import { firstRow } from "../rows";
 
 const INVITATION_TTL_DAYS = 14;
@@ -135,140 +135,147 @@ export const workersRoutes = new Elysia({
 
 			const email = normalizeEmail(body.email);
 			assertDeliverableInvitationEmail(email);
-
-			const [existingProfile] = await db
-				.select({ id: profiles.id })
-				.from(profiles)
-				.where(eq(profiles.email, email))
-				.limit(1);
-
-			if (existingProfile) {
-				const [existingEmployment] = await db
-					.select({ id: employments.id })
-					.from(employments)
-					.where(
-						and(
-							eq(employments.workplaceId, params.workplaceId),
-							eq(employments.profileId, existingProfile.id),
-							eq(employments.status, "active"),
-						),
-					)
-					.limit(1);
-
-				if (existingEmployment) {
-					throw new ConflictError(
-						"This person already has an active Employment at this Workplace",
-					);
-				}
-			}
-
 			const requestedLocationIds = body.locationIds ?? [];
 			const requestedPositionIds = body.positionIds ?? [];
 
-			if (requestedLocationIds.length > 0) {
-				const found = await db
-					.select({ id: locations.id })
-					.from(locations)
-					.where(
-						and(
-							eq(locations.workplaceId, params.workplaceId),
-							inArray(locations.id, requestedLocationIds),
-						),
+			return withIdempotency({
+				actorProfileId: profile.id,
+				scope: `invitation.create:${params.workplaceId}`,
+				key: headers["idempotency-key"],
+				request: {
+					email,
+					kind: body.kind,
+					locationIds: requestedLocationIds,
+					positionIds: requestedPositionIds,
+				},
+				execute: async () => {
+					const [existingProfile] = await db
+						.select({ id: profiles.id })
+						.from(profiles)
+						.where(eq(profiles.email, email))
+						.limit(1);
+
+					if (existingProfile) {
+						const [existingEmployment] = await db
+							.select({ id: employments.id })
+							.from(employments)
+							.where(
+								and(
+									eq(employments.workplaceId, params.workplaceId),
+									eq(employments.profileId, existingProfile.id),
+									eq(employments.status, "active"),
+								),
+							)
+							.limit(1);
+
+						if (existingEmployment) {
+							throw new ConflictError(
+								"This person already has an active Employment at this Workplace",
+							);
+						}
+					}
+
+					if (requestedLocationIds.length > 0) {
+						const found = await db
+							.select({ id: locations.id })
+							.from(locations)
+							.where(
+								and(
+									eq(locations.workplaceId, params.workplaceId),
+									inArray(locations.id, requestedLocationIds),
+								),
+							);
+						if (found.length !== requestedLocationIds.length) {
+							throw new NotFoundError("One or more Locations were not found");
+						}
+					}
+
+					if (requestedPositionIds.length > 0) {
+						const found = await db
+							.select({ id: positions.id })
+							.from(positions)
+							.where(
+								and(
+									eq(positions.workplaceId, params.workplaceId),
+									inArray(positions.id, requestedPositionIds),
+								),
+							);
+						if (found.length !== requestedPositionIds.length) {
+							throw new NotFoundError("One or more Positions were not found");
+						}
+					}
+
+					const expiresAt = new Date(
+						Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000,
 					);
-				if (found.length !== requestedLocationIds.length) {
-					throw new NotFoundError("One or more Locations were not found");
-				}
-			}
 
-			if (requestedPositionIds.length > 0) {
-				const found = await db
-					.select({ id: positions.id })
-					.from(positions)
-					.where(
-						and(
-							eq(positions.workplaceId, params.workplaceId),
-							inArray(positions.id, requestedPositionIds),
-						),
-					);
-				if (found.length !== requestedPositionIds.length) {
-					throw new NotFoundError("One or more Positions were not found");
-				}
-			}
+					const result = await db.transaction(async (tx) => {
+						await tx
+							.update(invitations)
+							.set({ status: "revoked" })
+							.where(
+								and(
+									eq(invitations.workplaceId, params.workplaceId),
+									eq(invitations.email, email),
+									eq(invitations.status, "pending"),
+								),
+							);
 
-			const expiresAt = new Date(
-				Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000,
-			);
+						const invitation = firstRow(
+							await tx
+								.insert(invitations)
+								.values({
+									workplaceId: params.workplaceId,
+									email,
+									kind: body.kind,
+									invitedBy: profile.id,
+									expiresAt,
+								})
+								.returning(),
+						);
 
-			const result = await db.transaction(async (tx) => {
-				await tx
-					.update(invitations)
-					.set({ status: "revoked" })
-					.where(
-						and(
-							eq(invitations.workplaceId, params.workplaceId),
-							eq(invitations.email, email),
-							eq(invitations.status, "pending"),
-						),
-					);
+						if (requestedLocationIds.length > 0) {
+							await tx.insert(invitationLocations).values(
+								requestedLocationIds.map((locationId) => ({
+									invitationId: invitation.id,
+									locationId,
+								})),
+							);
+						}
 
-				const invitation = firstRow(
-					await tx
-						.insert(invitations)
-						.values({
-							workplaceId: params.workplaceId,
-							email,
-							kind: body.kind,
-							invitedBy: profile.id,
-							expiresAt,
-						})
-						.returning(),
-				);
+						if (requestedPositionIds.length > 0) {
+							await tx.insert(invitationPositions).values(
+								requestedPositionIds.map((positionId) => ({
+									invitationId: invitation.id,
+									positionId,
+								})),
+							);
+						}
 
-				if (requestedLocationIds.length > 0) {
-					await tx.insert(invitationLocations).values(
-						requestedLocationIds.map((locationId) => ({
-							invitationId: invitation.id,
-							locationId,
-						})),
-					);
-				}
+						await enqueueInvitationEmail(tx, invitation);
+						return {
+							invitation: {
+								id: invitation.id,
+								email: invitation.email,
+								kind: invitation.kind,
+								status: invitation.status,
+								token: invitation.token,
+								expiresAt: invitation.expiresAt.toISOString(),
+							},
+						};
+					});
 
-				if (requestedPositionIds.length > 0) {
-					await tx.insert(invitationPositions).values(
-						requestedPositionIds.map((positionId) => ({
-							invitationId: invitation.id,
-							positionId,
-						})),
-					);
-				}
-
-				return {
-					invitation: {
-						id: invitation.id,
-						email: invitation.email,
-						kind: invitation.kind,
-						status: invitation.status,
-						token: invitation.token,
-						expiresAt: invitation.expiresAt.toISOString(),
-					},
-				};
+					return result;
+				},
 			});
-
-			const [workplace] = await db
-				.select({ name: workplaces.name })
-				.from(workplaces)
-				.where(eq(workplaces.id, params.workplaceId))
-				.limit(1);
-			await sendInvitationEmail({
-				email: result.invitation.email,
-				token: result.invitation.token,
-				workplaceName: workplace?.name ?? "your workplace",
-				kind: result.invitation.kind,
-			});
-			return result;
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({
+				authorization: t.String(),
+				"idempotency-key": t.Optional(
+					t.String({ minLength: 8, maxLength: 200 }),
+				),
+			}),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				email: emailSchema,
@@ -290,57 +297,71 @@ export const workersRoutes = new Elysia({
 			const { profile } = await requireSession(headers.authorization);
 			await requireManager(profile.id, params.workplaceId);
 
-			const [invitation] = await db
-				.select()
-				.from(invitations)
-				.where(
-					and(
-						eq(invitations.id, params.invitationId),
-						eq(invitations.workplaceId, params.workplaceId),
-					),
-				)
-				.limit(1);
-
-			if (!invitation) throw new NotFoundError("Invitation not found");
-			if (invitation.status !== "pending") {
-				throw new ConflictError("Only pending invitations can be resent");
-			}
-
-			const expiresAt = new Date(
-				Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000,
-			);
-
-			const updated = firstRow(
-				await db
-					.update(invitations)
-					.set({ token: crypto.randomUUID(), expiresAt })
-					.where(eq(invitations.id, invitation.id))
-					.returning(),
-			);
-			const [workplace] = await db
-				.select({ name: workplaces.name })
-				.from(workplaces)
-				.where(eq(workplaces.id, params.workplaceId))
-				.limit(1);
-			await sendInvitationEmail({
-				email: updated.email,
-				token: updated.token,
-				workplaceName: workplace?.name ?? "your workplace",
-				kind: updated.kind,
-			});
-
-			return {
-				invitation: {
-					id: updated.id,
-					email: updated.email,
-					status: updated.status,
-					token: updated.token,
-					expiresAt: updated.expiresAt.toISOString(),
+			return withIdempotency({
+				actorProfileId: profile.id,
+				scope: `invitation.resend:${params.invitationId}`,
+				key: headers["idempotency-key"],
+				request: {
+					workplaceId: params.workplaceId,
+					invitationId: params.invitationId,
 				},
-			};
+				execute: async () => {
+					const [invitation] = await db
+						.select()
+						.from(invitations)
+						.where(
+							and(
+								eq(invitations.id, params.invitationId),
+								eq(invitations.workplaceId, params.workplaceId),
+							),
+						)
+						.limit(1);
+
+					if (!invitation) throw new NotFoundError("Invitation not found");
+					if (invitation.status !== "pending") {
+						throw new ConflictError("Only pending invitations can be resent");
+					}
+
+					const expiresAt = new Date(
+						Date.now() + INVITATION_TTL_DAYS * 24 * 60 * 60 * 1000,
+					);
+
+					const updated = await db.transaction(async (tx) => {
+						const refreshed = firstRow(
+							await tx
+								.update(invitations)
+								.set({ token: crypto.randomUUID(), expiresAt })
+								.where(
+									and(
+										eq(invitations.id, invitation.id),
+										eq(invitations.status, "pending"),
+									),
+								)
+								.returning(),
+						);
+						await enqueueInvitationEmail(tx, refreshed);
+						return refreshed;
+					});
+
+					return {
+						invitation: {
+							id: updated.id,
+							email: updated.email,
+							status: updated.status,
+							token: updated.token,
+							expiresAt: updated.expiresAt.toISOString(),
+						},
+					};
+				},
+			});
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({
+				authorization: t.String(),
+				"idempotency-key": t.Optional(
+					t.String({ minLength: 8, maxLength: 200 }),
+				),
+			}),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				invitationId: t.String({ format: "uuid" }),

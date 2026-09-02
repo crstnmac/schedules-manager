@@ -1,4 +1,12 @@
-import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+	index,
+	integer,
+	pgTable,
+	text,
+	timestamp,
+	unique,
+	uuid,
+} from "drizzle-orm/pg-core";
 
 import { employments } from "./employments";
 import { profiles } from "./profiles";
@@ -20,6 +28,33 @@ export const notifications = pgTable(
 			.notNull(),
 	},
 	(table) => [index("notifications_employment_idx").on(table.employmentId)],
+);
+
+export const notificationOutbox = pgTable(
+	"notification_outbox",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		notificationId: uuid("notification_id")
+			.notNull()
+			.references(() => notifications.id, { onDelete: "cascade" }),
+		attempts: integer("attempts").notNull().default(0),
+		availableAt: timestamp("available_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+		lockedAt: timestamp("locked_at", { withTimezone: true }),
+		processedAt: timestamp("processed_at", { withTimezone: true }),
+		lastError: text("last_error"),
+		createdAt: timestamp("created_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [
+		unique("notification_outbox_notification_unique").on(table.notificationId),
+		index("notification_outbox_pending_idx").on(
+			table.processedAt,
+			table.availableAt,
+		),
+	],
 );
 
 export const auditEvents = pgTable(
@@ -65,6 +100,8 @@ export const pilotFeedback = pgTable(
 
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
+export type NotificationOutbox = typeof notificationOutbox.$inferSelect;
+export type NewNotificationOutbox = typeof notificationOutbox.$inferInsert;
 export type AuditEvent = typeof auditEvents.$inferSelect;
 export type NewAuditEvent = typeof auditEvents.$inferInsert;
 export type PilotFeedback = typeof pilotFeedback.$inferSelect;

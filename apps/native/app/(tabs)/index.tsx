@@ -12,20 +12,18 @@ import {
 
 import {
 	AppScreen,
-	Badge,
-	Body,
 	Card,
 	EmptyState,
 	FeatureCard,
-	Hint,
 	NoticeRow,
 	PageHeader,
 	PrimaryButton,
 	SecondaryButton,
 	useAppTheme,
 } from "@/components/ui";
-import { ShiftDetailSheet, SwapsCard } from "@/components/worker-shifts";
+import { SwapsCard } from "@/components/worker-shifts";
 import { useAuth } from "@/lib/auth";
+import { confirmAction } from "@/lib/confirm-action";
 import { positionColor } from "@/lib/position-color";
 import {
 	useAcknowledge,
@@ -147,6 +145,7 @@ function Metric({
 // ── Worker schedule – priority stack ───────────────────────────────────
 function WorkerSchedule() {
 	const { theme } = useAppTheme();
+	const router = useRouter();
 	const { signOut } = useAuth();
 	const me = useMe();
 	const { selected, select } = useSelectedWorkplaceId();
@@ -167,8 +166,6 @@ function WorkerSchedule() {
 	useShiftStartResponseHandler();
 	const [historyVersionId, setHistoryVersionId] = useState<string | null>(null);
 	const historyVersion = usePublishedVersion(historyVersionId);
-	const [detailShift, setDetailShift] = useState<WeekShiftType | null>(null);
-	const [detailLocation, setDetailLocation] = useState<string | null>(null);
 
 	useFocusEffect(() => {
 		if (workplaceId)
@@ -314,7 +311,17 @@ function WorkerSchedule() {
 										label="Accept shift"
 										disabled={respond.isPending}
 										onPress={() =>
-											respond.mutate({ acceptanceId: a.id, decision: "accept" })
+											confirmAction({
+												title: "Accept this shift change?",
+												message:
+													"This confirms that you agree to work the changed shift.",
+												confirmLabel: "Accept shift",
+												onConfirm: () =>
+													respond.mutate({
+														acceptanceId: a.id,
+														decision: "accept",
+													}),
+											})
 										}
 									/>
 								</View>
@@ -323,9 +330,17 @@ function WorkerSchedule() {
 										label="Decline"
 										disabled={respond.isPending}
 										onPress={() =>
-											respond.mutate({
-												acceptanceId: a.id,
-												decision: "decline",
+											confirmAction({
+												title: "Decline this shift change?",
+												message:
+													"Your Manager will see that you declined this change.",
+												confirmLabel: "Decline shift",
+												destructive: true,
+												onConfirm: () =>
+													respond.mutate({
+														acceptanceId: a.id,
+														decision: "decline",
+													}),
 											})
 										}
 									/>
@@ -433,8 +448,13 @@ function WorkerSchedule() {
 											accessibilityRole="button"
 											accessibilityLabel={`Open details for ${shift.positionName} shift`}
 											onPress={() => {
-												setDetailShift(shift);
-												setDetailLocation(currentWeek?.locationName ?? null);
+												router.push({
+													pathname: "/shift-detail",
+													params: {
+														shift: JSON.stringify(shift),
+														locationName: currentWeek?.locationName ?? "",
+													},
+												});
 											}}
 											style={[
 												s.shiftRow,
@@ -529,8 +549,19 @@ function WorkerSchedule() {
 					{nextWeek.shifts.map((sh) => {
 						const accent = positionColor(sh.positionName);
 						return (
-							<View
+							<Pressable
 								key={sh.id}
+								accessibilityRole="button"
+								accessibilityLabel={`Open details for ${sh.positionName} shift`}
+								onPress={() => {
+									router.push({
+										pathname: "/shift-detail",
+										params: {
+											shift: JSON.stringify(sh),
+											locationName: nextWeek.locationName ?? "",
+										},
+									});
+								}}
 								style={[
 									s.shiftRow,
 									{
@@ -558,7 +589,7 @@ function WorkerSchedule() {
 										</Text>
 									</View>
 								</View>
-							</View>
+							</Pressable>
 						);
 					})}
 				</Card>
@@ -627,13 +658,6 @@ function WorkerSchedule() {
 			) : null}
 
 			<SecondaryButton label="Sign out" onPress={() => void signOut()} />
-
-			<ShiftDetailSheet
-				shift={detailShift}
-				workplaceId={workplaceId}
-				locationName={detailLocation}
-				onClose={() => setDetailShift(null)}
-			/>
 		</AppScreen>
 	);
 }
@@ -661,12 +685,6 @@ const CLOCK_IN_EARLY_MS = 15 * 60 * 1000;
 type NextShift = NonNullable<
 	NonNullable<ReturnType<typeof useMySchedule>["data"]>["nextShift"]
 >;
-
-type WeekShiftType = NonNullable<
-	NonNullable<
-		NonNullable<ReturnType<typeof useMySchedule>["data"]>["currentWeek"]
-	>["shifts"]
->[number];
 
 function TimeClockControls({
 	shift,

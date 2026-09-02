@@ -23,6 +23,7 @@ import {
 	useAppTheme,
 } from "@/components/ui";
 import { api } from "@/lib/api";
+import { confirmAction } from "@/lib/confirm-action";
 import { useSelectedWorkplaceId } from "@/lib/workplace-store";
 
 interface ConstraintsResponse {
@@ -462,7 +463,18 @@ export default function AvailabilityScreen() {
 							) : null}
 						</View>
 						{r.status === "pending" ? (
-							<Pressable onPress={() => void cancelRequest(r.id)}>
+							<Pressable
+								onPress={() =>
+									confirmAction({
+										title: "Cancel this time-off request?",
+										message:
+											"Your Manager will no longer review it. You can submit a new request later.",
+										confirmLabel: "Cancel request",
+										destructive: true,
+										onConfirm: () => void cancelRequest(r.id),
+									})
+								}
+							>
 								<Text style={[styles.link, { color: theme.primary }]}>
 									Cancel
 								</Text>

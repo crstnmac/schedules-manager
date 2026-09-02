@@ -54,6 +54,10 @@ export default function RootLayout() {
 										options={{ headerShown: false }}
 									/>
 									<Stack.Screen name="team" options={{ headerShown: false }} />
+									<Stack.Screen
+										name="shift-detail"
+										options={{ headerShown: false, presentation: "card" }}
+									/>
 								</Stack>
 							</SessionGate>
 						</GestureHandlerRootView>

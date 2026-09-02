@@ -1,3 +1,4 @@
+import { randomUUID } from "expo-crypto";
 import { getServerUrl } from "./server-url";
 import { supabase } from "./supabase";
 
@@ -14,12 +15,18 @@ export class ApiError extends Error {
 interface ApiOptions {
 	method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 	body?: unknown;
+	/** Reuse for an intentional replay of the same command and payload. */
+	idempotencyKey?: string;
 }
 
 export async function api<T>(
 	path: string,
 	options: ApiOptions = {},
 ): Promise<T> {
+	const idempotencyKey =
+		options.method === "POST"
+			? (options.idempotencyKey ?? randomUUID())
+			: undefined;
 	const { data } = await supabase.auth.getSession();
 	const session = data.session;
 
@@ -35,6 +42,7 @@ export async function api<T>(
 			cache: "no-store",
 			headers: {
 				Authorization: `Bearer ${session.access_token}`,
+				...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
 				...(options.body === undefined
 					? {}
 					: { "Content-Type": "application/json" }),

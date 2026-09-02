@@ -13,7 +13,6 @@ import {
 	scheduleVersions,
 	shifts,
 	workerDeliveries,
-	workplaces,
 } from "@SchedulesManager/db";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
@@ -23,8 +22,8 @@ import {
 	requireSession,
 	requireWorkplaceMember,
 } from "../context";
+import { enqueueInvitationEmail } from "../email-outbox";
 import { BadRequestError } from "../errors";
-import { sendInvitationEmail } from "../mail";
 import { writeAudit } from "../notify";
 
 const INVITATION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
@@ -316,23 +315,11 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 						await tx
 							.insert(invitationPositions)
 							.values({ invitationId: invitation.id, positionId });
+					await enqueueInvitationEmail(tx, invitation);
 					result.push({ email: row.email, token: invitation.token });
 				}
 				return result;
 			});
-			const [workplace] = await db
-				.select({ name: workplaces.name })
-				.from(workplaces)
-				.where(eq(workplaces.id, params.workplaceId))
-				.limit(1);
-			for (const invitation of created) {
-				await sendInvitationEmail({
-					email: invitation.email,
-					token: invitation.token,
-					workplaceName: workplace?.name ?? "your workplace",
-					kind: "worker",
-				});
-			}
 			return { invitations: created };
 		},
 		{

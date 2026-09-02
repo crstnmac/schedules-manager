@@ -15,12 +15,18 @@ export class ApiError extends Error {
 interface ApiOptions {
 	method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 	body?: unknown;
+	/** Reuse for an intentional replay of the same command and payload. */
+	idempotencyKey?: string;
 }
 
 export async function api<T>(
 	path: string,
 	options: ApiOptions = {},
 ): Promise<T> {
+	const idempotencyKey =
+		options.method === "POST"
+			? (options.idempotencyKey ?? crypto.randomUUID())
+			: undefined;
 	const { data } = await supabase.auth.getSession();
 	const session = data.session;
 
@@ -33,6 +39,7 @@ export async function api<T>(
 		cache: "no-store",
 		headers: {
 			Authorization: `Bearer ${session.access_token}`,
+			...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
 			...(options.body === undefined
 				? {}
 				: { "Content-Type": "application/json" }),
@@ -58,13 +65,19 @@ export async function publicApi<T>(
 	path: string,
 	options: ApiOptions = {},
 ): Promise<T> {
+	const idempotencyKey =
+		options.method === "POST"
+			? (options.idempotencyKey ?? crypto.randomUUID())
+			: undefined;
 	const response = await fetch(`${env.VITE_SERVER_URL}${path}`, {
 		method: options.method ?? "GET",
 		cache: "no-store",
-		headers:
-			options.body === undefined
-				? undefined
-				: { "Content-Type": "application/json" },
+		headers: {
+			...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+			...(options.body === undefined
+				? {}
+				: { "Content-Type": "application/json" }),
+		},
 		body: options.body === undefined ? undefined : JSON.stringify(options.body),
 	});
 

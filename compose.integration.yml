@@ -1,0 +1,16 @@
+services:
+  postgres-integration:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: schedules_manager_test
+      POSTGRES_USER: schedules_manager_test
+      POSTGRES_PASSWORD: schedules_manager_test
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U schedules_manager_test -d schedules_manager_test"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    tmpfs:
+      - /var/lib/postgresql/data

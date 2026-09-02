@@ -37,17 +37,34 @@ import {
 	ItemGroup,
 	ItemTitle,
 } from "@SchedulesManager/ui/components/item";
+import {
+	Sheet,
+	SheetContent,
+	SheetDescription,
+	SheetFooter,
+	SheetHeader,
+	SheetTitle,
+} from "@SchedulesManager/ui/components/sheet";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CalendarDaysIcon, EyeIcon, TimerIcon } from "lucide-react";
+import {
+	ArrowLeftRightIcon,
+	CalendarDaysIcon,
+	CheckIcon,
+	EyeIcon,
+	TimerIcon,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { ConfirmAction } from "@/components/confirm-action";
 import {
 	useAcknowledge,
 	useClockIn,
 	useClockOut,
+	useDayRoster,
 	useMySchedule,
+	useProposeSwap,
 	useRequestRelease,
 	useRespondToAcceptance,
 } from "@/lib/queries";
@@ -75,6 +92,7 @@ function WorkerHome() {
 	const clockOut = useClockOut();
 	const [confirmingIn, setConfirmingIn] = useState(false);
 	const [confirmingOut, setConfirmingOut] = useState(false);
+	const [swapShift, setSwapShift] = useState<WorkerShift | null>(null);
 	const [nowMs, setNowMs] = useState(() => Date.now());
 
 	const currentWeek = schedule.data?.currentWeek ?? null;
@@ -82,6 +100,8 @@ function WorkerHome() {
 	const nextShift = schedule.data?.nextShift ?? null;
 	const entry = nextShift?.timeEntry ?? null;
 	const onClock = entry !== null && entry.clockedOutAt === null;
+	const roster = useDayRoster(workplace?.id, swapShift?.date);
+	const proposeSwap = useProposeSwap();
 
 	useEffect(() => {
 		if (!onClock) return;
@@ -364,11 +384,14 @@ function WorkerHome() {
 											) : null}
 											Accept shift
 										</Button>
-										<Button
-											size="sm"
-											variant="outline"
+										<ConfirmAction
+											trigger="Decline"
 											disabled={respond.isPending}
-											onClick={() =>
+											title="Decline this shift change?"
+											description="Your manager will see that you declined this late material change."
+											confirmLabel="Decline shift"
+											destructive
+											onConfirm={() =>
 												respond.mutate(
 													{
 														acceptanceId: acceptance.id,
@@ -380,9 +403,7 @@ function WorkerHome() {
 													},
 												)
 											}
-										>
-											Decline
-										</Button>
+										/>
 									</ItemActions>
 								</Item>
 							))}
@@ -472,11 +493,26 @@ function WorkerHome() {
 												<Button
 													size="sm"
 													variant="outline"
+													disabled={new Date(shift.startsAt).getTime() <= nowMs}
+													onClick={() => setSwapShift(shift)}
+												>
+													<ArrowLeftRightIcon data-icon="inline-start" />
+													Propose swap
+												</Button>
+												<ConfirmAction
+													trigger={
+														shift.releaseStatus === "pending"
+															? "Release pending"
+															: "Request release"
+													}
 													disabled={
 														release.isPending ||
 														shift.releaseStatus === "pending"
 													}
-													onClick={() =>
+													title="Release this shift?"
+													description="Your manager must approve the release. You remain responsible for the shift until then."
+													confirmLabel="Request release"
+													onConfirm={() =>
 														release.mutate(shift.id, {
 															onSuccess: () =>
 																toast.success(
@@ -486,11 +522,7 @@ function WorkerHome() {
 																toast.error((error as Error).message),
 														})
 													}
-												>
-													{shift.releaseStatus === "pending"
-														? "Release pending"
-														: "Request release"}
-												</Button>
+												/>
 											</ItemActions>
 										</Item>
 									))}
@@ -506,6 +538,17 @@ function WorkerHome() {
 					</CardFooter>
 				</Card>
 			) : null}
+
+			<SwapSheet
+				key={swapShift?.id ?? "closed"}
+				shift={swapShift}
+				open={swapShift !== null}
+				onOpenChange={(open) => {
+					if (!open) setSwapShift(null);
+				}}
+				roster={roster}
+				proposeSwap={proposeSwap}
+			/>
 
 			{nextWeek && (nextWeek.shifts?.length ?? 0) > 0 ? (
 				<Card>
@@ -593,5 +636,145 @@ function WorkerHome() {
 				</Empty>
 			) : null}
 		</section>
+	);
+}
+
+type WorkerShift = NonNullable<
+	NonNullable<ReturnType<typeof useMySchedule>["data"]>["currentWeek"]
+>["shifts"][number];
+
+function SwapSheet({
+	shift,
+	open,
+	onOpenChange,
+	roster,
+	proposeSwap,
+}: {
+	shift: WorkerShift | null;
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	roster: ReturnType<typeof useDayRoster>;
+	proposeSwap: ReturnType<typeof useProposeSwap>;
+}) {
+	const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null);
+	const coworkers = (roster.data?.roster ?? []).filter(
+		(row) =>
+			!row.mine &&
+			row.employmentId !== null &&
+			new Date(row.startsAt).getTime() > Date.now(),
+	);
+	const selected = coworkers.find(
+		(row) => row.versionShiftId === selectedShiftId,
+	);
+
+	return (
+		<Sheet
+			open={open}
+			onOpenChange={(nextOpen) => {
+				if (!nextOpen) setSelectedShiftId(null);
+				onOpenChange(nextOpen);
+			}}
+		>
+			<SheetContent className="w-full sm:max-w-md">
+				<SheetHeader>
+					<SheetTitle>Propose a shift swap</SheetTitle>
+					<SheetDescription>
+						{shift
+							? `You give ${formatDay(shift.startsAt)}, ${formatShiftRange(
+									shift.startMinute,
+									shift.endMinute,
+									shift.overnight,
+								)} · ${shift.positionName}`
+							: "Choose a coworker's shift to exchange."}
+					</SheetDescription>
+				</SheetHeader>
+
+				<div
+					className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 pb-4"
+					role="radiogroup"
+					aria-label="Coworker shifts"
+				>
+					{roster.isLoading ? (
+						<div className="flex items-center gap-2 py-8 text-muted-foreground text-sm">
+							<Spinner /> Loading coworker shifts…
+						</div>
+					) : null}
+					{roster.isError ? (
+						<Alert variant="destructive">
+							<AlertTitle>Couldn’t load coworker shifts</AlertTitle>
+							<AlertDescription>
+								{(roster.error as Error).message}
+							</AlertDescription>
+						</Alert>
+					) : null}
+					{!roster.isLoading && !roster.isError && coworkers.length === 0 ? (
+						<p className="py-8 text-muted-foreground text-sm">
+							No coworkers have an eligible shift on this day.
+						</p>
+					) : null}
+					{coworkers.map((row) => {
+						const selected = selectedShiftId === row.versionShiftId;
+						return (
+							<label
+								key={row.versionShiftId}
+								className="flex min-h-16 w-full cursor-pointer items-center gap-3 rounded-xl border bg-card p-3 text-left transition-colors duration-150 hover:bg-accent has-focus-visible:ring-2 has-focus-visible:ring-ring data-[selected=true]:border-primary data-[selected=true]:bg-primary/5"
+								data-selected={selected}
+							>
+								<input
+									type="radio"
+									name="coworker-shift"
+									value={row.versionShiftId}
+									checked={selected}
+									onChange={() => setSelectedShiftId(row.versionShiftId)}
+									className="sr-only"
+								/>
+								<div className="min-w-0 flex-1">
+									<p className="font-medium text-sm">{row.workerName}</p>
+									<p className="text-muted-foreground text-xs">
+										Offers {formatClockTime(row.startsAt)}–
+										{formatClockTime(row.endsAt)} · {row.positionName}
+									</p>
+								</div>
+								{selected ? (
+									<CheckIcon className="size-4 text-primary" />
+								) : null}
+							</label>
+						);
+					})}
+				</div>
+
+				<SheetFooter>
+					<Button
+						disabled={
+							!shift || !selected?.employmentId || proposeSwap.isPending
+						}
+						onClick={() => {
+							if (!shift || !selected?.employmentId) return;
+							proposeSwap.mutate(
+								{
+									requesterShiftId: shift.id,
+									counterpartEmploymentId: selected.employmentId,
+									counterpartShiftId: selected.versionShiftId,
+								},
+								{
+									onSuccess: () => {
+										toast.success(`Swap proposed to ${selected.workerName}.`);
+										onOpenChange(false);
+									},
+									onError: (error) => toast.error((error as Error).message),
+								},
+							);
+						}}
+					>
+						{proposeSwap.isPending ? (
+							<Spinner data-icon="inline-start" />
+						) : (
+							<ArrowLeftRightIcon data-icon="inline-start" />
+						)}
+						Send swap proposal
+					</Button>
+				</SheetFooter>
+			</SheetContent>
+		</Sheet>
 	);
 }

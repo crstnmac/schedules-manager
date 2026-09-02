@@ -2,8 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
 	ActivityIndicator,
-	Modal,
 	Pressable,
+	ScrollView,
 	StyleSheet,
 	Text,
 	View,
@@ -11,6 +11,7 @@ import {
 
 import { PrimaryButton, SecondaryButton, useAppTheme } from "@/components/ui";
 import { api } from "@/lib/api";
+import { confirmAction } from "@/lib/confirm-action";
 import { positionColor } from "@/lib/position-color";
 import {
 	type DayRosterEntry,
@@ -22,7 +23,7 @@ import {
 	useRespondToSwap,
 } from "@/lib/queries";
 
-type WeekShift = PublishedWeek["shifts"][number];
+export type WeekShift = PublishedWeek["shifts"][number];
 
 function formatDay(iso: string): string {
 	return new Date(iso).toLocaleDateString(undefined, {
@@ -55,13 +56,13 @@ function formatRange(shift: {
 	return `${formatMinute(shift.startMinute)}–${shift.endMinute === 0 ? "12:00 AM" : formatMinute(shift.endMinute)}${shift.overnight ? " +1" : ""}`;
 }
 
-export function ShiftDetailSheet({
+export function ShiftDetailScreen({
 	shift,
 	workplaceId,
 	locationName,
 	onClose,
 }: {
-	shift: WeekShift | null;
+	shift: WeekShift;
 	workplaceId: string | undefined;
 	locationName: string | null;
 	onClose: () => void;
@@ -87,104 +88,105 @@ export function ShiftDetailSheet({
 	);
 
 	return (
-		<Modal
-			visible={shift !== null}
-			animationType="slide"
-			onRequestClose={onClose}
-			accessibilityLabel="Shift details"
-		>
-			<View style={[styles.screen, { backgroundColor: theme.background }]}>
-				<View style={styles.header}>
-					<Pressable
-						accessibilityRole="button"
-						accessibilityLabel="Close"
-						onPress={() => {
+		<View style={[styles.screen, { backgroundColor: theme.background }]}>
+			<View style={styles.header}>
+				<Pressable
+					accessibilityRole="button"
+					accessibilityLabel="Close"
+					onPress={() => {
+						setMode("info");
+						onClose();
+					}}
+					style={styles.closeButton}
+				>
+					<Text style={[styles.closeText, { color: theme.primary }]}>
+						Close
+					</Text>
+				</Pressable>
+			</View>
+
+			<ScrollView
+				style={styles.contentScroll}
+				contentContainerStyle={styles.content}
+				contentInsetAdjustmentBehavior="automatic"
+			>
+				<View style={styles.dayHeader}>
+					<View
+						style={[
+							styles.accentDot,
+							{ backgroundColor: positionColor(shift.positionName) },
+						]}
+					/>
+					<Text style={[styles.dayTitle, { color: theme.text }]}>
+						{formatDay(shift.startsAt)}
+					</Text>
+				</View>
+				<Text style={[styles.detailLine, { color: theme.muted }]}>
+					{formatRange(shift)} · {shift.positionName}
+				</Text>
+				<Text style={[styles.detailLine, { color: theme.muted }]}>
+					{locationName ?? "Location"}
+				</Text>
+				{shift.note ? (
+					<Text style={[styles.detailLine, { color: theme.muted }]}>
+						{shift.note}
+					</Text>
+				) : null}
+
+				{mode === "info" ? (
+					<>
+						<Text style={[styles.sectionTitle, { color: theme.muted }]}>
+							WHO ELSE IS WORKING
+						</Text>
+						{roster.isLoading ? (
+							<ActivityIndicator color={theme.primary} />
+						) : (
+							<View style={styles.rosterList}>
+								{(roster.data?.roster ?? []).map((row) => (
+									<RosterRow key={row.versionShiftId} row={row} />
+								))}
+								{(roster.data?.roster.length ?? 0) === 0 ? (
+									<Text style={[styles.rosterEmpty, { color: theme.muted }]}>
+										The published roster for this day isn’t available.
+									</Text>
+								) : null}
+							</View>
+						)}
+						<View style={styles.actions}>
+							<SecondaryButton
+								label="Propose swap"
+								onPress={() => setMode("swap")}
+								style={{ flex: 1 }}
+							/>
+							<SecondaryButton
+								label={release.isPending ? "Requesting…" : "Release shift"}
+								disabled={release.isPending}
+								onPress={() =>
+									confirmAction({
+										title: "Release this shift?",
+										message:
+											"Your Manager must approve the release. You remain responsible for the shift until then.",
+										confirmLabel: "Request release",
+										onConfirm: () => release.mutate(shift.id),
+									})
+								}
+								style={{ flex: 1 }}
+							/>
+						</View>
+					</>
+				) : (
+					<SwapProposer
+						shift={shift}
+						coworkers={coworkers}
+						onDone={() => {
 							setMode("info");
 							onClose();
 						}}
-						style={styles.closeButton}
-					>
-						<Text style={[styles.closeText, { color: theme.primary }]}>
-							Close
-						</Text>
-					</Pressable>
-				</View>
-
-				{shift ? (
-					<View style={styles.content}>
-						<View style={styles.dayHeader}>
-							<View
-								style={[
-									styles.accentDot,
-									{ backgroundColor: positionColor(shift.positionName) },
-								]}
-							/>
-							<Text style={[styles.dayTitle, { color: theme.text }]}>
-								{formatDay(shift.startsAt)}
-							</Text>
-						</View>
-						<Text style={[styles.detailLine, { color: theme.muted }]}>
-							{formatRange(shift)} · {shift.positionName}
-						</Text>
-						<Text style={[styles.detailLine, { color: theme.muted }]}>
-							{locationName ?? "Location"}
-						</Text>
-						{shift.note ? (
-							<Text style={[styles.detailLine, { color: theme.muted }]}>
-								{shift.note}
-							</Text>
-						) : null}
-
-						{mode === "info" ? (
-							<>
-								<Text style={[styles.sectionTitle, { color: theme.muted }]}>
-									WHO ELSE IS WORKING
-								</Text>
-								{roster.isLoading ? (
-									<ActivityIndicator color={theme.primary} />
-								) : (
-									<View style={styles.rosterList}>
-										{(roster.data?.roster ?? []).map((row) => (
-											<RosterRow key={row.versionShiftId} row={row} />
-										))}
-										{(roster.data?.roster.length ?? 0) === 0 ? (
-											<Text
-												style={[styles.rosterEmpty, { color: theme.muted }]}
-											>
-												The published roster for this day isn’t available.
-											</Text>
-										) : null}
-									</View>
-								)}
-								<View style={styles.actions}>
-									<SecondaryButton
-										label="Propose swap"
-										onPress={() => setMode("swap")}
-										style={{ flex: 1 }}
-									/>
-									<SecondaryButton
-										label={release.isPending ? "Requesting…" : "Release shift"}
-										disabled={release.isPending}
-										onPress={() => release.mutate(shift.id)}
-										style={{ flex: 1 }}
-									/>
-								</View>
-							</>
-						) : (
-							<SwapProposer
-								shift={shift}
-								coworkers={coworkers}
-								onDone={() => {
-									setMode("info");
-									onClose();
-								}}
-								onCancel={() => setMode("info")}
-							/>
-						)}
-					</View>
-				) : null}
-			</View>
-		</Modal>
+						onCancel={() => setMode("info")}
+					/>
+				)}
+			</ScrollView>
+		</View>
 	);
 }
 
@@ -361,7 +363,14 @@ export function SwapsCard({
 							label="Decline"
 							disabled={respond.isPending}
 							onPress={() =>
-								respond.mutate({ swapId: swap.id, decision: "decline" })
+								confirmAction({
+									title: "Decline this swap?",
+									message: "You will keep your current shift assignment.",
+									confirmLabel: "Decline swap",
+									destructive: true,
+									onConfirm: () =>
+										respond.mutate({ swapId: swap.id, decision: "decline" }),
+								})
 							}
 							style={{ flex: 1 }}
 						/>
@@ -369,7 +378,14 @@ export function SwapsCard({
 							label="Accept"
 							disabled={respond.isPending}
 							onPress={() =>
-								respond.mutate({ swapId: swap.id, decision: "accept" })
+								confirmAction({
+									title: "Accept this swap?",
+									message:
+										"If your Manager approves it, you will exchange these shift assignments.",
+									confirmLabel: "Accept swap",
+									onConfirm: () =>
+										respond.mutate({ swapId: swap.id, decision: "accept" }),
+								})
 							}
 							style={{ flex: 1 }}
 						/>
@@ -407,7 +423,8 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 8,
 	},
 	closeText: { fontSize: 15, fontWeight: "700" },
-	content: { flex: 1, padding: 20, gap: 10 },
+	contentScroll: { flex: 1 },
+	content: { flexGrow: 1, padding: 20, paddingBottom: 32, gap: 10 },
 	dayHeader: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -439,7 +456,7 @@ const styles = StyleSheet.create({
 	rosterName: { fontSize: 15, fontWeight: "600" },
 	rosterMeta: { fontSize: 13, lineHeight: 18 },
 	rosterEmpty: { fontSize: 14, lineHeight: 20 },
-	actions: { flexDirection: "row", gap: 10, marginTop: 18 },
+	actions: { gap: 10, marginTop: 18 },
 	swapHint: { fontSize: 13, lineHeight: 19 },
 	swapCard: {
 		borderWidth: 1.5,

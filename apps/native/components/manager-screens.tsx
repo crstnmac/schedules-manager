@@ -20,6 +20,7 @@ import {
 	useAppTheme,
 } from "@/components/ui";
 import { api } from "@/lib/api";
+import { confirmAction } from "@/lib/confirm-action";
 import {
 	useCurrentEmployment,
 	useManagerTimeOff,
@@ -420,7 +421,14 @@ export function ManagerRequests() {
 									label="Approve"
 									disabled={decide.isPending}
 									onPress={() =>
-										decide.mutate({ id: r.id, decision: "approved" })
+										confirmAction({
+											title: "Approve time off?",
+											message:
+												"This marks the request approved for scheduling.",
+											confirmLabel: "Approve",
+											onConfirm: () =>
+												decide.mutate({ id: r.id, decision: "approved" }),
+										})
 									}
 								/>
 							</View>
@@ -429,7 +437,14 @@ export function ManagerRequests() {
 									label="Decline"
 									disabled={decide.isPending}
 									onPress={() =>
-										decide.mutate({ id: r.id, decision: "declined" })
+										confirmAction({
+											title: "Decline time off?",
+											message: "This decision is visible to the worker.",
+											confirmLabel: "Decline",
+											destructive: true,
+											onConfirm: () =>
+												decide.mutate({ id: r.id, decision: "declined" }),
+										})
 									}
 								/>
 							</View>

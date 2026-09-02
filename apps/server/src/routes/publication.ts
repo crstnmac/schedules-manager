@@ -25,10 +25,16 @@ import {
 	weekStartDayFor,
 } from "../context";
 import { NotFoundError } from "../errors";
+import { withIdempotency } from "../idempotency";
+import { isWithinNoticeWindow } from "../notice-window";
 import { notifyEmployments, writeAudit } from "../notify";
 import { firstRow } from "../rows";
 import { weekStartOfDateKey, zonedDayInfo } from "../time";
 import { diffShiftSets } from "./changes";
+
+export type PublicationTransaction = Parameters<
+	Parameters<typeof db.transaction>[0]
+>[0];
 
 async function scheduleContext(scheduleId: string) {
 	const [row] = await db
@@ -77,6 +83,9 @@ async function accessibleLocationIds(
 export async function publishScheduleNow(
 	scheduleId: string,
 	publishedBy: string,
+	options?: {
+		beforePublish?: (tx: PublicationTransaction) => Promise<void>;
+	},
 ) {
 	const { schedule, location } = await scheduleContext(scheduleId);
 
@@ -89,6 +98,12 @@ export async function publishScheduleNow(
 	const now = Date.now();
 
 	const published = await db.transaction(async (tx) => {
+		await tx
+			.select({ id: schedules.id })
+			.from(schedules)
+			.where(eq(schedules.id, schedule.id))
+			.for("update");
+		await options?.beforePublish?.(tx);
 		const draftShifts = await tx
 			.select()
 			.from(shifts)
@@ -184,7 +199,7 @@ export async function publishScheduleNow(
 						(candidate) => candidate.id === change.draftShiftId,
 					);
 					return shift
-						? shift.startsAt.getTime() - now < noticeWindowHours * 3_600_000
+						? isWithinNoticeWindow(shift.startsAt, now, noticeWindowHours)
 						: false;
 				})(),
 		);
@@ -230,6 +245,43 @@ export async function publishScheduleNow(
 				)
 				.onConflictDoNothing();
 		}
+		const acceptanceEmploymentIds = [
+			...new Set(
+				acceptanceTargets
+					.map((change) => change.employmentId)
+					.filter((id): id is string => id !== null),
+			),
+		];
+
+		await writeAudit(
+			{
+				workplaceId: location.workplaceId,
+				actorProfileId: publishedBy,
+				action: "schedule.published",
+				entityType: "schedule_version",
+				entityId: version.id,
+				summary: `Published version ${version.versionNumber} for ${location.name}, week of ${schedule.weekStartDate}`,
+			},
+			tx,
+		);
+		await notifyEmployments(
+			workerIds,
+			{
+				kind: "schedule_published",
+				title: "Your schedule is ready",
+				body: `${location.name}: version ${version.versionNumber} for the week of ${schedule.weekStartDate} has been published.`,
+			},
+			tx,
+		);
+		await notifyEmployments(
+			acceptanceEmploymentIds,
+			{
+				kind: "late_change",
+				title: "A late change needs your acceptance",
+				body: "A material change was published inside the notice window. Open your schedule to accept or decline the shift.",
+			},
+			tx,
+		);
 
 		return {
 			version: {
@@ -245,34 +297,9 @@ export async function publishScheduleNow(
 			},
 			notices: {
 				workerIds,
-				acceptanceEmploymentIds: [
-					...new Set(
-						acceptanceTargets
-							.map((change) => change.employmentId)
-							.filter((id): id is string => id !== null),
-					),
-				],
+				acceptanceEmploymentIds,
 			},
 		};
-	});
-
-	await writeAudit({
-		workplaceId: location.workplaceId,
-		actorProfileId: publishedBy,
-		action: "schedule.published",
-		entityType: "schedule_version",
-		entityId: published.version.id,
-		summary: `Published version ${published.version.versionNumber} for ${location.name}, week of ${schedule.weekStartDate}`,
-	});
-	await notifyEmployments(published.notices.workerIds, {
-		kind: "schedule_published",
-		title: "Your schedule is ready",
-		body: `${location.name}: version ${published.version.versionNumber} for the week of ${schedule.weekStartDate} has been published.`,
-	});
-	await notifyEmployments(published.notices.acceptanceEmploymentIds, {
-		kind: "late_change",
-		title: "A late change needs your acceptance",
-		body: "A material change was published inside the notice window. Open your schedule to accept or decline the shift.",
 	});
 
 	return {
@@ -295,6 +322,46 @@ async function markDelivered(versionIds: string[], employmentId: string) {
 		);
 }
 
+async function acknowledgeDelivery(profileId: string, versionId: string) {
+	const membership = await listActiveEmployments(profileId);
+	const employmentIds = membership.map((row) => row.employment.id);
+	if (employmentIds.length === 0) {
+		throw new NotFoundError("Delivery not found");
+	}
+
+	const [delivery] = await db
+		.select()
+		.from(workerDeliveries)
+		.where(
+			and(
+				eq(workerDeliveries.versionId, versionId),
+				inArray(workerDeliveries.employmentId, employmentIds),
+			),
+		)
+		.limit(1);
+
+	if (!delivery) throw new NotFoundError("Delivery not found");
+	if (delivery.status === "acknowledged") {
+		return {
+			status: delivery.status,
+			acknowledgedAt: delivery.acknowledgedAt?.toISOString() ?? null,
+		};
+	}
+
+	const updated = firstRow(
+		await db
+			.update(workerDeliveries)
+			.set({ status: "acknowledged", acknowledgedAt: new Date() })
+			.where(eq(workerDeliveries.id, delivery.id))
+			.returning(),
+	);
+
+	return {
+		status: updated.status,
+		acknowledgedAt: updated.acknowledgedAt?.toISOString() ?? null,
+	};
+}
+
 export const publicationRoutes = new Elysia({
 	prefix: "/v1",
 	tags: ["Publication"],
@@ -306,10 +373,21 @@ export const publicationRoutes = new Elysia({
 			const { schedule, location } = await scheduleContext(params.scheduleId);
 			await requireManager(profile.id, location.workplaceId);
 
-			return publishScheduleNow(schedule.id, profile.id);
+			return withIdempotency({
+				actorProfileId: profile.id,
+				scope: `schedule.publish:${schedule.id}`,
+				key: headers["idempotency-key"],
+				request: { scheduleId: schedule.id },
+				execute: () => publishScheduleNow(schedule.id, profile.id),
+			});
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({
+				authorization: t.String(),
+				"idempotency-key": t.Optional(
+					t.String({ minLength: 8, maxLength: 200 }),
+				),
+			}),
 			params: t.Object({ scheduleId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -843,46 +921,21 @@ export const publicationRoutes = new Elysia({
 		"/my/deliveries/:versionId/acknowledge",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers.authorization);
-			const membership = await listActiveEmployments(profile.id);
-			const employmentIds = membership.map((row) => row.employment.id);
-			if (employmentIds.length === 0) {
-				throw new NotFoundError("Delivery not found");
-			}
-
-			const [delivery] = await db
-				.select()
-				.from(workerDeliveries)
-				.where(
-					and(
-						eq(workerDeliveries.versionId, params.versionId),
-						inArray(workerDeliveries.employmentId, employmentIds),
-					),
-				)
-				.limit(1);
-
-			if (!delivery) throw new NotFoundError("Delivery not found");
-			if (delivery.status === "acknowledged") {
-				return {
-					status: delivery.status,
-					acknowledgedAt: delivery.acknowledgedAt?.toISOString() ?? null,
-				};
-			}
-
-			const updated = firstRow(
-				await db
-					.update(workerDeliveries)
-					.set({ status: "acknowledged", acknowledgedAt: new Date() })
-					.where(eq(workerDeliveries.id, delivery.id))
-					.returning(),
-			);
-
-			return {
-				status: updated.status,
-				acknowledgedAt: updated.acknowledgedAt?.toISOString() ?? null,
-			};
+			return withIdempotency({
+				actorProfileId: profile.id,
+				scope: `delivery.acknowledge:${params.versionId}`,
+				key: headers["idempotency-key"],
+				request: { versionId: params.versionId },
+				execute: () => acknowledgeDelivery(profile.id, params.versionId),
+			});
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({
+				authorization: t.String(),
+				"idempotency-key": t.Optional(
+					t.String({ minLength: 8, maxLength: 200 }),
+				),
+			}),
 			params: t.Object({ versionId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:

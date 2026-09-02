@@ -505,6 +505,48 @@ export function useMySchedule(workplaceId: string | undefined) {
 	});
 }
 
+export interface DayRosterEntry {
+	versionShiftId: string;
+	employmentId: string | null;
+	workerName: string;
+	positionName: string;
+	startsAt: string;
+	endsAt: string;
+	mine: boolean;
+}
+
+export function useDayRoster(
+	workplaceId: string | undefined,
+	date: string | undefined,
+) {
+	return useQuery({
+		queryKey: ["day-roster", workplaceId, date],
+		queryFn: () =>
+			api<{ roster: DayRosterEntry[] }>(
+				`/v1/workplaces/${workplaceId}/my/day-roster?date=${date}`,
+			),
+		enabled: Boolean(workplaceId && date),
+	});
+}
+
+export function useProposeSwap() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			requesterShiftId: string;
+			counterpartEmploymentId: string;
+			counterpartShiftId: string;
+		}) =>
+			api<{ swap: SwapDetailDto }>("/v1/my/swaps", {
+				method: "POST",
+				body: input,
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["swaps"] });
+		},
+	});
+}
+
 export function useAcknowledge() {
 	const queryClient = useQueryClient();
 	return useMutation({

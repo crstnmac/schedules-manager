@@ -18,6 +18,8 @@ import {
 	requireSession,
 } from "../context";
 import { NotFoundError } from "../errors";
+import { withIdempotency } from "../idempotency";
+import { isWithinNoticeWindow } from "../notice-window";
 import { managerEmploymentIds, notifyEmployments } from "../notify";
 import { firstRow } from "../rows";
 
@@ -196,12 +198,11 @@ async function scheduleContext(scheduleId: string) {
 }
 
 async function respondToAcceptance(
-	authorization: string | undefined,
+	profileId: string,
 	acceptanceId: string,
 	decision: "accepted" | "declined",
 ) {
-	const { profile } = await requireSession(authorization);
-	const memberships = await listActiveEmployments(profile.id);
+	const memberships = await listActiveEmployments(profileId);
 	const employmentIds = memberships.map((row) => row.employment.id);
 
 	const placeholder = "00000000-0000-0000-0000-000000000000";
@@ -284,7 +285,6 @@ export const changesRoutes = new Elysia({
 			);
 
 			const now = Date.now();
-			const noticeMs = workplace.noticeWindowHours * 3_600_000;
 			const draftById = new Map(draftRows.map((shift) => [shift.id, shift]));
 			const wouldRequireAcceptance = changes.filter(
 				(change) =>
@@ -292,7 +292,13 @@ export const changesRoutes = new Elysia({
 					change.draftShiftId !== undefined &&
 					(() => {
 						const shift = draftById.get(change.draftShiftId ?? "");
-						return shift ? shift.startsAt.getTime() - now < noticeMs : false;
+						return shift
+							? isWithinNoticeWindow(
+									shift.startsAt,
+									now,
+									workplace.noticeWindowHours,
+								)
+							: false;
 					})(),
 			).length;
 
@@ -387,14 +393,23 @@ export const changesRoutes = new Elysia({
 	.post(
 		"/my/shift-acceptances/:acceptanceId/accept",
 		async ({ headers, params }) => {
-			return respondToAcceptance(
-				headers.authorization,
-				params.acceptanceId,
-				"accepted",
-			);
+			const { profile } = await requireSession(headers.authorization);
+			return withIdempotency({
+				actorProfileId: profile.id,
+				scope: `shift-acceptance.respond:${params.acceptanceId}`,
+				key: headers["idempotency-key"],
+				request: { decision: "accepted" },
+				execute: () =>
+					respondToAcceptance(profile.id, params.acceptanceId, "accepted"),
+			});
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({
+				authorization: t.String(),
+				"idempotency-key": t.Optional(
+					t.String({ minLength: 8, maxLength: 200 }),
+				),
+			}),
 			params: t.Object({ acceptanceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Accept a materially changed or newly added Shift",
@@ -405,14 +420,23 @@ export const changesRoutes = new Elysia({
 	.post(
 		"/my/shift-acceptances/:acceptanceId/decline",
 		async ({ headers, params }) => {
-			return respondToAcceptance(
-				headers.authorization,
-				params.acceptanceId,
-				"declined",
-			);
+			const { profile } = await requireSession(headers.authorization);
+			return withIdempotency({
+				actorProfileId: profile.id,
+				scope: `shift-acceptance.respond:${params.acceptanceId}`,
+				key: headers["idempotency-key"],
+				request: { decision: "declined" },
+				execute: () =>
+					respondToAcceptance(profile.id, params.acceptanceId, "declined"),
+			});
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({
+				authorization: t.String(),
+				"idempotency-key": t.Optional(
+					t.String({ minLength: 8, maxLength: 200 }),
+				),
+			}),
 			params: t.Object({ acceptanceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Decline a materially changed Shift (Manager can see this)",

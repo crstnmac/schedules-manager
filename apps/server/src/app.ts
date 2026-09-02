@@ -13,6 +13,7 @@ import {
 import { changesRoutes } from "./routes/changes";
 import { constraintsRoutes } from "./routes/constraints";
 import { coverageRoutes } from "./routes/coverage";
+import { emailDeliveryRoutes } from "./routes/email-delivery";
 import { invitationsRoutes } from "./routes/invitations";
 import { locationsRoutes } from "./routes/locations";
 import { meRoutes } from "./routes/me";
@@ -119,6 +120,7 @@ export function createApp() {
 		.use(publicationRoutes)
 		.use(changesRoutes)
 		.use(coverageRoutes)
+		.use(emailDeliveryRoutes)
 		.use(notificationsRoutes)
 		.use(timeEntryRoutes)
 		.use(swapRoutes)
