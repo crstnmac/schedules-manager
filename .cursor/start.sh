@@ -77,4 +77,25 @@ log "wrote local .env files"
 ( cd packages/db && bun run drizzle-kit push --force )
 log "database schema applied"
 
+# 6. Launch the API and web dev servers in the background (idempotent).
+if ! curl -sf http://localhost:3000/health >/dev/null 2>&1; then
+  log "starting API dev server (:3000)"
+  nohup bash -lc "cd '$repo_root' && export PATH=\"\$HOME/.bun/bin:\$PATH\" && bun run dev:server" \
+    >/tmp/api-server.log 2>&1 &
+  disown || true
+fi
+if ! curl -sf http://localhost:3001/ >/dev/null 2>&1; then
+  log "starting web dev server (:3001)"
+  nohup bash -lc "cd '$repo_root' && export PATH=\"\$HOME/.bun/bin:\$PATH\" && bun run dev:web" \
+    >/tmp/web-dev.log 2>&1 &
+  disown || true
+fi
+
+# Give the servers a moment and report readiness (non-fatal).
+for _ in $(seq 1 30); do
+  curl -sf http://localhost:3000/ready >/dev/null 2>&1 && break
+  sleep 1
+done
+curl -sf http://localhost:3000/ready >/dev/null 2>&1 && log "API is ready (/ready)" || log "NOTE: API not confirmed ready yet; see /tmp/api-server.log"
+
 log "ready — API on :3000, web on :3001, Supabase Studio on :54323"
