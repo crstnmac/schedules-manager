@@ -19,13 +19,11 @@ import {
 	timeOffRequests,
 	unavailability,
 	versionShifts,
-	workplaces,
 	workPreferences,
 } from "@SchedulesManager/db";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import {
-	requireLocationAccess,
 	requireManager,
 	requireSession,
 	weekStartDayFor,
@@ -34,12 +32,18 @@ import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { laborCents, laborPercent } from "../labor";
 import { firstRow } from "../rows";
 import {
+	clopeningConflicts,
+	consecutiveWorkDayConflicts,
+	isLateArrival,
+} from "../schedule-conflicts";
+import {
 	assertWeekStartDay,
 	shiftDays,
 	wallToInstant,
 	weekStartOfDateKey,
 	zonedDayInfo,
 } from "../time";
+import { loadWorkplace } from "../workplace-policy";
 import { assertEligible } from "./coverage";
 
 type ShiftRow = Shift;
@@ -50,7 +54,9 @@ export interface Conflict {
 		| "unavailability"
 		| "time_off"
 		| "position_access"
-		| "location_access";
+		| "location_access"
+		| "clopening"
+		| "consecutive_days";
 	message: string;
 }
 
@@ -171,6 +177,35 @@ async function loadWorkforce(workplaceId: string) {
 	};
 }
 
+async function loadNearbyShifts(
+	workplaceId: string,
+	employmentIds: string[],
+	weekStart: string,
+	timeZone: string,
+) {
+	if (employmentIds.length === 0) return [];
+	const from = wallToInstant(shiftDays(weekStart, -14), 0, timeZone);
+	const to = wallToInstant(shiftDays(weekStart, 21), 0, timeZone);
+	return db
+		.select({
+			id: shifts.id,
+			employmentId: shifts.employmentId,
+			startsAt: shifts.startsAt,
+			endsAt: shifts.endsAt,
+		})
+		.from(shifts)
+		.innerJoin(schedules, eq(schedules.id, shifts.scheduleId))
+		.innerJoin(locations, eq(locations.id, schedules.locationId))
+		.where(
+			and(
+				eq(locations.workplaceId, workplaceId),
+				inArray(shifts.employmentId, employmentIds),
+				gte(shifts.startsAt, from),
+				lte(shifts.startsAt, to),
+			),
+		);
+}
+
 function shiftHitsUnavailability(
 	shiftStart: Date,
 	shiftEnd: Date,
@@ -182,11 +217,13 @@ function shiftHitsUnavailability(
 		specificDate: string | null;
 		startMinute: number;
 		endMinute: number;
+		status?: string;
 	}[],
 	timeZone: string,
 ): boolean {
 	for (const window of windows) {
 		if (window.employmentId !== employmentId) continue;
+		if (window.status && window.status !== "approved") continue;
 		let blocked = false;
 		if (window.kind === "recurring" && window.weekday !== null) {
 			blocked = recurringWindowOverlaps(
@@ -279,6 +316,8 @@ function computeConflicts(
 	location: Location,
 	shiftRows: ShiftRow[],
 	workforce: Awaited<ReturnType<typeof loadWorkforce>>,
+	nearbyShifts: { id: string; employmentId: string | null; startsAt: Date; endsAt: Date }[],
+	policy: { clopeningMinutes: number; maxConsecutiveWorkDays: number },
 ): Conflict[] {
 	const conflicts: Conflict[] = [];
 	const tz = location.timezone;
@@ -361,6 +400,34 @@ function computeConflicts(
 		}
 	}
 
+	const weekShiftIds = new Set(shiftRows.map((shift) => shift.id));
+	const merged = new Map<
+		string,
+		{ id: string; employmentId: string | null; startsAt: Date; endsAt: Date }
+	>();
+	for (const shift of nearbyShifts) merged.set(shift.id, shift);
+	for (const shift of shiftRows) {
+		merged.set(shift.id, {
+			id: shift.id,
+			employmentId: shift.employmentId,
+			startsAt: shift.startsAt,
+			endsAt: shift.endsAt,
+		});
+	}
+	conflicts.push(
+		...clopeningConflicts(
+			[...merged.values()],
+			policy.clopeningMinutes,
+			weekShiftIds,
+		),
+		...consecutiveWorkDayConflicts(
+			[...merged.values()],
+			policy.maxConsecutiveWorkDays,
+			tz,
+			weekShiftIds,
+		),
+	);
+
 	return conflicts;
 }
 
@@ -395,17 +462,30 @@ function serializeShift(
 async function loadSchedulePayload(location: Location, weekStart: string) {
 	const schedule = await getOrCreateSchedule(location.id, weekStart);
 
-	const [shiftRows, positionRows, workforce] = await Promise.all([
+	const [shiftRows, positionRows, workforce, workplace] = await Promise.all([
 		db.select().from(shifts).where(eq(shifts.scheduleId, schedule.id)),
 		db
 			.select()
 			.from(positions)
 			.where(eq(positions.workplaceId, location.workplaceId)),
 		loadWorkforce(location.workplaceId),
+		loadWorkplace(location.workplaceId),
 	]);
 
-	const conflicts = computeConflicts(location, shiftRows, workforce);
-	const timeclock = await timeclockSummary(schedule.id);
+	const nearbyShifts = await loadNearbyShifts(
+		location.workplaceId,
+		workforce.employmentRows.map((row) => row.employment.id),
+		weekStart,
+		location.timezone,
+	);
+	const conflicts = computeConflicts(location, shiftRows, workforce, nearbyShifts, {
+		clopeningMinutes: workplace.clopeningMinutes,
+		maxConsecutiveWorkDays: workplace.maxConsecutiveWorkDays,
+	});
+	const timeclock = await timeclockSummary(
+		schedule.id,
+		workplace.lateArrivalGraceMinutes,
+	);
 
 	const workerInfoById = new Map(
 		workforce.employmentRows.map((row) => [
@@ -488,6 +568,7 @@ async function loadSchedulePayload(location: Location, weekStart: string) {
 			name: string;
 			minutes: number;
 			byPosition: Map<string, number>;
+			byDate: Map<string, number>;
 		}
 	>();
 	for (const shift of shiftRows) {
@@ -499,6 +580,7 @@ async function loadSchedulePayload(location: Location, weekStart: string) {
 			name: info.name,
 			minutes: 0,
 			byPosition: new Map<string, number>(),
+			byDate: new Map<string, number>(),
 		};
 		const minutes = Math.round(
 			(shift.endsAt.getTime() - shift.startsAt.getTime()) / 60_000,
@@ -508,29 +590,31 @@ async function loadSchedulePayload(location: Location, weekStart: string) {
 			shift.positionId,
 			(entry.byPosition.get(shift.positionId) ?? 0) + minutes,
 		);
+		const dateKey = zonedDayInfo(shift.startsAt, location.timezone).dateKey;
+		entry.byDate.set(dateKey, (entry.byDate.get(dateKey) ?? 0) + minutes);
 		hours.set(shift.employmentId, entry);
 	}
 
-	const [workplace] = await db
-		.select()
-		.from(workplaces)
-		.where(eq(workplaces.id, location.workplaceId))
-		.limit(1);
-	const overtimeWeeklyMinutes = workplace?.overtimeWeeklyMinutes ?? 2400;
+	const overtimeWeeklyMinutes = workplace.overtimeWeeklyMinutes;
+	const overtimeDailyMinutes = workplace.overtimeDailyMinutes;
 	let scheduledCents = 0;
 	let overtimeCents = 0;
-	for (const entry of hours.values()) {
-		const wage =
-			workforce.employmentRows.find(
-				(row) => row.employment.id === entry.employmentId,
-			)?.employment.hourlyWageCents ?? 0;
-		const cost = laborCents({
-			minutes: entry.minutes,
-			hourlyWageCents: wage ?? 0,
-			overtimeWeeklyMinutes,
-		});
-		scheduledCents += cost.totalCents;
-		overtimeCents += cost.overtimeCents;
+	if (workplace.managersCanViewLaborCost) {
+		for (const entry of hours.values()) {
+			const wage =
+				workforce.employmentRows.find(
+					(row) => row.employment.id === entry.employmentId,
+				)?.employment.hourlyWageCents ?? 0;
+			const cost = laborCents({
+				minutes: entry.minutes,
+				hourlyWageCents: wage ?? 0,
+				overtimeWeeklyMinutes,
+				overtimeDailyMinutes,
+				dailyMinutes: [...entry.byDate.values()],
+			});
+			scheduledCents += cost.totalCents;
+			overtimeCents += cost.overtimeCents;
+		}
 	}
 	const weekDates = Array.from({ length: 7 }, (_, index) =>
 		shiftDays(weekStart, index),
@@ -559,6 +643,8 @@ async function loadSchedulePayload(location: Location, weekStart: string) {
 			weekStartDate: schedule.weekStartDate,
 			timezone: location.timezone,
 			weekStartDay: await weekStartDayFor(location.workplaceId),
+			openMinute: location.openMinute,
+			closeMinute: location.closeMinute,
 		},
 		publication,
 		timeclock,
@@ -566,7 +652,11 @@ async function loadSchedulePayload(location: Location, weekStart: string) {
 			scheduledCents,
 			overtimeCents,
 			salesCents,
-			laborPercent: laborPercent(scheduledCents, salesCents),
+			laborPercent: workplace.managersCanViewLaborCost
+				? laborPercent(scheduledCents, salesCents)
+				: null,
+			laborCostPercentGoal: workplace.laborCostPercentGoal,
+			hidden: !workplace.managersCanViewLaborCost,
 			byDate: salesByDate,
 		},
 		shifts: serialized.map((shift) => ({
@@ -585,7 +675,9 @@ async function loadSchedulePayload(location: Location, weekStart: string) {
 				name: profile.fullName ?? profile.email,
 				email: profile.email,
 				kind: employment.kind,
-				hourlyWageCents: employment.hourlyWageCents,
+				hourlyWageCents: workplace.managersCanViewLaborCost
+					? employment.hourlyWageCents
+					: null,
 				groupIds: groupsByEmployment.get(employment.id) ?? [],
 				positionIds: workforce.positionScope.get(employment.id) ?? [],
 				preference: workforce.preferenceByEmployment.get(employment.id) ?? null,
@@ -598,6 +690,7 @@ async function loadSchedulePayload(location: Location, weekStart: string) {
 						startMinute: window.startMinute,
 						endMinute: window.endMinute,
 						note: window.note,
+						status: window.status,
 					})),
 				timeOff: workforce.timeOffRows
 					.filter((request) => request.employmentId === employment.id)
@@ -727,7 +820,7 @@ async function assertAssignmentValid(
 	}
 }
 
-async function timeclockSummary(scheduleId: string) {
+async function timeclockSummary(scheduleId: string, lateArrivalGraceMinutes: number) {
 	const [latest] = await db
 		.select()
 		.from(scheduleVersions)
@@ -740,6 +833,7 @@ async function timeclockSummary(scheduleId: string) {
 		.select({
 			shiftId: versionShifts.shiftId,
 			versionShiftId: versionShifts.id,
+			startsAt: versionShifts.startsAt,
 			entryId: timeEntries.id,
 			clockedInAt: timeEntries.clockedInAt,
 			clockedOutAt: timeEntries.clockedOutAt,
@@ -758,6 +852,15 @@ async function timeclockSummary(scheduleId: string) {
 			(row): row is typeof row & { shiftId: string } => row.shiftId !== null,
 		)
 		.map((row) => {
+			const late =
+				row.clockedInAt != null &&
+				isLateArrival(
+					row.clockedInAt,
+					row.startsAt,
+					lateArrivalGraceMinutes,
+				);
+			const attendance =
+				row.attendanceKind ?? (late ? ("late" as const) : null);
 			if (!row.entryId || !row.clockedInAt) {
 				return {
 					shiftId: row.shiftId,
@@ -766,7 +869,8 @@ async function timeclockSummary(scheduleId: string) {
 					clockedInAt: null as string | null,
 					clockedOutAt: null as string | null,
 					workedMinutes: null as number | null,
-					attendance: row.attendanceKind,
+					attendance,
+					late,
 				};
 			}
 			const workedMinutes = Math.max(
@@ -784,7 +888,8 @@ async function timeclockSummary(scheduleId: string) {
 				clockedInAt: row.clockedInAt.toISOString(),
 				clockedOutAt: row.clockedOutAt?.toISOString() ?? null,
 				workedMinutes,
-				attendance: row.attendanceKind,
+				attendance,
+				late,
 			};
 		});
 }
@@ -863,16 +968,52 @@ async function loadCalendarPayload(location: Location, monthStart: string) {
 	}
 
 	const scheduleIds = existing.map((row) => row.id);
-	const [shiftRows, positionRows, workforce] = await Promise.all([
+	const [shiftRows, positionRows, workforce, workplace] = await Promise.all([
 		db.select().from(shifts).where(inArray(shifts.scheduleId, scheduleIds)),
 		db
 			.select()
 			.from(positions)
 			.where(eq(positions.workplaceId, location.workplaceId)),
 		loadWorkforce(location.workplaceId),
+		loadWorkplace(location.workplaceId),
 	]);
 
-	const conflicts = computeConflicts(location, shiftRows, workforce);
+	const firstWeek = weekStarts[0] ?? monthStart;
+	const lastWeek = weekStarts[weekStarts.length - 1] ?? monthStart;
+	const employmentIds = workforce.employmentRows.map(
+		(row) => row.employment.id,
+	);
+	const [nearbyEarly, nearbyLate] = await Promise.all([
+		loadNearbyShifts(
+			location.workplaceId,
+			employmentIds,
+			firstWeek,
+			location.timezone,
+		),
+		firstWeek === lastWeek
+			? Promise.resolve([])
+			: loadNearbyShifts(
+					location.workplaceId,
+					employmentIds,
+					lastWeek,
+					location.timezone,
+				),
+	]);
+	const nearbyById = new Map(
+		[...nearbyEarly, ...nearbyLate].map((shift) => [shift.id, shift]),
+	);
+	const nearbyShifts = [...nearbyById.values()];
+
+	const conflicts = computeConflicts(
+		location,
+		shiftRows,
+		workforce,
+		nearbyShifts,
+		{
+			clopeningMinutes: workplace.clopeningMinutes,
+			maxConsecutiveWorkDays: workplace.maxConsecutiveWorkDays,
+		},
+	);
 	const workerInfoById = new Map(
 		workforce.employmentRows.map((row) => [
 			row.employment.id,
@@ -931,7 +1072,11 @@ async function loadCalendarPayload(location: Location, monthStart: string) {
 	}
 
 	const timeclock = (
-		await Promise.all(scheduleIds.map((id) => timeclockSummary(id)))
+		await Promise.all(
+			scheduleIds.map((id) =>
+				timeclockSummary(id, workplace.lateArrivalGraceMinutes),
+			),
+		)
 	).flat();
 
 	return {
@@ -953,14 +1098,13 @@ export const schedulesRoutes = new Elysia({
 		"/locations/:locationId/calendar/:monthStart",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers.authorization);
-			await requireLocationAccess(profile.id, params.locationId);
-
 			const [location] = await db
 				.select()
 				.from(locations)
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
+			await requireManager(profile.id, location.workplaceId);
 
 			return loadCalendarPayload(location, params.monthStart);
 		},
@@ -981,14 +1125,13 @@ export const schedulesRoutes = new Elysia({
 		"/locations/:locationId/schedules/:weekStart",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers.authorization);
-			await requireLocationAccess(profile.id, params.locationId);
-
 			const [location] = await db
 				.select()
 				.from(locations)
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
+			await requireManager(profile.id, location.workplaceId);
 			assertWeekStartDay(
 				params.weekStart,
 				await weekStartDayFor(location.workplaceId),

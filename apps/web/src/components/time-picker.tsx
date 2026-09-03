@@ -7,24 +7,9 @@ import {
 	SelectValue,
 } from "@SchedulesManager/ui/components/select";
 
-import { formatMinute } from "@/lib/time";
+import { useDisplayPrefs } from "@/lib/use-display-prefs";
 
 const STEP_MINUTES = 30;
-
-function timeItems(overnightAfterMinute?: number) {
-	const items = Array.from({ length: (24 * 60) / STEP_MINUTES }, (_, index) => {
-		const minute = index * STEP_MINUTES;
-		return {
-			label: `${formatMinute(minute)}${
-				overnightAfterMinute != null && minute <= overnightAfterMinute
-					? " +1"
-					: ""
-			}`,
-			value: String(minute),
-		};
-	});
-	return items;
-}
 
 export function TimePicker({
 	id,
@@ -37,7 +22,18 @@ export function TimePicker({
 	onValueChange: (minute: number) => void;
 	overnightAfterMinute?: number;
 }) {
-	const items = timeItems(overnightAfterMinute);
+	const { formatMinute } = useDisplayPrefs();
+	const items = Array.from({ length: (24 * 60) / STEP_MINUTES }, (_, index) => {
+		const minute = index * STEP_MINUTES;
+		return {
+			label: `${formatMinute(minute)}${
+				overnightAfterMinute != null && minute <= overnightAfterMinute
+					? " +1"
+					: ""
+			}`,
+			value: String(minute),
+		};
+	});
 	const selected = String(value);
 	const options = items.some((item) => item.value === selected)
 		? items

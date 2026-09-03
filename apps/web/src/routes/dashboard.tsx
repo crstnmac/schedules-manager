@@ -34,6 +34,7 @@ import {
 	useRouterState,
 } from "@tanstack/react-router";
 import {
+	AlarmClockIcon,
 	BellIcon,
 	CalendarDaysIcon,
 	ChevronsUpDownIcon,
@@ -44,10 +45,11 @@ import {
 	MegaphoneIcon,
 	MessageSquareIcon,
 	Settings2Icon,
+	TimerIcon,
 	UsersIcon,
 	WorkflowIcon,
-	TimerIcon,
 } from "lucide-react";
+
 import { useEffect } from "react";
 import { toast } from "sonner";
 
@@ -58,6 +60,7 @@ import { settingsSectionLabel } from "@/components/settings/nav";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
 import { useMe, useNotifications } from "@/lib/queries";
+import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
 
 export const Route = createFileRoute("/dashboard")({
@@ -71,6 +74,7 @@ const navigation = [
 		icon: LayoutDashboardIcon,
 		exact: true,
 	},
+	{ to: "/dashboard/clock", label: "Clock", icon: AlarmClockIcon },
 	{ to: "/dashboard/schedule", label: "Schedule", icon: CalendarDaysIcon },
 	{ to: "/dashboard/roster", label: "Roster", icon: ClipboardListIcon },
 	{ to: "/dashboard/workers", label: "Workers", icon: UsersIcon },
@@ -78,7 +82,11 @@ const navigation = [
 	{ to: "/dashboard/timesheets", label: "Timesheets", icon: TimerIcon },
 	{ to: "/dashboard/coverage", label: "Coverage", icon: WorkflowIcon },
 	{ to: "/dashboard/messages", label: "Messages", icon: MessageSquareIcon },
-	{ to: "/dashboard/announcements", label: "Announcements", icon: MegaphoneIcon },
+	{
+		to: "/dashboard/announcements",
+		label: "Announcements",
+		icon: MegaphoneIcon,
+	},
 	{ to: "/dashboard/reports", label: "Reports", icon: Settings2Icon },
 	{ to: "/dashboard/activity", label: "Activity", icon: BellIcon },
 	{
@@ -93,30 +101,29 @@ function DashboardLayout() {
 	const { isSigningOut, user, signOut } = useAuth();
 	const { setTheme } = useTheme();
 	const me = useMe();
+	const { formatPerson } = useDisplayPrefs();
 	const { isLoading, workplace, kind } = useWorkplace();
 	const inbox = useNotifications(workplace?.id);
 	const unreadCount = inbox.data?.unreadCount ?? 0;
 	const profile = me.data?.profile;
+	const displayName = profile
+		? formatPerson(profile.fullName, profile.email)
+		: "";
 	const pathname = useRouterState({
 		select: (state) => state.location.pathname,
 	});
 	const isSchedule = pathname.startsWith("/dashboard/schedule");
 	const isSettings = pathname.startsWith("/dashboard/settings");
-	const settingsLabel = isSettings
-		? settingsSectionLabel(pathname)
-		: undefined;
+	const settingsLabel = isSettings ? settingsSectionLabel(pathname) : undefined;
 	const activePage =
 		navigation.find((item) => {
-			const matchPath =
-				"match" in item && item.match ? item.match : item.to;
+			const matchPath = "match" in item && item.match ? item.match : item.to;
 			return "exact" in item && item.exact
 				? pathname === matchPath
 				: pathname.startsWith(matchPath);
 		})?.label ?? "Overview";
 	const headerLabel =
-		isSettings && settingsLabel
-			? `Settings / ${settingsLabel}`
-			: activePage;
+		isSettings && settingsLabel ? `Settings / ${settingsLabel}` : activePage;
 
 	useEffect(() => {
 		document.title = `${headerLabel} · jooling`;
@@ -220,7 +227,7 @@ function DashboardLayout() {
 										render={
 											<SidebarMenuButton
 												size="lg"
-												tooltip={profile.fullName ?? profile.email}
+												tooltip={displayName}
 											/>
 										}
 									>
@@ -231,7 +238,7 @@ function DashboardLayout() {
 										</Avatar>
 										<div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
 											<span className="truncate font-medium">
-												{profile.fullName ?? profile.email}
+												{displayName}
 											</span>
 											{profile.fullName ? (
 												<span className="truncate text-xs">
@@ -253,7 +260,7 @@ function DashboardLayout() {
 										<DropdownMenuGroup>
 											<DropdownMenuLabel>
 												<p className="truncate">
-													{profile.fullName ?? profile.email}
+													{displayName}
 												</p>
 												<p className="truncate font-normal text-muted-foreground text-xs capitalize">
 													{kind}

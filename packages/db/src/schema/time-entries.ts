@@ -40,6 +40,7 @@ export const timeEntries = pgTable(
 			{ onDelete: "set null" },
 		),
 		editReason: text("edit_reason"),
+		workerNote: text("worker_note"),
 	},
 	(table) => [
 		unique("time_entries_version_shift_unique").on(table.versionShiftId),

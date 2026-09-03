@@ -68,6 +68,7 @@ import {
 	type WorkerDto,
 } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
+import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { parseWorkerCsv, type WorkerImportRow } from "@/lib/worker-import";
 
 export const Route = createFileRoute("/dashboard/workers/")({
@@ -79,6 +80,7 @@ const invitationHelper = createDataColumnHelper<InvitationDto>();
 
 function WorkersPage() {
 	const { workplace } = useWorkplace();
+	const { formatPerson } = useDisplayPrefs();
 	const workers = useWorkers(workplace?.id);
 	const locations = useLocations(workplace?.id);
 	const positions = usePositions(workplace?.id);
@@ -219,7 +221,7 @@ function WorkersPage() {
 		() =>
 			workerHelper.columns([
 				workerHelper.accessor(
-					(row) => row.profile.fullName ?? row.profile.email,
+					(row) => formatPerson(row.profile.fullName, row.profile.email),
 					{
 						id: "name",
 						header: "Worker",
@@ -319,7 +321,7 @@ function WorkersPage() {
 					},
 				}),
 			]),
-		[deactivate],
+		[deactivate, formatPerson],
 	);
 
 	return (

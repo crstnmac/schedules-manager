@@ -9,8 +9,11 @@ import {
 } from "@SchedulesManager/ui/components/item";
 
 import type { MeProfile } from "@/lib/queries";
+import { useDisplayPrefs } from "@/lib/use-display-prefs";
 
-export function profileInitials(profile: MeProfile) {
+type ProfileIdentity = Pick<MeProfile, "id" | "email" | "fullName">;
+
+export function profileInitials(profile: ProfileIdentity) {
 	const name = profile.fullName?.trim();
 	if (name) {
 		const parts = name.split(/\s+/);
@@ -27,9 +30,12 @@ export function CurrentProfile({
 	profile,
 	kind,
 }: {
-	profile: MeProfile;
+	profile: ProfileIdentity;
 	kind?: "manager" | "worker" | null;
 }) {
+	const { formatPerson } = useDisplayPrefs();
+	const displayName = formatPerson(profile.fullName, profile.email);
+
 	return (
 		<Item variant="outline" size="sm">
 			<ItemMedia>
@@ -39,7 +45,7 @@ export function CurrentProfile({
 			</ItemMedia>
 			<ItemContent>
 				<ItemTitle>
-					{profile.fullName ?? profile.email}
+					{displayName}
 					{kind ? (
 						<Badge variant="outline" className="uppercase">
 							{kind}

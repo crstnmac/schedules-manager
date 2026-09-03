@@ -12,6 +12,29 @@ export interface MeProfile {
 	id: string;
 	email: string;
 	fullName: string | null;
+	timeFormat: "12h" | "24h";
+	nameFormat: "full" | "first_last_initial" | "first";
+	notificationPreferences: {
+		schedule: boolean;
+		messages: boolean;
+		timeOff: boolean;
+		timeClock: boolean;
+	};
+}
+
+export interface WorkplaceWorkerPolicies {
+	messagingEnabled: boolean;
+	announcementsEnabled: boolean;
+	tasksEnabled: boolean;
+	contactDetailsVisible: boolean;
+	workerScheduleVisibility: "own" | "full";
+	workerTimeOffVisibility: boolean;
+	breaksEnabled: boolean;
+	shiftExchangesEnabled: boolean;
+	workersCanRequestTimeOff: boolean;
+	geofenceRequired: boolean;
+	timesheetNotesEnabled: boolean;
+	unavailabilityRequiresApproval: boolean;
 }
 
 export interface MeEmployment {
@@ -20,6 +43,7 @@ export interface MeEmployment {
 	workplace: {
 		id: string;
 		name: string;
+		policies: WorkplaceWorkerPolicies;
 	};
 }
 
@@ -36,6 +60,8 @@ export interface LocationDto {
 	latitude?: string | null;
 	longitude?: string | null;
 	geofenceRadiusMeters?: number | null;
+	openMinute?: number | null;
+	closeMinute?: number | null;
 	kioskEnabled?: boolean;
 }
 
@@ -196,22 +222,33 @@ export function usePositions(workplaceId: string | undefined) {
 
 export interface TimeOffRequestDto {
 	id: string;
+	employmentId: string;
+	kind: "manager" | "worker";
 	worker: { email: string; fullName: string | null };
 	startsAt: string;
 	endsAt: string;
+	startDate: string;
+	endDate: string;
+	allDay: boolean;
+	startMinute: number | null;
+	endMinute: number | null;
+	chargeMinutes: number;
 	reason: string | null;
 	status: "pending" | "approved" | "declined";
 	decisionReason: string | null;
+	decidedAt: string | null;
 	createdAt: string;
 	leaveTypeId: string | null;
 	leaveTypeName: string | null;
+	leaveTypePaid: boolean | null;
+	remainingMinutes: number;
 }
 
 export function useTimeOff(workplaceId: string | undefined) {
 	return useQuery({
 		queryKey: ["workplaces", workplaceId, "time-off"],
 		queryFn: () =>
-			api<{ requests: TimeOffRequestDto[] }>(
+			api<{ requests: TimeOffRequestDto[]; timezone: string }>(
 				`/v1/workplaces/${workplaceId}/time-off`,
 			).then((data) => data.requests),
 		enabled: Boolean(workplaceId),
@@ -436,24 +473,46 @@ export function useAcceptances(scheduleId: string | undefined) {
 	});
 }
 
+export interface WorkplaceSettings {
+	id: string;
+	name: string;
+	noticeWindowHours: number;
+	weekStartDay: number;
+	payPeriodType: "weekly" | "biweekly" | "semimonthly" | "monthly";
+	payPeriodAnchor: string | null;
+	earlyClockInMinutes: number;
+	clockRoundMinutes: number;
+	autoClockOutGraceMinutes: number;
+	overtimeWeeklyMinutes: number;
+	overtimeDailyMinutes: number;
+	laborCostPercentGoal: number | null;
+	managersCanViewLaborCost: boolean;
+	messagingEnabled: boolean;
+	announcementsEnabled: boolean;
+	tasksEnabled: boolean;
+	contactDetailsVisible: boolean;
+	workerScheduleVisibility: "own" | "full";
+	workerTimeOffVisibility: boolean;
+	breaksEnabled: boolean;
+	shiftExchangesEnabled: boolean;
+	unavailabilityRequiresApproval: boolean;
+	clopeningMinutes: number;
+	maxConsecutiveWorkDays: number;
+	geofenceRequired: boolean;
+	lateArrivalGraceMinutes: number;
+	timesheetNotesEnabled: boolean;
+	leaveCapReset: "none" | "calendar_year" | "hire_date" | "custom_date";
+	leaveCapResetMonthDay: string | null;
+	workersCanRequestTimeOff: boolean;
+}
+
 export function useWorkplaceSettings(workplaceId: string | undefined) {
 	return useQuery({
 		queryKey: ["workplace-settings", workplaceId],
 		queryFn: () =>
-			api<{
-				workplace: {
-					id: string;
-					name: string;
-					noticeWindowHours: number;
-					weekStartDay: number;
-					payPeriodType: "weekly" | "biweekly" | "semimonthly" | "monthly";
-					payPeriodAnchor: string | null;
-					earlyClockInMinutes: number;
-					clockRoundMinutes: number;
-					autoClockOutGraceMinutes: number;
-					overtimeWeeklyMinutes: number;
-				};
-			}>(`/v1/workplaces/${workplaceId}`).then((data) => data.workplace),
+			api<{ workplace: WorkplaceSettings }>(
+				`/v1/workplaces/${workplaceId}`,
+			).then((data) => data.workplace),
 		enabled: Boolean(workplaceId),
 	});
 }
@@ -707,11 +766,22 @@ export function useClockIn() {
 export function useClockOut() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (versionShiftId: string) =>
-			api<{ timeEntry: { id: string; clockedOutAt: string | null } }>(
-				`/v1/my/shifts/${versionShiftId}/clock-out`,
-				{ method: "POST" },
-			),
+		mutationFn: (input: string | { versionShiftId: string; workerNote?: string }) => {
+			const versionShiftId =
+				typeof input === "string" ? input : input.versionShiftId;
+			const workerNote =
+				typeof input === "string" ? undefined : input.workerNote;
+			return api<{
+				timeEntry: {
+					id: string;
+					clockedOutAt: string | null;
+					workerNote: string | null;
+				};
+			}>(`/v1/my/shifts/${versionShiftId}/clock-out`, {
+				method: "POST",
+				body: workerNote ? { workerNote } : undefined,
+			});
+		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 			queryClient.invalidateQueries({ queryKey: ["timecard"] });
@@ -727,6 +797,7 @@ export interface TimecardEntry {
 	shiftEndsAt: string;
 	clockedInAt: string;
 	clockedOutAt: string | null;
+	workerNote: string | null;
 }
 
 export function useMyTimeEntries(workplaceId: string | undefined) {
@@ -820,6 +891,12 @@ export interface WorkerConstraints {
 		id: string;
 		startsAt: string;
 		endsAt: string;
+		startDate: string;
+		endDate: string;
+		allDay: boolean;
+		startMinute: number | null;
+		endMinute: number | null;
+		chargeMinutes: number;
 		reason: string | null;
 		status: "pending" | "approved" | "declined";
 		decisionReason: string | null;
@@ -1042,6 +1119,7 @@ export function useEditTimeEntry(workplaceId: string | undefined) {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["schedule"] });
 			queryClient.invalidateQueries({ queryKey: ["timecard"] });
+			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 		},
 	});
 }
@@ -1205,6 +1283,22 @@ export function usePtoBalances(
 				balances: { leaveTypeId: string; name: string; minutes: number }[];
 			}>(`/v1/workplaces/${workplaceId}/employments/${employmentId}/pto`),
 		enabled: Boolean(workplaceId && employmentId),
+	});
+}
+
+export function useWorkplacePto(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["pto", workplaceId],
+		queryFn: () =>
+			api<{
+				balances: {
+					employmentId: string;
+					leaveTypeId: string;
+					name: string;
+					minutes: number;
+				}[];
+			}>(`/v1/workplaces/${workplaceId}/pto`),
+		enabled: Boolean(workplaceId),
 	});
 }
 

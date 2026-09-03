@@ -1,14 +1,20 @@
 export type SettingsSection = {
 	to:
 		| "/dashboard/settings/workplace"
+		| "/dashboard/settings/company"
 		| "/dashboard/settings/locations"
 		| "/dashboard/settings/positions"
+		| "/dashboard/settings/schedule-policies"
+		| "/dashboard/settings/time-clock"
+		| "/dashboard/settings/time-off-policies"
 		| "/dashboard/settings/groups"
 		| "/dashboard/settings/tags"
 		| "/dashboard/settings/leave"
 		| "/dashboard/settings/time-blocks"
 		| "/dashboard/settings/day-parts"
-		| "/dashboard/settings/templates";
+		| "/dashboard/settings/templates"
+		| "/dashboard/settings/preferences"
+		| "/dashboard/settings/notifications";
 	label: string;
 	description: string;
 };
@@ -25,7 +31,12 @@ export const settingsGroups: SettingsGroup[] = [
 			{
 				to: "/dashboard/settings/workplace",
 				label: "General",
-				description: "Name, pay period, and clock rules",
+				description: "Name, week, pay, and labor",
+			},
+			{
+				to: "/dashboard/settings/company",
+				label: "Company",
+				description: "Messaging, announcements, and team visibility",
 			},
 			{
 				to: "/dashboard/settings/locations",
@@ -40,6 +51,26 @@ export const settingsGroups: SettingsGroup[] = [
 		],
 	},
 	{
+		label: "Policies",
+		items: [
+			{
+				to: "/dashboard/settings/schedule-policies",
+				label: "Schedule",
+				description: "What workers see and how shifts are exchanged",
+			},
+			{
+				to: "/dashboard/settings/time-clock",
+				label: "Time clock",
+				description: "Clock-in rules, geofence, and rounding",
+			},
+			{
+				to: "/dashboard/settings/time-off-policies",
+				label: "Time off",
+				description: "Who can request time off and when caps reset",
+			},
+		],
+	},
+	{
 		label: "Team",
 		items: [
 			{
@@ -49,18 +80,18 @@ export const settingsGroups: SettingsGroup[] = [
 			},
 			{
 				to: "/dashboard/settings/tags",
-				label: "Shift tags",
+				label: "Tags",
 				description: "Labels for shifts",
 			},
 			{
 				to: "/dashboard/settings/leave",
 				label: "Leave types",
-				description: "Reasons for time off",
+				description: "Vacation, sick, unpaid",
 			},
 		],
 	},
 	{
-		label: "Schedule",
+		label: "Schedule catalog",
 		items: [
 			{
 				to: "/dashboard/settings/time-blocks",
@@ -74,8 +105,23 @@ export const settingsGroups: SettingsGroup[] = [
 			},
 			{
 				to: "/dashboard/settings/templates",
-				label: "Shift templates",
+				label: "Templates",
 				description: "Reusable shift shapes",
+			},
+		],
+	},
+	{
+		label: "You",
+		items: [
+			{
+				to: "/dashboard/settings/preferences",
+				label: "Preferences",
+				description: "How names and times appear for you",
+			},
+			{
+				to: "/dashboard/settings/notifications",
+				label: "Notifications",
+				description: "What you want to hear about",
 			},
 		],
 	},

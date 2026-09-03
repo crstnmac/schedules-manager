@@ -170,4 +170,88 @@ export function registerTimeClockTests(getContext: () => Context) {
 			(await request(required(republishedShift).id, "clock-in")).status,
 		).toBe(409);
 	});
+
+	test("a Manager can clock in on an assigned published Shift", async () => {
+		const { database: d, app, token } = getContext();
+		const profileId = crypto.randomUUID();
+		const email = "clock-manager@example.test";
+		await d.db.insert(d.profiles).values({ id: profileId, email });
+		const [workplace] = await d.db
+			.insert(d.workplaces)
+			.values({ name: "Manager Clock Tests" })
+			.returning();
+		const [employment] = await d.db
+			.insert(d.employments)
+			.values({
+				workplaceId: required(workplace).id,
+				profileId,
+				kind: "manager",
+			})
+			.returning();
+		const [location] = await d.db
+			.insert(d.locations)
+			.values({
+				workplaceId: required(workplace).id,
+				name: "Manager Floor",
+				timezone: "America/Chicago",
+			})
+			.returning();
+		const [position] = await d.db
+			.insert(d.positions)
+			.values({
+				workplaceId: required(workplace).id,
+				name: "Floor Manager",
+			})
+			.returning();
+		const [schedule] = await d.db
+			.insert(d.schedules)
+			.values({
+				locationId: required(location).id,
+				weekStartDate: "2026-09-01",
+			})
+			.returning();
+		const [version] = await d.db
+			.insert(d.scheduleVersions)
+			.values({ scheduleId: required(schedule).id, versionNumber: 1 })
+			.returning();
+		const now = Date.now();
+		const [draft] = await d.db
+			.insert(d.shifts)
+			.values({
+				scheduleId: required(schedule).id,
+				employmentId: required(employment).id,
+				positionId: required(position).id,
+				startsAt: new Date(now - 5 * 60_000),
+				endsAt: new Date(now + 60 * 60_000),
+			})
+			.returning();
+		const [snapshot] = await d.db
+			.insert(d.versionShifts)
+			.values({
+				versionId: required(version).id,
+				shiftId: required(draft).id,
+				employmentId: required(employment).id,
+				positionId: required(position).id,
+				startsAt: required(draft).startsAt,
+				endsAt: required(draft).endsAt,
+			})
+			.returning();
+		const accessToken = await token(profileId, email);
+		const response = await app.handle(
+			new Request(
+				`http://localhost/v1/my/shifts/${required(snapshot).id}/clock-in`,
+				{
+					method: "POST",
+					headers: { authorization: `Bearer ${accessToken}` },
+				},
+			),
+		);
+		expect(response.status).toBe(200);
+		const punches = await d.db
+			.select()
+			.from(d.timeEntries)
+			.where(eq(d.timeEntries.versionShiftId, required(snapshot).id));
+		expect(punches).toHaveLength(1);
+		expect(punches[0]?.employmentId).toBe(required(employment).id);
+	});
 }

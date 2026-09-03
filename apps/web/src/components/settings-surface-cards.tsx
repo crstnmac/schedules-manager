@@ -26,15 +26,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import {
-	createDataColumnHelper,
-	DataTable,
-} from "@/components/data-table";
+import { ConfirmAction } from "@/components/confirm-action";
+import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { SettingsSection } from "@/components/settings/page";
 import { TimePicker } from "@/components/time-picker";
 import { api } from "@/lib/api";
 import type { LocationDto, PositionDto, WorkerDto } from "@/lib/queries";
-import { formatMinute } from "@/lib/time";
+import { useDisplayPrefs } from "@/lib/use-display-prefs";
 
 type Group = { id: string; name: string; employmentIds: string[] };
 type Tag = { id: string; name: string };
@@ -120,6 +118,7 @@ export function GroupsCard({
 	groups: Group[];
 	workers: WorkerDto[];
 }) {
+	const { formatPerson } = useDisplayPrefs();
 	const queryClient = useQueryClient();
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [name, setName] = useState("");
@@ -192,14 +191,16 @@ export function GroupsCard({
 							>
 								Edit
 							</Button>
-							<Button
-								size="sm"
-								variant="ghost"
+							<ConfirmAction
+								trigger="Delete"
+								triggerVariant="ghost"
+								destructive
+								title="Delete this group?"
+								description="Workers will be removed from the group. Their employment is unchanged."
+								confirmLabel="Delete"
 								disabled={remove.isPending}
-								onClick={() => remove.mutate(row.original.id)}
-							>
-								Delete
-							</Button>
+								onConfirm={() => remove.mutate(row.original.id)}
+							/>
 						</div>
 					),
 				}),
@@ -209,7 +210,11 @@ export function GroupsCard({
 
 	return (
 		<div className="flex flex-col gap-6">
-			<SettingsSection title="All groups" count={groups.length}>
+			<SettingsSection
+				title="All groups"
+				description="Team filters you can use on the schedule."
+				count={groups.length}
+			>
 				<DataTable
 					bounded
 					columns={columns}
@@ -281,9 +286,7 @@ export function GroupsCard({
 											onCheckedChange={() =>
 												setEmploymentIds((current) =>
 													current.includes(worker.employmentId)
-														? current.filter(
-																(id) => id !== worker.employmentId,
-															)
+														? current.filter((id) => id !== worker.employmentId)
 														: [...current, worker.employmentId],
 												)
 											}
@@ -292,7 +295,7 @@ export function GroupsCard({
 											htmlFor={`group-worker-${worker.employmentId}`}
 											className="font-normal"
 										>
-											{worker.profile.fullName ?? worker.profile.email}
+											{formatPerson(worker.profile.fullName, worker.profile.email)}
 										</FieldLabel>
 									</Field>
 								))}
@@ -312,27 +315,39 @@ export function TagsCard({
 	tags: Tag[];
 }) {
 	const queryClient = useQueryClient();
+	const [editingId, setEditingId] = useState<string | null>(null);
 	const [tagName, setTagName] = useState("");
-	const createTag = useMutation({
+	function edit(tag?: Tag) {
+		setEditingId(tag?.id ?? null);
+		setTagName(tag?.name ?? "");
+	}
+	const save = useMutation({
 		mutationFn: () =>
-			api(`/v1/workplaces/${workplaceId}/tags`, {
-				method: "POST",
-				body: { name: tagName.trim() },
-			}),
+			api(
+				editingId
+					? `/v1/workplaces/${workplaceId}/tags/${editingId}`
+					: `/v1/workplaces/${workplaceId}/tags`,
+				{
+					method: editingId ? "PATCH" : "POST",
+					body: { name: tagName.trim() },
+				},
+			),
 		onSuccess: () => {
-			setTagName("");
+			edit();
 			queryClient.invalidateQueries({ queryKey: ["tags", workplaceId] });
-			toast.success("Shift Tag added.");
+			toast.success("Shift Tag saved.");
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
-	const deleteTag = useMutation({
+	const remove = useMutation({
 		mutationFn: (tagId: string) =>
 			api(`/v1/workplaces/${workplaceId}/tags/${tagId}`, {
 				method: "DELETE",
 			}),
-		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: ["tags", workplaceId] }),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["tags", workplaceId] });
+			toast.success("Shift Tag deleted.");
+		},
 		onError: (error) => toast.error((error as Error).message),
 	});
 	const columns = useMemo(
@@ -349,25 +364,38 @@ export function TagsCard({
 					header: "Actions",
 					enableSorting: false,
 					cell: ({ row }) => (
-						<div className="flex justify-end">
+						<div className="flex flex-wrap items-center justify-end gap-2">
 							<Button
 								size="sm"
-								variant="ghost"
-								disabled={deleteTag.isPending}
-								onClick={() => deleteTag.mutate(row.original.id)}
+								variant="outline"
+								onClick={() => edit(row.original)}
 							>
-								Delete
+								Edit
 							</Button>
+							<ConfirmAction
+								trigger="Delete"
+								triggerVariant="ghost"
+								destructive
+								title="Delete this tag?"
+								description="Shifts using this tag will lose the label."
+								confirmLabel="Delete"
+								disabled={remove.isPending}
+								onConfirm={() => remove.mutate(row.original.id)}
+							/>
 						</div>
 					),
 				}),
 			]),
-		[deleteTag],
+		[remove],
 	);
 
 	return (
 		<div className="flex flex-col gap-6">
-			<SettingsSection title="All tags" count={tags.length}>
+			<SettingsSection
+				title="All tags"
+				description="Labels that can appear on a shift tile."
+				count={tags.length}
+			>
 				<DataTable
 					bounded
 					columns={columns}
@@ -387,24 +415,31 @@ export function TagsCard({
 			</SettingsSection>
 
 			<SettingsSection
-				title="Add tag"
+				title={editingId ? "Edit tag" : "Add tag"}
 				description="Keep names short — they show on shift tiles."
 				footer={
-					<Button
-						type="submit"
-						form="add-tag-form"
-						disabled={!tagName.trim() || createTag.isPending}
-					>
-						{createTag.isPending ? <Spinner data-icon="inline-start" /> : null}
-						Add tag
-					</Button>
+					<div className="flex flex-wrap gap-2">
+						<Button
+							type="submit"
+							form="tag-form"
+							disabled={!tagName.trim() || save.isPending}
+						>
+							{save.isPending ? <Spinner data-icon="inline-start" /> : null}
+							{editingId ? "Update tag" : "Add tag"}
+						</Button>
+						{editingId ? (
+							<Button type="button" variant="ghost" onClick={() => edit()}>
+								Cancel
+							</Button>
+						) : null}
+					</div>
 				}
 			>
 				<form
-					id="add-tag-form"
+					id="tag-form"
 					onSubmit={(event) => {
 						event.preventDefault();
-						createTag.mutate();
+						save.mutate();
 					}}
 				>
 					<Field>
@@ -430,21 +465,44 @@ export function LeaveTypesCard({
 	leaveTypes: LeaveType[];
 }) {
 	const queryClient = useQueryClient();
+	const [editingId, setEditingId] = useState<string | null>(null);
 	const [leaveName, setLeaveName] = useState("");
 	const [paid, setPaid] = useState(false);
-	const createLeaveType = useMutation({
+	function edit(leaveType?: LeaveType) {
+		setEditingId(leaveType?.id ?? null);
+		setLeaveName(leaveType?.name ?? "");
+		setPaid(leaveType?.paid ?? false);
+	}
+	const save = useMutation({
 		mutationFn: () =>
-			api(`/v1/workplaces/${workplaceId}/leave-types`, {
-				method: "POST",
-				body: { name: leaveName.trim(), paid },
-			}),
+			api(
+				editingId
+					? `/v1/workplaces/${workplaceId}/leave-types/${editingId}`
+					: `/v1/workplaces/${workplaceId}/leave-types`,
+				{
+					method: editingId ? "PATCH" : "POST",
+					body: { name: leaveName.trim(), paid },
+				},
+			),
 		onSuccess: () => {
-			setLeaveName("");
-			setPaid(false);
+			edit();
 			queryClient.invalidateQueries({
 				queryKey: ["leave-types", workplaceId],
 			});
-			toast.success("Leave Type added.");
+			toast.success("Leave Type saved.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+	const remove = useMutation({
+		mutationFn: (leaveTypeId: string) =>
+			api(`/v1/workplaces/${workplaceId}/leave-types/${leaveTypeId}`, {
+				method: "DELETE",
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["leave-types", workplaceId],
+			});
+			toast.success("Leave Type deleted.");
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
@@ -461,13 +519,43 @@ export function LeaveTypesCard({
 					header: "Pay",
 					cell: ({ getValue }) => (getValue() ? "Paid" : "Unpaid"),
 				}),
+				leaveHelper.display({
+					id: "actions",
+					header: "Actions",
+					enableSorting: false,
+					cell: ({ row }) => (
+						<div className="flex flex-wrap items-center justify-end gap-2">
+							<Button
+								size="sm"
+								variant="outline"
+								onClick={() => edit(row.original)}
+							>
+								Edit
+							</Button>
+							<ConfirmAction
+								trigger="Delete"
+								triggerVariant="ghost"
+								destructive
+								title="Delete this leave type?"
+								description="PTO balances for this type will be removed. Existing time-off requests keep their dates."
+								confirmLabel="Delete"
+								disabled={remove.isPending}
+								onConfirm={() => remove.mutate(row.original.id)}
+							/>
+						</div>
+					),
+				}),
 			]),
-		[],
+		[remove],
 	);
 
 	return (
 		<div className="flex flex-col gap-6">
-			<SettingsSection title="All leave types" count={leaveTypes.length}>
+			<SettingsSection
+				title="All leave types"
+				description="Request rules live under Time off. These are the categories people pick."
+				count={leaveTypes.length}
+			>
 				<DataTable
 					bounded
 					columns={columns}
@@ -478,7 +566,7 @@ export function LeaveTypesCard({
 							<EmptyHeader>
 								<EmptyTitle>No leave types yet</EmptyTitle>
 								<EmptyDescription>
-									Add the reasons workers can request time off.
+									Add the reasons people can request time off.
 								</EmptyDescription>
 							</EmptyHeader>
 						</Empty>
@@ -487,26 +575,36 @@ export function LeaveTypesCard({
 			</SettingsSection>
 
 			<SettingsSection
-				title="Add leave type"
+				title={editingId ? "Edit leave type" : "Add leave type"}
+				description={
+					editingId
+						? "Rename this type or change whether it deducts paid hours."
+						: "Paid types deduct remaining hours when a request is approved."
+				}
 				footer={
-					<Button
-						type="submit"
-						form="add-leave-form"
-						disabled={!leaveName.trim() || createLeaveType.isPending}
-					>
-						{createLeaveType.isPending ? (
-							<Spinner data-icon="inline-start" />
+					<div className="flex flex-wrap gap-2">
+						<Button
+							type="submit"
+							form="leave-form"
+							disabled={!leaveName.trim() || save.isPending}
+						>
+							{save.isPending ? <Spinner data-icon="inline-start" /> : null}
+							{editingId ? "Update leave type" : "Add leave type"}
+						</Button>
+						{editingId ? (
+							<Button type="button" variant="ghost" onClick={() => edit()}>
+								Cancel
+							</Button>
 						) : null}
-						Add leave type
-					</Button>
+					</div>
 				}
 			>
 				<form
-					id="add-leave-form"
+					id="leave-form"
 					className="grid gap-4"
 					onSubmit={(event) => {
 						event.preventDefault();
-						createLeaveType.mutate();
+						save.mutate();
 					}}
 				>
 					<Field>
@@ -553,64 +651,127 @@ function RangeSection({
 	onLocationChange: (id: string) => void;
 	isLoading: boolean;
 }) {
+	const { formatMinute } = useDisplayPrefs();
 	const queryClient = useQueryClient();
+	const [editingId, setEditingId] = useState<string | null>(null);
 	const [name, setName] = useState("");
 	const [startMinute, setStartMinute] = useState(9 * 60);
 	const [endMinute, setEndMinute] = useState(17 * 60);
+	function edit(row?: RangeRow) {
+		setEditingId(row?.id ?? null);
+		setName(row?.name ?? "");
+		setStartMinute(row?.startMinute ?? 9 * 60);
+		setEndMinute(row?.endMinute ?? 17 * 60);
+	}
 	const invalidate = () =>
 		queryClient.invalidateQueries({ queryKey: ["time-blocks", locationId] });
-	const createRange = useMutation({
+	const save = useMutation({
 		mutationFn: () =>
-			api(`/v1/locations/${locationId}/${kind}`, {
-				method: "POST",
-				body: { name: name.trim(), startMinute, endMinute },
-			}),
+			api(
+				editingId
+					? `/v1/locations/${locationId}/${kind}/${editingId}`
+					: `/v1/locations/${locationId}/${kind}`,
+				{
+					method: editingId ? "PATCH" : "POST",
+					body: { name: name.trim(), startMinute, endMinute },
+				},
+			),
 		onSuccess: () => {
-			setName("");
+			edit();
 			invalidate();
-			toast.success(`${label} added.`);
+			toast.success(`${label} saved.`);
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
+	const remove = useMutation({
+		mutationFn: (id: string) =>
+			api(`/v1/locations/${locationId}/${kind}/${id}`, {
+				method: "DELETE",
+			}),
+		onSuccess: () => {
+			invalidate();
+			toast.success(`${label} deleted.`);
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+	const columns = useMemo(
+		() =>
+			rangeHelper.columns([
+				rangeHelper.accessor("name", {
+					header: "Name",
+					cell: ({ getValue }) => (
+						<span className="font-medium">{getValue()}</span>
+					),
+				}),
+				rangeHelper.accessor(
+					(row) =>
+						`${formatMinute(row.startMinute)}–${formatMinute(row.endMinute)}`,
+					{
+						id: "window",
+						header: "Window",
+						cell: ({ getValue }) => (
+							<span className="text-muted-foreground tabular-nums">
+								{getValue()}
+							</span>
+						),
+					},
+				),
+				rangeHelper.display({
+					id: "actions",
+					header: "Actions",
+					enableSorting: false,
+					cell: ({ row }) => (
+						<div className="flex flex-wrap items-center justify-end gap-2">
+							<Button
+								size="sm"
+								variant="outline"
+								onClick={() => edit(row.original)}
+							>
+								Edit
+							</Button>
+							<ConfirmAction
+								trigger="Delete"
+								triggerVariant="ghost"
+								destructive
+								title={`Delete this ${label.toLowerCase()}?`}
+								description={`This ${label.toLowerCase()} will be removed from the location.`}
+								confirmLabel="Delete"
+								disabled={remove.isPending}
+								onConfirm={() => remove.mutate(row.original.id)}
+							/>
+						</div>
+					),
+				}),
+			]),
+		[formatMinute, label, remove],
+	);
 
 	return (
 		<div className="flex flex-col gap-6">
 			<SettingsSection
 				title={label === "Time Block" ? "All time blocks" : "All day parts"}
+				description={
+					label === "Time Block"
+						? "Windows you can drop onto the week while building a schedule."
+						: "Parts of service for this location, such as breakfast or dinner."
+				}
 				count={rows.length}
 			>
 				<div className="flex flex-col gap-4">
 					<SettingsLocationField
 						locations={locations}
 						locationId={locationId}
-						onLocationChange={onLocationChange}
+						onLocationChange={(id) => {
+							edit();
+							onLocationChange(id);
+						}}
 					/>
 					{!locationId ? null : isLoading ? (
 						<p className="text-muted-foreground text-sm">Loading…</p>
 					) : (
 						<DataTable
 							bounded
-							columns={rangeHelper.columns([
-								rangeHelper.accessor("name", {
-									header: "Name",
-									cell: ({ getValue }) => (
-										<span className="font-medium">{getValue()}</span>
-									),
-								}),
-								rangeHelper.accessor(
-									(row) =>
-										`${formatMinute(row.startMinute)}–${formatMinute(row.endMinute)}`,
-									{
-										id: "window",
-										header: "Window",
-										cell: ({ getValue }) => (
-											<span className="tabular-nums text-muted-foreground">
-												{getValue()}
-											</span>
-										),
-									},
-								),
-							])}
+							columns={columns}
 							data={rows}
 							getRowId={(row) => row.id}
 							empty={
@@ -623,25 +784,41 @@ function RangeSection({
 
 			{locationId ? (
 				<SettingsSection
-					title={`Add ${label.toLowerCase()}`}
+					title={
+						editingId
+							? `Edit ${label.toLowerCase()}`
+							: `Add ${label.toLowerCase()}`
+					}
+					description={
+						editingId
+							? `Update the name or hours for this ${label.toLowerCase()}.`
+							: `Give this ${label.toLowerCase()} a name and a start and end time.`
+					}
 					footer={
-						<Button
-							type="submit"
-							form={`${kind}-form`}
-							disabled={!name.trim() || createRange.isPending}
-						>
-							{createRange.isPending ? (
-								<Spinner data-icon="inline-start" />
+						<div className="flex flex-wrap gap-2">
+							<Button
+								type="submit"
+								form={`${kind}-form`}
+								disabled={!name.trim() || save.isPending}
+							>
+								{save.isPending ? <Spinner data-icon="inline-start" /> : null}
+								{editingId
+									? `Update ${label.toLowerCase()}`
+									: `Add ${label.toLowerCase()}`}
+							</Button>
+							{editingId ? (
+								<Button type="button" variant="ghost" onClick={() => edit()}>
+									Cancel
+								</Button>
 							) : null}
-							Add {label.toLowerCase()}
-						</Button>
+						</div>
 					}
 				>
 					<form
 						id={`${kind}-form`}
 						onSubmit={(event) => {
 							event.preventDefault();
-							createRange.mutate();
+							save.mutate();
 						}}
 					>
 						<FieldGroup className="grid gap-4 sm:grid-cols-2">
@@ -747,97 +924,135 @@ export function TemplatesCard({
 	data: TimeConfiguration | undefined;
 	isLoading: boolean;
 }) {
+	const { formatMinute } = useDisplayPrefs();
 	const queryClient = useQueryClient();
+	const [editingId, setEditingId] = useState<string | null>(null);
 	const [templateName, setTemplateName] = useState("");
 	const [positionId, setPositionId] = useState("");
 	const [templateStart, setTemplateStart] = useState(9 * 60);
 	const [templateEnd, setTemplateEnd] = useState(17 * 60);
 	const [note, setNote] = useState("");
+	function edit(template?: TemplateRow) {
+		setEditingId(template?.id ?? null);
+		setTemplateName(template?.name ?? "");
+		setPositionId(template?.positionId ?? "");
+		setTemplateStart(template?.startMinute ?? 9 * 60);
+		setTemplateEnd(template?.endMinute ?? 17 * 60);
+		setNote(template?.note ?? "");
+	}
 	const invalidate = () =>
 		queryClient.invalidateQueries({ queryKey: ["time-blocks", locationId] });
-	const createTemplate = useMutation({
+	const save = useMutation({
 		mutationFn: () =>
-			api(`/v1/locations/${locationId}/shift-templates`, {
-				method: "POST",
-				body: {
-					name: templateName.trim(),
-					positionId,
-					startMinute: templateStart,
-					endMinute: templateEnd,
-					note: note.trim() || undefined,
+			api(
+				editingId
+					? `/v1/locations/${locationId}/shift-templates/${editingId}`
+					: `/v1/locations/${locationId}/shift-templates`,
+				{
+					method: editingId ? "PATCH" : "POST",
+					body: {
+						name: templateName.trim(),
+						positionId,
+						startMinute: templateStart,
+						endMinute: templateEnd,
+						note: note.trim() || undefined,
+					},
 				},
-			}),
+			),
 		onSuccess: () => {
-			setTemplateName("");
-			setNote("");
+			edit();
 			invalidate();
-			toast.success("Shift Template added.");
+			toast.success("Shift Template saved.");
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
-	const deleteTemplate = useMutation({
+	const remove = useMutation({
 		mutationFn: (templateId: string) =>
 			api(`/v1/locations/${locationId}/shift-templates/${templateId}`, {
 				method: "DELETE",
 			}),
-		onSuccess: invalidate,
+		onSuccess: () => {
+			invalidate();
+			toast.success("Shift Template deleted.");
+		},
 		onError: (error) => toast.error((error as Error).message),
 	});
+	const columns = useMemo(
+		() =>
+			templateHelper.columns([
+				templateHelper.accessor("name", {
+					header: "Template",
+					cell: ({ getValue }) => (
+						<span className="font-medium">{getValue()}</span>
+					),
+				}),
+				templateHelper.accessor(
+					(row) =>
+						`${formatMinute(row.startMinute)}–${formatMinute(row.endMinute)}`,
+					{
+						id: "window",
+						header: "Window",
+						cell: ({ getValue }) => (
+							<span className="text-muted-foreground tabular-nums">
+								{getValue()}
+							</span>
+						),
+					},
+				),
+				templateHelper.display({
+					id: "actions",
+					header: "Actions",
+					enableSorting: false,
+					cell: ({ row }) => (
+						<div className="flex flex-wrap items-center justify-end gap-2">
+							<Button
+								size="sm"
+								variant="outline"
+								onClick={() => edit(row.original)}
+							>
+								Edit
+							</Button>
+							<ConfirmAction
+								trigger="Delete"
+								triggerVariant="ghost"
+								destructive
+								title="Delete this template?"
+								description="This template will be removed from the location."
+								confirmLabel="Delete"
+								disabled={remove.isPending}
+								onConfirm={() => remove.mutate(row.original.id)}
+							/>
+						</div>
+					),
+				}),
+			]),
+		[formatMinute, remove],
+	);
 
 	const templates = data?.shiftTemplates ?? [];
 
 	return (
 		<div className="flex flex-col gap-6">
-			<SettingsSection title="All templates" count={templates.length}>
+			<SettingsSection
+				title="All templates"
+				count={templates.length}
+				description="Reusable shift shapes for a position at this location."
+			>
 				<div className="flex flex-col gap-4">
 					<SettingsLocationField
 						locations={locations}
 						locationId={locationId}
-						onLocationChange={onLocationChange}
+						onLocationChange={(id) => {
+							edit();
+							onLocationChange(id);
+						}}
 					/>
 					{!locationId ? null : isLoading ? (
 						<p className="text-muted-foreground text-sm">Loading…</p>
 					) : (
 						<DataTable
 							bounded
-							columns={templateHelper.columns([
-								templateHelper.accessor("name", {
-									header: "Template",
-									cell: ({ getValue }) => (
-										<span className="font-medium">{getValue()}</span>
-									),
-								}),
-								templateHelper.accessor(
-									(row) =>
-										`${formatMinute(row.startMinute)}–${formatMinute(row.endMinute)}`,
-									{
-										id: "window",
-										header: "Window",
-										cell: ({ getValue }) => (
-											<span className="tabular-nums text-muted-foreground">
-												{getValue()}
-											</span>
-										),
-									},
-								),
-								templateHelper.display({
-									id: "actions",
-									header: "Actions",
-									enableSorting: false,
-									cell: ({ row }) => (
-										<div className="flex justify-end">
-											<Button
-												size="sm"
-												variant="ghost"
-												disabled={deleteTemplate.isPending}
-												onClick={() => deleteTemplate.mutate(row.original.id)}
-											>
-												Delete
-											</Button>
-										</div>
-									),
-								}),
-							])}
+							columns={columns}
 							data={templates}
 							getRowId={(row) => row.id}
 							empty={
@@ -852,27 +1067,35 @@ export function TemplatesCard({
 
 			{locationId ? (
 				<SettingsSection
-					title="Add template"
+					title={editingId ? "Edit template" : "Add template"}
+					description={
+						editingId
+							? "Update the position, hours, or note for this template."
+							: "Save a position and time window you reuse often."
+					}
 					footer={
-						<Button
-							type="submit"
-							form="template-form"
-							disabled={
-								!templateName.trim() || !positionId || createTemplate.isPending
-							}
-						>
-							{createTemplate.isPending ? (
-								<Spinner data-icon="inline-start" />
+						<div className="flex flex-wrap gap-2">
+							<Button
+								type="submit"
+								form="template-form"
+								disabled={!templateName.trim() || !positionId || save.isPending}
+							>
+								{save.isPending ? <Spinner data-icon="inline-start" /> : null}
+								{editingId ? "Update template" : "Add template"}
+							</Button>
+							{editingId ? (
+								<Button type="button" variant="ghost" onClick={() => edit()}>
+									Cancel
+								</Button>
 							) : null}
-							Add template
-						</Button>
+						</div>
 					}
 				>
 					<form
 						id="template-form"
 						onSubmit={(event) => {
 							event.preventDefault();
-							createTemplate.mutate();
+							save.mutate();
 						}}
 					>
 						<FieldGroup className="grid gap-4 sm:grid-cols-2">

@@ -12,7 +12,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
 import { BadRequestError, NotFoundError, RateLimitError } from "../errors";
-import { isInsideGeofence, roundToMinutes } from "../geo";
+import { assertClockInGeofence, roundToMinutes } from "../geo";
 import { pinMatches } from "../pin";
 import { tryConsumeRateLimit } from "../rate-limit";
 
@@ -33,7 +33,10 @@ export const kioskRoutes = new Elysia({ prefix: "/v1", tags: ["Kiosk"] }).post(
 			.from(locations)
 			.where(eq(locations.id, body.locationId))
 			.limit(1);
-		if (!location?.kioskPinHash || !pinMatches(body.locationPin, location.kioskPinHash)) {
+		if (
+			!location?.kioskPinHash ||
+			!pinMatches(body.locationPin, location.kioskPinHash)
+		) {
 			throw new BadRequestError("Location PIN is not valid");
 		}
 
@@ -51,28 +54,18 @@ export const kioskRoutes = new Elysia({ prefix: "/v1", tags: ["Kiosk"] }).post(
 		);
 		if (!worker) throw new BadRequestError("Worker PIN is not valid");
 
-		if (location.latitude && location.longitude && location.geofenceRadiusMeters) {
-			if (body.latitude == null || body.longitude == null) {
-				throw new BadRequestError("This Location requires a Geofence check");
-			}
-			if (
-				!isInsideGeofence({
-					latitude: body.latitude,
-					longitude: body.longitude,
-					centerLatitude: Number(location.latitude),
-					centerLongitude: Number(location.longitude),
-					radiusMeters: location.geofenceRadiusMeters,
-				})
-			) {
-				throw new BadRequestError("You are outside this Location's Geofence");
-			}
-		}
-
 		const [workplace] = await db
 			.select()
 			.from(workplaces)
 			.where(eq(workplaces.id, location.workplaceId))
 			.limit(1);
+		assertClockInGeofence({
+			geofenceRequired: workplace?.geofenceRequired ?? false,
+			latitude: location.latitude,
+			longitude: location.longitude,
+			geofenceRadiusMeters: location.geofenceRadiusMeters,
+			coords: { latitude: body.latitude, longitude: body.longitude },
+		});
 		const earlyMs = (workplace?.earlyClockInMinutes ?? 15) * 60_000;
 		const now = new Date();
 

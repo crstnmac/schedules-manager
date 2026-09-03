@@ -1,8 +1,15 @@
-import { db, positions } from "@SchedulesManager/db";
+import {
+	db,
+	employmentPositions,
+	positions,
+	shifts,
+	shiftTemplates,
+	templateShifts,
+} from "@SchedulesManager/db";
 import { eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { requireManager, requireSession } from "../context";
-import { NotFoundError } from "../errors";
+import { ConflictError, NotFoundError } from "../errors";
 import { firstRow } from "../rows";
 
 function serializePosition(position: typeof positions.$inferSelect) {
@@ -105,6 +112,61 @@ export const positionsRoutes = new Elysia({
 			}),
 			detail: {
 				summary: "Rename a Position (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.delete(
+		"/positions/:positionId",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+
+			const [existing] = await db
+				.select()
+				.from(positions)
+				.where(eq(positions.id, params.positionId))
+				.limit(1);
+
+			if (!existing) throw new NotFoundError("Position not found");
+			await requireManager(profile.id, existing.workplaceId);
+
+			const [[shift], [template], [templateShift], [assignment]] =
+				await Promise.all([
+					db
+						.select({ id: shifts.id })
+						.from(shifts)
+						.where(eq(shifts.positionId, existing.id))
+						.limit(1),
+					db
+						.select({ id: shiftTemplates.id })
+						.from(shiftTemplates)
+						.where(eq(shiftTemplates.positionId, existing.id))
+						.limit(1),
+					db
+						.select({ id: templateShifts.id })
+						.from(templateShifts)
+						.where(eq(templateShifts.positionId, existing.id))
+						.limit(1),
+					db
+						.select({ employmentId: employmentPositions.employmentId })
+						.from(employmentPositions)
+						.where(eq(employmentPositions.positionId, existing.id))
+						.limit(1),
+				]);
+			if (shift || template || templateShift || assignment) {
+				throw new ConflictError(
+					"This position is still used by shifts, templates, or workers.",
+				);
+			}
+
+			await db.delete(positions).where(eq(positions.id, existing.id));
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ positionId: t.String({ format: "uuid" }) }),
+			detail: {
+				summary: "Delete a Position (Manager)",
 				security: [{ bearerAuth: [] }],
 			},
 		},

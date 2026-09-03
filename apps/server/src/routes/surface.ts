@@ -2,23 +2,24 @@ import {
 	announcements,
 	conversationMembers,
 	conversations,
-	db,
 	dayParts,
+	db,
 	employmentDocuments,
 	employmentGroups,
 	employments,
 	leaveTypes,
 	locationSales,
 	locations,
+	positions,
 	profiles,
 	ptoBalances,
 	schedules,
+	shifts,
 	shiftTagAssignments,
 	shiftTags,
 	shiftTaskCompletions,
 	shiftTasks,
 	shiftTemplates,
-	shifts,
 	timeBlocks,
 	timeEntries,
 	timeEntryBreaks,
@@ -35,9 +36,11 @@ import {
 	requireWorkplaceMember,
 } from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
+import { leaveCapResetPayload } from "../leave";
 import { notifyEmployments, writeAudit } from "../notify";
 import { hashPin } from "../pin";
 import { firstRow } from "../rows";
+import { assertWorkplaceEnabled, loadWorkplace } from "../workplace-policy";
 
 const uuid = t.String({ format: "uuid" });
 const minuteSchema = t.Integer({ minimum: 0, maximum: 1440 });
@@ -228,6 +231,30 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			body: t.Object({ name: t.String({ minLength: 1, maxLength: 40 }) }),
 		},
 	)
+	.patch(
+		"/workplaces/:workplaceId/tags/:tagId",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const [tag] = await db
+				.update(shiftTags)
+				.set({ name: body.name.trim() })
+				.where(
+					and(
+						eq(shiftTags.id, params.tagId),
+						eq(shiftTags.workplaceId, params.workplaceId),
+					),
+				)
+				.returning();
+			if (!tag) throw new NotFoundError("Tag not found");
+			return { tag: { id: tag.id, name: tag.name } };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid, tagId: uuid }),
+			body: t.Object({ name: t.String({ minLength: 1, maxLength: 40 }) }),
+		},
+	)
 	.delete(
 		"/workplaces/:workplaceId/tags/:tagId",
 		async ({ headers, params }) => {
@@ -298,6 +325,71 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			}),
 		},
 	)
+	.patch(
+		"/workplaces/:workplaceId/leave-types/:leaveTypeId",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const [existing] = await db
+				.select()
+				.from(leaveTypes)
+				.where(
+					and(
+						eq(leaveTypes.id, params.leaveTypeId),
+						eq(leaveTypes.workplaceId, params.workplaceId),
+					),
+				)
+				.limit(1);
+			if (!existing) throw new NotFoundError("Leave type not found");
+			const updated = firstRow(
+				await db
+					.update(leaveTypes)
+					.set({
+						name: body.name !== undefined ? body.name.trim() : existing.name,
+						paid: body.paid ?? existing.paid,
+					})
+					.where(eq(leaveTypes.id, existing.id))
+					.returning(),
+			);
+			return {
+				leaveType: {
+					id: updated.id,
+					name: updated.name,
+					paid: updated.paid,
+				},
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid, leaveTypeId: uuid }),
+			body: t.Object({
+				name: t.Optional(t.String({ minLength: 1, maxLength: 80 })),
+				paid: t.Optional(t.Boolean()),
+			}),
+		},
+	)
+	.delete(
+		"/workplaces/:workplaceId/leave-types/:leaveTypeId",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const [deleted] = await db
+				.delete(leaveTypes)
+				.where(
+					and(
+						eq(leaveTypes.id, params.leaveTypeId),
+						eq(leaveTypes.workplaceId, params.workplaceId),
+					),
+				)
+				.returning({ id: leaveTypes.id });
+			if (!deleted) throw new NotFoundError("Leave type not found");
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid, leaveTypeId: uuid }),
+		},
+	)
 	.put(
 		"/workplaces/:workplaceId/employments/:employmentId/pto",
 		async ({ headers, params, body }) => {
@@ -326,6 +418,46 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		},
 	)
 	.get(
+		"/workplaces/:workplaceId/pto",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const rows = await db
+				.select({
+					employmentId: ptoBalances.employmentId,
+					leaveTypeId: ptoBalances.leaveTypeId,
+					minutes: ptoBalances.minutes,
+					name: leaveTypes.name,
+					hiredAt: employments.createdAt,
+				})
+				.from(ptoBalances)
+				.innerJoin(leaveTypes, eq(leaveTypes.id, ptoBalances.leaveTypeId))
+				.innerJoin(employments, eq(employments.id, ptoBalances.employmentId))
+				.where(eq(employments.workplaceId, params.workplaceId));
+			const workplace = await loadWorkplace(params.workplaceId);
+			const timeZone =
+				(
+					await db
+						.select({ timezone: locations.timezone })
+						.from(locations)
+						.where(eq(locations.workplaceId, params.workplaceId))
+						.limit(1)
+				)[0]?.timezone ?? "America/Chicago";
+			return {
+				balances: rows.map(({ hiredAt: _hiredAt, ...row }) => row),
+				...leaveCapResetPayload(
+					workplace,
+					rows[0]?.hiredAt ?? new Date(),
+					timeZone,
+				),
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: uuid }),
+		},
+	)
+	.get(
 		"/workplaces/:workplaceId/employments/:employmentId/pto",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers.authorization);
@@ -348,7 +480,28 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				.from(ptoBalances)
 				.innerJoin(leaveTypes, eq(leaveTypes.id, ptoBalances.leaveTypeId))
 				.where(eq(ptoBalances.employmentId, params.employmentId));
-			return { balances: rows };
+			const [subject] = await db
+				.select({ createdAt: employments.createdAt })
+				.from(employments)
+				.where(eq(employments.id, params.employmentId))
+				.limit(1);
+			const workplace = await loadWorkplace(params.workplaceId);
+			const timeZone =
+				(
+					await db
+						.select({ timezone: locations.timezone })
+						.from(locations)
+						.where(eq(locations.workplaceId, params.workplaceId))
+						.limit(1)
+				)[0]?.timezone ?? "America/Chicago";
+			return {
+				balances: rows,
+				...leaveCapResetPayload(
+					workplace,
+					subject?.createdAt ?? employment.createdAt,
+					timeZone,
+				),
+			};
 		},
 		{
 			headers: t.Object({ authorization: t.String() }),
@@ -434,6 +587,74 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			}),
 		},
 	)
+	.patch(
+		"/locations/:locationId/time-blocks/:blockId",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const location = await locationForManager(profile.id, params.locationId);
+			const [existing] = await db
+				.select()
+				.from(timeBlocks)
+				.where(
+					and(
+						eq(timeBlocks.id, params.blockId),
+						eq(timeBlocks.locationId, location.id),
+					),
+				)
+				.limit(1);
+			if (!existing) throw new NotFoundError("Time block not found");
+			const updated = firstRow(
+				await db
+					.update(timeBlocks)
+					.set({
+						name: body.name !== undefined ? body.name.trim() : existing.name,
+						startMinute: body.startMinute ?? existing.startMinute,
+						endMinute: body.endMinute ?? existing.endMinute,
+					})
+					.where(eq(timeBlocks.id, existing.id))
+					.returning(),
+			);
+			return {
+				timeBlock: {
+					id: updated.id,
+					name: updated.name,
+					startMinute: updated.startMinute,
+					endMinute: updated.endMinute,
+				},
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ locationId: uuid, blockId: uuid }),
+			body: t.Object({
+				name: t.Optional(t.String({ minLength: 1, maxLength: 40 })),
+				startMinute: t.Optional(minuteSchema),
+				endMinute: t.Optional(minuteSchema),
+			}),
+		},
+	)
+	.delete(
+		"/locations/:locationId/time-blocks/:blockId",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const location = await locationForManager(profile.id, params.locationId);
+			const [deleted] = await db
+				.delete(timeBlocks)
+				.where(
+					and(
+						eq(timeBlocks.id, params.blockId),
+						eq(timeBlocks.locationId, location.id),
+					),
+				)
+				.returning({ id: timeBlocks.id });
+			if (!deleted) throw new NotFoundError("Time block not found");
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ locationId: uuid, blockId: uuid }),
+		},
+	)
 	.post(
 		"/locations/:locationId/day-parts",
 		async ({ headers, params, body }) => {
@@ -467,6 +688,74 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				startMinute: minuteSchema,
 				endMinute: minuteSchema,
 			}),
+		},
+	)
+	.patch(
+		"/locations/:locationId/day-parts/:dayPartId",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const location = await locationForManager(profile.id, params.locationId);
+			const [existing] = await db
+				.select()
+				.from(dayParts)
+				.where(
+					and(
+						eq(dayParts.id, params.dayPartId),
+						eq(dayParts.locationId, location.id),
+					),
+				)
+				.limit(1);
+			if (!existing) throw new NotFoundError("Day part not found");
+			const updated = firstRow(
+				await db
+					.update(dayParts)
+					.set({
+						name: body.name !== undefined ? body.name.trim() : existing.name,
+						startMinute: body.startMinute ?? existing.startMinute,
+						endMinute: body.endMinute ?? existing.endMinute,
+					})
+					.where(eq(dayParts.id, existing.id))
+					.returning(),
+			);
+			return {
+				dayPart: {
+					id: updated.id,
+					name: updated.name,
+					startMinute: updated.startMinute,
+					endMinute: updated.endMinute,
+				},
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ locationId: uuid, dayPartId: uuid }),
+			body: t.Object({
+				name: t.Optional(t.String({ minLength: 1, maxLength: 40 })),
+				startMinute: t.Optional(minuteSchema),
+				endMinute: t.Optional(minuteSchema),
+			}),
+		},
+	)
+	.delete(
+		"/locations/:locationId/day-parts/:dayPartId",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const location = await locationForManager(profile.id, params.locationId);
+			const [deleted] = await db
+				.delete(dayParts)
+				.where(
+					and(
+						eq(dayParts.id, params.dayPartId),
+						eq(dayParts.locationId, location.id),
+					),
+				)
+				.returning({ id: dayParts.id });
+			if (!deleted) throw new NotFoundError("Day part not found");
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ locationId: uuid, dayPartId: uuid }),
 		},
 	)
 	.post(
@@ -506,6 +795,74 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				positionId: uuid,
 				startMinute: minuteSchema,
 				endMinute: minuteSchema,
+				note: t.Optional(t.String({ maxLength: 200 })),
+			}),
+		},
+	)
+	.patch(
+		"/locations/:locationId/shift-templates/:templateId",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers.authorization);
+			const location = await locationForManager(profile.id, params.locationId);
+			const [existing] = await db
+				.select()
+				.from(shiftTemplates)
+				.where(
+					and(
+						eq(shiftTemplates.id, params.templateId),
+						eq(shiftTemplates.locationId, location.id),
+					),
+				)
+				.limit(1);
+			if (!existing) throw new NotFoundError("Shift template not found");
+			if (body.positionId !== undefined) {
+				const [position] = await db
+					.select({ id: positions.id })
+					.from(positions)
+					.where(
+						and(
+							eq(positions.id, body.positionId),
+							eq(positions.workplaceId, location.workplaceId),
+						),
+					)
+					.limit(1);
+				if (!position) throw new NotFoundError("Position not found");
+			}
+			const updated = firstRow(
+				await db
+					.update(shiftTemplates)
+					.set({
+						name: body.name !== undefined ? body.name.trim() : existing.name,
+						positionId: body.positionId ?? existing.positionId,
+						startMinute: body.startMinute ?? existing.startMinute,
+						endMinute: body.endMinute ?? existing.endMinute,
+						note:
+							body.note === undefined
+								? existing.note
+								: body.note.trim() || null,
+					})
+					.where(eq(shiftTemplates.id, existing.id))
+					.returning(),
+			);
+			return {
+				shiftTemplate: {
+					id: updated.id,
+					name: updated.name,
+					positionId: updated.positionId,
+					startMinute: updated.startMinute,
+					endMinute: updated.endMinute,
+					note: updated.note,
+				},
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ locationId: uuid, templateId: uuid }),
+			body: t.Object({
+				name: t.Optional(t.String({ minLength: 1, maxLength: 80 })),
+				positionId: t.Optional(uuid),
+				startMinute: t.Optional(minuteSchema),
+				endMinute: t.Optional(minuteSchema),
 				note: t.Optional(t.String({ maxLength: 200 })),
 			}),
 		},
@@ -594,6 +951,11 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers.authorization);
 			await requireManager(profile.id, params.workplaceId);
+			await assertWorkplaceEnabled(
+				params.workplaceId,
+				"announcementsEnabled",
+				"Announcements are turned off for this Workplace",
+			);
 			const created = firstRow(
 				await db
 					.insert(announcements)
@@ -818,6 +1180,11 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				profile.id,
 				params.workplaceId,
 			);
+			await assertWorkplaceEnabled(
+				params.workplaceId,
+				"messagingEnabled",
+				"Messaging is turned off for this Workplace",
+			);
 			if (body.counterpartEmploymentId === employment.id) {
 				throw new BadRequestError("Pick someone else to message");
 			}
@@ -931,6 +1298,11 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				conversation.workplaceId,
+			);
+			await assertWorkplaceEnabled(
+				conversation.workplaceId,
+				"messagingEnabled",
+				"Messaging is turned off for this Workplace",
 			);
 			const created = firstRow(
 				await db
@@ -1095,7 +1467,13 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/shifts/:shiftId/tasks",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers.authorization);
-			await requireManager(profile.id, await workplaceForShift(params.shiftId));
+			const workplaceId = await workplaceForShift(params.shiftId);
+			await requireManager(profile.id, workplaceId);
+			await assertWorkplaceEnabled(
+				workplaceId,
+				"tasksEnabled",
+				"Shift tasks are turned off for this Workplace",
+			);
 			await db.delete(shiftTasks).where(eq(shiftTasks.shiftId, params.shiftId));
 			if (body.titles.length > 0) {
 				await db.insert(shiftTasks).values(
@@ -1183,7 +1561,10 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers.authorization);
 			const [row] = await db
-				.select({ entry: timeEntries })
+				.select({
+					entry: timeEntries,
+					workplaceId: employments.workplaceId,
+				})
 				.from(timeEntries)
 				.innerJoin(employments, eq(employments.id, timeEntries.employmentId))
 				.where(
@@ -1196,6 +1577,11 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			if (!row?.entry || row.entry.clockedOutAt) {
 				throw new NotFoundError("Time Entry not found");
 			}
+			await assertWorkplaceEnabled(
+				row.workplaceId,
+				"breaksEnabled",
+				"Breaks are turned off for this Workplace",
+			);
 			const [openBreak] = await db
 				.select()
 				.from(timeEntryBreaks)

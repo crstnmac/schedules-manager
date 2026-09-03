@@ -10,6 +10,7 @@ import {
 } from "react-native";
 
 import { PrimaryButton, SecondaryButton, useAppTheme } from "@/components/ui";
+import { useDisplayPrefs } from "@/lib/display";
 import { api } from "@/lib/api";
 import { confirmAction } from "@/lib/confirm-action";
 import { positionColor } from "@/lib/position-color";
@@ -36,28 +37,8 @@ function formatDay(iso: string): string {
 	});
 }
 
-function formatMinute(minute: number): string {
-	const h = Math.floor(minute / 60);
-	const m = minute % 60;
-	const suffix = h >= 12 ? "PM" : "AM";
-	const display = h % 12 === 0 ? 12 : h % 12;
-	return `${display}:${String(m).padStart(2, "0")} ${suffix}`;
-}
 
-function formatClock(iso: string): string {
-	return new Date(iso).toLocaleTimeString([], {
-		hour: "numeric",
-		minute: "2-digit",
-	});
-}
 
-function formatRange(shift: {
-	startMinute: number;
-	endMinute: number;
-	overnight: boolean;
-}): string {
-	return `${formatMinute(shift.startMinute)}–${shift.endMinute === 0 ? "12:00 AM" : formatMinute(shift.endMinute)}${shift.overnight ? " +1" : ""}`;
-}
 
 export function ShiftDetailScreen({
 	shift,
@@ -71,6 +52,7 @@ export function ShiftDetailScreen({
 	onClose: () => void;
 }) {
 	const { theme } = useAppTheme();
+	const { formatShiftRange, formatClockTime } = useDisplayPrefs();
 	const queryClient = useQueryClient();
 	const [mode, setMode] = useState<"info" | "swap">("info");
 	const roster = useDayRoster(workplaceId, shift?.date);
@@ -127,7 +109,7 @@ export function ShiftDetailScreen({
 					</Text>
 				</View>
 				<Text style={[styles.detailLine, { color: theme.muted }]}>
-					{formatRange(shift)} · {shift.positionName}
+					{formatShiftRange(shift.startMinute, shift.endMinute, shift.overnight)} · {shift.positionName}
 				</Text>
 				<Text style={[styles.detailLine, { color: theme.muted }]}>
 					{locationName ?? "Location"}
@@ -262,6 +244,7 @@ export function ShiftDetailScreen({
 
 function RosterRow({ row }: { row: DayRosterEntry }) {
 	const { theme } = useAppTheme();
+	const { formatClockTime } = useDisplayPrefs();
 	const accent = positionColor(row.positionName);
 	return (
 		<View style={styles.rosterRow}>
@@ -274,7 +257,7 @@ function RosterRow({ row }: { row: DayRosterEntry }) {
 					{row.mine ? "You" : row.workerName}
 				</Text>
 				<Text style={[styles.rosterMeta, { color: theme.muted }]}>
-					{formatClock(row.startsAt)} – {formatClock(row.endsAt)} ·{" "}
+					{formatClockTime(row.startsAt)} – {formatClockTime(row.endsAt)} ·{" "}
 					{row.positionName}
 				</Text>
 			</View>
@@ -294,6 +277,7 @@ function SwapProposer({
 	onCancel: () => void;
 }) {
 	const { theme } = useAppTheme();
+	const { formatClockTime, formatShiftRange } = useDisplayPrefs();
 	const [selected, setSelected] = useState<DayRosterEntry | null>(null);
 	const propose = useProposeSwap();
 
@@ -336,8 +320,8 @@ function SwapProposer({
 										{row.workerName}
 									</Text>
 									<Text style={[styles.rosterMeta, { color: theme.muted }]}>
-										Offers: {formatClock(row.startsAt)} –{" "}
-										{formatClock(row.endsAt)} · {row.positionName}
+										Offers: {formatClockTime(row.startsAt)} –{" "}
+										{formatClockTime(row.endsAt)} · {row.positionName}
 									</Text>
 								</View>
 							</Pressable>
@@ -346,7 +330,7 @@ function SwapProposer({
 				</View>
 			)}
 			<Text style={[styles.swapHint, { color: theme.muted }]}>
-				You give: {formatDay(shift.startsAt)} · {formatRange(shift)}
+				You give: {formatDay(shift.startsAt)} · {formatShiftRange(shift.startMinute, shift.endMinute, shift.overnight)}
 			</Text>
 			<View style={styles.actions}>
 				<SecondaryButton label="Back" onPress={onCancel} style={{ flex: 1 }} />
@@ -397,6 +381,7 @@ export function SwapsCard({
 	workplaceId: string | undefined;
 }) {
 	const { theme } = useAppTheme();
+	const { formatShiftRange, formatClockTime } = useDisplayPrefs();
 	const swaps = useMySwaps(workplaceId);
 	const respond = useRespondToSwap();
 	const cancel = useCancelSwap();
@@ -436,12 +421,12 @@ export function SwapsCard({
 						</Text>
 						<Text style={[styles.swapLine, { color: theme.muted }]}>
 							You would give: {formatDay(give.startsAt)} ·{" "}
-							{formatClock(give.startsAt)} – {formatClock(give.endsAt)} ·{" "}
+							{formatClockTime(give.startsAt)} – {formatClockTime(give.endsAt)} ·{" "}
 							{give.positionName}
 						</Text>
 						<Text style={[styles.swapLine, { color: theme.muted }]}>
 							You would take: {formatDay(take.startsAt)} ·{" "}
-							{formatClock(take.startsAt)} – {formatClock(take.endsAt)} ·{" "}
+							{formatClockTime(take.startsAt)} – {formatClockTime(take.endsAt)} ·{" "}
 							{take.positionName}
 						</Text>
 						{incoming ? (

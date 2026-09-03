@@ -24,6 +24,7 @@ export async function resetAndMigrateDatabase() {
 	const pool = new Pool({ connectionString: integrationDatabaseUrl() });
 	try {
 		await pool.query("drop schema if exists public cascade");
+		await pool.query("drop schema if exists drizzle cascade");
 		await pool.query("create schema public");
 		await migrate(drizzle(pool), {
 			migrationsFolder: new URL(

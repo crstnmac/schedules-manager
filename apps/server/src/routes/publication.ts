@@ -31,7 +31,9 @@ import { withIdempotency } from "../idempotency";
 import { isWithinNoticeWindow } from "../notice-window";
 import { notifyEmployments, writeAudit } from "../notify";
 import { firstRow } from "../rows";
+import { publicWorkerName } from "../schedule-conflicts";
 import { weekStartOfDateKey, zonedDayInfo } from "../time";
+import { loadWorkplace } from "../workplace-policy";
 import { diffShiftSets } from "./changes";
 
 export type PublicationTransaction = Parameters<
@@ -939,16 +941,28 @@ export const publicationRoutes = new Elysia({
 
 			await markDelivered([row.version.id], employment.employment.id);
 
-			const [myShifts, deliveryRows, positionRows] = await Promise.all([
+			const workplace = await loadWorkplace(row.location.workplaceId);
+			const showTeam =
+				employment.employment.kind === "manager" ||
+				workplace.workerScheduleVisibility === "full";
+			const shiftFilter = showTeam
+				? eq(versionShifts.versionId, row.version.id)
+				: and(
+						eq(versionShifts.versionId, row.version.id),
+						eq(versionShifts.employmentId, employment.employment.id),
+					);
+
+			const [publishedShifts, deliveryRows, positionRows] = await Promise.all([
 				db
-					.select()
+					.select({
+						shift: versionShifts,
+						name: profiles.fullName,
+						email: profiles.email,
+					})
 					.from(versionShifts)
-					.where(
-						and(
-							eq(versionShifts.versionId, row.version.id),
-							eq(versionShifts.employmentId, employment.employment.id),
-						),
-					),
+					.leftJoin(employments, eq(employments.id, versionShifts.employmentId))
+					.leftJoin(profiles, eq(profiles.id, employments.profileId))
+					.where(shiftFilter),
 				db
 					.select()
 					.from(workerDeliveries)
@@ -969,6 +983,9 @@ export const publicationRoutes = new Elysia({
 				positionRows.map((position) => [position.id, position.name]),
 			);
 			const tz = row.location.timezone;
+			const showContacts =
+				employment.employment.kind === "manager" ||
+				workplace.contactDetailsVisible;
 
 			return {
 				weekStart: row.schedule.weekStartDate,
@@ -980,12 +997,18 @@ export const publicationRoutes = new Elysia({
 					publishedAt: row.version.publishedAt.toISOString(),
 				},
 				deliveryStatus: deliveryRows[0]?.status ?? null,
-				shifts: myShifts
-					.map((shift) => {
+				shifts: publishedShifts
+					.map((item) => {
+						const shift = item.shift;
 						const startInfo = zonedDayInfo(shift.startsAt, tz);
 						const endInfo = zonedDayInfo(shift.endsAt, tz);
 						return {
 							id: shift.id,
+							employmentId: shift.employmentId,
+							mine: shift.employmentId === employment.employment.id,
+							workerName: shift.employmentId
+								? publicWorkerName(item.name, item.email ?? "", showContacts)
+								: "Open shift",
 							positionName: positionNamesById.get(shift.positionId) ?? "Shift",
 							startsAt: shift.startsAt.toISOString(),
 							endsAt: shift.endsAt.toISOString(),

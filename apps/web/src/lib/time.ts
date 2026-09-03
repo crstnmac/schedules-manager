@@ -1,17 +1,46 @@
-export function formatMinute(minute: number): string {
+export type TimeFormat = "12h" | "24h";
+export type NameFormat = "full" | "first_last_initial" | "first";
+
+export function formatMinute(
+	minute: number,
+	format: TimeFormat = "12h",
+): string {
 	const hours = Math.floor(minute / 60);
 	const mins = minute % 60;
+	if (format === "24h") {
+		return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+	}
 	const suffix = hours >= 12 ? "PM" : "AM";
 	const display = hours % 12 === 0 ? 12 : hours % 12;
 	return `${display}:${String(mins).padStart(2, "0")} ${suffix}`;
 }
 
-export function formatClockTime(iso?: string): string {
+export function formatClockTime(
+	iso?: string,
+	format: TimeFormat = "12h",
+): string {
 	if (!iso) return "";
 	return new Date(iso).toLocaleTimeString([], {
 		hour: "numeric",
 		minute: "2-digit",
+		hour12: format !== "24h",
 	});
+}
+
+export function formatPersonName(
+	fullName: string | null | undefined,
+	email: string,
+	format: NameFormat = "full",
+): string {
+	const name = fullName?.trim();
+	if (!name) return email;
+	if (format === "full") return name;
+	const parts = name.split(/\s+/).filter(Boolean);
+	const first = parts[0] ?? name;
+	if (format === "first") return first;
+	const last = parts.length > 1 ? parts[parts.length - 1] : "";
+	if (!last) return first;
+	return `${first} ${last.charAt(0).toUpperCase()}.`;
 }
 
 export function formatDurationMs(ms: number): string {
@@ -36,9 +65,15 @@ export function formatShiftRange(
 	startMinute: number,
 	endMinute: number,
 	overnight: boolean,
+	format: TimeFormat = "12h",
 ): string {
-	const end = endMinute === 0 ? "12:00 AM" : formatMinute(endMinute);
-	return `${formatMinute(startMinute)}–${end}${overnight ? " +1" : ""}`;
+	const end =
+		endMinute === 0
+			? format === "24h"
+				? "00:00"
+				: "12:00 AM"
+			: formatMinute(endMinute, format);
+	return `${formatMinute(startMinute, format)}–${end}${overnight ? " +1" : ""}`;
 }
 
 export function formatDay(isoOrDate: string): string {
@@ -75,6 +110,12 @@ export function parseIsoDate(value: string): Date | undefined {
 
 export function toIsoDate(date: Date): string {
 	return date.toLocaleDateString("sv-SE");
+}
+
+export function shiftDays(dateKey: string, days: number): string {
+	const parsed = new Date(`${dateKey}T00:00:00Z`);
+	parsed.setUTCDate(parsed.getUTCDate() + days);
+	return parsed.toISOString().slice(0, 10);
 }
 
 function tzOffsetMinutes(instant: Date, timeZone: string): number {

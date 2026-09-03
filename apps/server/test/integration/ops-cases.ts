@@ -86,6 +86,26 @@ async function seedWorkplace(
 	};
 }
 
+async function authJson(
+	app: Context["app"],
+	path: string,
+	access: string,
+	init: { method?: string; body?: unknown } = {},
+) {
+	return app.handle(
+		new Request(`http://localhost${path}`, {
+			method: init.method ?? "GET",
+			headers: {
+				authorization: `Bearer ${access}`,
+				...(init.body === undefined
+					? {}
+					: { "content-type": "application/json" }),
+			},
+			body: init.body === undefined ? undefined : JSON.stringify(init.body),
+		}),
+	);
+}
+
 export function registerOpsTests(getContext: () => Context) {
 	test("manager can save a named Schedule Template and apply it to another week", async () => {
 		const { database: d, app, token } = getContext();
@@ -552,6 +572,293 @@ export function registerOpsTests(getContext: () => Context) {
 		});
 	});
 
+	test("approving all-day Time-off deducts eight hours per day", async () => {
+		const { database: d, app, token } = getContext();
+		const seed = await seedWorkplace(d, "All Day Cafe");
+		const managerAccess = await token(seed.managerProfileId, seed.managerEmail);
+		const workerAccess = await token(seed.workerProfileId, seed.workerEmail);
+		const leave = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/leave-types`,
+				{
+					method: "POST",
+					headers: {
+						authorization: `Bearer ${managerAccess}`,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({ name: "Vacation", paid: true }),
+				},
+			),
+		);
+		const leaveBody = (await leave.json()) as { leaveType: { id: string } };
+		await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+				{
+					method: "PUT",
+					headers: {
+						authorization: `Bearer ${managerAccess}`,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({
+						leaveTypeId: leaveBody.leaveType.id,
+						minutes: 1920,
+					}),
+				},
+			),
+		);
+		const request = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/my/time-off`,
+				{
+					method: "POST",
+					headers: {
+						authorization: `Bearer ${workerAccess}`,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({
+						startDate: "2026-09-10",
+						endDate: "2026-09-11",
+						allDay: true,
+						leaveTypeId: leaveBody.leaveType.id,
+					}),
+				},
+			),
+		);
+		expect(request.status).toBe(200);
+		const requested = (await request.json()) as { request: { id: string } };
+		const decided = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/time-off/${requested.request.id}/decision`,
+				{
+					method: "POST",
+					headers: {
+						authorization: `Bearer ${managerAccess}`,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({ decision: "approved" }),
+				},
+			),
+		);
+		expect(decided.status).toBe(200);
+		const balances = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+				{ headers: { authorization: `Bearer ${managerAccess}` } },
+			),
+		);
+		expect(await balances.json()).toMatchObject({
+			balances: [{ minutes: 960, name: "Vacation" }],
+		});
+	});
+
+	test("managers can record approved time off for a worker", async () => {
+		const { database: d, app, token } = getContext();
+		const seed = await seedWorkplace(d, "Record Cafe");
+		const managerAccess = await token(seed.managerProfileId, seed.managerEmail);
+		const leave = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/leave-types`,
+				{
+					method: "POST",
+					headers: {
+						authorization: `Bearer ${managerAccess}`,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({ name: "Sick", paid: true }),
+				},
+			),
+		);
+		const leaveBody = (await leave.json()) as { leaveType: { id: string } };
+		await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+				{
+					method: "PUT",
+					headers: {
+						authorization: `Bearer ${managerAccess}`,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({
+						leaveTypeId: leaveBody.leaveType.id,
+						minutes: 480,
+					}),
+				},
+			),
+		);
+		const recorded = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/time-off`,
+				{
+					method: "POST",
+					headers: {
+						authorization: `Bearer ${managerAccess}`,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({
+						employmentId: seed.worker.id,
+						startDate: "2026-09-14",
+						endDate: "2026-09-14",
+						allDay: true,
+						leaveTypeId: leaveBody.leaveType.id,
+					}),
+				},
+			),
+		);
+		expect(recorded.status).toBe(200);
+		const listed = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/time-off`,
+				{ headers: { authorization: `Bearer ${managerAccess}` } },
+			),
+		);
+		const body = (await listed.json()) as {
+			requests: { status: string; allDay: boolean; chargeMinutes: number }[];
+		};
+		expect(body.requests).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					status: "approved",
+					allDay: true,
+					chargeMinutes: 480,
+				}),
+			]),
+		);
+		const balances = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+				{ headers: { authorization: `Bearer ${managerAccess}` } },
+			),
+		);
+		expect(await balances.json()).toMatchObject({
+			balances: [{ minutes: 0, name: "Sick" }],
+		});
+	});
+
+	test("managers can edit and delete recorded time off", async () => {
+		const { database: d, app, token } = getContext();
+		const seed = await seedWorkplace(d, "Edit Leave Cafe");
+		const managerAccess = await token(seed.managerProfileId, seed.managerEmail);
+		const leave = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/leave-types`,
+				{
+					method: "POST",
+					headers: {
+						authorization: `Bearer ${managerAccess}`,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({ name: "Vacation", paid: true }),
+				},
+			),
+		);
+		const leaveBody = (await leave.json()) as { leaveType: { id: string } };
+		await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+				{
+					method: "PUT",
+					headers: {
+						authorization: `Bearer ${managerAccess}`,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({
+						leaveTypeId: leaveBody.leaveType.id,
+						minutes: 960,
+					}),
+				},
+			),
+		);
+		const recorded = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/time-off`,
+				{
+					method: "POST",
+					headers: {
+						authorization: `Bearer ${managerAccess}`,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({
+						employmentId: seed.worker.id,
+						startDate: "2026-09-14",
+						endDate: "2026-09-14",
+						allDay: true,
+						leaveTypeId: leaveBody.leaveType.id,
+					}),
+				},
+			),
+		);
+		expect(recorded.status).toBe(200);
+		const recordedBody = (await recorded.json()) as { request: { id: string } };
+
+		const edited = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/time-off/${recordedBody.request.id}`,
+				{
+					method: "PATCH",
+					headers: {
+						authorization: `Bearer ${managerAccess}`,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({
+						leaveTypeId: leaveBody.leaveType.id,
+						startDate: "2026-09-14",
+						endDate: "2026-09-15",
+						allDay: true,
+					}),
+				},
+			),
+		);
+		expect(edited.status).toBe(200);
+		const editedBody = (await edited.json()) as {
+			request: { chargeMinutes: number; startDate: string; endDate: string };
+		};
+		expect(editedBody.request).toMatchObject({
+			chargeMinutes: 960,
+			startDate: "2026-09-14",
+			endDate: "2026-09-15",
+		});
+		const afterEdit = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+				{ headers: { authorization: `Bearer ${managerAccess}` } },
+			),
+		);
+		expect(await afterEdit.json()).toMatchObject({
+			balances: [{ minutes: 0, name: "Vacation" }],
+		});
+
+		const removed = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/time-off/${recordedBody.request.id}`,
+				{
+					method: "DELETE",
+					headers: { authorization: `Bearer ${managerAccess}` },
+				},
+			),
+		);
+		expect(removed.status).toBe(200);
+		const afterDelete = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+				{ headers: { authorization: `Bearer ${managerAccess}` } },
+			),
+		);
+		expect(await afterDelete.json()).toMatchObject({
+			balances: [{ minutes: 960, name: "Vacation" }],
+		});
+		const listed = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/time-off`,
+				{ headers: { authorization: `Bearer ${managerAccess}` } },
+			),
+		);
+		const listBody = (await listed.json()) as { requests: { id: string }[] };
+		expect(listBody.requests.map((row) => row.id)).not.toContain(
+			recordedBody.request.id,
+		);
+	});
+
 	test("bulk delete removes selected draft Shifts", async () => {
 		const { database: d, app, token } = getContext();
 		const seed = await seedWorkplace(d, "Bulk Cafe");
@@ -892,7 +1199,9 @@ export function registerOpsTests(getContext: () => Context) {
 		);
 		expect(blocked.status).toBe(400);
 		const blockedBody = (await blocked.json()) as { message: string };
-		expect(blockedBody.message).toBe("Worker is not approved for this position");
+		expect(blockedBody.message).toBe(
+			"Worker is not approved for this position",
+		);
 
 		const created = await app.handle(
 			new Request(
@@ -952,5 +1261,462 @@ export function registerOpsTests(getContext: () => Context) {
 		expect(afterMove.map((row) => row.positionId).sort()).toEqual(
 			[seed.position.id, required(host).id, required(bar).id].sort(),
 		);
+	});
+
+	test("leave types can be renamed and deleted with PTO cascade", async () => {
+		const { database: d, app, token } = getContext();
+		const seed = await seedWorkplace(d, "Leave Settings Cafe");
+		const managerAccess = await token(seed.managerProfileId, seed.managerEmail);
+		const workerAccess = await token(seed.workerProfileId, seed.workerEmail);
+		const created = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/leave-types`,
+			managerAccess,
+			{ method: "POST", body: { name: "Vacation", paid: true } },
+		);
+		expect(created.status).toBe(200);
+		const leaveBody = (await created.json()) as { leaveType: { id: string } };
+		const leaveTypeId = leaveBody.leaveType.id;
+		expect(
+			(
+				await authJson(
+					app,
+					`/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+					managerAccess,
+					{
+						method: "PUT",
+						body: { leaveTypeId, minutes: 480 },
+					},
+				)
+			).status,
+		).toBe(200);
+		const requested = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/my/time-off`,
+			workerAccess,
+			{
+				method: "POST",
+				body: {
+					startsAt: "2026-09-10T15:00:00.000Z",
+					endsAt: "2026-09-10T19:00:00.000Z",
+					leaveTypeId,
+				},
+			},
+		);
+		expect(requested.status).toBe(200);
+		const patched = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/leave-types/${leaveTypeId}`,
+			managerAccess,
+			{ method: "PATCH", body: { name: "PTO", paid: false } },
+		);
+		expect(patched.status).toBe(200);
+		expect(await patched.json()).toMatchObject({
+			leaveType: { id: leaveTypeId, name: "PTO", paid: false },
+		});
+		const removed = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/leave-types/${leaveTypeId}`,
+			managerAccess,
+			{ method: "DELETE" },
+		);
+		expect(removed.status).toBe(200);
+		const listed = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/leave-types`,
+			managerAccess,
+		);
+		expect(await listed.json()).toMatchObject({ leaveTypes: [] });
+		const balances = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+			managerAccess,
+		);
+		expect(await balances.json()).toMatchObject({ balances: [] });
+		const timeOff = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/time-off`,
+			managerAccess,
+		);
+		const timeOffBody = (await timeOff.json()) as {
+			requests: { leaveTypeId: string | null }[];
+		};
+		expect(timeOffBody.requests).toEqual(
+			expect.arrayContaining([expect.objectContaining({ leaveTypeId: null })]),
+		);
+	});
+
+	test("tags, time blocks, day parts, and shift templates can be updated", async () => {
+		const { database: d, app, token } = getContext();
+		const seed = await seedWorkplace(d, "Surface Settings Cafe");
+		const access = await token(seed.managerProfileId, seed.managerEmail);
+
+		const tag = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/tags`,
+			access,
+			{ method: "POST", body: { name: "Training" } },
+		);
+		expect(tag.status).toBe(200);
+		const tagBody = (await tag.json()) as { tag: { id: string } };
+		const renamed = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/tags/${tagBody.tag.id}`,
+			access,
+			{ method: "PATCH", body: { name: "Opener" } },
+		);
+		expect(renamed.status).toBe(200);
+		expect(await renamed.json()).toMatchObject({ tag: { name: "Opener" } });
+
+		const block = await authJson(
+			app,
+			`/v1/locations/${seed.location.id}/time-blocks`,
+			access,
+			{
+				method: "POST",
+				body: { name: "Dinner", startMinute: 1020, endMinute: 1320 },
+			},
+		);
+		expect(block.status).toBe(200);
+		const blockBody = (await block.json()) as { timeBlock: { id: string } };
+		const blockPatch = await authJson(
+			app,
+			`/v1/locations/${seed.location.id}/time-blocks/${blockBody.timeBlock.id}`,
+			access,
+			{
+				method: "PATCH",
+				body: { name: "Late dinner", startMinute: 1080, endMinute: 1380 },
+			},
+		);
+		expect(blockPatch.status).toBe(200);
+		expect(await blockPatch.json()).toMatchObject({
+			timeBlock: {
+				name: "Late dinner",
+				startMinute: 1080,
+				endMinute: 1380,
+			},
+		});
+		expect(
+			(
+				await authJson(
+					app,
+					`/v1/locations/${seed.location.id}/time-blocks/${blockBody.timeBlock.id}`,
+					access,
+					{ method: "DELETE" },
+				)
+			).status,
+		).toBe(200);
+
+		const part = await authJson(
+			app,
+			`/v1/locations/${seed.location.id}/day-parts`,
+			access,
+			{
+				method: "POST",
+				body: { name: "Evening", startMinute: 960, endMinute: 1320 },
+			},
+		);
+		expect(part.status).toBe(200);
+		const partBody = (await part.json()) as { dayPart: { id: string } };
+		const partPatch = await authJson(
+			app,
+			`/v1/locations/${seed.location.id}/day-parts/${partBody.dayPart.id}`,
+			access,
+			{ method: "PATCH", body: { name: "Night" } },
+		);
+		expect(partPatch.status).toBe(200);
+		expect(await partPatch.json()).toMatchObject({
+			dayPart: { name: "Night", startMinute: 960, endMinute: 1320 },
+		});
+		expect(
+			(
+				await authJson(
+					app,
+					`/v1/locations/${seed.location.id}/day-parts/${partBody.dayPart.id}`,
+					access,
+					{ method: "DELETE" },
+				)
+			).status,
+		).toBe(200);
+
+		const template = await authJson(
+			app,
+			`/v1/locations/${seed.location.id}/shift-templates`,
+			access,
+			{
+				method: "POST",
+				body: {
+					name: "Closer",
+					positionId: seed.position.id,
+					startMinute: 1020,
+					endMinute: 1320,
+				},
+			},
+		);
+		expect(template.status).toBe(200);
+		const templateBody = (await template.json()) as {
+			shiftTemplate: { id: string };
+		};
+		const templatePatch = await authJson(
+			app,
+			`/v1/locations/${seed.location.id}/shift-templates/${templateBody.shiftTemplate.id}`,
+			access,
+			{
+				method: "PATCH",
+				body: {
+					name: "Closer plus",
+					startMinute: 1050,
+					note: "Lock up",
+				},
+			},
+		);
+		expect(templatePatch.status).toBe(200);
+		expect(await templatePatch.json()).toMatchObject({
+			shiftTemplate: {
+				name: "Closer plus",
+				positionId: seed.position.id,
+				startMinute: 1050,
+				endMinute: 1320,
+				note: "Lock up",
+			},
+		});
+	});
+
+	test("unused locations and positions can be deleted", async () => {
+		const { database: d, app, token } = getContext();
+		const seed = await seedWorkplace(d, "Delete Settings Cafe");
+		const access = await token(seed.managerProfileId, seed.managerEmail);
+
+		const blockedLocation = await authJson(
+			app,
+			`/v1/locations/${seed.location.id}`,
+			access,
+			{ method: "DELETE" },
+		);
+		expect(blockedLocation.status).toBe(409);
+
+		const extraLocation = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/locations`,
+			access,
+			{
+				method: "POST",
+				body: { name: "Patio", timezone: "America/Chicago" },
+			},
+		);
+		expect(extraLocation.status).toBe(200);
+		const locationBody = (await extraLocation.json()) as {
+			location: { id: string };
+		};
+		expect(
+			(
+				await authJson(
+					app,
+					`/v1/locations/${locationBody.location.id}`,
+					access,
+					{ method: "DELETE" },
+				)
+			).status,
+		).toBe(200);
+
+		const extraPosition = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/positions`,
+			access,
+			{ method: "POST", body: { name: "Host" } },
+		);
+		expect(extraPosition.status).toBe(200);
+		const positionBody = (await extraPosition.json()) as {
+			position: { id: string };
+		};
+		expect(
+			(
+				await authJson(
+					app,
+					`/v1/positions/${positionBody.position.id}`,
+					access,
+					{ method: "DELETE" },
+				)
+			).status,
+		).toBe(200);
+
+		await d.db.insert(d.shifts).values({
+			scheduleId: seed.schedule.id,
+			employmentId: seed.worker.id,
+			positionId: seed.position.id,
+			startsAt: new Date("2026-09-08T16:00:00.000Z"),
+			endsAt: new Date("2026-09-08T22:00:00.000Z"),
+		});
+		const blockedPosition = await authJson(
+			app,
+			`/v1/positions/${seed.position.id}`,
+			access,
+			{ method: "DELETE" },
+		);
+		expect(blockedPosition.status).toBe(409);
+	});
+
+	test("workplace policies persist and block worker time-off, swaps, and messages", async () => {
+		const { database: d, app, token } = getContext();
+		const seed = await seedWorkplace(d, "Policy Cafe");
+		const managerAccess = await token(seed.managerProfileId, seed.managerEmail);
+		const workerAccess = await token(seed.workerProfileId, seed.workerEmail);
+
+		const patched = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}`,
+			managerAccess,
+			{
+				method: "PATCH",
+				body: {
+					messagingEnabled: false,
+					shiftExchangesEnabled: false,
+					workersCanRequestTimeOff: false,
+					geofenceRequired: true,
+					workerScheduleVisibility: "own",
+					leaveCapReset: "custom_date",
+					leaveCapResetMonthDay: "01-15",
+					clopeningMinutes: 480,
+				},
+			},
+		);
+		expect(patched.status).toBe(200);
+		expect(await patched.json()).toMatchObject({
+			workplace: {
+				messagingEnabled: false,
+				shiftExchangesEnabled: false,
+				workersCanRequestTimeOff: false,
+				geofenceRequired: true,
+				workerScheduleVisibility: "own",
+				leaveCapReset: "custom_date",
+				leaveCapResetMonthDay: "01-15",
+				clopeningMinutes: 480,
+			},
+		});
+
+		const me = await authJson(app, "/v1/me", workerAccess);
+		expect(me.status).toBe(200);
+		expect(await me.json()).toMatchObject({
+			profile: { timeFormat: "12h", nameFormat: "full" },
+			employments: [
+				{
+					workplace: {
+						id: seed.workplace.id,
+						policies: {
+							messagingEnabled: false,
+							workersCanRequestTimeOff: false,
+							shiftExchangesEnabled: false,
+							geofenceRequired: true,
+						},
+					},
+				},
+			],
+		});
+
+		const prefs = await authJson(app, "/v1/me", workerAccess, {
+			method: "PATCH",
+			body: {
+				timeFormat: "24h",
+				nameFormat: "first",
+				notificationPreferences: { messages: false },
+			},
+		});
+		expect(prefs.status).toBe(200);
+		expect(await prefs.json()).toMatchObject({
+			profile: {
+				timeFormat: "24h",
+				nameFormat: "first",
+				notificationPreferences: {
+					schedule: true,
+					messages: false,
+					timeOff: true,
+					timeClock: true,
+				},
+			},
+		});
+
+		const timeOff = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/my/time-off`,
+			workerAccess,
+			{
+				method: "POST",
+				body: {
+					startsAt: "2026-09-10T15:00:00.000Z",
+					endsAt: "2026-09-10T19:00:00.000Z",
+				},
+			},
+		);
+		expect(timeOff.status).toBe(403);
+
+		const conversations = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/conversations`,
+			workerAccess,
+		);
+		expect(conversations.status).toBe(200);
+		const conversationBody = (await conversations.json()) as {
+			conversations: { id: string }[];
+		};
+		const message = await authJson(
+			app,
+			`/v1/conversations/${conversationBody.conversations[0]?.id}/messages`,
+			workerAccess,
+			{ method: "POST", body: { body: "Hello" } },
+		);
+		expect(message.status).toBe(403);
+
+		const [version] = await d.db
+			.insert(d.scheduleVersions)
+			.values({ scheduleId: seed.schedule.id, versionNumber: 1 })
+			.returning();
+		const now = Date.now();
+		const [futureShift] = await d.db
+			.insert(d.versionShifts)
+			.values({
+				versionId: required(version).id,
+				employmentId: seed.worker.id,
+				positionId: seed.position.id,
+				startsAt: new Date(now + 60 * 60_000),
+				endsAt: new Date(now + 5 * 60 * 60_000),
+			})
+			.returning();
+		const swap = await authJson(app, "/v1/my/swaps", workerAccess, {
+			method: "POST",
+			body: {
+				requesterShiftId: required(futureShift).id,
+				counterpartEmploymentId: seed.manager.id,
+				counterpartShiftId: crypto.randomUUID(),
+			},
+		});
+		expect(swap.status).toBe(403);
+
+		const [openShift] = await d.db
+			.insert(d.versionShifts)
+			.values({
+				versionId: required(version).id,
+				employmentId: seed.worker.id,
+				positionId: seed.position.id,
+				startsAt: new Date(now - 10 * 60_000),
+				endsAt: new Date(now + 90 * 60_000),
+			})
+			.returning();
+		const clockIn = await app.handle(
+			new Request(
+				`http://localhost/v1/my/shifts/${required(openShift).id}/clock-in`,
+				{
+					method: "POST",
+					headers: {
+						authorization: `Bearer ${workerAccess}`,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({}),
+				},
+			),
+		);
+		expect(clockIn.status).toBe(400);
+		expect(await clockIn.json()).toMatchObject({
+			message: "This Workplace requires a Location Geofence for clock-in",
+		});
 	});
 }

@@ -24,6 +24,7 @@ import {
 import { SwapsCard } from "@/components/worker-shifts";
 import { useAuth } from "@/lib/auth";
 import { confirmAction } from "@/lib/confirm-action";
+import { useDisplayPrefs } from "@/lib/display";
 import { positionColor } from "@/lib/position-color";
 import {
 	useAcknowledge,
@@ -55,10 +56,18 @@ import { useManagerTimeOff, useManagerWorkers } from "@/lib/queries";
 
 function ManagerHome() {
 	const { theme } = useAppTheme();
+	const { formatShiftRange } = useDisplayPrefs();
 	const { employment, workplaceId } = useCurrentEmployment();
 	const workers = useManagerWorkers(workplaceId);
 	const timeOff = useManagerTimeOff(workplaceId);
 	const swaps = useCoverageSwaps(workplaceId);
+	const schedule = useMySchedule(workplaceId);
+	const clockIn = useClockIn();
+	const clockOut = useClockOut();
+	const nextShift = schedule.data?.nextShift ?? null;
+	const todayKey = new Date().toLocaleDateString("sv-SE");
+	const onClock =
+		nextShift?.timeEntry != null && nextShift.timeEntry.clockedOutAt === null;
 
 	const active =
 		workers.data?.workers.filter(
@@ -73,10 +82,46 @@ function ManagerHome() {
 	return (
 		<AppScreen>
 			<PageHeader
-				eyebrow="Manager workspace"
+				eyebrow={onClock ? "On the clock" : "Manager workspace"}
 				title={employment?.workplace.name ?? "Workplace"}
-				description="Keep the Published Schedule current. Draft, review, publish on the web; clear requests here."
+				description={
+					onClock
+						? "Punch out from here when this shift ends."
+						: "Clock in for your shift, then clear requests. Draft and publish on the web."
+				}
 			/>
+			{nextShift ? (
+				<FeatureCard>
+					<Text style={[s.nextLabel, { color: theme.onPrimary }]}>
+						{onClockLabel(nextShift, todayKey)}
+					</Text>
+					<Text style={[s.nextTitle, { color: theme.onPrimary }]}>
+						{formatDay(nextShift.startsAt)}
+					</Text>
+					<Text style={[s.nextTime, { color: theme.onPrimary }]}>
+						{formatShiftRange(nextShift.startMinute, nextShift.endMinute, nextShift.overnight)}{" "}
+						· {nextShift.positionName}
+					</Text>
+					<TimeClockControls
+						shift={nextShift}
+						clockIn={clockIn}
+						clockOut={clockOut}
+					/>
+				</FeatureCard>
+			) : (
+				<Card>
+					<Text style={[s.cardTitle, { color: theme.text }]}>
+						No shift to clock
+					</Text>
+					<Text style={[s.body, { color: theme.muted }]}>
+						Assign yourself a published Shift on the Schedule, then punch in
+						here.
+					</Text>
+				</Card>
+			)}
+			<Text style={[s.label, { color: theme.muted, marginTop: 4 }]}>
+				WORKPLACE
+			</Text>
 			<View style={s.metricGrid}>
 				<View style={s.metricCell}>
 					<Metric icon="people-outline" value={active} label="Active Workers" />
@@ -97,26 +142,17 @@ function ManagerHome() {
 				</View>
 			</View>
 			<Card>
-				<Text style={[s.cardTitle, { color: theme.text }]}>
-					Draft on the web
-				</Text>
-				<Text style={[s.body, { color: theme.muted }]}>
-					Building and publishing the week happens in the manager web Schedule
-					grid. This mobile view is a calm read-only check: who is active, what
-					needs a decision, and where the next Schedule Version stands.
-				</Text>
-			</Card>
-			<Card>
 				<Text style={[s.cardTitle, { color: theme.text }]}>What to do now</Text>
 				<View style={{ gap: 6 }}>
 					<Text style={[s.body, { color: theme.muted }]}>
-						• Review Time-off Requests and agreed Shift Swaps before you publish.
+						• Review Time-off Requests and agreed Shift Swaps before you
+						publish.
 					</Text>
 					<Text style={[s.body, { color: theme.muted }]}>
 						• Open Shifts with no Worker still need coverage.
 					</Text>
 					<Text style={[s.body, { color: theme.muted }]}>
-						• Acknowledgement ≠ Shift Acceptance — they are separate.
+						• Draft and publish the week on the web Schedule grid.
 					</Text>
 				</View>
 			</Card>
@@ -147,6 +183,7 @@ function Metric({
 
 // ── Worker schedule – priority stack ───────────────────────────────────
 function WorkerSchedule() {
+	const { formatMinute, formatPerson, formatShiftRange } = useDisplayPrefs();
 	const { theme } = useAppTheme();
 	const router = useRouter();
 	const { signOut } = useAuth();
@@ -217,7 +254,7 @@ function WorkerSchedule() {
 				title="My schedule"
 				description={
 					me.data?.profile
-						? (me.data.profile.fullName ?? me.data.profile.email)
+						? (formatPerson(me.data.profile.fullName, me.data.profile.email))
 						: undefined
 				}
 			/>
@@ -271,9 +308,8 @@ function WorkerSchedule() {
 						{formatDay(nextShift.startsAt)}
 					</Text>
 					<Text style={[s.nextTime, { color: theme.onPrimary }]}>
-						{formatMinute(nextShift.startMinute)}–
-						{formatMinute(nextShift.endMinute)}
-						{nextShift.overnight ? " +1" : ""} · {nextShift.positionName}
+						{formatShiftRange(nextShift.startMinute, nextShift.endMinute, nextShift.overnight)}{" "}
+						· {nextShift.positionName}
 					</Text>
 					<TimeClockControls
 						shift={nextShift}
@@ -475,7 +511,7 @@ function WorkerSchedule() {
 											/>
 											<View style={{ flex: 1, gap: 2, paddingLeft: 8 }}>
 												<Text style={[s.shiftTime, { color: theme.text }]}>
-													{formatRange(
+													{formatShiftRange(
 														shift.startMinute,
 														shift.endMinute,
 														shift.overnight,
@@ -581,7 +617,7 @@ function WorkerSchedule() {
 								<View style={{ flex: 1, gap: 2, paddingLeft: 8 }}>
 									<Text style={[s.shiftTime, { color: theme.text }]}>
 										{formatDay(sh.startsAt)} ·{" "}
-										{formatRange(sh.startMinute, sh.endMinute, sh.overnight)}
+										{formatShiftRange(sh.startMinute, sh.endMinute, sh.overnight)}
 									</Text>
 									<View style={s.shiftMetaRow}>
 										<View
@@ -632,8 +668,12 @@ function WorkerSchedule() {
 					{historyVersion.data
 						? historyVersion.data.shifts.map((sh) => (
 								<Text key={sh.id} style={[s.shiftMeta, { color: theme.muted }]}>
-									{formatDay(sh.startsAt)} · {formatMinute(sh.startMinute)}–
-									{sh.endMinute === 0 ? "12:00 AM" : formatMinute(sh.endMinute)}{" "}
+									{formatDay(sh.startsAt)} ·{" "}
+									{formatShiftRange(
+										sh.startMinute,
+										sh.endMinute,
+										sh.overnight,
+									)}{" "}
 									· {sh.positionName}
 								</Text>
 							))
@@ -680,9 +720,6 @@ function onClockLabel(shift: NextShift, todayKey: string): string {
 	return "Next shift";
 }
 
-function formatRange(start: number, end: number, overnight: boolean): string {
-	return `${formatMinute(start)}–${end === 0 ? "12:00 AM" : formatMinute(end)}${overnight ? " +1" : ""}`;
-}
 const CLOCK_IN_EARLY_MS = 15 * 60 * 1000;
 
 type NextShift = NonNullable<
@@ -699,6 +736,7 @@ function TimeClockControls({
 	clockOut: ReturnType<typeof useClockOut>;
 }) {
 	const { theme } = useAppTheme();
+	const { formatMinute, formatClockTime } = useDisplayPrefs();
 	const router = useRouter();
 	const [nowMs, setNowMs] = useState(() => Date.now());
 	const entry = shift.timeEntry;
@@ -721,7 +759,7 @@ function TimeClockControls({
 			"Clock in?",
 			`${shift.positionName} · ${formatMinute(shift.startMinute)}–${formatMinute(
 				shift.endMinute,
-			)}\nStart work at ${formatClock(new Date().toISOString())}?`,
+			)}\nStart work at ${formatClockTime(new Date().toISOString())}?`,
 			[
 				{ text: "Cancel", style: "cancel" },
 				{
@@ -755,8 +793,8 @@ function TimeClockControls({
 		<View style={{ marginTop: 12, gap: 8 }}>
 			{worked && entry ? (
 				<Text style={[s.hint, { color: theme.onPrimary }]}>
-					Last punch · In {formatClock(entry.clockedInAt)} · Out{" "}
-					{formatClock(entry.clockedOutAt ?? undefined)} ·{" "}
+					Last punch · In {formatClockTime(entry.clockedInAt)} · Out{" "}
+					{formatClockTime(entry.clockedOutAt ?? undefined)} ·{" "}
 					{formatDuration(
 						new Date(entry.clockedOutAt ?? "").getTime() -
 							new Date(entry.clockedInAt).getTime(),
@@ -774,7 +812,7 @@ function TimeClockControls({
 						{formatTimer(nowMs - new Date(entry.clockedInAt).getTime())}
 					</Text>
 					<Text style={[s.hint, { color: theme.onPrimary }]}>
-						Clocked in at {formatClock(entry.clockedInAt)}
+						Clocked in at {formatClockTime(entry.clockedInAt)}
 					</Text>
 					<SecondaryButton
 						label={clockOut.isPending ? "Clocking out…" : "Clock out"}
@@ -809,7 +847,7 @@ function TimeClockControls({
 			{!canStart && entry === null ? (
 				<Text style={[s.hint, { color: theme.onPrimary }]}>
 					Clock-in opens at{" "}
-					{formatClock(new Date(startsAt - CLOCK_IN_EARLY_MS).toISOString())} —
+					{formatClockTime(new Date(startsAt - CLOCK_IN_EARLY_MS).toISOString())} —
 					15 minutes before your shift.
 				</Text>
 			) : null}
@@ -836,13 +874,6 @@ function TimeClockControls({
 	);
 }
 
-function formatClock(iso?: string): string {
-	if (!iso) return "";
-	return new Date(iso).toLocaleTimeString([], {
-		hour: "numeric",
-		minute: "2-digit",
-	});
-}
 
 function formatDuration(ms: number): string {
 	const minutes = Math.max(0, Math.round(ms / 60000));
@@ -857,13 +888,6 @@ function formatTimer(ms: number): string {
 	const m = Math.floor((totalSeconds % 3600) / 60);
 	const sec = totalSeconds % 60;
 	return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-}
-function formatMinute(minute: number): string {
-	const h = Math.floor(minute / 60);
-	const m = minute % 60;
-	const suffix = h >= 12 ? "PM" : "AM";
-	const display = h % 12 === 0 ? 12 : h % 12;
-	return `${display}:${String(m).padStart(2, "0")} ${suffix}`;
 }
 
 const s = StyleSheet.create({

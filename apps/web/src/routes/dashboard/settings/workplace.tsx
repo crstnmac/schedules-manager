@@ -1,7 +1,8 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
 
 import { WorkplaceCard } from "@/components/settings/core";
+import { DirectoryCard } from "@/components/settings/directory";
 import { SettingsPage } from "@/components/settings/page";
 import { useWorkplaceSettings } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
@@ -18,7 +19,7 @@ function WorkplaceSettingsPage() {
 	return (
 		<SettingsPage
 			title="General"
-			description="Name, pay period, and clock rules for this workplace."
+			description="Name, week, pay period, and labor defaults for this workplace."
 		>
 			<WorkplaceCard
 				settings={settings.data}
@@ -29,6 +30,7 @@ function WorkplaceSettingsPage() {
 					})
 				}
 			/>
+			<DirectoryCard />
 		</SettingsPage>
 	);
 }

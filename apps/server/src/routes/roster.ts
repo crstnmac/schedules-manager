@@ -7,6 +7,7 @@ import {
 	profiles,
 	schedules,
 	scheduleVersions,
+	timeOffRequests,
 	versionShifts,
 	workplaces,
 } from "@SchedulesManager/db";
@@ -24,6 +25,8 @@ import { BadRequestError, NotFoundError } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { notifyEmployments, writeAudit } from "../notify";
 import { weekStartOfDateKey } from "../time";
+import { loadWorkplace } from "../workplace-policy";
+import { publicWorkerName } from "../schedule-conflicts";
 
 function zonedDateKey(instant: Date, timezone: string): string {
 	return new Intl.DateTimeFormat("en-CA", {
@@ -46,9 +49,17 @@ export const rosterRoutes = new Elysia({
 				profile.id,
 				params.workplaceId,
 			);
+			const workplace = await loadWorkplace(params.workplaceId);
+			const showTeam =
+				employment.kind === "manager" ||
+				workplace.workerScheduleVisibility === "full";
+			const showContacts =
+				employment.kind === "manager" || workplace.contactDetailsVisible;
+			const showOthersTimeOff =
+				employment.kind === "manager" || workplace.workerTimeOffVisibility;
 
 			const scope = await locationScopeFor(employment);
-			if (scope.length === 0) return { roster: [] };
+			if (scope.length === 0) return { roster: [], timeOff: [] };
 
 			const weekStart = weekStartOfDateKey(
 				query.date,
@@ -65,7 +76,7 @@ export const rosterRoutes = new Elysia({
 						eq(schedules.weekStartDate, weekStart),
 					),
 				);
-			if (scheduleRows.length === 0) return { roster: [] };
+			if (scheduleRows.length === 0) return { roster: [], timeOff: [] };
 
 			const latestVersions = await Promise.all(
 				scheduleRows.map(async (row) => {
@@ -81,7 +92,7 @@ export const rosterRoutes = new Elysia({
 			const versions = latestVersions.filter(
 				(row): row is NonNullable<typeof row> => row !== null,
 			);
-			if (versions.length === 0) return { roster: [] };
+			if (versions.length === 0) return { roster: [], timeOff: [] };
 
 			const shiftRows = await db
 				.select({
@@ -106,12 +117,21 @@ export const rosterRoutes = new Elysia({
 					const timezone =
 						versions.find((v) => v.version.id === row.shift.versionId)
 							?.timezone ?? "America/Chicago";
-					return zonedDateKey(row.shift.startsAt, timezone) === query.date;
+					if (zonedDateKey(row.shift.startsAt, timezone) !== query.date) {
+						return false;
+					}
+					if (showTeam) return true;
+					return (
+						row.shift.employmentId === employment.id ||
+						row.shift.employmentId === null
+					);
 				})
 				.map((row) => ({
 					versionShiftId: row.shift.id,
 					employmentId: row.shift.employmentId,
-					workerName: row.name ?? row.email ?? "Open shift",
+					workerName: row.shift.employmentId
+						? publicWorkerName(row.name, row.email ?? "", showContacts)
+						: "Open shift",
 					positionName: row.positionName,
 					startsAt: row.shift.startsAt.toISOString(),
 					endsAt: row.shift.endsAt.toISOString(),
@@ -119,7 +139,69 @@ export const rosterRoutes = new Elysia({
 				}))
 				.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 
-			return { roster };
+			const timeOffRows =
+				showOthersTimeOff || employment.kind === "manager"
+					? await db
+							.select({
+								request: timeOffRequests,
+								name: profiles.fullName,
+								email: profiles.email,
+								employmentId: timeOffRequests.employmentId,
+							})
+							.from(timeOffRequests)
+							.innerJoin(
+								employments,
+								eq(employments.id, timeOffRequests.employmentId),
+							)
+							.innerJoin(profiles, eq(profiles.id, employments.profileId))
+							.where(
+								and(
+									eq(employments.workplaceId, params.workplaceId),
+									eq(timeOffRequests.status, "approved"),
+								),
+							)
+					: await db
+							.select({
+								request: timeOffRequests,
+								name: profiles.fullName,
+								email: profiles.email,
+								employmentId: timeOffRequests.employmentId,
+							})
+							.from(timeOffRequests)
+							.innerJoin(
+								employments,
+								eq(employments.id, timeOffRequests.employmentId),
+							)
+							.innerJoin(profiles, eq(profiles.id, employments.profileId))
+							.where(
+								and(
+									eq(timeOffRequests.employmentId, employment.id),
+									eq(timeOffRequests.status, "approved"),
+								),
+							);
+
+			const dayStart = new Date(`${query.date}T00:00:00Z`);
+			const dayEnd = new Date(`${query.date}T23:59:59Z`);
+			const timeOff = timeOffRows
+				.filter((row) => {
+					if (
+						!showOthersTimeOff &&
+						row.employmentId !== employment.id &&
+						employment.kind !== "manager"
+					) {
+						return false;
+					}
+					return row.request.startsAt <= dayEnd && row.request.endsAt >= dayStart;
+				})
+				.map((row) => ({
+					employmentId: row.employmentId,
+					workerName: publicWorkerName(row.name, row.email, showContacts),
+					startsAt: row.request.startsAt.toISOString(),
+					endsAt: row.request.endsAt.toISOString(),
+					mine: row.employmentId === employment.id,
+				}));
+
+			return { roster, timeOff };
 		},
 		{
 			headers: t.Object({ authorization: t.String() }),

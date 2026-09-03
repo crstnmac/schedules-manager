@@ -3,16 +3,6 @@ import {
 	AlertDescription,
 	AlertTitle,
 } from "@SchedulesManager/ui/components/alert";
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from "@SchedulesManager/ui/components/alert-dialog";
 import { Button } from "@SchedulesManager/ui/components/button";
 import {
 	Card,
@@ -23,6 +13,14 @@ import {
 	CardTitle,
 } from "@SchedulesManager/ui/components/card";
 import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@SchedulesManager/ui/components/dialog";
+import {
 	Empty,
 	EmptyDescription,
 	EmptyHeader,
@@ -31,14 +29,6 @@ import {
 } from "@SchedulesManager/ui/components/empty";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "@SchedulesManager/ui/components/dialog";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
@@ -46,20 +36,19 @@ import {
 	CalendarDaysIcon,
 	CheckIcon,
 	EyeIcon,
-	TimerIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { AppDocument } from "@/components/app-page";
 import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import { TimeClockCard } from "@/components/time-clock-card";
 import { api } from "@/lib/api";
 import {
 	type DayRosterEntry,
 	type SwapDetailDto,
 	useAcknowledge,
 	useCancelSwap,
-	useClockIn,
-	useClockOut,
 	useDayRoster,
 	useMySchedule,
 	useMySwaps,
@@ -69,16 +58,9 @@ import {
 	useRespondToSwap,
 	useShiftTasks,
 } from "@/lib/queries";
-import {
-	CLOCK_IN_EARLY_MS,
-	formatClockTime,
-	formatDay,
-	formatMinute,
-	formatShiftRange,
-	formatTimerMs,
-} from "@/lib/time";
+import { formatDay } from "@/lib/time";
+import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
-import { AppDocument } from "@/components/app-page";
 
 export const Route = createFileRoute("/worker/")({
 	component: WorkerHome,
@@ -104,17 +86,14 @@ const taskHelper = createDataColumnHelper<ShiftTask>();
 const coworkerHelper = createDataColumnHelper<DayRosterEntry>();
 
 function WorkerHome() {
+	const { formatMinute, formatShiftRange } = useDisplayPrefs();
 	const { workplace } = useWorkplace();
 	const schedule = useMySchedule(workplace?.id);
 	const acknowledge = useAcknowledge();
 	const respond = useRespondToAcceptance();
 	const release = useRequestRelease();
-	const clockIn = useClockIn();
-	const clockOut = useClockOut();
-	const [confirmingIn, setConfirmingIn] = useState(false);
-	const [confirmingOut, setConfirmingOut] = useState(false);
 	const [swapShift, setSwapShift] = useState<WorkerShift | null>(null);
-	const [nowMs, setNowMs] = useState(() => Date.now());
+	const nowMs = Date.now();
 
 	const currentWeek = schedule.data?.currentWeek ?? null;
 	const nextWeek = schedule.data?.nextWeek ?? null;
@@ -134,16 +113,8 @@ function WorkerHome() {
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
-	const entry = nextShift?.timeEntry ?? null;
-	const onClock = entry !== null && entry.clockedOutAt === null;
 	const roster = useDayRoster(workplace?.id, swapShift?.date);
 	const proposeSwap = useProposeSwap();
-
-	useEffect(() => {
-		if (!onClock) return;
-		const timer = setInterval(() => setNowMs(Date.now()), 1000);
-		return () => clearInterval(timer);
-	}, [onClock]);
 
 	const pendingAcceptances = schedule.data?.pendingAcceptances ?? [];
 	const currentChanges = schedule.data?.currentChanges ?? [];
@@ -187,8 +158,7 @@ function WorkerHome() {
 										{ acceptanceId: row.original.id, decision: "accept" },
 										{
 											onSuccess: () => toast.success("Shift accepted."),
-											onError: (error) =>
-												toast.error((error as Error).message),
+											onError: (error) => toast.error((error as Error).message),
 										},
 									)
 								}
@@ -209,8 +179,7 @@ function WorkerHome() {
 									respond.mutate(
 										{ acceptanceId: row.original.id, decision: "decline" },
 										{
-											onError: (error) =>
-												toast.error((error as Error).message),
+											onError: (error) => toast.error((error as Error).message),
 										},
 									)
 								}
@@ -238,7 +207,7 @@ function WorkerHome() {
 						id: "window",
 						header: "Shift",
 						cell: ({ getValue }) => (
-							<span className="tabular-nums text-muted-foreground">
+							<span className="text-muted-foreground tabular-nums">
 								{getValue()}
 							</span>
 						),
@@ -283,8 +252,7 @@ function WorkerHome() {
 												toast.success(
 													"Release requested. You remain responsible until a manager approves.",
 												),
-											onError: (error) =>
-												toast.error((error as Error).message),
+											onError: (error) => toast.error((error as Error).message),
 										})
 									}
 								/>
@@ -312,7 +280,7 @@ function WorkerHome() {
 						id: "window",
 						header: "Shift",
 						cell: ({ getValue }) => (
-							<span className="tabular-nums text-muted-foreground">
+							<span className="text-muted-foreground tabular-nums">
 								{getValue()}
 							</span>
 						),
@@ -336,8 +304,7 @@ function WorkerHome() {
 				}),
 				historyHelper.accessor("publishedAt", {
 					header: "Published",
-					cell: ({ getValue }) =>
-						new Date(getValue()).toLocaleString(),
+					cell: ({ getValue }) => new Date(getValue()).toLocaleString(),
 				}),
 				historyHelper.display({
 					id: "actions",
@@ -428,102 +395,7 @@ function WorkerHome() {
 			) : null}
 
 			{nextShift ? (
-				<div className="flex flex-col gap-4 rounded-2xl bg-primary p-6 text-primary-foreground shadow-sm">
-					<div>
-						<p className="mb-3 font-medium text-primary-foreground/75 text-sm">
-							{onClock ? "You're on the clock" : "Next shift"}
-						</p>
-						<h1 className="font-semibold text-2xl tracking-[-0.025em]">
-							{formatDay(nextShift.startsAt)}
-						</h1>
-						<p className="mt-1 font-medium text-lg tabular-nums">
-							{formatShiftRange(
-								nextShift.startMinute,
-								nextShift.endMinute,
-								nextShift.overnight,
-							)}{" "}
-							· {nextShift.positionName}
-						</p>
-					</div>
-
-					{onClock && entry ? (
-						<div className="flex flex-col gap-2">
-							<p
-								className="font-mono font-semibold text-3xl tabular-nums"
-								aria-live="off"
-							>
-								{formatTimerMs(nowMs - new Date(entry.clockedInAt).getTime())}
-							</p>
-							<p className="text-primary-foreground/75 text-sm">
-								Clocked in at {formatClockTime(entry.clockedInAt)}
-							</p>
-							<Button
-								variant="outline"
-								className="self-start border-primary-foreground/60 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
-								disabled={clockOut.isPending}
-								onClick={() => setConfirmingOut(true)}
-							>
-								{clockOut.isPending ? (
-									<Spinner data-icon="inline-start" />
-								) : (
-									<TimerIcon data-icon="inline-start" />
-								)}
-								Clock out
-							</Button>
-						</div>
-					) : null}
-
-					{!onClock && entry && entry.clockedOutAt !== null ? (
-						<p className="text-primary-foreground/75 text-sm">
-							Last punch · In {formatClockTime(entry.clockedInAt)} · Out{" "}
-							{formatClockTime(entry.clockedOutAt)}
-						</p>
-					) : null}
-
-					{!entry &&
-					nowMs >= new Date(nextShift.startsAt).getTime() - CLOCK_IN_EARLY_MS &&
-					nowMs <= new Date(nextShift.endsAt).getTime() ? (
-						<div className="flex flex-col gap-2">
-							<Button
-								variant="secondary"
-								className="self-start bg-primary-foreground text-primary hover:bg-primary-foreground/90"
-								disabled={clockIn.isPending}
-								onClick={() => setConfirmingIn(true)}
-							>
-								{clockIn.isPending ? (
-									<Spinner data-icon="inline-start" />
-								) : (
-									<TimerIcon data-icon="inline-start" />
-								)}
-								Clock in
-							</Button>
-							{clockIn.isError ? (
-								<p className="text-primary-foreground/75 text-sm">
-									{(clockIn.error as Error).message}
-								</p>
-							) : null}
-						</div>
-					) : null}
-
-					{!entry &&
-					nowMs < new Date(nextShift.startsAt).getTime() - CLOCK_IN_EARLY_MS ? (
-						<p className="text-primary-foreground/75 text-sm">
-							Clock-in opens at{" "}
-							{formatClockTime(
-								new Date(
-									new Date(nextShift.startsAt).getTime() - CLOCK_IN_EARLY_MS,
-								).toISOString(),
-							)}{" "}
-							— 15 minutes before your shift.
-						</p>
-					) : null}
-
-					{clockOut.isError ? (
-						<p className="text-primary-foreground/75 text-sm">
-							{(clockOut.error as Error).message}
-						</p>
-					) : null}
-
+				<TimeClockCard shift={nextShift} timecardTo="/worker/timecard">
 					{(shiftTasks.data?.tasks.length ?? 0) > 0 ? (
 						<div className="grid gap-2 border-primary-foreground/30 border-t pt-4">
 							<p className="font-medium text-sm">Shift Tasks</p>
@@ -535,92 +407,8 @@ function WorkerHome() {
 							/>
 						</div>
 					) : null}
-
-					<Button
-						variant="ghost"
-						className="self-start text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground"
-						nativeButton={false}
-						render={<Link to="/worker/timecard" />}
-					>
-						My timecard
-						<CalendarDaysIcon data-icon="inline-end" />
-					</Button>
-				</div>
+				</TimeClockCard>
 			) : null}
-
-			<AlertDialog
-				open={confirmingIn}
-				onOpenChange={(open) => {
-					if (!open) setConfirmingIn(false);
-				}}
-			>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Clock in?</AlertDialogTitle>
-						<AlertDialogDescription>
-							{nextShift
-								? `${nextShift.positionName} · ${formatShiftRange(
-										nextShift.startMinute,
-										nextShift.endMinute,
-										nextShift.overnight,
-									)}. Start work at ${formatClockTime(
-										new Date().toISOString(),
-									)}?`
-								: "Start work now?"}
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction
-							onClick={() =>
-								nextShift &&
-								clockIn.mutate(nextShift.id, {
-									onSuccess: () => toast.success("Clocked in."),
-									onError: (error) => toast.error((error as Error).message),
-								})
-							}
-						>
-							Clock in
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
-
-			<AlertDialog
-				open={confirmingOut}
-				onOpenChange={(open) => {
-					if (!open) setConfirmingOut(false);
-				}}
-			>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Clock out?</AlertDialogTitle>
-						<AlertDialogDescription>
-							You've been on the clock for{" "}
-							{entry
-								? formatTimerMs(
-										Date.now() - new Date(entry.clockedInAt).getTime(),
-									)
-								: ""}
-							. This ends your Time Entry for this shift.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction
-							onClick={() =>
-								nextShift &&
-								clockOut.mutate(nextShift.id, {
-									onSuccess: () => toast.success("Clocked out."),
-									onError: (error) => toast.error((error as Error).message),
-								})
-							}
-						>
-							Clock out
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
 
 			{pendingAcceptances.length > 0 ? (
 				<Card>
@@ -794,15 +582,19 @@ const SWAP_STATUS_LABELS = {
 	cancelled: "Cancelled",
 } as const;
 
-function formatSwapShift(shift: {
-	positionName: string;
-	startsAt: string;
-	endsAt: string;
-}) {
+function formatSwapShift(
+	shift: {
+		positionName: string;
+		startsAt: string;
+		endsAt: string;
+	},
+	formatClockTime: (iso?: string) => string,
+) {
 	return `${formatDay(shift.startsAt)} · ${formatClockTime(shift.startsAt)}–${formatClockTime(shift.endsAt)} · ${shift.positionName}`;
 }
 
 function WorkerSwapsCard({ workplaceId }: { workplaceId: string | undefined }) {
+	const { formatClockTime } = useDisplayPrefs();
 	const swaps = useMySwaps(workplaceId);
 	const respond = useRespondToSwap();
 	const cancel = useCancelSwap();
@@ -844,7 +636,7 @@ function WorkerSwapsCard({ workplaceId }: { workplaceId: string | undefined }) {
 				const take = incoming
 					? row.swap.requesterShift
 					: row.swap.counterpartShift;
-				return `Give ${formatSwapShift(give)} · take ${formatSwapShift(take)}`;
+				return `Give ${formatSwapShift(give, formatClockTime)} · take ${formatSwapShift(take, formatClockTime)}`;
 			},
 			{ id: "details", header: "Exchange" },
 		),
@@ -915,8 +707,7 @@ function WorkerSwapsCard({ workplaceId }: { workplaceId: string | undefined }) {
 								onConfirm={() =>
 									cancel.mutate(swap.id, {
 										onSuccess: () => toast.success("Swap cancelled."),
-										onError: (error) =>
-											toast.error((error as Error).message),
+										onError: (error) => toast.error((error as Error).message),
 									})
 								}
 							/>
@@ -961,6 +752,7 @@ function SwapSheet({
 	roster: ReturnType<typeof useDayRoster>;
 	proposeSwap: ReturnType<typeof useProposeSwap>;
 }) {
+	const { formatClockTime, formatShiftRange } = useDisplayPrefs();
 	const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null);
 	const coworkers = (roster.data?.roster ?? []).filter(
 		(row) =>
@@ -987,7 +779,7 @@ function SwapSheet({
 						id: "window",
 						header: "Shift",
 						cell: ({ getValue }) => (
-							<span className="tabular-nums text-muted-foreground">
+							<span className="text-muted-foreground tabular-nums">
 								{getValue()}
 							</span>
 						),
@@ -1009,9 +801,7 @@ function SwapSheet({
 										setSelectedShiftId(row.original.versionShiftId)
 									}
 								>
-									{isSelected ? (
-										<CheckIcon data-icon="inline-start" />
-									) : null}
+									{isSelected ? <CheckIcon data-icon="inline-start" /> : null}
 									{isSelected ? "Selected" : "Select"}
 								</Button>
 							</div>

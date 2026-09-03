@@ -10,6 +10,7 @@ import {
 	useMessages,
 	useWorkers,
 } from "@/lib/queries";
+import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
 
 export const Route = createFileRoute("/dashboard/messages")({
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/dashboard/messages")({
 
 function MessagesPage() {
 	const { workplace, employmentId } = useWorkplace();
+	const { formatPerson } = useDisplayPrefs();
 	const threads = useConversations(workplace?.id);
 	const workers = useWorkers(workplace?.id);
 	const [active, setActive] = useState<string | null>(null);
@@ -30,11 +32,11 @@ function MessagesPage() {
 				.filter((row) => row.status === "active")
 				.map((row) => ({
 					employmentId: row.employmentId,
-					name: row.profile.fullName ?? row.profile.email,
+					name: formatPerson(row.profile.fullName, row.profile.email),
 					email: row.profile.email,
 				}))
 				.sort((left, right) => left.name.localeCompare(right.name)),
-		[workers.data?.workers],
+		[formatPerson, workers.data?.workers],
 	);
 
 	const send = useMutation({

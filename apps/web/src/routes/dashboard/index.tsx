@@ -19,6 +19,7 @@ import { cn } from "@SchedulesManager/ui/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
+	AlarmClockIcon,
 	CalendarCheckIcon,
 	CircleCheckIcon,
 	CircleIcon,
@@ -27,22 +28,25 @@ import {
 	UserPlusIcon,
 	UsersIcon,
 } from "lucide-react";
+import { useMemo } from "react";
 import { toast } from "sonner";
+import { AppDocument } from "@/components/app-page";
+import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { api } from "@/lib/api";
 import {
+	type AcceptancesResponse,
+	type ScheduleResponse,
 	useAcceptances,
 	useLocations,
+	useMySchedule,
 	usePilotStatus,
 	usePositions,
 	useSchedule,
 	useWorkers,
-	type AcceptancesResponse,
-	type ScheduleResponse,
 } from "@/lib/queries";
-import { formatMinute, WEEKDAY_NAMES } from "@/lib/time";
+import { formatDay, WEEKDAY_NAMES } from "@/lib/time";
+import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
-import { AppDocument } from "@/components/app-page";
-import { createDataColumnHelper, DataTable } from "@/components/data-table";
 
 export const Route = createFileRoute("/dashboard/")({ component: Overview });
 
@@ -51,7 +55,10 @@ type AcceptanceRow = AcceptancesResponse["acceptances"][number];
 const staffHelper = createDataColumnHelper<StaffRow>();
 const acceptanceHelper = createDataColumnHelper<AcceptanceRow>();
 
-function staffConstraintText(member: StaffRow): string {
+function staffConstraintText(
+	member: StaffRow,
+	formatMinute: (minute: number) => string,
+): string {
 	const parts: string[] = [];
 	if ((member.unavailability?.length ?? 0) > 0) {
 		parts.push(
@@ -75,16 +82,18 @@ function staffConstraintText(member: StaffRow): string {
 	return parts.join(" · ");
 }
 
-const staffColumns = staffHelper.columns([
-	staffHelper.accessor("name", {
-		header: "Worker",
-		cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
-	}),
-	staffHelper.accessor((row) => staffConstraintText(row), {
-		id: "details",
-		header: "Constraints",
-	}),
-]);
+function createStaffColumns(formatMinute: (minute: number) => string) {
+	return staffHelper.columns([
+		staffHelper.accessor("name", {
+			header: "Worker",
+			cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
+		}),
+		staffHelper.accessor((row) => staffConstraintText(row, formatMinute), {
+			id: "details",
+			header: "Constraints",
+		}),
+	]);
+}
 const overviewAcceptanceColumns = acceptanceHelper.columns([
 	acceptanceHelper.accessor(
 		(row) => `${row.workerName} · v${row.versionNumber}`,
@@ -125,6 +134,11 @@ function currentWeekStart(): string {
 
 function Overview() {
 	const { workplace } = useWorkplace();
+	const { formatMinute, formatShiftRange } = useDisplayPrefs();
+	const staffColumns = useMemo(
+		() => createStaffColumns(formatMinute),
+		[formatMinute],
+	);
 	const locations = useLocations(workplace?.id);
 	const positions = usePositions(workplace?.id);
 	const workers = useWorkers(workplace?.id);
@@ -134,6 +148,10 @@ function Overview() {
 		currentWeekStart(),
 	);
 	const acceptances = useAcceptances(currentSchedule.data?.schedule.id);
+	const mySchedule = useMySchedule(workplace?.id);
+	const nextShift = mySchedule.data?.nextShift ?? null;
+	const onClock =
+		nextShift?.timeEntry != null && nextShift.timeEntry.clockedOutAt === null;
 	const queryClient = useQueryClient();
 	const remind = useMutation({
 		mutationFn: () =>
@@ -241,6 +259,38 @@ function Overview() {
 
 	return (
 		<AppDocument widthClassName="max-w-5xl">
+			{nextShift ? (
+				<Card className={cn(onClock && "border-primary/40 bg-primary/5")}>
+					<CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
+						<div className="flex min-w-0 items-start gap-3">
+							<div className="mt-0.5 rounded-lg bg-primary/10 p-2 text-primary">
+								<AlarmClockIcon className="size-4" />
+							</div>
+							<div className="min-w-0">
+								<CardTitle className="text-base">
+									{onClock ? "You're on the clock" : "Your next shift"}
+								</CardTitle>
+								<CardDescription>
+									{formatDay(nextShift.startsAt)} ·{" "}
+									{formatShiftRange(
+										nextShift.startMinute,
+										nextShift.endMinute,
+										nextShift.overnight,
+									)}{" "}
+									· {nextShift.positionName}
+								</CardDescription>
+							</div>
+						</div>
+						<Button
+							size="sm"
+							nativeButton={false}
+							render={<Link to="/dashboard/clock" />}
+						>
+							{onClock ? "Open clock" : "Clock in"}
+						</Button>
+					</CardHeader>
+				</Card>
+			) : null}
 			{isLoading ? (
 				<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
 					{["locations", "positions", "workers", "invitations"].map((key) => (

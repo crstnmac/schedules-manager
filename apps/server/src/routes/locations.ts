@@ -1,8 +1,8 @@
-import { db, locations } from "@SchedulesManager/db";
+import { db, locations, schedules } from "@SchedulesManager/db";
 import { eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { requireManager, requireSession } from "../context";
-import { BadRequestError, NotFoundError } from "../errors";
+import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { fillPlaceFromAddress } from "../geocode";
 import { hashPin } from "../pin";
 import { firstRow } from "../rows";
@@ -24,8 +24,27 @@ function toLocationDto(location: typeof locations.$inferSelect) {
 		latitude: location.latitude,
 		longitude: location.longitude,
 		geofenceRadiusMeters: location.geofenceRadiusMeters,
+		openMinute: location.openMinute,
+		closeMinute: location.closeMinute,
 		kioskEnabled: Boolean(location.kioskPinHash),
 	};
+}
+
+function normalizeHours(
+	openMinute: number | null | undefined,
+	closeMinute: number | null | undefined,
+	existingOpen: number | null,
+	existingClose: number | null,
+) {
+	const open = openMinute === undefined ? existingOpen : openMinute;
+	const close = closeMinute === undefined ? existingClose : closeMinute;
+	if (open != null && (open < 0 || open > 1440)) {
+		throw new BadRequestError("Open time must be between 0 and 1440 minutes");
+	}
+	if (close != null && (close < 0 || close > 1440)) {
+		throw new BadRequestError("Close time must be between 0 and 1440 minutes");
+	}
+	return { openMinute: open, closeMinute: close };
 }
 
 export const locationsRoutes = new Elysia({
@@ -71,6 +90,12 @@ export const locationsRoutes = new Elysia({
 			const timezone = body.timezone ?? filled.timezone;
 			assertTimeZone(timezone);
 
+			const hours = normalizeHours(
+				body.openMinute,
+				body.closeMinute,
+				null,
+				null,
+			);
 			const location = firstRow(
 				await db
 					.insert(locations)
@@ -82,6 +107,8 @@ export const locationsRoutes = new Elysia({
 						latitude: filled.latitude,
 						longitude: filled.longitude,
 						geofenceRadiusMeters: body.geofenceRadiusMeters ?? null,
+						openMinute: hours.openMinute,
+						closeMinute: hours.closeMinute,
 					})
 					.returning(),
 			);
@@ -101,6 +128,12 @@ export const locationsRoutes = new Elysia({
 				longitude: t.Optional(t.Union([t.String(), t.Null()])),
 				geofenceRadiusMeters: t.Optional(
 					t.Union([t.Integer({ minimum: 20, maximum: 5000 }), t.Null()]),
+				),
+				openMinute: t.Optional(
+					t.Union([t.Integer({ minimum: 0, maximum: 1440 }), t.Null()]),
+				),
+				closeMinute: t.Optional(
+					t.Union([t.Integer({ minimum: 0, maximum: 1440 }), t.Null()]),
 				),
 			}),
 			detail: {
@@ -138,6 +171,12 @@ export const locationsRoutes = new Elysia({
 			});
 			const timezone = body.timezone ?? filled.timezone ?? existing.timezone;
 			assertTimeZone(timezone);
+			const hours = normalizeHours(
+				body.openMinute,
+				body.closeMinute,
+				existing.openMinute,
+				existing.closeMinute,
+			);
 
 			const location = firstRow(
 				await db
@@ -155,6 +194,8 @@ export const locationsRoutes = new Elysia({
 							body.geofenceRadiusMeters === undefined
 								? existing.geofenceRadiusMeters
 								: body.geofenceRadiusMeters,
+						openMinute: hours.openMinute,
+						closeMinute: hours.closeMinute,
 						kioskPinHash:
 							body.kioskPin === undefined
 								? existing.kioskPinHash
@@ -185,12 +226,55 @@ export const locationsRoutes = new Elysia({
 				geofenceRadiusMeters: t.Optional(
 					t.Union([t.Integer({ minimum: 20, maximum: 5000 }), t.Null()]),
 				),
+				openMinute: t.Optional(
+					t.Union([t.Integer({ minimum: 0, maximum: 1440 }), t.Null()]),
+				),
+				closeMinute: t.Optional(
+					t.Union([t.Integer({ minimum: 0, maximum: 1440 }), t.Null()]),
+				),
 				kioskPin: t.Optional(
 					t.Union([t.String({ minLength: 4, maxLength: 8 }), t.Null()]),
 				),
 			}),
 			detail: {
 				summary: "Update a Location (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.delete(
+		"/locations/:locationId",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+
+			const [existing] = await db
+				.select()
+				.from(locations)
+				.where(eq(locations.id, params.locationId))
+				.limit(1);
+
+			if (!existing) throw new NotFoundError("Location not found");
+			await requireManager(profile.id, existing.workplaceId);
+
+			const [schedule] = await db
+				.select({ id: schedules.id })
+				.from(schedules)
+				.where(eq(schedules.locationId, existing.id))
+				.limit(1);
+			if (schedule) {
+				throw new ConflictError(
+					"This location still has schedules. Remove those weeks before deleting it.",
+				);
+			}
+
+			await db.delete(locations).where(eq(locations.id, existing.id));
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ locationId: t.String({ format: "uuid" }) }),
+			detail: {
+				summary: "Delete a Location (Manager)",
 				security: [{ bearerAuth: [] }],
 			},
 		},

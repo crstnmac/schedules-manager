@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
 
 import { LocationsCard } from "@/components/settings/core";
 import { SettingsPage } from "@/components/settings/page";
@@ -18,7 +18,7 @@ function LocationsSettingsPage() {
 	return (
 		<SettingsPage
 			title="Locations"
-			description="Places workers can be scheduled at."
+			description="Sites where people can be scheduled, including time zone, address, and kiosk."
 		>
 			<LocationsCard
 				locations={locations.data ?? []}

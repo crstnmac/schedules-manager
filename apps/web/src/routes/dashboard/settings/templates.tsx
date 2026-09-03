@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-
-import { TemplatesCard } from "@/components/settings-surface-cards";
 import { SettingsPage } from "@/components/settings/page";
+import { TemplatesCard } from "@/components/settings-surface-cards";
 import { useLocations, usePositions, useTimeBlocks } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -22,7 +21,7 @@ function TemplatesSettingsPage() {
 
 	return (
 		<SettingsPage
-			title="Shift templates"
+			title="Templates"
 			description="Reusable shift shapes for a position and time window."
 		>
 			<TemplatesCard

@@ -153,10 +153,10 @@ import {
 } from "@/lib/schedule-calendar";
 import {
 	datetimeLocalToIso,
-	formatMinute,
 	isoToDatetimeLocal,
 	WEEKDAY_NAMES,
 } from "@/lib/time";
+import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
 
 export const Route = createFileRoute("/dashboard/schedule")({
@@ -185,7 +185,10 @@ const acceptanceHelper = createDataColumnHelper<AcceptanceRow>();
 const publicationHelper = createDataColumnHelper<PublicationRow>();
 const changeHelper = createDataColumnHelper<ChangeRow>();
 
-function staffConstraintText(member: StaffRow): string {
+function staffConstraintText(
+	member: StaffRow,
+	formatMinute: (minute: number) => string,
+): string {
 	const parts: string[] = [];
 	if ((member.unavailability?.length ?? 0) > 0) {
 		parts.push(
@@ -212,16 +215,18 @@ function staffConstraintText(member: StaffRow): string {
 	return parts.join(" · ");
 }
 
-const scheduleStaffColumns = staffHelper.columns([
-	staffHelper.accessor("name", {
-		header: "Worker",
-		cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
-	}),
-	staffHelper.accessor((row) => staffConstraintText(row), {
-		id: "details",
-		header: "Constraints",
-	}),
-]);
+function createScheduleStaffColumns(formatMinute: (minute: number) => string) {
+	return staffHelper.columns([
+		staffHelper.accessor("name", {
+			header: "Worker",
+			cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
+		}),
+		staffHelper.accessor((row) => staffConstraintText(row, formatMinute), {
+			id: "details",
+			header: "Constraints",
+		}),
+	]);
+}
 const hoursColumns = hoursHelper.columns([
 	hoursHelper.accessor("name", {
 		header: "Worker",
@@ -536,6 +541,7 @@ function timeOffCoversDay(
 function cellConstraints(
 	member: ScheduleResponse["staff"][number],
 	day: string,
+	formatMinute: (minute: number) => string,
 ): CellConstraint[] {
 	const weekday = new Date(`${day}T12:00:00`).getDay();
 	const constraints: CellConstraint[] = [];
@@ -687,6 +693,11 @@ function ScheduleMetric({
 
 function SchedulePage() {
 	const { workplace } = useWorkplace();
+	const { formatMinute } = useDisplayPrefs();
+	const scheduleStaffColumns = useMemo(
+		() => createScheduleStaffColumns(formatMinute),
+		[formatMinute],
+	);
 	const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
 	const settings = useWorkplaceSettings(workplace?.id);
 	const weekStartDay = settings.data?.weekStartDay ?? 1;
@@ -3549,7 +3560,11 @@ function SchedulePage() {
 																`${member.employmentId}:${day}`,
 															) ?? []
 														).filter(shiftMatchesSurfaceFilters);
-														const constraints = cellConstraints(member, day);
+														const constraints = cellConstraints(
+															member,
+															day,
+															formatMinute,
+														);
 														const isEmptyCell =
 															workerShifts.length === 0 &&
 															constraints.length === 0;

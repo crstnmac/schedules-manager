@@ -14,6 +14,8 @@ import {
 	AppScreen,
 	Badge,
 	Card,
+	NativeDatePickerField,
+	NativeField,
 	PageHeader,
 	PrimaryButton,
 	SecondaryButton,
@@ -21,9 +23,13 @@ import {
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { confirmAction } from "@/lib/confirm-action";
+import { useDisplayPrefs } from "@/lib/display";
+import { formatLeaveHours, formatLeaveRange, todayIsoDate } from "@/lib/leave";
 import {
+	type ManagerTimeOffResponse,
 	useCoverageSwaps,
 	useCurrentEmployment,
+	useLeaveTypes,
 	useManagerTimeOff,
 	useManagerWorkers,
 	useMarkAttendance,
@@ -172,6 +178,7 @@ function attendanceLabel(kind: TimeclockRow["attendance"]) {
 
 export function ManagerSchedule() {
 	const { theme } = useAppTheme();
+	const { formatMinute } = useDisplayPrefs();
 	const { workplaceId } = useCurrentEmployment();
 	const locations = useQuery({
 		queryKey: ["manager", workplaceId, "locations"],
@@ -438,6 +445,7 @@ export function ManagerSchedule() {
 // ── Team ─────────────────────────────────────────────────────────────────
 export function ManagerTeam() {
 	const { theme } = useAppTheme();
+	const { formatPerson } = useDisplayPrefs();
 	const { workplaceId } = useCurrentEmployment();
 	const workers = useManagerWorkers(workplaceId);
 
@@ -454,14 +462,14 @@ export function ManagerTeam() {
 					<View style={s.row}>
 						<View style={[s.avatar, { backgroundColor: `${theme.primary}18` }]}>
 							<Text style={[s.avatarText, { color: theme.primary }]}>
-								{(w.profile.fullName ?? w.profile.email)
+								{formatPerson(w.profile.fullName, w.profile.email)
 									.slice(0, 1)
 									.toUpperCase()}
 							</Text>
 						</View>
 						<View style={s.grow}>
 							<Text style={[s.cardTitle, { color: theme.text }]}>
-								{w.profile.fullName ?? w.profile.email}
+								{formatPerson(w.profile.fullName, w.profile.email)}
 							</Text>
 							<Text style={[s.hint, { color: theme.muted }]}>
 								{w.kind} · {w.status}
@@ -499,7 +507,7 @@ export function ManagerTeam() {
 						No Employments yet
 					</Text>
 					<Text style={[s.body, { color: theme.muted }]}>
-						Invite Workers and Managers from the web settings.
+						Invite workers and managers from the web Team page.
 					</Text>
 				</Card>
 			) : null}
@@ -510,10 +518,27 @@ export function ManagerTeam() {
 // ── Requests (Time-off) ──────────────────────────────────────────────────
 export function ManagerRequests() {
 	const { theme } = useAppTheme();
-	const { workplaceId } = useCurrentEmployment();
+	const { formatPerson } = useDisplayPrefs();
+	const { workplaceId, employment } = useCurrentEmployment();
 	const requests = useManagerTimeOff(workplaceId);
+	const workers = useManagerWorkers(workplaceId);
+	const leaveTypes = useLeaveTypes(workplaceId);
 	const swaps = useCoverageSwaps(workplaceId);
 	const client = useQueryClient();
+	const [employmentId, setEmploymentId] = useState("");
+	const [leaveTypeId, setLeaveTypeId] = useState("");
+	const [startDate, setStartDate] = useState(todayIsoDate);
+	const [endDate, setEndDate] = useState(todayIsoDate);
+	const [reason, setReason] = useState("");
+	const [mineLeaveTypeId, setMineLeaveTypeId] = useState("");
+	const [mineStartDate, setMineStartDate] = useState(todayIsoDate);
+	const [mineEndDate, setMineEndDate] = useState(todayIsoDate);
+	const [mineReason, setMineReason] = useState("");
+	const [editingId, setEditingId] = useState<string | null>(null);
+	const [editLeaveTypeId, setEditLeaveTypeId] = useState("");
+	const [editStartDate, setEditStartDate] = useState(todayIsoDate);
+	const [editEndDate, setEditEndDate] = useState(todayIsoDate);
+	const [editReason, setEditReason] = useState("");
 	const decide = useMutation({
 		mutationFn: ({
 			id,
@@ -532,10 +557,106 @@ export function ManagerRequests() {
 			}),
 		onError: (e) => Alert.alert("Could not save", (e as Error).message),
 	});
+	const record = useMutation({
+		mutationFn: () =>
+			api(`/v1/workplaces/${workplaceId}/time-off`, {
+				method: "POST",
+				body: {
+					employmentId,
+					leaveTypeId,
+					startDate,
+					endDate: endDate || startDate,
+					allDay: true,
+					reason: reason.trim() || undefined,
+				},
+			}),
+		onSuccess: () => {
+			setReason("");
+			client.invalidateQueries({
+				queryKey: ["manager", workplaceId, "time-off"],
+			});
+			Alert.alert("Recorded", "They are now out on the schedule.");
+		},
+		onError: (e) => Alert.alert("Could not record", (e as Error).message),
+	});
+	const requestMine = useMutation({
+		mutationFn: () =>
+			api(`/v1/workplaces/${workplaceId}/my/time-off`, {
+				method: "POST",
+				body: {
+					leaveTypeId: mineLeaveTypeId,
+					startDate: mineStartDate,
+					endDate: mineEndDate || mineStartDate,
+					allDay: true,
+					reason: mineReason.trim() || undefined,
+				},
+			}),
+		onSuccess: () => {
+			setMineReason("");
+			client.invalidateQueries({
+				queryKey: ["manager", workplaceId, "time-off"],
+			});
+			Alert.alert(
+				"Requested",
+				"Another manager can approve this, or record it for yourself to approve now.",
+			);
+		},
+		onError: (e) => Alert.alert("Could not request", (e as Error).message),
+	});
+	const saveEdit = useMutation({
+		mutationFn: () =>
+			api(`/v1/workplaces/${workplaceId}/time-off/${editingId}`, {
+				method: "PATCH",
+				body: {
+					leaveTypeId: editLeaveTypeId,
+					startDate: editStartDate,
+					endDate: editEndDate || editStartDate,
+					allDay: true,
+					reason: editReason.trim() || undefined,
+				},
+			}),
+		onSuccess: () => {
+			setEditingId(null);
+			client.invalidateQueries({
+				queryKey: ["manager", workplaceId, "time-off"],
+			});
+			Alert.alert("Updated", "Time off was updated.");
+		},
+		onError: (e) => Alert.alert("Could not update", (e as Error).message),
+	});
+	const removeLeave = useMutation({
+		mutationFn: (id: string) =>
+			api(`/v1/workplaces/${workplaceId}/time-off/${id}`, {
+				method: "DELETE",
+			}),
+		onSuccess: () => {
+			if (editingId) setEditingId(null);
+			client.invalidateQueries({
+				queryKey: ["manager", workplaceId, "time-off"],
+			});
+		},
+		onError: (e) => Alert.alert("Could not delete", (e as Error).message),
+	});
 	const decideSwap = useSwapDecision(workplaceId);
+
+	function beginEdit(r: ManagerTimeOffResponse["requests"][number]) {
+		setEditingId(r.id);
+		setEditLeaveTypeId(r.leaveTypeId ?? "");
+		setEditStartDate(r.startDate ?? r.startsAt.slice(0, 10));
+		setEditEndDate(r.endDate ?? r.endsAt.slice(0, 10));
+		setEditReason(r.reason ?? "");
+	}
 	const pendingTimeOff =
 		requests.data?.requests.filter((r) => r.status === "pending") ?? [];
+	const approvedUpcoming =
+		requests.data?.requests.filter(
+			(r) =>
+				r.status === "approved" &&
+				(r.endDate ?? r.endsAt.slice(0, 10)) >= todayIsoDate(),
+		) ?? [];
 	const pendingSwaps = swaps.data ?? [];
+	const activePeople =
+		workers.data?.workers.filter((member) => member.status === "active") ?? [];
 	const empty =
 		!requests.isLoading &&
 		!swaps.isLoading &&
@@ -545,19 +666,237 @@ export function ManagerRequests() {
 	return (
 		<AppScreen>
 			<PageHeader
-				title="Requests"
-				description="Approve Time-off Requests and agreed Shift Swaps. A swap republishes the schedule."
+				title="Time off"
+				description="Managers and workers can take leave. Decide requests, record leave, or request your own."
 			/>
+			{editingId ? (
+				<Card>
+					<Text style={[s.cardTitle, { color: theme.text }]}>
+						Edit time off
+					</Text>
+					<View style={s.chipsRow}>
+						{(leaveTypes.data?.leaveTypes ?? []).map((type) => {
+							const selected = editLeaveTypeId === type.id;
+							return (
+								<Pressable
+									key={type.id}
+									onPress={() => setEditLeaveTypeId(type.id)}
+									style={[
+										s.chip,
+										{
+											borderColor: selected ? theme.primary : theme.border,
+											backgroundColor: selected ? theme.primary : "transparent",
+										},
+									]}
+								>
+									<Text
+										style={[
+											s.chipText,
+											{ color: selected ? theme.onPrimary : theme.text },
+										]}
+									>
+										{type.name}
+									</Text>
+								</Pressable>
+							);
+						})}
+					</View>
+					<NativeDatePickerField
+						label="From"
+						value={editStartDate}
+						onChange={(value) => {
+							setEditStartDate(value);
+							if (!editEndDate || editEndDate < value) setEditEndDate(value);
+						}}
+					/>
+					<NativeDatePickerField
+						label="Until"
+						value={editEndDate}
+						onChange={setEditEndDate}
+					/>
+					<NativeField
+						label="Note (optional)"
+						value={editReason}
+						onChange={setEditReason}
+					/>
+					<View style={s.actions}>
+						<View style={{ flex: 1 }}>
+							<PrimaryButton
+								label={saveEdit.isPending ? "Saving…" : "Save changes"}
+								disabled={saveEdit.isPending || !editLeaveTypeId}
+								onPress={() => saveEdit.mutate()}
+							/>
+						</View>
+						<View style={{ flex: 1 }}>
+							<SecondaryButton
+								label="Cancel"
+								onPress={() => setEditingId(null)}
+							/>
+						</View>
+					</View>
+				</Card>
+			) : null}
+			<Card>
+				<Text style={[s.cardTitle, { color: theme.text }]}>
+					Request my leave
+				</Text>
+				<Text style={[s.hint, { color: theme.muted }]}>
+					Pending until another manager approves. Record yourself below to
+					approve immediately.
+				</Text>
+				<View style={s.chipsRow}>
+					{(leaveTypes.data?.leaveTypes ?? []).map((type) => {
+						const selected = mineLeaveTypeId === type.id;
+						return (
+							<Pressable
+								key={type.id}
+								onPress={() => setMineLeaveTypeId(type.id)}
+								style={[
+									s.chip,
+									{
+										borderColor: selected ? theme.primary : theme.border,
+										backgroundColor: selected ? theme.primary : "transparent",
+									},
+								]}
+							>
+								<Text
+									style={[
+										s.chipText,
+										{ color: selected ? theme.onPrimary : theme.text },
+									]}
+								>
+									{type.name}
+								</Text>
+							</Pressable>
+						);
+					})}
+				</View>
+				<NativeDatePickerField
+					label="From"
+					value={mineStartDate}
+					onChange={(value) => {
+						setMineStartDate(value);
+						if (!mineEndDate || mineEndDate < value) setMineEndDate(value);
+					}}
+				/>
+				<NativeDatePickerField
+					label="Until"
+					value={mineEndDate}
+					onChange={setMineEndDate}
+				/>
+				<NativeField
+					label="Note (optional)"
+					value={mineReason}
+					onChange={setMineReason}
+				/>
+				<PrimaryButton
+					label={requestMine.isPending ? "Sending…" : "Request my leave"}
+					disabled={
+						requestMine.isPending || !employment?.id || !mineLeaveTypeId
+					}
+					onPress={() => requestMine.mutate()}
+				/>
+			</Card>
+			<Card>
+				<Text style={[s.cardTitle, { color: theme.text }]}>
+					Record time off
+				</Text>
+				<Text style={[s.hint, { color: theme.muted }]}>
+					Approved immediately for a worker or manager. Paid hours deduct from
+					the balance.
+				</Text>
+				<View style={s.chipsRow}>
+					{activePeople.map((member) => {
+						const selected = employmentId === member.employmentId;
+						const label = formatPerson(
+							member.profile.fullName,
+							member.profile.email,
+						);
+						return (
+							<Pressable
+								key={member.employmentId}
+								onPress={() => setEmploymentId(member.employmentId)}
+								style={[
+									s.chip,
+									{
+										borderColor: selected ? theme.primary : theme.border,
+										backgroundColor: selected ? theme.primary : "transparent",
+									},
+								]}
+							>
+								<Text
+									style={[
+										s.chipText,
+										{ color: selected ? theme.onPrimary : theme.text },
+									]}
+								>
+									{member.kind === "manager" ? `${label} · Mgr` : label}
+								</Text>
+							</Pressable>
+						);
+					})}
+				</View>
+				<View style={s.chipsRow}>
+					{(leaveTypes.data?.leaveTypes ?? []).map((type) => {
+						const selected = leaveTypeId === type.id;
+						return (
+							<Pressable
+								key={type.id}
+								onPress={() => setLeaveTypeId(type.id)}
+								style={[
+									s.chip,
+									{
+										borderColor: selected ? theme.primary : theme.border,
+										backgroundColor: selected ? theme.primary : "transparent",
+									},
+								]}
+							>
+								<Text
+									style={[
+										s.chipText,
+										{ color: selected ? theme.onPrimary : theme.text },
+									]}
+								>
+									{type.name}
+								</Text>
+							</Pressable>
+						);
+					})}
+				</View>
+				<NativeDatePickerField
+					label="From"
+					value={startDate}
+					onChange={(value) => {
+						setStartDate(value);
+						if (!endDate || endDate < value) setEndDate(value);
+					}}
+				/>
+				<NativeDatePickerField
+					label="Until"
+					value={endDate}
+					onChange={setEndDate}
+				/>
+				<NativeField
+					label="Note (optional)"
+					value={reason}
+					onChange={setReason}
+				/>
+				<PrimaryButton
+					label={record.isPending ? "Saving…" : "Record time off"}
+					disabled={record.isPending || !employmentId || !leaveTypeId}
+					onPress={() => record.mutate()}
+				/>
+			</Card>
 			{requests.isLoading || swaps.isLoading ? (
 				<ActivityIndicator color={theme.primary} />
 			) : null}
 			{empty ? (
 				<Card>
 					<Text style={[s.cardTitle, { color: theme.text }]}>
-						You’re all caught up
+						No requests waiting
 					</Text>
 					<Text style={[s.body, { color: theme.muted }]}>
-						New Time-off Requests and agreed Shift Swaps will appear here.
+						Request your leave, record time off, or wait for a request or swap.
 					</Text>
 				</Card>
 			) : null}
@@ -627,22 +966,14 @@ export function ManagerRequests() {
 					) : null}
 				</Card>
 			))}
-			{requests.data?.requests.map((r) => (
+			{pendingTimeOff.map((r) => (
 				<Card key={r.id}>
 					<View style={s.rowBetween}>
 						<Text style={[s.cardTitle, { color: theme.text }]}>
-							{r.worker.fullName ?? r.worker.email}
+							{formatPerson(r.worker.fullName, r.worker.email)}
+							{r.kind === "manager" ? " · Manager" : ""}
 						</Text>
-						<Badge
-							label={r.status}
-							variant={
-								r.status === "declined"
-									? "danger"
-									: r.status === "approved"
-										? "success"
-										: "default"
-							}
-						/>
+						<Badge label="Needs a decision" variant="default" />
 					</View>
 					<Text
 						style={[
@@ -650,62 +981,134 @@ export function ManagerRequests() {
 							{ color: theme.text, fontVariant: ["tabular-nums"] },
 						]}
 					>
-						{new Date(r.startsAt).toLocaleString()} –{" "}
-						{new Date(r.endsAt).toLocaleString()}
+						{formatLeaveRange(r)}
+						{r.leaveTypeName ? ` · ${r.leaveTypeName}` : ""}
+						{r.chargeMinutes ? ` · ${formatLeaveHours(r.chargeMinutes)}` : ""}
 					</Text>
+					{r.remainingMinutes != null && r.chargeMinutes != null ? (
+						<Text style={[s.hint, { color: theme.muted }]}>
+							{r.remainingMinutes >= r.chargeMinutes
+								? `${formatLeaveHours(r.remainingMinutes)} remaining after this.`
+								: `Only ${formatLeaveHours(r.remainingMinutes)} remaining.`}
+						</Text>
+					) : null}
 					{r.reason ? (
 						<Text style={[s.hint, { color: theme.muted }]}>{r.reason}</Text>
 					) : null}
-					{r.status === "pending" ? (
-						<View style={s.actions}>
-							<View style={{ flex: 1 }}>
-								<PrimaryButton
-									label="Approve"
-									disabled={decide.isPending}
-									onPress={() =>
-										confirmAction({
-											title: "Approve time off?",
-											message:
-												"This marks the request approved for scheduling.",
-											confirmLabel: "Approve",
-											onConfirm: () =>
-												decide.mutate({ id: r.id, decision: "approved" }),
-										})
-									}
-								/>
-							</View>
-							<View style={{ flex: 1 }}>
-								<SecondaryButton
-									label="Decline"
-									disabled={decide.isPending}
-									onPress={() =>
-										confirmAction({
-											title: "Decline time off?",
-											message: "This decision is visible to the worker.",
-											confirmLabel: "Decline",
-											destructive: true,
-											onConfirm: () =>
-												decide.mutate({ id: r.id, decision: "declined" }),
-										})
-									}
-								/>
-							</View>
+					<View style={s.actions}>
+						<View style={{ flex: 1 }}>
+							<PrimaryButton
+								label="Approve"
+								disabled={decide.isPending}
+								onPress={() =>
+									confirmAction({
+										title: "Approve this time off?",
+										message: r.chargeMinutes
+											? `This uses ${formatLeaveHours(r.chargeMinutes)}${r.leaveTypeName ? ` of ${r.leaveTypeName}` : ""} and blocks the schedule.`
+											: "This marks the request approved for scheduling.",
+										confirmLabel: "Approve",
+										onConfirm: () =>
+											decide.mutate({ id: r.id, decision: "approved" }),
+									})
+								}
+							/>
 						</View>
-					) : null}
+						<View style={{ flex: 1 }}>
+							<SecondaryButton
+								label="Decline"
+								disabled={decide.isPending}
+								onPress={() =>
+									confirmAction({
+										title: "Decline this request?",
+										message: "The worker will see this decision.",
+										confirmLabel: "Decline",
+										destructive: true,
+										onConfirm: () =>
+											decide.mutate({ id: r.id, decision: "declined" }),
+									})
+								}
+							/>
+						</View>
+					</View>
+					<View style={s.actions}>
+						<View style={{ flex: 1 }}>
+							<SecondaryButton
+								label="Edit"
+								disabled={removeLeave.isPending}
+								onPress={() => beginEdit(r)}
+							/>
+						</View>
+						<View style={{ flex: 1 }}>
+							<SecondaryButton
+								label="Delete"
+								disabled={removeLeave.isPending}
+								onPress={() =>
+									confirmAction({
+										title: "Delete this request?",
+										message: "This removes the request permanently.",
+										confirmLabel: "Delete",
+										destructive: true,
+										onConfirm: () => removeLeave.mutate(r.id),
+									})
+								}
+							/>
+						</View>
+					</View>
 				</Card>
 			))}
+			{approvedUpcoming.length > 0 ? (
+				<Card>
+					<Text style={[s.cardTitle, { color: theme.text }]}>Who’s out</Text>
+					{approvedUpcoming.map((r) => (
+						<View key={r.id} style={{ gap: 8 }}>
+							<View style={{ gap: 2 }}>
+								<Text style={[s.body, { color: theme.text }]}>
+									{formatPerson(r.worker.fullName, r.worker.email)}
+									{r.kind === "manager" ? " · Manager" : ""}
+								</Text>
+								<Text
+									style={[
+										s.hint,
+										{ color: theme.muted, fontVariant: ["tabular-nums"] },
+									]}
+								>
+									{formatLeaveRange(r)}
+									{r.leaveTypeName ? ` · ${r.leaveTypeName}` : ""}
+								</Text>
+							</View>
+							<View style={s.actions}>
+								<View style={{ flex: 1 }}>
+									<SecondaryButton
+										label="Edit"
+										disabled={removeLeave.isPending}
+										onPress={() => beginEdit(r)}
+									/>
+								</View>
+								<View style={{ flex: 1 }}>
+									<SecondaryButton
+										label="Delete"
+										disabled={removeLeave.isPending}
+										onPress={() =>
+											confirmAction({
+												title: "Delete this time off?",
+												message:
+													"They will no longer be blocked on the schedule. Paid hours will be restored.",
+												confirmLabel: "Delete",
+												destructive: true,
+												onConfirm: () => removeLeave.mutate(r.id),
+											})
+										}
+									/>
+								</View>
+							</View>
+						</View>
+					))}
+				</Card>
+			) : null}
 		</AppScreen>
 	);
 }
 
-function formatMinute(v: number) {
-	const h = Math.floor(v / 60);
-	const m = v % 60;
-	return new Date(2000, 0, 1, h, m).toLocaleTimeString([], {
-		hour: "numeric",
-		minute: "2-digit",
-	});
-}
 function formatDay(date: string) {
 	return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
 		weekday: "short",

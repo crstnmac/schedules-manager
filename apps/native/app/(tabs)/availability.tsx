@@ -24,6 +24,16 @@ import {
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { confirmAction } from "@/lib/confirm-action";
+import {
+	formatLeaveHours,
+	formatLeaveRange,
+	todayIsoDate,
+} from "@/lib/leave";
+import {
+	useCurrentEmployment,
+	useLeaveTypes,
+	usePtoBalances,
+} from "@/lib/queries";
 import { useSelectedWorkplaceId } from "@/lib/workplace-store";
 
 interface ConstraintsResponse {
@@ -41,9 +51,16 @@ interface ConstraintsResponse {
 		id: string;
 		startsAt: string;
 		endsAt: string;
+		startDate?: string;
+		endDate?: string;
+		allDay?: boolean;
+		startMinute?: number | null;
+		endMinute?: number | null;
+		chargeMinutes?: number;
 		reason: string | null;
 		status: "pending" | "approved" | "declined";
 		decisionReason: string | null;
+		leaveTypeId?: string | null;
 	}[];
 }
 interface RecurringDraft {
@@ -95,6 +112,9 @@ function toLabel(min: number) {
 export default function AvailabilityScreen() {
 	const { theme } = useAppTheme();
 	const { selected } = useSelectedWorkplaceId();
+	const { employment } = useCurrentEmployment();
+	const leaveTypes = useLeaveTypes(selected ?? undefined);
+	const pto = usePtoBalances(selected ?? undefined, employment?.id);
 	const qc = useQueryClient();
 	const c = useQuery({
 		queryKey: ["constraints", selected],
@@ -111,11 +131,15 @@ export default function AvailabilityScreen() {
 	const [dateDraft, setDateDraft] = useState<DateDraft>(newDateDraft());
 	const [preference, setPreference] = useState("");
 	const [saving, setSaving] = useState(false);
-	const [offDate, setOffDate] = useState("");
-	const [offStart, setOffStart] = useState("17:00");
-	const [offEnd, setOffEnd] = useState("23:00");
+	const [offStartDate, setOffStartDate] = useState(todayIsoDate);
+	const [offEndDate, setOffEndDate] = useState(todayIsoDate);
+	const [offAllDay, setOffAllDay] = useState(true);
+	const [offStart, setOffStart] = useState("09:00");
+	const [offEnd, setOffEnd] = useState("17:00");
 	const [offReason, setOffReason] = useState("");
+	const [leaveTypeId, setLeaveTypeId] = useState("");
 	const [requesting, setRequesting] = useState(false);
+	const [editingId, setEditingId] = useState<string | null>(null);
 
 	useEffect(() => {
 		if (!c.data) return;
@@ -203,36 +227,68 @@ export default function AvailabilityScreen() {
 		}
 	}
 	async function requestTimeOff() {
-		if (!/^\d{4}-\d{2}-\d{2}$/.test(offDate)) {
-			Alert.alert("Check date", "Use YYYY-MM-DD.");
+		if (!/^\d{4}-\d{2}-\d{2}$/.test(offStartDate)) {
+			Alert.alert("Check dates", "Choose a start date.");
+			return;
+		}
+		if (!leaveTypeId) {
+			Alert.alert("Leave type", "Choose vacation, sick, or another type.");
+			return;
+		}
+		const endDate = /^\d{4}-\d{2}-\d{2}$/.test(offEndDate)
+			? offEndDate
+			: offStartDate;
+		if (endDate < offStartDate) {
+			Alert.alert("Check dates", "End date must be on or after the start.");
 			return;
 		}
 		const s = parseTime(offStart);
 		const e = parseTime(offEnd);
-		if (s === null || e === null || s >= e) {
+		if (!offAllDay && (s === null || e === null || s >= e)) {
 			Alert.alert("Check times", "Invalid range.");
 			return;
 		}
-		const sd = new Date(`${offDate}T00:00:00`);
-		sd.setMinutes(s);
-		const ed = new Date(`${offDate}T00:00:00`);
-		ed.setMinutes(e);
 		setRequesting(true);
 		try {
-			await api(`/v1/workplaces/${selected}/my/time-off`, {
-				method: "POST",
-				body: {
-					startsAt: sd.toISOString(),
-					endsAt: ed.toISOString(),
-					reason: offReason.trim() || undefined,
-				},
-			});
-			setOffDate("");
-			setOffReason("");
-			await qc.invalidateQueries({ queryKey: ["constraints", selected] });
-			Alert.alert("Requested", "Time-off Request sent to your Manager.");
-		} catch (e) {
-			Alert.alert("Could not request", (e as Error).message);
+			if (editingId) {
+				await api(`/v1/workplaces/${selected}/my/time-off/${editingId}`, {
+					method: "PATCH",
+					body: {
+						startDate: offStartDate,
+						endDate,
+						allDay: offAllDay,
+						...(offAllDay ? {} : { startMinute: s, endMinute: e }),
+						reason: offReason.trim() || undefined,
+						leaveTypeId,
+					},
+				});
+				setEditingId(null);
+				setOffReason("");
+				await qc.invalidateQueries({ queryKey: ["constraints", selected] });
+				await qc.invalidateQueries({ queryKey: ["pto", selected] });
+				Alert.alert("Updated", "Your pending request was updated.");
+			} else {
+				await api(`/v1/workplaces/${selected}/my/time-off`, {
+					method: "POST",
+					body: {
+						startDate: offStartDate,
+						endDate,
+						allDay: offAllDay,
+						...(offAllDay ? {} : { startMinute: s, endMinute: e }),
+						reason: offReason.trim() || undefined,
+						leaveTypeId,
+					},
+				});
+				setOffReason("");
+				await qc.invalidateQueries({ queryKey: ["constraints", selected] });
+				await qc.invalidateQueries({ queryKey: ["pto", selected] });
+				Alert.alert("Requested", "Your manager will review this time off.");
+			}
+		} catch (err) {
+			Alert.alert(
+				editingId ? "Could not update" : "Could not request",
+				(err as Error).message,
+			);
 		} finally {
 			setRequesting(false);
 		}
@@ -258,10 +314,205 @@ export default function AvailabilityScreen() {
 	return (
 		<AppScreen>
 			<PageHeader
-				eyebrow="SCHEDULING"
-				title="Availability"
-				description="Tell your manager when you can’t work, which shifts you prefer, and when you need time off."
+				title="Time off & availability"
+				description="Request days off first. Recurring unavailability and preferences stay separate."
 			/>
+
+			<Card>
+				<Text style={[styles.title, { color: theme.text }]}>Time off</Text>
+				<Text style={[styles.desc, { color: theme.muted }]}>
+					All-day by default. Your manager reviews every request.
+				</Text>
+				{(pto.data?.balances ?? []).map((balance) => (
+					<Text
+						key={balance.leaveTypeId}
+						style={[styles.desc, { color: theme.muted }]}
+					>
+						{balance.name}: {formatLeaveHours(balance.minutes)} remaining
+					</Text>
+				))}
+				{(c.data?.timeOff ?? []).map((r) => (
+					<View
+						key={r.id}
+						style={[styles.rowCard, { borderColor: theme.border }]}
+					>
+						<View style={{ flex: 1, gap: 4 }}>
+							<Text
+								style={[
+									styles.rowLabel,
+									{ color: theme.text, fontVariant: ["tabular-nums"] },
+								]}
+							>
+								{formatLeaveRange(r)}
+								{r.chargeMinutes
+									? ` · ${formatLeaveHours(r.chargeMinutes)}`
+									: ""}
+							</Text>
+							<View style={{ flexDirection: "row" }}>
+								<Badge
+									label={
+										r.status === "pending"
+											? "Needs a decision"
+											: r.status === "approved"
+												? "Approved"
+												: "Declined"
+									}
+									variant={
+										r.status === "approved"
+											? "success"
+											: r.status === "declined"
+												? "danger"
+												: "outline"
+									}
+								/>
+							</View>
+							{r.decisionReason ? (
+								<Text style={[styles.desc, { color: theme.muted }]}>
+									Manager: {r.decisionReason}
+								</Text>
+							) : null}
+						</View>
+						{r.status === "pending" ? (
+							<View style={{ alignItems: "flex-end", gap: 8 }}>
+								<Pressable
+									onPress={() => {
+										setEditingId(r.id);
+										setLeaveTypeId(r.leaveTypeId ?? "");
+										setOffStartDate(r.startDate ?? r.startsAt.slice(0, 10));
+										setOffEndDate(r.endDate ?? r.endsAt.slice(0, 10));
+										setOffAllDay(r.allDay ?? true);
+										setOffStart(
+											toLabel(r.startMinute ?? 9 * 60),
+										);
+										setOffEnd(toLabel(r.endMinute ?? 17 * 60));
+										setOffReason(r.reason ?? "");
+									}}
+								>
+									<Text style={[styles.link, { color: theme.primary }]}>
+										Edit
+									</Text>
+								</Pressable>
+								<Pressable
+									onPress={() =>
+										confirmAction({
+											title: "Cancel this time-off request?",
+											message:
+												"Your manager will no longer review it. You can submit a new request later.",
+											confirmLabel: "Cancel request",
+											destructive: true,
+											onConfirm: () => void cancelRequest(r.id),
+										})
+									}
+								>
+									<Text style={[styles.link, { color: theme.primary }]}>
+										Cancel
+									</Text>
+								</Pressable>
+							</View>
+						) : null}
+					</View>
+				))}
+				<View style={[styles.dashed, { borderColor: theme.border }]}>
+					<Text style={[styles.label, { color: theme.muted }]}>
+						{editingId ? "Edit request" : "New request"}
+					</Text>
+					<View style={styles.chipsRow}>
+						{(leaveTypes.data?.leaveTypes ?? []).map((type) => {
+							const selectedType = leaveTypeId === type.id;
+							return (
+								<Pressable
+									key={type.id}
+									onPress={() => setLeaveTypeId(type.id)}
+									style={[
+										styles.chip,
+										{
+											borderColor: selectedType ? theme.primary : theme.border,
+											backgroundColor: selectedType
+												? theme.primary
+												: "transparent",
+										},
+									]}
+								>
+									<Text
+										style={[
+											styles.chipText,
+											{ color: selectedType ? theme.onPrimary : theme.text },
+										]}
+									>
+										{type.name}
+									</Text>
+								</Pressable>
+							);
+						})}
+					</View>
+					<DateField
+						label="From"
+						value={offStartDate}
+						onChange={(value) => {
+							setOffStartDate(value);
+							if (!offEndDate || offEndDate < value) setOffEndDate(value);
+						}}
+					/>
+					<DateField
+						label="Until"
+						value={offEndDate}
+						onChange={setOffEndDate}
+					/>
+					<Pressable
+						onPress={() => setOffAllDay((value) => !value)}
+						style={styles.rowBetween}
+					>
+						<Text style={[styles.rowLabel, { color: theme.text }]}>
+							All day
+						</Text>
+						<Badge
+							label={offAllDay ? "On" : "Off"}
+							variant={offAllDay ? "success" : "outline"}
+						/>
+					</Pressable>
+					{offAllDay ? null : (
+						<View style={styles.pickerStack}>
+							<TimeField
+								label="Starts"
+								value={offStart}
+								onChange={setOffStart}
+							/>
+							<TimeField label="Ends" value={offEnd} onChange={setOffEnd} />
+						</View>
+					)}
+					<Field
+						label="Note (optional)"
+						value={offReason}
+						onChange={setOffReason}
+					/>
+					<PrimaryButton
+						label={
+							requesting
+								? "Saving…"
+								: editingId
+									? "Save changes"
+									: "Request time off"
+						}
+						disabled={requesting}
+						onPress={() => void requestTimeOff()}
+					/>
+					{editingId ? (
+						<Pressable
+							onPress={() => {
+								setEditingId(null);
+								setOffReason("");
+								setOffStartDate(todayIsoDate());
+								setOffEndDate(todayIsoDate());
+								setOffAllDay(true);
+							}}
+						>
+							<Text style={[styles.link, { color: theme.primary }]}>
+								Cancel edit
+							</Text>
+						</Pressable>
+					) : null}
+				</View>
+			</Card>
 
 			{/* Unavailability */}
 			<Card>
@@ -423,90 +674,6 @@ export default function AvailabilityScreen() {
 				/>
 			</Card>
 
-			{/* Time-off */}
-			<Card>
-				<Text style={[styles.title, { color: theme.text }]}>Time off</Text>
-				<Text style={[styles.desc, { color: theme.muted }]}>
-					Send a request for your manager to review.
-				</Text>
-				{(c.data?.timeOff ?? []).map((r) => (
-					<View
-						key={r.id}
-						style={[styles.rowCard, { borderColor: theme.border }]}
-					>
-						<View style={{ flex: 1, gap: 4 }}>
-							<Text
-								style={[
-									styles.rowLabel,
-									{ color: theme.text, fontVariant: ["tabular-nums"] },
-								]}
-							>
-								{formatDay(r.startsAt)} · {toLabel(toMin(r.startsAt))}–
-								{toLabel(toMin(r.endsAt))}
-							</Text>
-							<View style={{ flexDirection: "row" }}>
-								<Badge
-									label={r.status}
-									variant={
-										r.status === "approved"
-											? "success"
-											: r.status === "declined"
-												? "danger"
-												: "outline"
-									}
-								/>
-							</View>
-							{r.decisionReason ? (
-								<Text style={[styles.desc, { color: theme.muted }]}>
-									Manager: {r.decisionReason}
-								</Text>
-							) : null}
-						</View>
-						{r.status === "pending" ? (
-							<Pressable
-								onPress={() =>
-									confirmAction({
-										title: "Cancel this time-off request?",
-										message:
-											"Your Manager will no longer review it. You can submit a new request later.",
-										confirmLabel: "Cancel request",
-										destructive: true,
-										onConfirm: () => void cancelRequest(r.id),
-									})
-								}
-							>
-								<Text style={[styles.link, { color: theme.primary }]}>
-									Cancel
-								</Text>
-							</Pressable>
-						) : null}
-					</View>
-				))}
-				<View style={[styles.dashed, { borderColor: theme.border }]}>
-					<Text style={[styles.label, { color: theme.muted }]}>
-						New Time-off Request
-					</Text>
-					<DateField label="Date" value={offDate} onChange={setOffDate} />
-					<View style={styles.pickerStack}>
-						<TimeField
-							label="Start time"
-							value={offStart}
-							onChange={setOffStart}
-						/>
-						<TimeField label="End time" value={offEnd} onChange={setOffEnd} />
-					</View>
-					<Field
-						label="Reason (optional)"
-						value={offReason}
-						onChange={setOffReason}
-					/>
-					<PrimaryButton
-						label={requesting ? "Sending…" : "Request time off"}
-						disabled={requesting}
-						onPress={() => void requestTimeOff()}
-					/>
-				</View>
-			</Card>
 		</AppScreen>
 	);
 }
@@ -556,18 +723,6 @@ function TimeField({
 		</View>
 	);
 }
-function toMin(iso: string) {
-	const d = new Date(iso);
-	return d.getHours() * 60 + d.getMinutes();
-}
-function formatDay(iso: string) {
-	return new Date(iso).toLocaleDateString(undefined, {
-		weekday: "short",
-		month: "short",
-		day: "numeric",
-	});
-}
-
 const styles = StyleSheet.create({
 	centered: { flex: 1, alignItems: "center", justifyContent: "center" },
 	title: { fontSize: 17, fontWeight: "700", lineHeight: 24 },
@@ -597,4 +752,18 @@ const styles = StyleSheet.create({
 	},
 	pickerStack: { gap: 12, width: "100%" },
 	pickerField: { width: "100%", minHeight: 52 },
+	chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+	chip: {
+		minHeight: 36,
+		borderWidth: 1,
+		borderRadius: 999,
+		justifyContent: "center",
+		paddingHorizontal: 14,
+	},
+	chipText: { fontSize: 13, fontWeight: "700" },
+	rowBetween: {
+		flexDirection: "row",
+		alignItems: "center",
+		justifyContent: "space-between",
+	},
 });

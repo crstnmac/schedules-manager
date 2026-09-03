@@ -23,7 +23,9 @@ export function SettingsPage({
 	className?: string;
 }) {
 	return (
-		<div className={cn("mx-auto flex w-full max-w-3xl flex-col gap-6", className)}>
+		<div
+			className={cn("mx-auto flex w-full max-w-3xl flex-col gap-6", className)}
+		>
 			<header className="flex flex-col gap-1">
 				<h1 className="font-medium text-base tracking-tight">{title}</h1>
 				{description ? (
@@ -85,9 +87,21 @@ export function SettingsSection({
 			>
 				{children}
 			</CardContent>
-			{footer ? (
-				<CardFooter className="border-t">{footer}</CardFooter>
-			) : null}
+			{footer ? <CardFooter className="border-t">{footer}</CardFooter> : null}
 		</Card>
+	);
+}
+
+export function SettingsSaveSection({
+	message,
+	footer,
+}: {
+	message: string;
+	footer: ReactNode;
+}) {
+	return (
+		<SettingsSection footer={footer}>
+			<p className="text-muted-foreground text-sm">{message}</p>
+		</SettingsSection>
 	);
 }

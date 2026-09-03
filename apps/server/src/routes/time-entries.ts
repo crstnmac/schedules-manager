@@ -12,9 +12,13 @@ import {
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
-import { requireManager, requireSession, requireWorkplaceMember } from "../context";
+import {
+	requireManager,
+	requireSession,
+	requireWorkplaceMember,
+} from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
-import { isInsideGeofence, roundToMinutes } from "../geo";
+import { assertClockInGeofence, roundToMinutes } from "../geo";
 import { withIdempotency } from "../idempotency";
 import { writeAudit } from "../notify";
 
@@ -78,6 +82,7 @@ function toPayload(entry: typeof timeEntries.$inferSelect) {
 		versionShiftId: entry.versionShiftId,
 		clockedInAt: entry.clockedInAt.toISOString(),
 		clockedOutAt: entry.clockedOutAt?.toISOString() ?? null,
+		workerNote: entry.workerNote,
 	};
 }
 
@@ -129,22 +134,13 @@ async function clockIn(
 		.where(eq(schedules.id, shift.scheduleId))
 		.limit(1);
 	const loc = location?.locations;
-	if (loc?.latitude && loc.longitude && loc.geofenceRadiusMeters) {
-		if (coords?.latitude == null || coords.longitude == null) {
-			throw new BadRequestError("This Location requires a Geofence check");
-		}
-		if (
-			!isInsideGeofence({
-				latitude: coords.latitude,
-				longitude: coords.longitude,
-				centerLatitude: Number(loc.latitude),
-				centerLongitude: Number(loc.longitude),
-				radiusMeters: loc.geofenceRadiusMeters,
-			})
-		) {
-			throw new BadRequestError("You are outside this Location's Geofence");
-		}
-	}
+	assertClockInGeofence({
+		geofenceRequired: workplace?.geofenceRequired ?? false,
+		latitude: loc?.latitude ?? null,
+		longitude: loc?.longitude ?? null,
+		geofenceRadiusMeters: loc?.geofenceRadiusMeters ?? null,
+		coords,
+	});
 	const clockedInAt = roundToMinutes(now, workplace?.clockRoundMinutes ?? 0);
 	await db.execute(
 		sql`select pg_advisory_xact_lock(hashtextextended(${`clock:${shift.shiftId ?? shift.id}`}, 0))`,
@@ -185,7 +181,11 @@ async function clockIn(
 	return { timeEntry: toPayload(entry) };
 }
 
-async function clockOut(profileId: string, versionShiftId: string) {
+async function clockOut(
+	profileId: string,
+	versionShiftId: string,
+	options?: { workerNote?: string },
+) {
 	const { shift, workplaceId } = await myVersionShift(
 		profileId,
 		versionShiftId,
@@ -208,9 +208,23 @@ async function clockOut(profileId: string, versionShiftId: string) {
 		workplace?.clockRoundMinutes ?? 0,
 	);
 
+	let workerNote = entry.workerNote;
+	const noteInput = options?.workerNote?.trim();
+	if (noteInput) {
+		if (!workplace?.timesheetNotesEnabled) {
+			throw new BadRequestError(
+				"Timesheet notes are disabled for this workplace",
+			);
+		}
+		if (noteInput.length > 500) {
+			throw new BadRequestError("Timesheet note must be 500 characters or fewer");
+		}
+		workerNote = noteInput;
+	}
+
 	const [updated] = await db
 		.update(timeEntries)
-		.set({ clockedOutAt })
+		.set({ clockedOutAt, workerNote })
 		.where(and(eq(timeEntries.id, entry.id), isNull(timeEntries.clockedOutAt)))
 		.returning();
 	if (!updated) {
@@ -275,14 +289,17 @@ export const timeEntryRoutes = new Elysia({
 	)
 	.post(
 		"/my/shifts/:versionShiftId/clock-out",
-		async ({ headers, params }) => {
+		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers.authorization);
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `time-entry.clock-out:${params.versionShiftId}`,
 				key: headers["idempotency-key"],
-				request: { versionShiftId: params.versionShiftId },
-				execute: () => clockOut(profile.id, params.versionShiftId),
+				request: { versionShiftId: params.versionShiftId, ...body },
+				execute: () =>
+					clockOut(profile.id, params.versionShiftId, {
+						workerNote: body?.workerNote,
+					}),
 			});
 		},
 		{
@@ -293,6 +310,11 @@ export const timeEntryRoutes = new Elysia({
 				),
 			}),
 			params: t.Object({ versionShiftId: t.String({ format: "uuid" }) }),
+			body: t.Optional(
+				t.Object({
+					workerNote: t.Optional(t.String({ maxLength: 500 })),
+				}),
+			),
 			detail: {
 				summary: "Finish work on an assigned shift (Time Entry)",
 				security: [{ bearerAuth: [] }],
@@ -314,6 +336,7 @@ export const timeEntryRoutes = new Elysia({
 					versionShiftId: timeEntries.versionShiftId,
 					clockedInAt: timeEntries.clockedInAt,
 					clockedOutAt: timeEntries.clockedOutAt,
+					workerNote: timeEntries.workerNote,
 					positionName: positions.name,
 					shiftStartsAt: versionShifts.startsAt,
 					shiftEndsAt: versionShifts.endsAt,
@@ -337,6 +360,7 @@ export const timeEntryRoutes = new Elysia({
 					shiftEndsAt: row.shiftEndsAt.toISOString(),
 					clockedInAt: row.clockedInAt.toISOString(),
 					clockedOutAt: row.clockedOutAt?.toISOString() ?? null,
+					workerNote: row.workerNote,
 				})),
 			};
 		},

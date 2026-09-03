@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-
-import { TagsCard } from "@/components/settings-surface-cards";
 import { SettingsPage } from "@/components/settings/page";
+import { TagsCard } from "@/components/settings-surface-cards";
 import { useTags } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -15,8 +14,8 @@ function TagsSettingsPage() {
 
 	return (
 		<SettingsPage
-			title="Shift tags"
-			description="Labels you can apply to shifts on the schedule."
+			title="Tags"
+			description="Short labels you can attach to a shift, such as Training or Event."
 		>
 			<TagsCard workplaceId={workplace?.id} tags={tags.data?.tags ?? []} />
 		</SettingsPage>

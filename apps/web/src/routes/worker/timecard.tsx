@@ -27,7 +27,8 @@ import {
 	useMySchedule,
 	useMyTimeEntries,
 } from "@/lib/queries";
-import { formatClockTime, formatDurationMs } from "@/lib/time";
+import { formatDurationMs } from "@/lib/time";
+import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
 import { AppDocument } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
@@ -40,6 +41,8 @@ const punchHelper = createDataColumnHelper<TimecardEntry>();
 
 function TimecardPage() {
 	const { workplace } = useWorkplace();
+	const { formatClockTime } = useDisplayPrefs();
+	const notesEnabled = workplace?.policies.timesheetNotesEnabled ?? false;
 	const timecard = useMyTimeEntries(workplace?.id);
 	const schedule = useMySchedule(workplace?.id);
 	const weekStartDay = schedule.data?.weekStartDay ?? 1;
@@ -115,6 +118,15 @@ function TimecardPage() {
 						),
 					},
 				),
+				...(notesEnabled
+					? [
+							punchHelper.accessor((row) => row.workerNote ?? "", {
+								id: "note",
+								header: "Note",
+								cell: ({ getValue }) => getValue() || "—",
+							}),
+						]
+					: []),
 				punchHelper.display({
 					id: "status",
 					header: "Status",
@@ -170,7 +182,7 @@ function TimecardPage() {
 					},
 				}),
 			]),
-		[breakStates, nowMs, updateBreak],
+		[breakStates, formatClockTime, notesEnabled, nowMs, updateBreak],
 	);
 
 	return (

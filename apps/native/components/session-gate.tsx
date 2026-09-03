@@ -14,6 +14,7 @@ import { AuthScreen } from "@/components/auth-screen";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { NAV_THEME } from "@/lib/constants";
+import { useDisplayPrefs } from "@/lib/display";
 import {
 	useAcceptInvitation,
 	useMe,
@@ -475,6 +476,7 @@ function InvitationView() {
 	const { colorScheme } = useColorScheme();
 	const theme = colorScheme === "dark" ? NAV_THEME.dark : NAV_THEME.light;
 	const insets = useSafeAreaInsets();
+	const { formatPerson } = useDisplayPrefs();
 	const me = useMe(true);
 	const invitations = usePendingInvitations(true);
 	const accept = useAcceptInvitation();
@@ -505,7 +507,7 @@ function InvitationView() {
 					]}
 				>
 					<Text style={[styles.cardTitle, { color: theme.text }]}>
-						{profile.fullName ?? profile.email}
+						{formatPerson(profile.fullName, profile.email)}
 					</Text>
 					{profile.fullName ? (
 						<Text style={[styles.cardBody, { color: theme.text }]}>
@@ -584,6 +586,7 @@ function Message({
 	const { colorScheme } = useColorScheme();
 	const theme = colorScheme === "dark" ? NAV_THEME.dark : NAV_THEME.light;
 	const insets = useSafeAreaInsets();
+	const { formatPerson } = useDisplayPrefs();
 
 	return (
 		<View
@@ -601,7 +604,7 @@ function Message({
 				<Text style={[styles.body, { color: theme.text }]}>{body}</Text>
 				{profile ? (
 					<Text style={[styles.body, { color: theme.text }]}>
-						Signed in as {profile.fullName ?? profile.email}
+						Signed in as {formatPerson(profile.fullName, profile.email)}
 					</Text>
 				) : null}
 				{actions?.map((item) => (

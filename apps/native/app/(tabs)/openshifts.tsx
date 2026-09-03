@@ -15,11 +15,13 @@ import {
 	PrimaryButton,
 	useAppTheme,
 } from "@/components/ui";
+import { useDisplayPrefs } from "@/lib/display";
 import { useMe, useOpenShifts, useRequestPickup } from "@/lib/queries";
 import { useSelectedWorkplaceId } from "@/lib/workplace-store";
 
 export default function OpenShiftsScreen() {
 	const { theme } = useAppTheme();
+	const { formatShiftRange } = useDisplayPrefs();
 	const me = useMe();
 	const { selected } = useSelectedWorkplaceId();
 	const workplaceId =
@@ -54,9 +56,8 @@ export default function OpenShiftsScreen() {
 				<Card key={sh.id}>
 					<View style={s.headerRow}>
 						<Text style={[s.shiftTitle, { color: theme.text }]}>
-							{formatDay(sh.startsAt)} · {formatMinute(sh.startMinute)}–
-							{sh.endMinute === 0 ? "12:00 AM" : formatMinute(sh.endMinute)}
-							{sh.overnight ? " +1" : ""}
+							{formatDay(sh.startsAt)} ·{" "}
+							{formatShiftRange(sh.startMinute, sh.endMinute, sh.overnight)}
 						</Text>
 						<Badge label="Open Shift" variant="amber" />
 					</View>
@@ -103,13 +104,6 @@ function formatDay(iso: string) {
 		month: "short",
 		day: "numeric",
 	});
-}
-function formatMinute(m: number) {
-	const h = Math.floor(m / 60);
-	const mm = m % 60;
-	const sfx = h >= 12 ? "PM" : "AM";
-	const d = h % 12 === 0 ? 12 : h % 12;
-	return `${d}:${String(mm).padStart(2, "0")} ${sfx}`;
 }
 
 const s = StyleSheet.create({

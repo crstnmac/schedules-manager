@@ -33,7 +33,7 @@ export const Route = createFileRoute("/worker")({
 
 const navigation = [
 	{ to: "/worker", label: "My schedule", icon: CalendarDaysIcon, exact: true },
-	{ to: "/worker/availability", label: "Availability", icon: Clock3Icon },
+	{ to: "/worker/availability", label: "Time off", icon: Clock3Icon },
 	{ to: "/worker/openshifts", label: "Open shifts", icon: InboxIcon },
 	{ to: "/worker/timecard", label: "Timecard", icon: TimerIcon },
 	{ to: "/worker/messages", label: "Messages", icon: MessageSquareIcon },

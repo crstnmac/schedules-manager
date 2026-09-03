@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-
-import { LeaveTypesCard } from "@/components/settings-surface-cards";
 import { SettingsPage } from "@/components/settings/page";
+import { LeaveTypesCard } from "@/components/settings-surface-cards";
 import { useLeaveTypes } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -16,7 +15,7 @@ function LeaveSettingsPage() {
 	return (
 		<SettingsPage
 			title="Leave types"
-			description="Reasons workers can request time off."
+			description="Categories people pick when they request time off. Paid types deduct remaining hours when a request is approved."
 		>
 			<LeaveTypesCard
 				workplaceId={workplace?.id}

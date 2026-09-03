@@ -21,6 +21,11 @@ export const unavailabilityKindEnum = pgEnum("unavailability_kind", [
 	"date",
 ]);
 
+export const unavailabilityStatusEnum = pgEnum("unavailability_status", [
+	"pending",
+	"approved",
+]);
+
 export const unavailability = pgTable(
 	"unavailability",
 	{
@@ -34,6 +39,7 @@ export const unavailability = pgTable(
 		startMinute: integer("start_minute").notNull(),
 		endMinute: integer("end_minute").notNull(),
 		note: text("note"),
+		status: unavailabilityStatusEnum("status").notNull().default("approved"),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),

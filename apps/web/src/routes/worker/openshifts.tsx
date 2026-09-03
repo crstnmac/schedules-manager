@@ -21,7 +21,8 @@ import {
 } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { type OpenShiftDto, useOpenShifts, useRequestPickup } from "@/lib/queries";
-import { formatDay, formatShiftRange } from "@/lib/time";
+import { formatDay } from "@/lib/time";
+import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
 
 export const Route = createFileRoute("/worker/openshifts")({
@@ -32,6 +33,7 @@ const columnHelper = createDataColumnHelper<OpenShiftDto>();
 
 function OpenShiftsPage() {
 	const { workplace } = useWorkplace();
+	const { formatShiftRange } = useDisplayPrefs();
 	const openShifts = useOpenShifts(workplace?.id);
 	const requestPickup = useRequestPickup();
 	const shifts = openShifts.data?.openShifts ?? [];
@@ -93,7 +95,7 @@ function OpenShiftsPage() {
 					},
 				}),
 			]),
-		[requestPickup],
+		[formatShiftRange, requestPickup],
 	);
 
 	return (

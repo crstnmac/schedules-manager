@@ -16,7 +16,7 @@ import {
 } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { useLocations, useSchedule } from "@/lib/queries";
-import { formatMinute } from "@/lib/time";
+import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
 
 export const Route = createFileRoute("/dashboard/roster")({
@@ -73,6 +73,7 @@ const columns = columnHelper.columns([
 
 function RosterPage() {
 	const { workplace } = useWorkplace();
+	const { formatMinute } = useDisplayPrefs();
 	const locations = useLocations(workplace?.id);
 	const locationId = locations.data?.[0]?.id;
 	const schedule = useSchedule(locationId, weekStartOfToday());
@@ -101,7 +102,7 @@ function RosterPage() {
 				status,
 			};
 		});
-	}, [date, schedule.data]);
+	}, [date, formatMinute, schedule.data]);
 
 	function printRoster() {
 		window.print();

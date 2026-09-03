@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-
-import { DayPartsCard } from "@/components/settings-surface-cards";
 import { SettingsPage } from "@/components/settings/page";
+import { DayPartsCard } from "@/components/settings-surface-cards";
 import { useLocations, useTimeBlocks } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -22,7 +21,7 @@ function DayPartsSettingsPage() {
 	return (
 		<SettingsPage
 			title="Day parts"
-			description="Breakfast, lunch, dinner, and other parts of service."
+			description="Breakfast, lunch, dinner, and other parts of service for this location."
 		>
 			<DayPartsCard
 				locations={locations.data ?? []}

@@ -18,9 +18,11 @@ import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { ArrowLeftIcon, CalendarDaysIcon } from "lucide-react";
 
 import { usePublishedVersion } from "@/lib/queries";
-import { formatDay, formatShiftRange } from "@/lib/time";
+import { formatDay } from "@/lib/time";
+import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { AppDocument } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import { useMemo } from "react";
 
 export const Route = createFileRoute("/worker/history/$versionId")({
 	component: WorkerHistory,
@@ -32,32 +34,41 @@ type HistoryShift = NonNullable<
 
 const historyShiftHelper = createDataColumnHelper<HistoryShift>();
 
-const historyShiftColumns = historyShiftHelper.columns([
-	historyShiftHelper.accessor((row) => formatDay(row.date), {
-		id: "date",
-		header: "Date",
-		cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
-	}),
-	historyShiftHelper.accessor(
-		(row) => formatShiftRange(row.startMinute, row.endMinute, row.overnight),
-		{
-			id: "window",
-			header: "Shift",
-			cell: ({ getValue }) => (
-				<span className="tabular-nums text-muted-foreground">{getValue()}</span>
-			),
-		},
-	),
-	historyShiftHelper.accessor("positionName", { header: "Position" }),
-	historyShiftHelper.accessor("note", {
-		header: "Note",
-		cell: ({ getValue }) => getValue() ?? "—",
-	}),
-]);
-
 function WorkerHistory() {
 	const { versionId } = Route.useParams();
+	const { formatShiftRange } = useDisplayPrefs();
 	const version = usePublishedVersion(versionId);
+	const historyShiftColumns = useMemo(
+		() =>
+			historyShiftHelper.columns([
+				historyShiftHelper.accessor((row) => formatDay(row.date), {
+					id: "date",
+					header: "Date",
+					cell: ({ getValue }) => (
+						<span className="font-medium">{getValue()}</span>
+					),
+				}),
+				historyShiftHelper.accessor(
+					(row) =>
+						formatShiftRange(row.startMinute, row.endMinute, row.overnight),
+					{
+						id: "window",
+						header: "Shift",
+						cell: ({ getValue }) => (
+							<span className="tabular-nums text-muted-foreground">
+								{getValue()}
+							</span>
+						),
+					},
+				),
+				historyShiftHelper.accessor("positionName", { header: "Position" }),
+				historyShiftHelper.accessor("note", {
+					header: "Note",
+					cell: ({ getValue }) => getValue() ?? "—",
+				}),
+			]),
+		[formatShiftRange],
+	);
 	const data = version.data;
 
 	return (

@@ -47,6 +47,12 @@ export default function MoreScreen() {
 			icon: "chatbubbles-outline",
 			path: "/messages",
 		},
+		{
+			label: "Timecard",
+			detail: "Punches and worked hours",
+			icon: "stopwatch-outline",
+			path: "/timecard",
+		},
 		...(isManager
 			? [
 					{
@@ -64,14 +70,8 @@ export default function MoreScreen() {
 				]
 			: [
 					{
-						label: "Timecard",
-						detail: "Punches and worked hours",
-						icon: "stopwatch-outline" as const,
-						path: "/timecard" as const,
-					},
-					{
-						label: "Availability",
-						detail: "Blocked times, preferences, and time off",
+						label: "Time off",
+						detail: "Requests, blocked times, and preferences",
 						icon: "time-outline" as const,
 						path: "/worker-availability" as const,
 					},

@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-
-import { TimeBlocksCard } from "@/components/settings-surface-cards";
 import { SettingsPage } from "@/components/settings/page";
+import { TimeBlocksCard } from "@/components/settings-surface-cards";
 import { useLocations, useTimeBlocks } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -22,7 +21,7 @@ function TimeBlocksSettingsPage() {
 	return (
 		<SettingsPage
 			title="Time blocks"
-			description="Named windows you can reuse when building the week."
+			description="Named windows of the day you can reuse while building a week."
 		>
 			<TimeBlocksCard
 				locations={locations.data ?? []}

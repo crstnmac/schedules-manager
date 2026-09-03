@@ -32,6 +32,7 @@ import {
 	usePtoBalances,
 	useWorkers,
 } from "@/lib/queries";
+import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
 import { AppDocument } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
@@ -56,6 +57,7 @@ const documentHelper = createDataColumnHelper<DocumentRow>();
 function EmploymentPage() {
 	const { employmentId } = Route.useParams();
 	const { workplace } = useWorkplace();
+	const { formatPerson } = useDisplayPrefs();
 	const workplaceId = workplace?.id;
 	const workers = useWorkers(workplaceId);
 	const worker = useMemo(
@@ -162,8 +164,9 @@ function EmploymentPage() {
 		onError: (error) => toast.error((error as Error).message),
 	});
 
-	const displayName =
-		worker?.profile.fullName ?? worker?.profile.email ?? "Worker";
+	const displayName = worker
+		? formatPerson(worker.profile.fullName, worker.profile.email)
+		: "Worker";
 	const leaveTypeRows = leaveTypes.data?.leaveTypes ?? [];
 	const documentRows = documents.data?.documents ?? [];
 	const ptoColumns = useMemo(
@@ -177,7 +180,7 @@ function EmploymentPage() {
 				}),
 				ptoHelper.display({
 					id: "minutes",
-					header: "Minutes",
+					header: "Hours",
 					enableSorting: false,
 					cell: ({ row }) => {
 						const current =
@@ -189,7 +192,12 @@ function EmploymentPage() {
 								id={`pto-${row.original.id}`}
 								type="number"
 								min={0}
-								value={ptoMinutes[row.original.id] ?? String(current)}
+								step="0.5"
+								className="tabular-nums"
+								value={
+									ptoMinutes[row.original.id] ??
+									(current / 60).toFixed(current % 60 === 0 ? 0 : 1)
+								}
 								onChange={(event) =>
 									setPtoMinutes((values) => ({
 										...values,
@@ -197,25 +205,6 @@ function EmploymentPage() {
 									}))
 								}
 							/>
-						);
-					},
-				}),
-				ptoHelper.display({
-					id: "hours",
-					header: "Hours",
-					enableSorting: false,
-					cell: ({ row }) => {
-						const current =
-							pto.data?.balances.find(
-								(balance) => balance.leaveTypeId === row.original.id,
-							)?.minutes ?? 0;
-						return (
-							<span className="tabular-nums text-muted-foreground">
-								{(
-									Number(ptoMinutes[row.original.id] ?? current) / 60
-								).toFixed(1)}
-								h
-							</span>
 						);
 					},
 				}),
@@ -237,7 +226,10 @@ function EmploymentPage() {
 									onClick={() =>
 										savePto.mutate({
 											leaveTypeId: row.original.id,
-											minutes: Number(ptoMinutes[row.original.id] ?? current),
+											minutes: Math.round(
+												Number(ptoMinutes[row.original.id] ?? current / 60) *
+													60,
+											),
 										})
 									}
 								>
@@ -413,7 +405,9 @@ function EmploymentPage() {
 					<Card>
 						<CardHeader>
 							<CardTitle>PTO balances</CardTitle>
-							<CardDescription>Balances are stored in minutes.</CardDescription>
+							<CardDescription>
+								Hours remaining. Approving time off deducts from these.
+							</CardDescription>
 						</CardHeader>
 						<CardContent>
 							<DataTable

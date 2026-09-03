@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
 
 import { PositionsCard } from "@/components/settings/core";
 import { SettingsPage } from "@/components/settings/page";
@@ -18,7 +18,7 @@ function PositionsSettingsPage() {
 	return (
 		<SettingsPage
 			title="Positions"
-			description="Roles workers can be scheduled into, like cashier, nurse, or technician."
+			description="Roles people can be scheduled into, like cashier, nurse, or technician."
 		>
 			<PositionsCard
 				positions={positions.data ?? []}

@@ -5,11 +5,29 @@ import { api } from "./api";
 import { useSelectedWorkplaceId } from "./workplace-store";
 
 export interface MeResponse {
-	profile: { id: string; email: string; fullName: string | null };
+	profile: {
+		id: string;
+		email: string;
+		fullName: string | null;
+		timeFormat?: "12h" | "24h";
+		nameFormat?: "full" | "first_last_initial" | "first";
+	};
 	employments: {
 		id: string;
 		kind: "manager" | "worker";
-		workplace: { id: string; name: string };
+		workplace: {
+			id: string;
+			name: string;
+			policies?: {
+				messagingEnabled: boolean;
+				announcementsEnabled: boolean;
+				tasksEnabled: boolean;
+				workersCanRequestTimeOff: boolean;
+				shiftExchangesEnabled: boolean;
+				geofenceRequired: boolean;
+				timesheetNotesEnabled?: boolean;
+			};
+		};
 	}[];
 }
 
@@ -146,11 +164,24 @@ export function useClockOut() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: (versionShiftId: string) =>
-			api<{ timeEntry: { id: string; clockedOutAt: string | null } }>(
-				`/v1/my/shifts/${versionShiftId}/clock-out`,
-				{ method: "POST" },
-			),
+		mutationFn: (
+			input: string | { versionShiftId: string; workerNote?: string },
+		) => {
+			const versionShiftId =
+				typeof input === "string" ? input : input.versionShiftId;
+			const workerNote =
+				typeof input === "string" ? undefined : input.workerNote;
+			return api<{
+				timeEntry: {
+					id: string;
+					clockedOutAt: string | null;
+					workerNote: string | null;
+				};
+			}>(`/v1/my/shifts/${versionShiftId}/clock-out`, {
+				method: "POST",
+				body: workerNote ? { workerNote } : undefined,
+			});
+		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 			queryClient.invalidateQueries({ queryKey: ["timecard"] });
@@ -166,6 +197,7 @@ export interface TimecardEntry {
 	shiftEndsAt: string;
 	clockedInAt: string;
 	clockedOutAt: string | null;
+	workerNote: string | null;
 }
 
 export function useMyTimeEntries(workplaceId: string | undefined) {
@@ -668,15 +700,50 @@ export interface ManagerWorkersResponse {
 }
 
 export interface ManagerTimeOffResponse {
+	timezone?: string;
 	requests: {
 		id: string;
+		employmentId?: string;
+		kind?: "manager" | "worker";
 		worker: { email: string; fullName: string | null };
 		startsAt: string;
 		endsAt: string;
+		startDate?: string;
+		endDate?: string;
+		allDay?: boolean;
+		chargeMinutes?: number;
 		reason: string | null;
 		status: "pending" | "approved" | "declined";
 		decisionReason: string | null;
+		leaveTypeId?: string | null;
+		leaveTypeName?: string | null;
+		remainingMinutes?: number;
 	}[];
+}
+
+export function useLeaveTypes(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["leave-types", workplaceId],
+		queryFn: () =>
+			api<{ leaveTypes: { id: string; name: string; paid: boolean }[] }>(
+				`/v1/workplaces/${workplaceId}/leave-types`,
+			),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function usePtoBalances(
+	workplaceId: string | undefined,
+	employmentId: string | undefined,
+) {
+	return useQuery({
+		queryKey: ["pto", workplaceId, employmentId],
+		queryFn: () =>
+			api<{
+				balances: { leaveTypeId: string; name: string; minutes: number }[];
+			}>(`/v1/workplaces/${workplaceId}/employments/${employmentId}/pto`),
+		enabled: Boolean(workplaceId && employmentId),
+	});
 }
 
 export function useManagerWorkers(workplaceId: string | undefined) {

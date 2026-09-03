@@ -21,6 +21,7 @@ import {
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { managerEmploymentIds, notifyEmployments, writeAudit } from "../notify";
+import { assertWorkplaceEnabled } from "../workplace-policy";
 import { assertEligible } from "./coverage";
 import { publishScheduleNow } from "./publication";
 
@@ -271,6 +272,11 @@ export const swapRoutes = new Elysia({
 					if (!requesterShift?.shift.employmentId) {
 						throw new NotFoundError("Your shift could not be found");
 					}
+					await assertWorkplaceEnabled(
+						requesterShift.workplaceId,
+						"shiftExchangesEnabled",
+						"Shift exchanges are turned off for this Workplace",
+					);
 					await assertFutureShift(requesterShift.shift.startsAt, "Your shift");
 
 					const [counterpartShift] = await db

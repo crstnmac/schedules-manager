@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-
-import { GroupsCard } from "@/components/settings-surface-cards";
 import { SettingsPage } from "@/components/settings/page";
+import { GroupsCard } from "@/components/settings-surface-cards";
 import { useGroups, useWorkers } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -17,7 +16,7 @@ function GroupsSettingsPage() {
 	return (
 		<SettingsPage
 			title="Groups"
-			description="Group employments for faster scheduling and filtering."
+			description="Group people so you can filter the schedule and staff a week faster."
 		>
 			<GroupsCard
 				workplaceId={workplace?.id}
