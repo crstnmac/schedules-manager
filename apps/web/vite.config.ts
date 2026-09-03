@@ -6,9 +6,12 @@ import { defineConfig, loadEnv } from "vite";
 
 export default defineConfig(({ mode }) => {
 	const env = loadEnv(mode, process.cwd(), "");
-	const posthogHost = env.VITE_PUBLIC_POSTHOG_HOST || "https://eu.i.posthog.com";
-	// EU region assets host
-	const posthogAssetsHost = posthogHost.replace("eu.i.posthog.com", "eu-assets.i.posthog.com");
+	const posthogUiHost = env.VITE_PUBLIC_POSTHOG_HOST || "https://eu.posthog.com";
+	const posthogHost = posthogUiHost.replace("eu.posthog.com", "eu.i.posthog.com");
+	const posthogAssetsHost = posthogUiHost.replace(
+		"eu.posthog.com",
+		"eu-assets.i.posthog.com",
+	);
 
 	return {
 	server: {

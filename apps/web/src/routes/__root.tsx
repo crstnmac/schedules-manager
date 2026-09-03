@@ -86,9 +86,15 @@ function RootComponent() {
 			apiKey={posthogToken}
 			options={{
 				api_host: "/ingest",
-				ui_host: posthogHost,
+				ui_host: posthogHost ?? "https://eu.posthog.com",
 				defaults: "2026-01-30",
+				person_profiles: "identified_only",
+				capture_pageview: "history_change",
+				capture_pageleave: true,
 				capture_exceptions: true,
+				session_recording: {
+					maskAllInputs: true,
+				},
 				debug: import.meta.env.DEV,
 			}}
 		>

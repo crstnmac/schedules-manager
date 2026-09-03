@@ -5,6 +5,7 @@
 #     --build-arg VITE_SERVER_URL=https://api.example.com \
 #     --build-arg VITE_SUPABASE_URL=https://xyz.supabase.co \
 #     --build-arg VITE_SUPABASE_ANON_KEY=... \
+#     --build-arg VITE_PUBLIC_POSTHOG_PROJECT_TOKEN=... \
 #     -t schedules-manager-web .
 
 FROM oven/bun:1.3.11-slim AS base
@@ -34,9 +35,13 @@ FROM deps AS build
 ARG VITE_SERVER_URL=http://localhost:3000
 ARG VITE_SUPABASE_URL=http://127.0.0.1:54321
 ARG VITE_SUPABASE_ANON_KEY=replace-with-your-supabase-anon-key
+ARG VITE_PUBLIC_POSTHOG_PROJECT_TOKEN
+ARG VITE_PUBLIC_POSTHOG_HOST=https://eu.posthog.com
 ENV VITE_SERVER_URL=${VITE_SERVER_URL} \
 	VITE_SUPABASE_URL=${VITE_SUPABASE_URL} \
-	VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+	VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY} \
+	VITE_PUBLIC_POSTHOG_PROJECT_TOKEN=${VITE_PUBLIC_POSTHOG_PROJECT_TOKEN} \
+	VITE_PUBLIC_POSTHOG_HOST=${VITE_PUBLIC_POSTHOG_HOST}
 COPY . .
 RUN bun run --cwd apps/web build
 

@@ -1,4 +1,5 @@
 import { Badge } from "@SchedulesManager/ui/components/badge";
+import { usePostHog } from "@posthog/react";
 import { Button } from "@SchedulesManager/ui/components/button";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import {
@@ -42,6 +43,7 @@ const navigation = [
 ] as const;
 
 function WorkerLayout() {
+	const posthog = usePostHog();
 	const { isSigningOut, user, signOut } = useAuth();
 	const me = useMe(Boolean(user));
 	const { isLoading, workplace, kind } = useWorkplace();
@@ -59,6 +61,11 @@ function WorkerLayout() {
 	useEffect(() => {
 		document.title = `${activePage} · jooling`;
 	}, [activePage]);
+	useEffect(() => {
+		if (!workplace || !kind) return;
+		posthog?.group("workplace", workplace.id, { name: workplace.name });
+		posthog?.register({ workplace_id: workplace.id, employment_kind: kind });
+	}, [kind, posthog, workplace]);
 	const handleSignOut = async () => {
 		try {
 			await signOut();

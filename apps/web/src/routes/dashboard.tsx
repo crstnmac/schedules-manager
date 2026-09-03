@@ -26,6 +26,7 @@ import {
 } from "@SchedulesManager/ui/components/sidebar";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { cn } from "@SchedulesManager/ui/lib/utils";
+import { usePostHog } from "@posthog/react";
 import {
 	createFileRoute,
 	Link,
@@ -98,6 +99,7 @@ const navigation = [
 ] as const;
 
 function DashboardLayout() {
+	const posthog = usePostHog();
 	const { isSigningOut, user, signOut } = useAuth();
 	const { setTheme } = useTheme();
 	const me = useMe();
@@ -128,6 +130,11 @@ function DashboardLayout() {
 	useEffect(() => {
 		document.title = `${headerLabel} · jooling`;
 	}, [headerLabel]);
+	useEffect(() => {
+		if (!workplace || !kind) return;
+		posthog?.group("workplace", workplace.id, { name: workplace.name });
+		posthog?.register({ workplace_id: workplace.id, employment_kind: kind });
+	}, [kind, posthog, workplace]);
 	const handleSignOut = async () => {
 		try {
 			await signOut();

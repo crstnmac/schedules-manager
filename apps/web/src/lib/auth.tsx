@@ -43,17 +43,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
 				}
 			}
 		});
-		const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+		const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
 			setSession(nextSession);
 			setIsLoading(false);
+			if (nextSession?.user) {
+				posthog?.identify(nextSession.user.id, {
+					email: nextSession.user.email,
+				});
+			} else if (event === "SIGNED_OUT") {
+				posthog?.reset();
+			}
 		});
 		return () => {
 			mounted = false;
 			data.subscription.unsubscribe();
 		};
-	// posthog is stable after mount; safe to include
-	// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+	}, [posthog]);
 
 	const value = useMemo<AuthContextValue>(
 		() => ({
@@ -65,9 +70,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
 				setIsSigningOut(true);
 				try {
 					posthog?.capture("user_signed_out");
-					posthog?.reset();
 					const { error } = await supabase.auth.signOut();
 					if (error) throw error;
+					posthog?.reset();
 					setSession(null);
 					queryClient.clear();
 				} finally {
@@ -75,7 +80,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 				}
 			},
 		}),
-		[isLoading, isSigningOut, queryClient, session],
+		[isLoading, isSigningOut, posthog, queryClient, session],
 	);
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
