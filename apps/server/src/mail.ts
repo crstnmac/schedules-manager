@@ -53,14 +53,39 @@ export async function sendInvitationEmail(input: {
 		method: "POST",
 		headers: {
 			Authorization: env.ZEPTOMAIL_TOKEN,
+			Accept: "application/json",
 			"Content-Type": "application/json",
 		},
 		body: JSON.stringify(payload),
 		signal: AbortSignal.timeout(20_000),
 	});
-	if (!response.ok) throw new Error("ZeptoMail request failed");
-	const result = (await response.json()) as { request_id?: unknown };
-	if (typeof result?.request_id !== "string") {
+	const raw = await response.text();
+	let result: {
+		request_id?: unknown;
+		message?: unknown;
+		error?: { code?: unknown; message?: unknown };
+		data?: Array<{ code?: unknown; message?: unknown }>;
+	} = {};
+	try {
+		result = JSON.parse(raw) as typeof result;
+	} catch {
+		throw new Error(
+			`ZeptoMail returned non-JSON (HTTP ${response.status})`,
+		);
+	}
+	if (!response.ok) {
+		const code =
+			(typeof result.error?.code === "string" && result.error.code) ||
+			(typeof result.data?.[0]?.code === "string" && result.data[0].code) ||
+			`HTTP_${response.status}`;
+		const message =
+			(typeof result.error?.message === "string" && result.error.message) ||
+			(typeof result.message === "string" && result.message) ||
+			"request failed";
+		// Provider codes only — never persist recipient or invite URL material.
+		throw new Error(`ZeptoMail ${code}: ${message}`);
+	}
+	if (typeof result.request_id !== "string") {
 		throw new Error("ZeptoMail returned no request ID");
 	}
 	return { providerMessageId: result.request_id };

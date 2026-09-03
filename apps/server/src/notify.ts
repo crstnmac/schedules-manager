@@ -1,9 +1,12 @@
 import {
 	auditEvents,
 	db,
+	DEFAULT_NOTIFICATION_PREFERENCES,
 	employments,
 	notificationOutbox,
 	notifications,
+	type NotificationPreferences,
+	profiles,
 	pushDeliveries,
 	pushTokens,
 } from "@SchedulesManager/db";
@@ -17,6 +20,70 @@ import {
 
 type NotificationWriter = Pick<typeof db, "insert">;
 
+/** Map outbox kinds onto the four Settings → Notifications toggles. */
+export function notificationTopicForKind(
+	kind: string,
+): keyof NotificationPreferences | null {
+	if (
+		kind.startsWith("time_off") ||
+		kind === "unavailability_requested"
+	) {
+		return "timeOff";
+	}
+	if (
+		kind.startsWith("time_entry") ||
+		kind.includes("clock") ||
+		kind.includes("timesheet")
+	) {
+		return "timeClock";
+	}
+	if (kind === "announcement" || kind.includes("message")) {
+		return "messages";
+	}
+	if (
+		kind.startsWith("schedule") ||
+		kind.startsWith("swap") ||
+		kind.startsWith("release") ||
+		kind.startsWith("pickup") ||
+		kind === "open_shift" ||
+		kind === "late_change" ||
+		kind === "coverage_filled" ||
+		kind === "attendance_mark" ||
+		kind === "acceptance_response"
+	) {
+		return "schedule";
+	}
+	// Unknown kinds still deliver — do not silently drop ops alerts.
+	return null;
+}
+
+async function employmentIdsAllowingKind(
+	employmentIds: string[],
+	kind: string,
+): Promise<string[]> {
+	const topic = notificationTopicForKind(kind);
+	if (!topic || employmentIds.length === 0) return employmentIds;
+
+	const rows = await db
+		.select({
+			employmentId: employments.id,
+			prefs: profiles.notificationPreferences,
+		})
+		.from(employments)
+		.innerJoin(profiles, eq(profiles.id, employments.profileId))
+		.where(inArray(employments.id, employmentIds));
+
+	const allowed = new Set<string>();
+	for (const row of rows) {
+		const prefs = {
+			...DEFAULT_NOTIFICATION_PREFERENCES,
+			...row.prefs,
+		};
+		if (prefs[topic]) allowed.add(row.employmentId);
+	}
+	return employmentIds.filter((id) => allowed.has(id));
+}
+
 export async function notifyEmployments(
 	employmentIds: string[],
 	payload: { kind: string; title: string; body: string },
@@ -26,14 +93,30 @@ export async function notifyEmployments(
 		...new Set(employmentIds.filter((id) => typeof id === "string" && id)),
 	];
 	if (unique.length === 0) return;
+
+	// Preference filtering always uses the primary db connection (reads), even
+	// when inserts run inside a caller-provided transaction.
+	const allowed = await employmentIdsAllowingKind(unique, payload.kind);
+	if (allowed.length === 0) return;
+
 	if (writer === db) {
-		await db.transaction((tx) => notifyEmployments(unique, payload, tx));
+		await db.transaction((tx) =>
+			insertEmploymentNotifications(allowed, payload, tx),
+		);
 		return;
 	}
+	await insertEmploymentNotifications(allowed, payload, writer);
+}
+
+async function insertEmploymentNotifications(
+	employmentIds: string[],
+	payload: { kind: string; title: string; body: string },
+	writer: NotificationWriter,
+) {
 	const created = await writer
 		.insert(notifications)
 		.values(
-			unique.map((employmentId) => ({
+			employmentIds.map((employmentId) => ({
 				employmentId,
 				kind: payload.kind,
 				title: payload.title,

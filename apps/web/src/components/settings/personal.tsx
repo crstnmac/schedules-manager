@@ -277,7 +277,14 @@ export function NotificationPreferencesCard({
 						description="Published schedules, late material changes, and shift assignments."
 						checked={value("schedule")}
 						onCheckedChange={(checked) =>
-							setDraft((current) => ({ ...current, schedule: checked }))
+							setDraft((current) => {
+								const next = { ...current, schedule: checked };
+								if (checked === (prefs?.schedule ?? true)) {
+									const { schedule: _drop, ...rest } = next;
+									return rest;
+								}
+								return next;
+							})
 						}
 					/>
 					<SettingsToggleField
@@ -286,7 +293,14 @@ export function NotificationPreferencesCard({
 						description="Forgotten punch reminders and timesheet follow-up."
 						checked={value("timeClock")}
 						onCheckedChange={(checked) =>
-							setDraft((current) => ({ ...current, timeClock: checked }))
+							setDraft((current) => {
+								const next = { ...current, timeClock: checked };
+								if (checked === (prefs?.timeClock ?? true)) {
+									const { timeClock: _drop, ...rest } = next;
+									return rest;
+								}
+								return next;
+							})
 						}
 					/>
 				</FieldSet>
@@ -302,7 +316,14 @@ export function NotificationPreferencesCard({
 						description="Workplace conversations and direct messages."
 						checked={value("messages")}
 						onCheckedChange={(checked) =>
-							setDraft((current) => ({ ...current, messages: checked }))
+							setDraft((current) => {
+								const next = { ...current, messages: checked };
+								if (checked === (prefs?.messages ?? true)) {
+									const { messages: _drop, ...rest } = next;
+									return rest;
+								}
+								return next;
+							})
 						}
 					/>
 					<SettingsToggleField
@@ -311,7 +332,14 @@ export function NotificationPreferencesCard({
 						description="Time-off requests you submit or need to decide."
 						checked={value("timeOff")}
 						onCheckedChange={(checked) =>
-							setDraft((current) => ({ ...current, timeOff: checked }))
+							setDraft((current) => {
+								const next = { ...current, timeOff: checked };
+								if (checked === (prefs?.timeOff ?? true)) {
+									const { timeOff: _drop, ...rest } = next;
+									return rest;
+								}
+								return next;
+							})
 						}
 					/>
 				</FieldSet>

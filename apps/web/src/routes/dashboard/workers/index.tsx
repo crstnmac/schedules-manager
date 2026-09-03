@@ -590,6 +590,7 @@ type InvitationEmailDelivery = {
 		| "cancelled";
 	attempts: number;
 	availableAt: string;
+	lastError: string | null;
 };
 
 function Invitations({
@@ -680,6 +681,11 @@ function Invitations({
 										{delivery.status === "queued" && delivery.attempts > 0
 											? ` · Retry after ${new Date(delivery.availableAt).toLocaleString()}`
 											: ""}
+										{delivery.lastError
+											? ` · ${delivery.lastError}`
+											: delivery.status === "sent"
+												? " · Accepted by provider; waiting for delivery confirmation"
+												: ""}
 									</span>
 								) : null}
 							</div>

@@ -73,7 +73,16 @@ function usePolicyDraft(
 	}
 
 	function patch(partial: Partial<WorkplaceSettings>) {
-		setDraft((current) => ({ ...current, ...partial }));
+		setDraft((current) => {
+			if (!settings) return { ...current, ...partial };
+			const next = { ...current, ...partial };
+			for (const key of Object.keys(partial) as (keyof WorkplaceSettings)[]) {
+				if (next[key] === settings[key]) {
+					delete next[key];
+				}
+			}
+			return next;
+		});
 	}
 
 	return {
@@ -349,7 +358,7 @@ export function SchedulePoliciesCard({
 							<SettingsToggleField
 								id="unavailability-approval"
 								label="Unavailability needs approval"
-								description="Recorded for managers. Approval workflow is not enforced yet."
+								description="When on, workers submit unavailability for manager approval before it blocks scheduling."
 								checked={form.value("unavailabilityRequiresApproval")}
 								onCheckedChange={(checked) =>
 									form.patch({ unavailabilityRequiresApproval: checked })

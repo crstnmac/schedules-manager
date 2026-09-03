@@ -955,7 +955,8 @@ export function TemplatesCard({
 						positionId,
 						startMinute: templateStart,
 						endMinute: templateEnd,
-						note: note.trim() || undefined,
+						// Always send a string on edit so an emptied note clears server-side.
+						note: editingId ? note.trim() : note.trim() || undefined,
 					},
 				},
 			),

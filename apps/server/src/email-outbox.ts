@@ -107,21 +107,35 @@ export async function processEmailOutboxBatch(
 						eq(emailDeliveries.leaseId, leaseId),
 					),
 				);
-		} catch {
-			// Provider errors may contain the recipient and invitation URL. Do not persist or log them.
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			const safeMessage = message.startsWith("ZeptoMail ")
+				? message.slice(0, 200)
+				: "Email provider request failed; delivery may be retried";
+			// Provider errors may contain the recipient and invitation URL. Do not persist them unless they are our coded ZeptoMail summary.
 			await db
 				.update(emailDeliveries)
 				.set({
 					status: item.attempts >= 8 ? "failed" : "queued",
 					lockedAt: null,
 					leaseId: null,
-					lastError: "Email provider request failed; delivery may be retried",
+					lastError: safeMessage,
 					availableAt: new Date(
 						Date.now() +
 							Math.min(3600, 30 * 2 ** Math.min(item.attempts, 7)) * 1000,
 					),
 				})
 				.where(owned);
+			console.error(
+				JSON.stringify({
+					level: "error",
+					message: "Email delivery deferred for retry",
+					deliveryId: item.id,
+					attempt: item.attempts,
+					error: safeMessage,
+					timestamp: new Date().toISOString(),
+				}),
+			);
 		}
 	}
 	return { claimed: claimed.length };

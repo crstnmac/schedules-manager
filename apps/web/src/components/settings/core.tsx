@@ -407,7 +407,7 @@ export function WorkplaceCard({
 								type="number"
 								min={0}
 								max={100}
-								step={0.1}
+								step={1}
 								value={laborGoal == null ? "" : String(laborGoal)}
 								onChange={(event) => {
 									const raw = event.target.value.trim();
@@ -415,7 +415,11 @@ export function WorkplaceCard({
 										setLaborCostPercentGoal(null);
 										return;
 									}
-									setLaborCostPercentGoal(Number(raw));
+									const next = Math.round(Number(raw));
+									if (!Number.isFinite(next)) return;
+									setLaborCostPercentGoal(
+										Math.min(100, Math.max(0, next)),
+									);
 								}}
 								placeholder="e.g. 25"
 							/>
@@ -545,7 +549,8 @@ export function LocationsCard({
 			latitude: string;
 			longitude: string;
 			geofenceRadiusMeters: number | null;
-			kioskPin: string | null;
+			/** Omit to keep; string to set; null to clear. */
+			kioskPin?: string | null;
 			openMinute: number | null;
 			closeMinute: number | null;
 		}) =>
@@ -558,7 +563,9 @@ export function LocationsCard({
 					latitude: input.latitude.trim() || null,
 					longitude: input.longitude.trim() || null,
 					geofenceRadiusMeters: input.geofenceRadiusMeters,
-					kioskPin: input.kioskPin,
+					...(input.kioskPin !== undefined
+						? { kioskPin: input.kioskPin }
+						: {}),
 					openMinute: input.openMinute,
 					closeMinute: input.closeMinute,
 				},
@@ -848,12 +855,12 @@ export function LocationsCard({
 											/>
 											<FieldDescription>
 												{editingLocation.kioskEnabled
-													? "Kiosk is enabled. Leave empty to disable it."
-													: "Set a PIN to enable this location for kiosk use."}
+													? "Leave blank to keep the current PIN. Enter a new PIN to change it."
+													: "Set a 4–8 digit PIN to enable kiosk clock-in."}
 											</FieldDescription>
 										</Field>
 									</div>
-									<div>
+									<div className="flex flex-wrap items-center gap-2">
 										<Button
 											size="sm"
 											disabled={update.isPending}
@@ -868,7 +875,9 @@ export function LocationsCard({
 													geofenceRadiusMeters: editGeo.geofenceRadiusMeters
 														? Number(editGeo.geofenceRadiusMeters)
 														: null,
-													kioskPin: editKioskPin || null,
+													...(editKioskPin.trim()
+														? { kioskPin: editKioskPin.trim() }
+														: {}),
 													openMinute: editHoursEnabled ? editOpenMinute : null,
 													closeMinute: editHoursEnabled
 														? editCloseMinute
@@ -881,6 +890,35 @@ export function LocationsCard({
 											) : null}
 											Save location
 										</Button>
+										{editingLocation.kioskEnabled ? (
+											<Button
+												size="sm"
+												variant="ghost"
+												disabled={update.isPending}
+												onClick={() =>
+													update.mutate({
+														id: editingLocation.id,
+														name: editName.trim() || editingLocation.name,
+														timezone: editTimezone,
+														addressLine: editGeo.addressLine,
+														latitude: editGeo.latitude,
+														longitude: editGeo.longitude,
+														geofenceRadiusMeters: editGeo.geofenceRadiusMeters
+															? Number(editGeo.geofenceRadiusMeters)
+															: null,
+														kioskPin: null,
+														openMinute: editHoursEnabled
+															? editOpenMinute
+															: null,
+														closeMinute: editHoursEnabled
+															? editCloseMinute
+															: null,
+													})
+												}
+											>
+												Disable kiosk
+											</Button>
+										) : null}
 									</div>
 								</FieldGroup>
 							</>
