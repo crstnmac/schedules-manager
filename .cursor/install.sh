@@ -26,7 +26,12 @@ export PATH="$HOME/.bun/bin:$PATH"
 if ! command -v docker >/dev/null 2>&1; then
   log "installing docker + helpers"
   sudo apt-get update -qq
-  sudo apt-get install -y -qq docker.io docker-compose-v2 fuse-overlayfs iptables
+  # Non-interactive + keep existing conffiles so packages like fuse3 (which ship
+  # /etc/fuse.conf) do not block on a dpkg conffile prompt without a TTY.
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+    -o Dpkg::Options::=--force-confdef \
+    -o Dpkg::Options::=--force-confold \
+    docker.io docker-compose-v2 fuse-overlayfs iptables
 fi
 # Nested Docker container networking needs the legacy iptables backend.
 sudo update-alternatives --set iptables /usr/sbin/iptables-legacy >/dev/null 2>&1 || true
