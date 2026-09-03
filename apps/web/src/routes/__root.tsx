@@ -6,10 +6,22 @@ import {
 	HeadContent,
 	Outlet,
 } from "@tanstack/react-router";
+import { PostHogProvider } from "@posthog/react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/lib/auth";
 
 import "../index.css";
+
+const posthogToken = import.meta.env.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN as string | undefined;
+const posthogHost = import.meta.env.VITE_PUBLIC_POSTHOG_HOST as string | undefined;
+
+if (import.meta.env.DEV && !posthogToken) {
+	console.error(
+		"VITE_PUBLIC_POSTHOG_PROJECT_TOKEN variable required by PostHog is missing or un-configured, " +
+		"this causes events to be silently missed. This error stops appearing once " +
+		"VITE_PUBLIC_POSTHOG_PROJECT_TOKEN is configured",
+	);
+}
 
 export interface RouterAppContext {
 	queryClient: QueryClient;
@@ -38,7 +50,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 });
 
 function RootComponent() {
-	return (
+	const inner = (
 		<>
 			<HeadContent />
 			<a
@@ -65,5 +77,22 @@ function RootComponent() {
 			</ThemeProvider>
 			{/* <TanStackRouterDevtools position="bottom-left" /> */}
 		</>
+	);
+
+	if (!posthogToken) return inner;
+
+	return (
+		<PostHogProvider
+			apiKey={posthogToken}
+			options={{
+				api_host: "/ingest",
+				ui_host: posthogHost,
+				defaults: "2026-01-30",
+				capture_exceptions: true,
+				debug: import.meta.env.DEV,
+			}}
+		>
+			{inner}
+		</PostHogProvider>
 	);
 }

@@ -16,6 +16,7 @@ import {
 	ItemTitle,
 } from "@SchedulesManager/ui/components/item";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import { usePostHog } from "@posthog/react";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { AuthShell } from "@/components/auth-shell";
 import { CurrentProfile } from "@/components/current-profile";
@@ -33,6 +34,7 @@ export const Route = createFileRoute("/join")({
 
 function JoinPage() {
 	const { user, signOut } = useAuth();
+	const posthog = usePostHog();
 	const me = useMe(Boolean(user));
 	const pending = usePendingInvitations(Boolean(user));
 	const accept = useAcceptInvitation();
@@ -98,7 +100,12 @@ function JoinPage() {
 									<Button
 										size="sm"
 										disabled={accept.isPending}
-										onClick={() => accept.mutate(invitation.token)}
+												onClick={() => {
+											posthog?.capture("invitation_accepted", {
+												invitee_role: invitation.kind,
+											});
+											accept.mutate(invitation.token);
+										}}
 									>
 										{accept.isPending ? (
 											<Spinner data-icon="inline-start" />

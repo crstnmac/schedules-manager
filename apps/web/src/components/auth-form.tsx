@@ -40,6 +40,7 @@ import {
 	MailIcon,
 	UserPlusIcon,
 } from "lucide-react";
+import { usePostHog } from "@posthog/react";
 import { useState } from "react";
 
 import { AuthShell } from "@/components/auth-shell";
@@ -90,6 +91,7 @@ export function AuthForm({
 	const [error, setError] = useState<string | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
 
+	const posthog = usePostHog();
 	const isInvite = Boolean(invite);
 	const emailLocked = Boolean(lockedEmail) && isInvite;
 	const activeCopy = copy[mode];
@@ -110,13 +112,26 @@ export function AuthForm({
 		const submitEmail = (lockedEmail ?? email).trim().toLowerCase();
 		try {
 			if (mode === "sign-in") {
-				const { error: authError } = await supabase.auth.signInWithPassword({
+				const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
 					email: submitEmail,
 					password,
 				});
 				if (authError) throw authError;
+				if (authData.user) {
+					posthog?.identify(authData.user.id, { email: authData.user.email });
+					posthog?.capture("user_signed_in", {
+						invite_flow: isInvite,
+					});
+				}
 			} else {
 				const data = await signUpWithEmail(supabase, submitEmail, password);
+				if (data.user) {
+					posthog?.identify(data.user.id, { email: data.user.email });
+					posthog?.capture("user_signed_up", {
+						invite_flow: isInvite,
+						email_confirmation_required: !data.session,
+					});
+				}
 				if (!data.session) {
 					setMessage("Check your email to confirm your account, then sign in.");
 				}

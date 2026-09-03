@@ -2,11 +2,34 @@ import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+	const env = loadEnv(mode, process.cwd(), "");
+	const posthogHost = env.VITE_PUBLIC_POSTHOG_HOST || "https://eu.i.posthog.com";
+	// EU region assets host
+	const posthogAssetsHost = posthogHost.replace("eu.i.posthog.com", "eu-assets.i.posthog.com");
+
+	return {
 	server: {
 		port: 3001,
+		proxy: {
+			"/ingest/static": {
+				target: posthogAssetsHost,
+				changeOrigin: true,
+				rewrite: (path) => path.replace(/^\/ingest/, ""),
+			},
+			"/ingest/array": {
+				target: posthogAssetsHost,
+				changeOrigin: true,
+				rewrite: (path) => path.replace(/^\/ingest/, ""),
+			},
+			"/ingest": {
+				target: posthogHost,
+				changeOrigin: true,
+				rewrite: (path) => path.replace(/^\/ingest/, ""),
+			},
+		},
 	},
 	resolve: {
 		tsconfigPaths: true,
@@ -30,4 +53,5 @@ export default defineConfig({
 		}),
 		react(),
 	],
+	};
 });

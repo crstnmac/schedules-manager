@@ -110,6 +110,7 @@ import {
 	UserPlusIcon,
 	XIcon,
 } from "lucide-react";
+import { usePostHog } from "@posthog/react";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
@@ -694,6 +695,7 @@ function ScheduleMetric({
 function SchedulePage() {
 	const { workplace } = useWorkplace();
 	const { formatMinute } = useDisplayPrefs();
+	const posthog = usePostHog();
 	const scheduleStaffColumns = useMemo(
 		() => createScheduleStaffColumns(formatMinute),
 		[formatMinute],
@@ -862,6 +864,11 @@ function SchedulePage() {
 					queryKey: ["workplaces", workplace?.id, "workers"],
 				});
 			}
+			posthog?.capture("shift_created", {
+				shift_count: result.count,
+				position_approved: result.approvePosition,
+				week_start: weekStart,
+			});
 			toast.success(
 				result.count > 1 ? `${result.count} shifts added.` : "Shift saved.",
 			);
@@ -875,6 +882,7 @@ function SchedulePage() {
 		onSuccess: async () => {
 			setForm(null);
 			await invalidate();
+			posthog?.capture("shift_deleted", { week_start: weekStart });
 			toast.success("Shift removed.");
 		},
 		onError: (error) => toast.error((error as Error).message),
@@ -1055,6 +1063,14 @@ function SchedulePage() {
 			});
 			await queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 			await queryClient.invalidateQueries({ queryKey: ["notifications"] });
+			posthog?.capture("schedule_published", {
+				version_number: result.version.versionNumber,
+				worker_count: result.version.workers,
+				total_changes: result.changes.total,
+				material_changes: result.changes.material,
+				acceptances_required: result.changes.acceptancesRequired,
+				week_start: weekStart,
+			});
 			const acceptanceNote =
 				result.changes.acceptancesRequired > 0
 					? ` ${result.changes.acceptancesRequired} late change(s) need worker acceptance.`

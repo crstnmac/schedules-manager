@@ -1,5 +1,3 @@
-import { env } from "@SchedulesManager/env/server";
-
 function escapeHtml(value: string) {
 	return value.replace(
 		/[&<>"']/g,
@@ -14,6 +12,14 @@ function escapeHtml(value: string) {
 	);
 }
 
+let cachedEnv: typeof import("@SchedulesManager/env/server").env | undefined;
+
+async function getMailEnv() {
+	// Load env on demand so tests can seed process.env first.
+	cachedEnv ??= (await import("@SchedulesManager/env/server")).env;
+	return cachedEnv;
+}
+
 export async function sendInvitationEmail(input: {
 	email: string;
 	token: string;
@@ -21,6 +27,7 @@ export async function sendInvitationEmail(input: {
 	kind: string;
 	deliveryId: string;
 }) {
+	const env = await getMailEnv();
 	const inviteUrl = new URL(
 		`/invite/${encodeURIComponent(input.token)}`,
 		env.APP_URL,

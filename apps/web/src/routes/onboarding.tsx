@@ -24,6 +24,7 @@ import {
 	ItemTitle,
 } from "@SchedulesManager/ui/components/item";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { StoreIcon, UsersIcon } from "lucide-react";
@@ -282,6 +283,7 @@ function WorkplaceSetup({
 	onBack: () => void;
 }) {
 	const queryClient = useQueryClient();
+	const posthog = usePostHog();
 	const [workplaceName, setWorkplaceName] = useState("");
 	const [locationName, setLocationName] = useState("");
 	const [locationAddress, setLocationAddress] = useState("");
@@ -309,6 +311,9 @@ function WorkplaceSetup({
 		onSuccess: (data) => {
 			queryClient.invalidateQueries({ queryKey: ["me"] });
 			toast.success(`${data.workplace.name} is ready.`);
+			posthog?.capture("workplace_created", {
+				location_timezone: data.location.timezone,
+			});
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});

@@ -46,6 +46,7 @@ import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@SchedulesManager/ui/components/toggle-group";
+import { usePostHog } from "@posthog/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
@@ -81,6 +82,7 @@ const invitationHelper = createDataColumnHelper<InvitationDto>();
 function WorkersPage() {
 	const { workplace } = useWorkplace();
 	const { formatPerson } = useDisplayPrefs();
+	const posthog = usePostHog();
 	const workers = useWorkers(workplace?.id);
 	const locations = useLocations(workplace?.id);
 	const positions = usePositions(workplace?.id);
@@ -120,6 +122,11 @@ function WorkersPage() {
 			),
 		onSuccess: (data) => {
 			setLastInviteToken(data.invitation.token);
+			posthog?.capture("invitation_sent", {
+				invitee_role: kind,
+				location_count: selectedLocations.length,
+				position_count: selectedPositions.length,
+			});
 			setEmail("");
 			setSelectedLocations([]);
 			setSelectedPositions([]);

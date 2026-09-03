@@ -42,6 +42,7 @@ import {
 	TabsList,
 	TabsTrigger,
 } from "@SchedulesManager/ui/components/tabs";
+import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CalendarOffIcon } from "lucide-react";
@@ -97,6 +98,7 @@ type TeamMember = {
 function TimeOffPage() {
 	const { workplace, employmentId: myEmploymentId } = useWorkplace();
 	const { formatLeaveRange, formatPerson } = useDisplayPrefs();
+	const posthog = usePostHog();
 	const workplaceId = workplace?.id;
 	const timeOff = useTimeOff(workplaceId);
 	const leaveTypes = useLeaveTypes(workplaceId);
@@ -151,6 +153,13 @@ function TimeOffPage() {
 			invalidateLeave();
 			setDeclineId(null);
 			setDeclineReason("");
+			if (input.decision === "approved") {
+				posthog?.capture("time_off_approved");
+			} else {
+				posthog?.capture("time_off_declined", {
+					reason_provided: Boolean(input.reason),
+				});
+			}
 			toast.success(
 				input.decision === "approved"
 					? "Time off approved. It will block the schedule."
@@ -1001,6 +1010,7 @@ function RequestMyLeaveSheet({
 	onSaved: () => void;
 }) {
 	const today = todayIsoDate();
+	const posthogLeave = usePostHog();
 	const [leaveTypeId, setLeaveTypeId] = useState("");
 	const [startDate, setStartDate] = useState(today);
 	const [endDate, setEndDate] = useState(today);
@@ -1040,6 +1050,11 @@ function RequestMyLeaveSheet({
 			onSaved();
 			onOpenChange(false);
 			setReason("");
+			posthogLeave?.capture("time_off_requested", {
+				all_day: allDay,
+				has_leave_type: Boolean(leaveTypeId),
+				has_reason: Boolean(reason.trim()),
+			});
 			toast.success("Leave requested. Another manager can approve it.");
 		},
 		onError: (error) => toast.error((error as Error).message),

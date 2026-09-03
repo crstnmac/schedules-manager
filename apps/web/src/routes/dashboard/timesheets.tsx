@@ -6,6 +6,7 @@ import {
 	EmptyHeader,
 	EmptyTitle,
 } from "@SchedulesManager/ui/components/empty";
+import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
@@ -39,6 +40,7 @@ const columnHelper = createDataColumnHelper<TimesheetRow>();
 function TimesheetsPage() {
 	const { workplace } = useWorkplace();
 	const sheets = useTimesheets(workplace?.id);
+	const posthog = usePostHog();
 	const queryClient = useQueryClient();
 	const decide = useMutation({
 		mutationFn: (input: {
@@ -49,8 +51,11 @@ function TimesheetsPage() {
 				`/v1/workplaces/${workplace?.id}/time-entries/${input.timeEntryId}/approval`,
 				{ method: "POST", body: { decision: input.decision } },
 			),
-		onSuccess: () => {
+		onSuccess: (_, input) => {
 			queryClient.invalidateQueries({ queryKey: ["timesheets"] });
+			if (input.decision === "approved") {
+				posthog?.capture("timesheet_approved");
+			}
 			toast.success("Timesheet Approval saved");
 		},
 		onError: (error) => toast.error((error as Error).message),
