@@ -110,6 +110,8 @@ export const timeOffRequests = pgTable("time_off_requests", {
 	leaveTypeId: uuid("leave_type_id").references(() => leaveTypes.id, {
 		onDelete: "set null",
 	}),
+	/** Minutes actually taken from the PTO balance (clamped to what remained). */
+	deductedMinutes: integer("deducted_minutes"),
 	createdAt: timestamp("created_at", { withTimezone: true })
 		.defaultNow()
 		.notNull(),
