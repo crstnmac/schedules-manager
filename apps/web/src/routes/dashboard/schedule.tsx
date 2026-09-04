@@ -114,6 +114,7 @@ import { usePostHog } from "@posthog/react";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
+import { ConfirmAction } from "@/components/confirm-action";
 import { DatePicker } from "@/components/date-picker";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { ScheduleMonthGrid } from "@/components/schedule-month-grid";
@@ -134,7 +135,9 @@ import {
 	useGroups,
 	useLocations,
 	useMarkAttendance,
+	useMySchedule,
 	usePublication,
+	useRespondToAcceptance,
 	useSaveScheduleTemplate,
 	useSchedule,
 	useScheduleCalendar,
@@ -251,37 +254,96 @@ const hoursColumns = hoursHelper.columns([
 		{ id: "byPosition", header: "By position" },
 	),
 ]);
-const scheduleAcceptanceColumns = acceptanceHelper.columns([
-	acceptanceHelper.accessor(
-		(row) => `${row.workerName} · v${row.versionNumber}`,
-		{
-			id: "worker",
-			header: "Worker",
-			cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
-		},
-	),
-	acceptanceHelper.accessor("changeSummary", { header: "Change" }),
-	acceptanceHelper.accessor("status", {
-		header: "Status",
-		cell: ({ getValue }) => {
-			const status = getValue();
-			return (
-				<Badge
-					variant={
-						status === "declined"
-							? "destructive"
-							: status === "accepted"
-								? "default"
-								: "secondary"
-					}
-					className="rounded-md uppercase"
-				>
-					{status}
-				</Badge>
-			);
-		},
-	}),
-]);
+function createScheduleAcceptanceColumns(
+	respond: ReturnType<typeof useRespondToAcceptance>,
+	myAcceptanceIds: Set<string>,
+	queryClient: ReturnType<typeof useQueryClient>,
+) {
+	return acceptanceHelper.columns([
+		acceptanceHelper.accessor(
+			(row) => `${row.workerName} · v${row.versionNumber}`,
+			{
+				id: "worker",
+				header: "Worker",
+				cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
+			},
+		),
+		acceptanceHelper.accessor("changeSummary", { header: "Change" }),
+		acceptanceHelper.accessor("status", {
+			header: "Status",
+			cell: ({ getValue }) => {
+				const status = getValue();
+				return (
+					<Badge
+						variant={
+							status === "declined"
+								? "destructive"
+								: status === "accepted"
+									? "default"
+									: "secondary"
+						}
+						className="rounded-md uppercase"
+					>
+						{status}
+					</Badge>
+				);
+			},
+		}),
+		acceptanceHelper.display({
+			id: "actions",
+			header: "Actions",
+			enableSorting: false,
+			cell: ({ row }) => {
+				if (!myAcceptanceIds.has(row.original.id)) return null;
+				return (
+					<div className="flex flex-wrap items-center justify-end gap-2">
+						<Button
+							size="sm"
+							disabled={respond.isPending}
+							onClick={() =>
+								respond.mutate(
+									{ acceptanceId: row.original.id, decision: "accept" },
+									{
+										onSuccess: () => {
+											queryClient.invalidateQueries({
+												queryKey: ["acceptances"],
+											});
+											toast.success("Shift accepted.");
+										},
+										onError: (error) => toast.error((error as Error).message),
+									},
+								)
+							}
+						>
+							{respond.isPending ? <Spinner data-icon="inline-start" /> : null}
+							Accept shift
+						</Button>
+						<ConfirmAction
+							trigger="Decline"
+							disabled={respond.isPending}
+							title="Decline this shift change?"
+							description="Your response is recorded and visible to workplace managers."
+							confirmLabel="Decline shift"
+							destructive
+							onConfirm={() =>
+								respond.mutate(
+									{ acceptanceId: row.original.id, decision: "decline" },
+									{
+										onSuccess: () =>
+											queryClient.invalidateQueries({
+												queryKey: ["acceptances"],
+											}),
+										onError: (error) => toast.error((error as Error).message),
+									},
+								)
+							}
+						/>
+					</div>
+				);
+			},
+		}),
+	]);
+}
 const publicationColumns = publicationHelper.columns([
 	publicationHelper.accessor("versionNumber", {
 		header: "Version",
@@ -764,6 +826,22 @@ function SchedulePage() {
 	const publication = usePublication(schedule.data?.schedule.id);
 	const acceptances = useAcceptances(schedule.data?.schedule.id);
 	const queryClient = useQueryClient();
+	const mySchedule = useMySchedule(workplace?.id);
+	const respondToAcceptance = useRespondToAcceptance();
+	const pendingAcceptances = mySchedule.data?.pendingAcceptances;
+	const myAcceptanceIds = useMemo(
+		() => new Set((pendingAcceptances ?? []).map((acceptance) => acceptance.id)),
+		[pendingAcceptances],
+	);
+	const scheduleAcceptanceColumns = useMemo(
+		() =>
+			createScheduleAcceptanceColumns(
+				respondToAcceptance,
+				myAcceptanceIds,
+				queryClient,
+			),
+		[respondToAcceptance, myAcceptanceIds, queryClient],
+	);
 	const [form, setForm] = useState<ShiftFormState | null>(null);
 	const [addDates, setAddDates] = useState<string[]>([]);
 	const [addEmploymentIds, setAddEmploymentIds] = useState<string[]>([]);

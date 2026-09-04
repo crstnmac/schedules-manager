@@ -15,6 +15,7 @@ import {
 	ItemTitle,
 } from "@SchedulesManager/ui/components/item";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
+import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { cn } from "@SchedulesManager/ui/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -31,6 +32,7 @@ import {
 import { useMemo } from "react";
 import { toast } from "sonner";
 import { AppDocument } from "@/components/app-page";
+import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { api } from "@/lib/api";
 import {
@@ -41,6 +43,7 @@ import {
 	useMySchedule,
 	usePilotStatus,
 	usePositions,
+	useRespondToAcceptance,
 	useSchedule,
 	useWorkers,
 } from "@/lib/queries";
@@ -52,8 +55,12 @@ export const Route = createFileRoute("/dashboard/")({ component: Overview });
 
 type StaffRow = ScheduleResponse["staff"][number];
 type AcceptanceRow = AcceptancesResponse["acceptances"][number];
+type MyAcceptanceRow = NonNullable<
+	NonNullable<ReturnType<typeof useMySchedule>["data"]>["pendingAcceptances"]
+>[number];
 const staffHelper = createDataColumnHelper<StaffRow>();
 const acceptanceHelper = createDataColumnHelper<AcceptanceRow>();
+const myAcceptanceHelper = createDataColumnHelper<MyAcceptanceRow>();
 
 function staffConstraintText(
 	member: StaffRow,
@@ -149,6 +156,7 @@ function Overview() {
 	);
 	const acceptances = useAcceptances(currentSchedule.data?.schedule.id);
 	const mySchedule = useMySchedule(workplace?.id);
+	const respond = useRespondToAcceptance();
 	const nextShift = mySchedule.data?.nextShift ?? null;
 	const onClock =
 		nextShift?.timeEntry != null && nextShift.timeEntry.clockedOutAt === null;
@@ -254,8 +262,81 @@ function Overview() {
 	const outstandingAcceptances = (acceptances.data?.acceptances ?? []).filter(
 		(acceptance) => acceptance.status !== "accepted",
 	);
+	const myPendingAcceptances = mySchedule.data?.pendingAcceptances ?? [];
+	const myAcceptanceColumns = useMemo(
+		() =>
+			myAcceptanceHelper.columns([
+				myAcceptanceHelper.accessor(
+					(row) => `${formatDay(row.date)} · ${formatMinute(row.startMinute)}`,
+					{
+						id: "when",
+						header: "When",
+						cell: ({ getValue }) => (
+							<span className="font-medium">{getValue()}</span>
+						),
+					},
+				),
+				myAcceptanceHelper.accessor("positionName", { header: "Position" }),
+				myAcceptanceHelper.accessor("changeSummary", { header: "Change" }),
+				myAcceptanceHelper.display({
+					id: "actions",
+					header: "Actions",
+					enableSorting: false,
+					cell: ({ row }) => (
+						<div className="flex flex-wrap items-center justify-end gap-2">
+							<Button
+								size="sm"
+								disabled={respond.isPending}
+								onClick={() =>
+									respond.mutate(
+										{ acceptanceId: row.original.id, decision: "accept" },
+										{
+											onSuccess: () => {
+												queryClient.invalidateQueries({
+													queryKey: ["acceptances"],
+												});
+												toast.success("Shift accepted.");
+											},
+											onError: (error) => toast.error((error as Error).message),
+										},
+									)
+								}
+							>
+								{respond.isPending ? (
+									<Spinner data-icon="inline-start" />
+								) : null}
+								Accept shift
+							</Button>
+							<ConfirmAction
+								trigger="Decline"
+								disabled={respond.isPending}
+								title="Decline this shift change?"
+								description="Your response is recorded and visible to workplace managers."
+								confirmLabel="Decline shift"
+								destructive
+								onConfirm={() =>
+									respond.mutate(
+										{ acceptanceId: row.original.id, decision: "decline" },
+										{
+											onSuccess: () =>
+												queryClient.invalidateQueries({
+													queryKey: ["acceptances"],
+												}),
+											onError: (error) => toast.error((error as Error).message),
+										},
+									)
+								}
+							/>
+						</div>
+					),
+				}),
+			]),
+		[respond, formatMinute, queryClient],
+	);
 	const hasScheduleDetails =
-		constrainedStaff.length > 0 || outstandingAcceptances.length > 0;
+		constrainedStaff.length > 0 ||
+		outstandingAcceptances.length > 0 ||
+		myPendingAcceptances.length > 0;
 
 	return (
 		<AppDocument widthClassName="max-w-5xl">
@@ -402,6 +483,35 @@ function Overview() {
 									columns={staffColumns}
 									data={constrainedStaff.slice(0, 6)}
 									getRowId={(row) => row.employmentId}
+								/>
+							</section>
+						) : null}
+						{myPendingAcceptances.length > 0 ? (
+							<section aria-labelledby="overview-my-acceptances-heading">
+								<div className="mb-1 flex items-center gap-2">
+									<h3
+										id="overview-my-acceptances-heading"
+										className="font-semibold text-sm"
+									>
+										Your shifts need acceptance
+									</h3>
+									<Badge
+										variant="secondary"
+										className="h-5 rounded-md px-1.5 tabular-nums"
+									>
+										{myPendingAcceptances.length}
+									</Badge>
+								</div>
+								<p className="mb-3 text-muted-foreground text-xs">
+									A late material change touched your own shifts. Accept or
+									decline each one.
+								</p>
+								<DataTable
+									fill={false}
+									bounded
+									columns={myAcceptanceColumns}
+									data={myPendingAcceptances}
+									getRowId={(row) => row.id}
 								/>
 							</section>
 						) : null}

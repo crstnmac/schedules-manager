@@ -13,6 +13,13 @@ export function createDb() {
 		max: env.DATABASE_POOL_MAX,
 		connectionTimeoutMillis: 10_000,
 		idleTimeoutMillis: 10_000,
+		// The pool is small (default 5). These bounds keep one stuck statement or
+		// leaked open transaction from pinning a client forever and starving every
+		// other request into a 10s connection-acquisition timeout. Note: managed
+		// poolers in transaction mode (e.g. Supabase :6543) ignore startup params
+		// and enforce their own server-side limits.
+		statement_timeout: 15_000,
+		idle_in_transaction_session_timeout: 30_000,
 		allowExitOnIdle: env.NODE_ENV === "test",
 	});
 	return drizzle({ client, schema });

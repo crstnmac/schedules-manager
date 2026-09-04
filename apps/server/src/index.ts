@@ -13,13 +13,19 @@ createApp().listen({ port: 3000, hostname: "0.0.0.0" }, () => {
 	);
 });
 
-function dispatchNotifications() {
-	return Promise.all([
-		processNotificationOutboxBatch(),
-		processEmailOutboxBatch(),
-		processPushReceiptBatch(),
-		processAutoClockOutBatch(),
-	]).catch((error) => {
+let dispatchInFlight = false;
+
+async function dispatchNotifications() {
+	if (dispatchInFlight) return;
+	dispatchInFlight = true;
+	try {
+		await Promise.all([
+			processNotificationOutboxBatch(),
+			processEmailOutboxBatch(),
+			processPushReceiptBatch(),
+			processAutoClockOutBatch(),
+		]);
+	} catch (error) {
 		console.error(
 			JSON.stringify({
 				level: "error",
@@ -28,7 +34,9 @@ function dispatchNotifications() {
 				timestamp: new Date().toISOString(),
 			}),
 		);
-	});
+	} finally {
+		dispatchInFlight = false;
+	}
 }
 
 const outboxTimer = setInterval(() => {
