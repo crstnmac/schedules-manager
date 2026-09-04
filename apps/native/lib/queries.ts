@@ -1,4 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+import {
+	type InfiniteData,
+	useInfiniteQuery,
+	useMutation,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import * as Location from "expo-location";
 
 import { api } from "./api";
@@ -312,29 +319,91 @@ export function useConversations(workplaceId: string | undefined) {
 	});
 }
 
+export interface MessagesPage {
+	messages: WorkplaceMessage[];
+	hasMore: boolean;
+}
+
 export function useConversationMessages(conversationId: string | undefined) {
-	return useQuery({
+	const query = useInfiniteQuery<
+		MessagesPage,
+		Error,
+		InfiniteData<MessagesPage>,
+		(string | undefined)[],
+		string | undefined
+	>({
 		queryKey: ["conversation-messages", conversationId],
-		queryFn: () =>
-			api<{ messages: WorkplaceMessage[] }>(
-				`/v1/conversations/${conversationId}/messages`,
-			).then((data) => data.messages),
+		queryFn: async ({ pageParam }) => {
+			const data = await api<{
+				messages: WorkplaceMessage[];
+				hasMore: boolean;
+			}>(
+				`/v1/conversations/${conversationId}/messages${pageParam ? `?before=${encodeURIComponent(pageParam)}` : ""}`,
+			);
+			return { messages: data.messages, hasMore: data.hasMore };
+		},
+		initialPageParam: undefined as string | undefined,
+		getNextPageParam: () => undefined,
+		getPreviousPageParam: (firstPage) =>
+			firstPage.hasMore ? firstPage.messages[0]?.createdAt : undefined,
 		enabled: Boolean(conversationId),
 	});
+	const messages = useMemo(() => {
+		const pages = query.data?.pages ?? [];
+		return pages.reduce<WorkplaceMessage[]>(
+			(older, page) => [...older, ...page.messages],
+			[],
+		);
+	}, [query.data]);
+	return {
+		...query,
+		messages,
+		hasMore: query.data?.pages[0]?.hasMore ?? false,
+		loadOlder: () => {
+			if (
+				(query.data?.pages[0]?.hasMore ?? false) &&
+				!query.isFetchingPreviousPage
+			) {
+				void query.fetchPreviousPage();
+			}
+		},
+	};
 }
 
 export function useSendConversationMessage(conversationId: string | undefined) {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: (body: string) =>
-			api(`/v1/conversations/${conversationId}/messages`, {
-				method: "POST",
-				body: { body },
-			}),
-		onSuccess: () => {
-			queryClient.invalidateQueries({
-				queryKey: ["conversation-messages", conversationId],
-			});
+			api<{ message: WorkplaceMessage }>(
+				`/v1/conversations/${conversationId}/messages`,
+				{
+					method: "POST",
+					body: { body },
+				},
+			),
+		onSuccess: (result) => {
+			// Append into the newest page instead of re-downloading the thread.
+			queryClient.setQueryData(
+				["conversation-messages", conversationId],
+				(
+					existing:
+						| {
+								pages: { messages: WorkplaceMessage[] }[];
+								pageParams: unknown[];
+						  }
+						| undefined,
+				) =>
+					existing
+						? {
+								pages: existing.pages.map((page, index) =>
+									index === existing.pages.length - 1
+										? { ...page, messages: [...page.messages, result.message] }
+										: page,
+								),
+								pageParams: existing.pageParams,
+							}
+						: existing,
+			);
 		},
 	});
 }

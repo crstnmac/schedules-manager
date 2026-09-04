@@ -2,6 +2,31 @@ import { randomUUID } from "expo-crypto";
 import { getServerUrl } from "./server-url";
 import { supabase } from "./supabase";
 
+// The access token is cached in memory and kept current via auth state
+// changes, so each request does not pay an async storage read.
+let cachedToken: string | null = null;
+let tokenPromise: Promise<string | null> | null = null;
+
+supabase.auth.onAuthStateChange((_event, session) => {
+	cachedToken = session?.access_token ?? null;
+});
+
+async function accessToken(): Promise<string | null> {
+	if (cachedToken) return cachedToken;
+	if (!tokenPromise) {
+		tokenPromise = supabase.auth
+			.getSession()
+			.then(({ data }) => {
+				cachedToken = data.session?.access_token ?? null;
+				return cachedToken;
+			})
+			.finally(() => {
+				tokenPromise = null;
+			});
+	}
+	return tokenPromise;
+}
+
 export class ApiError extends Error {
 	status: number;
 
@@ -27,10 +52,9 @@ export async function api<T>(
 		options.method === "POST"
 			? (options.idempotencyKey ?? randomUUID())
 			: undefined;
-	const { data } = await supabase.auth.getSession();
-	const session = data.session;
+	const token = await accessToken();
 
-	if (!session) {
+	if (!token) {
 		throw new ApiError(401, "You are not signed in.");
 	}
 
@@ -39,9 +63,8 @@ export async function api<T>(
 	try {
 		response = await fetch(`${baseUrl}${path}`, {
 			method: options.method ?? "GET",
-			cache: "no-store",
 			headers: {
-				Authorization: `Bearer ${session.access_token}`,
+				Authorization: `Bearer ${token}`,
 				...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
 				...(options.body === undefined
 					? {}

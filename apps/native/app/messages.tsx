@@ -101,8 +101,23 @@ export default function MessagesScreen() {
 					{selected.title.toUpperCase()}
 				</Text>
 			) : null}
-			{messages.isLoading ? <ActivityIndicator color={theme.primary} /> : null}
-			{messages.data?.map((message) => (
+		{messages.isLoading ? <ActivityIndicator color={theme.primary} /> : null}
+		{!messages.isLoading && messages.hasMore ? (
+			<Pressable
+				accessibilityRole="button"
+				accessibilityLabel="Load earlier messages"
+				disabled={messages.isFetchingPreviousPage}
+				onPress={messages.loadOlder}
+				style={styles.loadOlder}
+			>
+				<Text style={{ color: theme.primary, fontWeight: "700" }}>
+					{messages.isFetchingPreviousPage
+						? "Loading earlier messages…"
+						: "Load earlier messages"}
+				</Text>
+			</Pressable>
+		) : null}
+		{messages.messages.map((message) => (
 				<Card key={message.id}>
 					<View style={styles.messageMeta}>
 						<Text style={[styles.author, { color: theme.text }]}>
@@ -122,7 +137,7 @@ export default function MessagesScreen() {
 					</Text>
 				</Card>
 			))}
-			{conversationId && messages.data?.length === 0 ? (
+			{conversationId && messages.messages.length === 0 && !messages.isLoading ? (
 				<Card>
 					<Text style={[styles.messageBody, { color: theme.muted }]}>
 						No messages yet. Start the conversation below.
@@ -189,5 +204,6 @@ const styles = StyleSheet.create({
 	author: { flex: 1, fontSize: 14, fontWeight: "700" },
 	date: { fontSize: 11 },
 	messageBody: { fontSize: 14, lineHeight: 21 },
+	loadOlder: { alignItems: "center", paddingVertical: 10 },
 	error: { fontSize: 14, lineHeight: 20 },
 });

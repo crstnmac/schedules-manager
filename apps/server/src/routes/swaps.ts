@@ -64,23 +64,22 @@ async function myEmploymentIds(profileId: string): Promise<string[]> {
 	return memberships.map((row) => row.employment.id);
 }
 
-async function loadSwapDetail(
-	swapId: string,
-	reader: Pick<typeof db, "select"> = db,
-): Promise<SwapDetail> {
-	const [row] = await reader
-		.select({
-			swap: shiftSwaps,
-			workplaceId: requesterEmployments.workplaceId,
-			requesterShift: requesterShifts,
-			counterpartShift: counterpartShifts,
-			requesterName: requesterProfiles.fullName,
-			requesterEmail: requesterProfiles.email,
-			counterpartName: counterpartProfiles.fullName,
-			counterpartEmail: counterpartProfiles.email,
-			requesterPositionName: requesterPositions.name,
-			counterpartPositionName: counterpartPositions.name,
-		})
+const swapDetailColumns = {
+	swap: shiftSwaps,
+	workplaceId: requesterEmployments.workplaceId,
+	requesterShift: requesterShifts,
+	counterpartShift: counterpartShifts,
+	requesterName: requesterProfiles.fullName,
+	requesterEmail: requesterProfiles.email,
+	counterpartName: counterpartProfiles.fullName,
+	counterpartEmail: counterpartProfiles.email,
+	requesterPositionName: requesterPositions.name,
+	counterpartPositionName: counterpartPositions.name,
+};
+
+function swapDetailQuery() {
+	return db
+		.select(swapDetailColumns)
 		.from(shiftSwaps)
 		.innerJoin(
 			requesterShifts,
@@ -113,12 +112,12 @@ async function loadSwapDetail(
 		.innerJoin(
 			counterpartPositions,
 			eq(counterpartPositions.id, counterpartShifts.positionId),
-		)
-		.where(eq(shiftSwaps.id, swapId))
-		.limit(1);
+		);
+}
 
-	if (!row) throw new NotFoundError("Swap request not found");
+type SwapDetailRow = Awaited<ReturnType<typeof swapDetailQuery>>[number];
 
+function toSwapDetail(row: SwapDetailRow): SwapDetail {
 	return {
 		id: row.swap.id,
 		status: row.swap.status,
@@ -147,6 +146,25 @@ async function loadSwapDetail(
 			endsAt: row.counterpartShift.endsAt.toISOString(),
 		},
 	};
+}
+
+async function loadSwapDetail(swapId: string): Promise<SwapDetail> {
+	const [row] = await swapDetailQuery()
+		.where(eq(shiftSwaps.id, swapId))
+		.limit(1);
+
+	if (!row) throw new NotFoundError("Swap request not found");
+
+	return toSwapDetail(row);
+}
+
+/** Batched detail load for lists — one query instead of one per swap. */
+async function loadSwapDetails(
+	swapIds: string[],
+): Promise<Map<string, SwapDetail>> {
+	if (swapIds.length === 0) return new Map();
+	const rows = await swapDetailQuery().where(inArray(shiftSwaps.id, swapIds));
+	return new Map(rows.map((row) => [row.swap.id, toSwapDetail(row)]));
 }
 
 async function draftShiftIdFor(versionShiftId: string): Promise<string | null> {
@@ -419,12 +437,13 @@ export const swapRoutes = new Elysia({
 				if (!byId.has(row.id)) byId.set(row.id, "incoming");
 			}
 
-			const detailed = await Promise.all(
-				[...byId.entries()].map(async ([id, direction]) => ({
-					direction,
-					swap: await loadSwapDetail(id),
-				})),
-			);
+			const details = await loadSwapDetails([...byId.keys()]);
+			const detailed = [...byId.entries()]
+				.map(([id, direction]) => {
+					const swap = details.get(id);
+					return swap ? { direction, swap } : null;
+				})
+				.filter((row) => row !== null);
 			detailed.sort((a, b) =>
 				b.swap.requestedAt.localeCompare(a.swap.requestedAt),
 			);
@@ -522,7 +541,7 @@ export const swapRoutes = new Elysia({
 							tx,
 						);
 
-						return { swap: await loadSwapDetail(swap.id, tx) };
+						return { swap: await loadSwapDetail(swap.id) };
 					});
 				},
 			});
@@ -590,7 +609,7 @@ export const swapRoutes = new Elysia({
 							tx,
 						);
 
-						return { swap: await loadSwapDetail(swap.id, tx) };
+						return { swap: await loadSwapDetail(swap.id) };
 					});
 				},
 			});
@@ -629,9 +648,10 @@ export const swapRoutes = new Elysia({
 					),
 				);
 
-			const swaps = await Promise.all(
-				rows.map((row) => loadSwapDetail(row.id)),
-			);
+			const details = await loadSwapDetails(rows.map((row) => row.id));
+			const swaps = rows
+				.map((row) => details.get(row.id))
+				.filter((swap) => swap !== undefined);
 			swaps.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
 			return { swaps };
 		},

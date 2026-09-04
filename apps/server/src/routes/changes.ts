@@ -21,10 +21,15 @@ import { NotFoundError } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { isWithinNoticeWindow } from "../notice-window";
 import { managerEmploymentIds, notifyEmployments } from "../notify";
-import { firstRow } from "../rows";
+
+function firstRowOr<T>(rows: T[]): T | null {
+	return rows[0] ?? null;
+}
 
 interface DiffableShift {
 	id: string;
+	/** Draft shift id — identical across versions for the same Shift. */
+	shiftId: string | null;
 	employmentId: string | null;
 	positionId: string;
 	startsAt: Date;
@@ -92,16 +97,9 @@ export function diffShiftSets(
 		const usedBefore = new Set<string>();
 		const matchedAfter = new Set<string>();
 
-		for (const candidate of after) {
-			const match = before.find(
-				(other) =>
-					!usedBefore.has(other.id) &&
-					other.positionId === candidate.positionId,
-			);
-			if (!match) continue;
+		const pushMatched = (match: DiffableShift, candidate: DiffableShift) => {
 			usedBefore.add(match.id);
 			matchedAfter.add(candidate.id);
-
 			const sameTimes =
 				match.startsAt.getTime() === candidate.startsAt.getTime() &&
 				match.endsAt.getTime() === candidate.endsAt.getTime();
@@ -124,6 +122,38 @@ export function diffShiftSets(
 					draftShiftId: candidate.id,
 				});
 			}
+		};
+
+		// Identity pass: version shifts carry the draft shift id, so the same
+		// Shift matches across versions regardless of position or order.
+		for (const candidate of after) {
+			if (candidate.shiftId === null) continue;
+			const match = before.find(
+				(other) =>
+					!usedBefore.has(other.id) && other.shiftId === candidate.shiftId,
+			);
+			if (match) pushMatched(match, candidate);
+		}
+
+		// Fallback pass for shifts without a shared identity (deleted and
+		// recreated drafts): nearest start time among the same position, so a
+		// multi-shift week does not cross-pair shifts.
+		for (const candidate of after) {
+			if (matchedAfter.has(candidate.id)) continue;
+			let best: DiffableShift | null = null;
+			let bestDelta = Number.POSITIVE_INFINITY;
+			for (const other of before) {
+				if (usedBefore.has(other.id)) continue;
+				if (other.positionId !== candidate.positionId) continue;
+				const delta = Math.abs(
+					other.startsAt.getTime() - candidate.startsAt.getTime(),
+				);
+				if (delta < bestDelta) {
+					best = other;
+					bestDelta = delta;
+				}
+			}
+			if (best) pushMatched(best, candidate);
 		}
 
 		for (const candidate of after) {
@@ -176,6 +206,7 @@ export async function latestVersionWithShifts(scheduleId: string) {
 		version: latest,
 		shifts: rows.map((shift) => ({
 			id: shift.id,
+			shiftId: shift.shiftId,
 			employmentId: shift.employmentId,
 			positionId: shift.positionId,
 			startsAt: shift.startsAt,
@@ -224,13 +255,22 @@ async function respondToAcceptance(
 		return { status: acceptance.status };
 	}
 
-	const updated = firstRow(
-		await db
-			.update(shiftAcceptances)
-			.set({ status: decision, respondedAt: new Date() })
-			.where(eq(shiftAcceptances.id, acceptance.id))
-			.returning(),
-	);
+	// Gating on status = 'pending' makes concurrent accept/decline idempotent:
+	// exactly one decision wins, and the loser observes the recorded status.
+	const updatedRows = await db
+		.update(shiftAcceptances)
+		.set({ status: decision, respondedAt: new Date() })
+		.where(
+			and(
+				eq(shiftAcceptances.id, acceptance.id),
+				eq(shiftAcceptances.status, "pending"),
+			),
+		)
+		.returning();
+	const updated = firstRowOr(updatedRows);
+	if (!updated) {
+		return { status: acceptance.status };
+	}
 
 	const [employment] = await db
 		.select({ workplaceId: employments.workplaceId })
@@ -275,6 +315,7 @@ export const changesRoutes = new Elysia({
 				previous.shifts,
 				draftRows.map((shift) => ({
 					id: shift.id,
+					shiftId: shift.id,
 					employmentId: shift.employmentId,
 					positionId: shift.positionId,
 					startsAt: shift.startsAt,

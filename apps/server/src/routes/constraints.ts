@@ -1,6 +1,7 @@
 import {
 	db,
 	employments,
+	employmentLocations,
 	leaveTypes,
 	locations,
 	profiles,
@@ -9,7 +10,7 @@ import {
 	unavailability,
 	workPreferences,
 } from "@SchedulesManager/db";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import {
 	requireManager,
@@ -67,6 +68,24 @@ async function workplaceTimeZone(workplaceId: string): Promise<string> {
 	return location?.timezone ?? "America/Chicago";
 }
 
+/**
+ * Leave windows resolve against the calendar where the person actually works:
+ * their first scoped location, falling back to the workplace's first location
+ * (managers are typically unscoped).
+ */
+async function employmentTimeZone(
+	employmentId: string,
+	workplaceId: string,
+): Promise<string> {
+	const [scoped] = await db
+		.select({ timezone: locations.timezone })
+		.from(employmentLocations)
+		.innerJoin(locations, eq(locations.id, employmentLocations.locationId))
+		.where(eq(employmentLocations.employmentId, employmentId))
+		.limit(1);
+	return scoped?.timezone ?? workplaceTimeZone(workplaceId);
+}
+
 function resolveLeaveBody(
 	body: {
 		startsAt?: string;
@@ -107,12 +126,18 @@ function resolveLeaveBody(
 	};
 }
 
+/**
+ * Deduct PTO minutes, clamped to the available balance. Returns the minutes
+ * actually deducted — persist it on the request so a later restore can only
+ * give back what was taken. Locks the balance row; call inside a transaction
+ * when composing it with request mutations.
+ */
 async function deductPto(
 	employmentId: string,
 	leaveTypeId: string,
 	minutes: number,
-) {
-	if (minutes <= 0) return;
+): Promise<number> {
+	if (minutes <= 0) return 0;
 	await db
 		.insert(ptoBalances)
 		.values({
@@ -121,17 +146,29 @@ async function deductPto(
 			minutes: 0,
 		})
 		.onConflictDoNothing();
-	await db
-		.update(ptoBalances)
-		.set({
-			minutes: sql`greatest(${ptoBalances.minutes} - ${minutes}, 0)`,
-		})
+	const [balance] = await db
+		.select({ minutes: ptoBalances.minutes })
+		.from(ptoBalances)
 		.where(
 			and(
 				eq(ptoBalances.employmentId, employmentId),
 				eq(ptoBalances.leaveTypeId, leaveTypeId),
 			),
-		);
+		)
+		.for("update");
+	const actual = Math.max(0, Math.min(minutes, balance?.minutes ?? 0));
+	if (actual > 0) {
+		await db
+			.update(ptoBalances)
+			.set({ minutes: sql`${ptoBalances.minutes} - ${actual}` })
+			.where(
+				and(
+					eq(ptoBalances.employmentId, employmentId),
+					eq(ptoBalances.leaveTypeId, leaveTypeId),
+				),
+			);
+	}
+	return actual;
 }
 
 async function restorePto(
@@ -184,7 +221,10 @@ export const constraintsRoutes = new Elysia({
 				params.workplaceId,
 			);
 
-			const timeZone = await workplaceTimeZone(params.workplaceId);
+			const timeZone = await employmentTimeZone(
+				employment.id,
+				params.workplaceId,
+			);
 			const [unavailabilityRows, preferenceRows, timeOffRows] =
 				await Promise.all([
 					db
@@ -322,6 +362,21 @@ export const constraintsRoutes = new Elysia({
 							eq(unavailability.status, "pending"),
 						),
 					);
+
+				// Replace semantics: approved windows omitted from the payload are
+				// removed. Lifting a constraint is the worker's call; only new
+				// windows need manager approval.
+				const omittedApproved = approved.filter(
+					(row) => !submittedKeys.has(unavailabilityKey(row)),
+				);
+				if (omittedApproved.length > 0) {
+					await tx.delete(unavailability).where(
+						inArray(
+							unavailability.id,
+							omittedApproved.map((row) => row.id),
+						),
+					);
+				}
 
 				const pendingRows = submitted.filter(
 					(row) =>
@@ -499,10 +554,11 @@ export const constraintsRoutes = new Elysia({
 				"workersCanRequestTimeOff",
 				"Workers cannot request time off at this Workplace",
 			);
-			const window = resolveLeaveBody(
-				body,
-				await workplaceTimeZone(params.workplaceId),
+			const timeZone = await employmentTimeZone(
+				employment.id,
+				params.workplaceId,
 			);
+			const window = resolveLeaveBody(body, timeZone);
 
 			const request = firstRow(
 				await db
@@ -529,11 +585,7 @@ export const constraintsRoutes = new Elysia({
 					startsAt: request.startsAt.toISOString(),
 					endsAt: request.endsAt.toISOString(),
 					status: request.status,
-					...describeLeaveWindow(
-						request.startsAt,
-						request.endsAt,
-						await workplaceTimeZone(params.workplaceId),
-					),
+					...describeLeaveWindow(request.startsAt, request.endsAt, timeZone),
 				},
 			};
 		},
@@ -623,6 +675,28 @@ export const constraintsRoutes = new Elysia({
 				)
 				.where(eq(employments.workplaceId, params.workplaceId));
 
+			// Per-worker timezone: each request resolves against the calendar of
+			// the requester's first scoped location, not the workplace's first
+			// location.
+			const scopeRows = await db
+				.select({
+					employmentId: employmentLocations.employmentId,
+					timezone: locations.timezone,
+				})
+				.from(employmentLocations)
+				.innerJoin(locations, eq(locations.id, employmentLocations.locationId))
+				.innerJoin(
+					employments,
+					eq(employments.id, employmentLocations.employmentId),
+				)
+				.where(eq(employments.workplaceId, params.workplaceId));
+			const tzByEmployment = new Map<string, string>();
+			for (const row of scopeRows) {
+				if (!tzByEmployment.has(row.employmentId)) {
+					tzByEmployment.set(row.employmentId, row.timezone);
+				}
+			}
+
 			const pendingUnavailability = await db
 				.select({
 					window: unavailability,
@@ -659,7 +733,7 @@ export const constraintsRoutes = new Elysia({
 						const window = describeLeaveWindow(
 							row.request.startsAt,
 							row.request.endsAt,
-							timeZone,
+							tzByEmployment.get(row.request.employmentId) ?? timeZone,
 						);
 						return {
 							id: row.request.id,
@@ -716,7 +790,10 @@ export const constraintsRoutes = new Elysia({
 				throw new NotFoundError("Employment not found");
 			}
 
-			const timeZone = await workplaceTimeZone(params.workplaceId);
+			const timeZone = await employmentTimeZone(
+				member.id,
+				params.workplaceId,
+			);
 			const window = resolveLeaveBody(body, timeZone);
 			const request = firstRow(
 				await db
@@ -735,7 +812,15 @@ export const constraintsRoutes = new Elysia({
 			);
 
 			if (body.leaveTypeId) {
-				await deductPto(member.id, body.leaveTypeId, window.chargeMinutes);
+				const deducted = await deductPto(
+					member.id,
+					body.leaveTypeId,
+					window.chargeMinutes,
+				);
+				await db
+					.update(timeOffRequests)
+					.set({ deductedMinutes: deducted })
+					.where(eq(timeOffRequests.id, request.id));
 			}
 
 			await notifyEmployments([member.id], {
@@ -811,8 +896,14 @@ export const constraintsRoutes = new Elysia({
 				throw new ConflictError("This request has already been decided");
 			}
 
-			const updated = firstRow(
-				await db
+			const timeZone = await employmentTimeZone(
+				request.request.employmentId,
+				params.workplaceId,
+			);
+			// The conditional update gates concurrent decisions: exactly one
+			// caller flips the status, so PTO can never be deducted twice.
+			const decided = await db.transaction(async (tx) => {
+				const [updated] = await tx
 					.update(timeOffRequests)
 					.set({
 						status: body.decision,
@@ -820,21 +911,36 @@ export const constraintsRoutes = new Elysia({
 						decisionReason: body.reason ?? null,
 						decidedAt: new Date(),
 					})
-					.where(eq(timeOffRequests.id, request.request.id))
-					.returning(),
-			);
+					.where(
+						and(
+							eq(timeOffRequests.id, request.request.id),
+							eq(timeOffRequests.status, "pending"),
+						),
+					)
+					.returning();
+				if (!updated) return null;
 
-			if (body.decision === "approved" && request.request.leaveTypeId) {
-				const window = describeLeaveWindow(
-					request.request.startsAt,
-					request.request.endsAt,
-					await workplaceTimeZone(params.workplaceId),
-				);
-				await deductPto(
-					request.request.employmentId,
-					request.request.leaveTypeId,
-					window.chargeMinutes,
-				);
+				if (body.decision === "approved" && updated.leaveTypeId) {
+					const window = describeLeaveWindow(
+						updated.startsAt,
+						updated.endsAt,
+						timeZone,
+					);
+					const deducted = await deductPto(
+						updated.employmentId,
+						updated.leaveTypeId,
+						window.chargeMinutes,
+					);
+					await tx
+						.update(timeOffRequests)
+						.set({ deductedMinutes: deducted })
+						.where(eq(timeOffRequests.id, updated.id));
+				}
+				return updated;
+			});
+
+			if (!decided) {
+				throw new ConflictError("This request has already been decided");
 			}
 
 			await notifyEmployments([request.request.employmentId], {
@@ -855,14 +961,14 @@ export const constraintsRoutes = new Elysia({
 				actorProfileId: profile.id,
 				action: `time_off.${body.decision}`,
 				entityType: "time_off_request",
-				entityId: updated.id,
+				entityId: decided.id,
 				summary: `${body.decision === "approved" ? "Approved" : "Declined"} a time-off request`,
 			});
 
 			return {
 				request: {
-					id: updated.id,
-					status: updated.status,
+					id: decided.id,
+					status: decided.status,
 				},
 			};
 		},
@@ -897,7 +1003,10 @@ export const constraintsRoutes = new Elysia({
 				);
 			}
 
-			const timeZone = await workplaceTimeZone(params.workplaceId);
+			const timeZone = await employmentTimeZone(
+				existing.employmentId,
+				params.workplaceId,
+			);
 			const previous = describeLeaveWindow(
 				existing.startsAt,
 				existing.endsAt,
@@ -931,20 +1040,35 @@ export const constraintsRoutes = new Elysia({
 					(existing.leaveTypeId ?? null) !== (nextLeaveTypeId ?? null);
 				const chargeChanged = previous.chargeMinutes !== next.chargeMinutes;
 				if (leaveTypeChanged || chargeChanged) {
-					if (existing.leaveTypeId) {
-						await restorePto(
-							existing.employmentId,
-							existing.leaveTypeId,
-							previous.chargeMinutes,
-						);
-					}
-					if (nextLeaveTypeId) {
-						await deductPto(
-							existing.employmentId,
-							nextLeaveTypeId,
-							next.chargeMinutes,
-						);
-					}
+					await db.transaction(async () => {
+						// Restore only what was actually taken (clamped at approval
+						// time); legacy rows fall back to the window charge.
+						const previousActual =
+							existing.deductedMinutes ?? previous.chargeMinutes;
+						if (existing.leaveTypeId) {
+							await restorePto(
+								existing.employmentId,
+								existing.leaveTypeId,
+								previousActual,
+							);
+						}
+						if (nextLeaveTypeId) {
+							const deducted = await deductPto(
+								existing.employmentId,
+								nextLeaveTypeId,
+								next.chargeMinutes,
+							);
+							await db
+								.update(timeOffRequests)
+								.set({ deductedMinutes: deducted })
+								.where(eq(timeOffRequests.id, existing.id));
+						} else {
+							await db
+								.update(timeOffRequests)
+								.set({ deductedMinutes: null })
+								.where(eq(timeOffRequests.id, existing.id));
+						}
+					});
 				}
 			}
 
@@ -994,7 +1118,10 @@ export const constraintsRoutes = new Elysia({
 				params.workplaceId,
 				params.requestId,
 			);
-			const timeZone = await workplaceTimeZone(params.workplaceId);
+			const timeZone = await employmentTimeZone(
+				existing.employmentId,
+				params.workplaceId,
+			);
 			const window = describeLeaveWindow(
 				existing.startsAt,
 				existing.endsAt,
@@ -1005,7 +1132,9 @@ export const constraintsRoutes = new Elysia({
 				await restorePto(
 					existing.employmentId,
 					existing.leaveTypeId,
-					window.chargeMinutes,
+					// Restore only what was actually taken; legacy rows fall back
+					// to the window charge.
+					existing.deductedMinutes ?? window.chargeMinutes,
 				);
 			}
 
@@ -1064,7 +1193,10 @@ export const constraintsRoutes = new Elysia({
 				throw new ConflictError("Only pending requests can be edited");
 			}
 
-			const timeZone = await workplaceTimeZone(params.workplaceId);
+			const timeZone = await employmentTimeZone(
+				employment.id,
+				params.workplaceId,
+			);
 			const next = resolveLeaveBody(body, timeZone);
 			const updated = firstRow(
 				await db

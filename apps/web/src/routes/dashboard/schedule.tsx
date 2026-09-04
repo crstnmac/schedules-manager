@@ -124,9 +124,9 @@ import { api } from "@/lib/api";
 import type {
 	AcceptancesResponse,
 	ChangePreviewResponse,
-	PublicationResponse,
 	ScheduleResponse,
 	ScheduleShiftDto,
+	ScheduleTimeclockEntry,
 } from "@/lib/queries";
 import {
 	useAcceptances,
@@ -136,12 +136,13 @@ import {
 	useLocations,
 	useMarkAttendance,
 	useMySchedule,
-	usePublication,
 	useRespondToAcceptance,
 	useSaveScheduleTemplate,
 	useSchedule,
 	useScheduleCalendar,
+	useScheduleLabor,
 	useScheduleTemplates,
+	useScheduleTimeclock,
 	useTags,
 	useTimeBlocks,
 	useWorkplaceSettings,
@@ -180,7 +181,7 @@ const DAY_HEADERS = [
 type StaffRow = ScheduleResponse["staff"][number];
 type HoursRow = ScheduleResponse["hours"][number];
 type AcceptanceRow = AcceptancesResponse["acceptances"][number];
-type PublicationRow = PublicationResponse["versions"][number];
+type PublicationRow = ScheduleResponse["publication"]["versions"][number];
 type ChangeRow = ChangePreviewResponse["changes"][number];
 
 const staffHelper = createDataColumnHelper<StaffRow>();
@@ -823,7 +824,6 @@ function SchedulePage() {
 	const timeBlocks = useTimeBlocks(activeLocationId);
 	const markAttendance = useMarkAttendance(workplace?.id);
 	const editTimeEntry = useEditTimeEntry(workplace?.id);
-	const publication = usePublication(schedule.data?.schedule.id);
 	const acceptances = useAcceptances(schedule.data?.schedule.id);
 	const queryClient = useQueryClient();
 	const mySchedule = useMySchedule(workplace?.id);
@@ -854,8 +854,19 @@ function SchedulePage() {
 	}, []);
 
 	async function invalidate() {
-		await queryClient.invalidateQueries({ queryKey: ["schedule"] });
-		await queryClient.invalidateQueries({ queryKey: ["schedule-calendar"] });
+		// Only the week under edit and this location's calendar go stale —
+		// invalidating the ["schedule"] prefix would mark every location/week
+		// stale and refetch them on visit. Shift edits change labor, but not
+		// time-clock state (punches live on published versions).
+		await queryClient.invalidateQueries({
+			queryKey: ["schedule", activeLocationId, weekStart],
+		});
+		await queryClient.invalidateQueries({
+			queryKey: ["schedule-labor", activeLocationId, weekStart],
+		});
+		await queryClient.invalidateQueries({
+			queryKey: ["schedule-calendar", activeLocationId],
+		});
 		await queryClient.refetchQueries({
 			queryKey: ["schedule", activeLocationId, weekStart],
 		});
@@ -1134,10 +1145,14 @@ function SchedulePage() {
 			setPublishPreview(null);
 			await invalidate();
 			await queryClient.invalidateQueries({
-				queryKey: ["publication", schedule.data?.schedule.id],
+				queryKey: ["acceptances", schedule.data?.schedule.id],
+			});
+			// A new version re-links punches and republishes rollups.
+			await queryClient.invalidateQueries({
+				queryKey: ["schedule-timeclock", activeLocationId, weekStart],
 			});
 			await queryClient.invalidateQueries({
-				queryKey: ["acceptances", schedule.data?.schedule.id],
+				queryKey: ["schedule-labor", activeLocationId, weekStart],
 			});
 			await queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 			await queryClient.invalidateQueries({ queryKey: ["notifications"] });
@@ -1195,16 +1210,18 @@ function SchedulePage() {
 		(sum, shift) => sum + shift.conflicts.length,
 		0,
 	);
+	const timeclockQuery = useScheduleTimeclock(activeLocationId, weekStart);
+	const laborQuery = useScheduleLabor(activeLocationId, weekStart);
 	const timeclockByShiftId = useMemo(() => {
-		const map = new Map<string, ScheduleResponse["timeclock"][number]>();
-		for (const entry of data?.timeclock ?? []) {
+		const map = new Map<string, ScheduleTimeclockEntry>();
+		for (const entry of timeclockQuery.data ?? []) {
 			map.set(entry.shiftId, entry);
 		}
 		for (const entry of calendar.data?.timeclock ?? []) {
 			if (!map.has(entry.shiftId)) map.set(entry.shiftId, entry);
 		}
 		return map;
-	}, [calendar.data?.timeclock, data?.timeclock]);
+	}, [calendar.data?.timeclock, timeclockQuery.data]);
 
 	function syncPunchFields(shift: ScheduleShiftDto | undefined) {
 		const timezone = data?.schedule.timezone ?? "America/Chicago";
@@ -1228,7 +1245,7 @@ function SchedulePage() {
 	const onClockCount = (
 		viewMode === "month"
 			? (calendar.data?.timeclock ?? [])
-			: (data?.timeclock ?? [])
+			: (timeclockQuery.data ?? [])
 	).filter((entry) => entry.status === "open").length;
 	const openShiftCount = summaryShifts.filter(
 		(shift) => shift.employmentId === null,
@@ -1271,11 +1288,11 @@ function SchedulePage() {
 	}, [data?.shifts]);
 	const salesByDate = useMemo(() => {
 		const map = new Map<string, number>();
-		for (const row of data?.labor?.byDate ?? []) {
+		for (const row of laborQuery.data?.byDate ?? []) {
 			map.set(row.date, row.amountCents);
 		}
 		return map;
-	}, [data?.labor?.byDate]);
+	}, [laborQuery.data?.byDate]);
 
 	function prepareDaySales(day: string) {
 		setSelectedDay(day);
@@ -1696,7 +1713,7 @@ function SchedulePage() {
 		constrainedStaff.length > 0 ||
 		(data?.hours.length ?? 0) > 0 ||
 		(acceptances.data?.acceptances.length ?? 0) > 0 ||
-		(publication.data?.versions.length ?? 0) > 0;
+		(data?.publication.versions.length ?? 0) > 0;
 	const showScheduleDetails: boolean = false;
 	const locationItems = (locations.data ?? []).map((location) => ({
 		label: location.name,
@@ -3066,8 +3083,16 @@ function SchedulePage() {
 																		kind: "late",
 																	},
 																	{
-																		onSuccess: () =>
-																			toast.success("Marked late."),
+																		onSuccess: () => {
+																			queryClient.invalidateQueries({
+																				queryKey: [
+																					"schedule-timeclock",
+																					activeLocationId,
+																					weekStart,
+																				],
+																			});
+																			toast.success("Marked late.");
+																		},
 																		onError: (error) =>
 																			toast.error((error as Error).message),
 																	},
@@ -3089,8 +3114,16 @@ function SchedulePage() {
 																		kind: "no_show",
 																	},
 																	{
-																		onSuccess: () =>
-																			toast.success("Marked no-show."),
+																		onSuccess: () => {
+																			queryClient.invalidateQueries({
+																				queryKey: [
+																					"schedule-timeclock",
+																					activeLocationId,
+																					weekStart,
+																				],
+																			});
+																			toast.success("Marked no-show.");
+																		},
 																		onError: (error) =>
 																			toast.error((error as Error).message),
 																	},
@@ -3112,8 +3145,16 @@ function SchedulePage() {
 																		kind: "sick",
 																	},
 																	{
-																		onSuccess: () =>
-																			toast.success("Marked sick."),
+																		onSuccess: () => {
+																			queryClient.invalidateQueries({
+																				queryKey: [
+																					"schedule-timeclock",
+																					activeLocationId,
+																					weekStart,
+																				],
+																			});
+																			toast.success("Marked sick.");
+																		},
 																		onError: (error) =>
 																			toast.error((error as Error).message),
 																	},
@@ -3212,6 +3253,13 @@ function SchedulePage() {
 																},
 																{
 																	onSuccess: () => {
+																		queryClient.invalidateQueries({
+																			queryKey: [
+																				"schedule-timeclock",
+																				activeLocationId,
+																				weekStart,
+																			],
+																		});
 																		setPunchReason("");
 																		toast.success("Time Entry saved.");
 																	},
@@ -4010,7 +4058,7 @@ function SchedulePage() {
 									</section>
 								) : null}
 
-								{(publication.data?.versions.length ?? 0) > 0 ? (
+								{(data?.publication.versions.length ?? 0) > 0 ? (
 									<section aria-labelledby="schedule-publication-heading">
 										<h3
 											id="schedule-publication-heading"
@@ -4026,7 +4074,7 @@ function SchedulePage() {
 											fill={false}
 											bounded
 											columns={publicationColumns}
-											data={(publication.data?.versions ?? []).slice(0, 3)}
+											data={(data?.publication.versions ?? []).slice(0, 3)}
 											getRowId={(row) => row.id}
 										/>
 									</section>

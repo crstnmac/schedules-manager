@@ -135,6 +135,40 @@ async function syncPublishedOpenShifts(
 	);
 }
 
+/**
+ * Close the pickup marketplace for draft shifts that a manager assigned
+ * directly: their open rows close and pending pickups decline, so workers
+ * cannot win a shift that is no longer open. Runs on the caller's active
+ * transaction when invoked inside one (db routes to the caller's tx).
+ */
+export async function closeOpenMarketplaceForShifts(shiftIds: string[]) {
+	if (shiftIds.length === 0) return;
+	const openRows = await db
+		.select({ id: openShifts.id })
+		.from(openShifts)
+		.where(
+			and(
+				inArray(openShifts.shiftId, shiftIds),
+				eq(openShifts.status, "open"),
+			),
+		);
+	const ids = openRows.map((row) => row.id);
+	if (ids.length === 0) return;
+	await db
+		.update(openShifts)
+		.set({ status: "closed" })
+		.where(inArray(openShifts.id, ids));
+	await db
+		.update(shiftPickups)
+		.set({ status: "declined", decidedAt: new Date() })
+		.where(
+			and(
+				inArray(shiftPickups.openShiftId, ids),
+				eq(shiftPickups.status, "pending"),
+			),
+		);
+}
+
 async function accessibleLocationIds(
 	employmentId: string,
 	workplaceId: string,
@@ -256,6 +290,7 @@ export async function publishScheduleNow(
 				? diffShiftSets(
 						previousShifts.map((shift) => ({
 							id: shift.id,
+							shiftId: shift.shiftId,
 							employmentId: shift.employmentId,
 							positionId: shift.positionId,
 							startsAt: shift.startsAt,
@@ -264,6 +299,7 @@ export async function publishScheduleNow(
 						})),
 						draftShifts.map((shift) => ({
 							id: shift.id,
+							shiftId: shift.id,
 							employmentId: shift.employmentId,
 							positionId: shift.positionId,
 							startsAt: shift.startsAt,
@@ -456,6 +492,50 @@ async function acknowledgeDelivery(profileId: string, versionId: string) {
 	};
 }
 
+/** Delivery/acknowledgement state for the most recent published versions.
+ * Shared by the /publication endpoint and the week schedule payload so the
+ * manager schedule page needs no extra round-trip. */
+export async function loadPublicationVersions(scheduleId: string) {
+	const versions = await db
+		.select()
+		.from(scheduleVersions)
+		.where(eq(scheduleVersions.scheduleId, scheduleId))
+		.orderBy(desc(scheduleVersions.versionNumber))
+		.limit(12);
+
+	if (versions.length === 0) return [];
+
+	const versionIds = versions.map((version) => version.id);
+	const deliveryRows = await db
+		.select({
+			delivery: workerDeliveries,
+			email: profiles.email,
+			fullName: profiles.fullName,
+		})
+		.from(workerDeliveries)
+		.innerJoin(
+			employments,
+			eq(employments.id, workerDeliveries.employmentId),
+		)
+		.innerJoin(profiles, eq(profiles.id, employments.profileId))
+		.where(inArray(workerDeliveries.versionId, versionIds));
+
+	return versions.map((version) => ({
+		id: version.id,
+		versionNumber: version.versionNumber,
+		publishedAt: version.publishedAt.toISOString(),
+		workers: deliveryRows
+			.filter((row) => row.delivery.versionId === version.id)
+			.map((row) => ({
+				employmentId: row.delivery.employmentId,
+				name: row.fullName ?? row.email,
+				email: row.email,
+				status: row.delivery.status,
+				acknowledgedAt: row.delivery.acknowledgedAt?.toISOString() ?? null,
+			})),
+	}));
+}
+
 export const publicationRoutes = new Elysia({
 	prefix: "/v1",
 	tags: ["Publication"],
@@ -497,49 +577,7 @@ export const publicationRoutes = new Elysia({
 			const { schedule, location } = await scheduleContext(params.scheduleId);
 			await requireManager(profile.id, location.workplaceId);
 
-			const versions = await db
-				.select()
-				.from(scheduleVersions)
-				.where(eq(scheduleVersions.scheduleId, schedule.id))
-				.orderBy(desc(scheduleVersions.versionNumber))
-				.limit(12);
-
-			if (versions.length === 0) {
-				return { versions: [] };
-			}
-
-			const versionIds = versions.map((version) => version.id);
-			const deliveryRows = await db
-				.select({
-					delivery: workerDeliveries,
-					email: profiles.email,
-					fullName: profiles.fullName,
-				})
-				.from(workerDeliveries)
-				.innerJoin(
-					employments,
-					eq(employments.id, workerDeliveries.employmentId),
-				)
-				.innerJoin(profiles, eq(profiles.id, employments.profileId))
-				.where(inArray(workerDeliveries.versionId, versionIds));
-
-			return {
-				versions: versions.map((version) => ({
-					id: version.id,
-					versionNumber: version.versionNumber,
-					publishedAt: version.publishedAt.toISOString(),
-					workers: deliveryRows
-						.filter((row) => row.delivery.versionId === version.id)
-						.map((row) => ({
-							employmentId: row.delivery.employmentId,
-							name: row.fullName ?? row.email,
-							email: row.email,
-							status: row.delivery.status,
-							acknowledgedAt:
-								row.delivery.acknowledgedAt?.toISOString() ?? null,
-						})),
-				})),
-			};
+			return { versions: await loadPublicationVersions(schedule.id) };
 		},
 		{
 			headers: t.Object({ authorization: t.String() }),
@@ -553,12 +591,13 @@ export const publicationRoutes = new Elysia({
 	)
 	.get(
 		"/workplaces/:workplaceId/my/schedule",
-		async ({ headers, params }) => {
+		async ({ headers, params, query }) => {
 			const { profile } = await requireSession(headers.authorization);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
 			);
+			const scope = query.scope ?? "full";
 
 			const locationIds = await accessibleLocationIds(
 				employment.id,
@@ -777,13 +816,18 @@ export const publicationRoutes = new Elysia({
 					})()
 				: null;
 
-			const historyRows = await db
-				.select({ version: scheduleVersions, schedule: schedules })
-				.from(scheduleVersions)
-				.innerJoin(schedules, eq(schedules.id, scheduleVersions.scheduleId))
-				.where(inArray(schedules.locationId, locationIds))
-				.orderBy(desc(scheduleVersions.publishedAt))
-				.limit(20);
+			// Home scope is the dashboard/home-card summary: skip version
+			// history entirely — it is only rendered on the worker schedule page.
+			const historyRows =
+				scope === "home"
+					? []
+					: await db
+							.select({ version: scheduleVersions, schedule: schedules })
+							.from(scheduleVersions)
+							.innerJoin(schedules, eq(schedules.id, scheduleVersions.scheduleId))
+							.where(inArray(schedules.locationId, locationIds))
+							.orderBy(desc(scheduleVersions.publishedAt))
+							.limit(20);
 
 			const pendingAcceptanceRows = await db
 				.select({
@@ -843,6 +887,7 @@ export const publicationRoutes = new Elysia({
 					]);
 					const toDiffable = (shift: (typeof currentMyShifts)[number]) => ({
 						id: shift.id,
+						shiftId: shift.shiftId,
 						employmentId: shift.employmentId,
 						positionId: shift.positionId,
 						startsAt: shift.startsAt,
@@ -899,9 +944,12 @@ export const publicationRoutes = new Elysia({
 		{
 			headers: t.Object({ authorization: t.String() }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			query: t.Object({
+				scope: t.Optional(t.Union([t.Literal("home"), t.Literal("full")])),
+			}),
 			detail: {
 				summary:
-					"Return the worker's published schedule for this and next week, their next Shift, and version history",
+					"Return the worker's published schedule for this and next week, their next Shift, and version history (scope=home skips history)",
 				security: [{ bearerAuth: [] }],
 			},
 		},

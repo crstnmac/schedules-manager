@@ -15,6 +15,45 @@ import { ConflictError, ForbiddenError, NotFoundError } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { firstRow } from "../rows";
 
+/** Grant the invitation's location and position scopes to an Employment. */
+async function applyInvitationScopes(
+	writer: Pick<typeof db, "select" | "insert">,
+	invitationId: string,
+	employmentId: string,
+) {
+	const scopedLocations = await writer
+		.select({ locationId: invitationLocations.locationId })
+		.from(invitationLocations)
+		.where(eq(invitationLocations.invitationId, invitationId));
+	if (scopedLocations.length > 0) {
+		await writer
+			.insert(employmentLocations)
+			.values(
+				scopedLocations.map((row) => ({
+					employmentId,
+					locationId: row.locationId,
+				})),
+			)
+			.onConflictDoNothing();
+	}
+
+	const scopedPositions = await writer
+		.select({ positionId: invitationPositions.positionId })
+		.from(invitationPositions)
+		.where(eq(invitationPositions.invitationId, invitationId));
+	if (scopedPositions.length > 0) {
+		await writer
+			.insert(employmentPositions)
+			.values(
+				scopedPositions.map((row) => ({
+					employmentId,
+					positionId: row.positionId,
+				})),
+			)
+			.onConflictDoNothing();
+	}
+}
+
 export const invitationsRoutes = new Elysia({
 	prefix: "/v1",
 	tags: ["Invitation"],
@@ -123,6 +162,11 @@ export const invitationsRoutes = new Elysia({
 						);
 					}
 
+					const invitationKind =
+						invitation.kind === "manager"
+							? ("manager" as const)
+							: ("worker" as const);
+
 					const [existingEmployment] = await db
 						.select({ id: employments.id })
 						.from(employments)
@@ -135,13 +179,30 @@ export const invitationsRoutes = new Elysia({
 						.limit(1);
 
 					if (existingEmployment) {
+						// Re-joining: reactivate the membership and apply what the
+						// invitation grants, instead of silently accepting and leaving
+						// a deactivated Employment or stale kind in place.
+						const employment = firstRow(
+							await db
+								.update(employments)
+								.set({
+									status: "active",
+									kind: invitationKind,
+									deactivatedAt: null,
+								})
+								.where(eq(employments.id, existingEmployment.id))
+								.returning(),
+						);
+
+						await applyInvitationScopes(db, invitation.id, employment.id);
+
 						await db
 							.update(invitations)
 							.set({
 								status: "accepted",
 								acceptedAt: new Date(),
 								acceptedProfileId: profile.id,
-								acceptedEmploymentId: existingEmployment.id,
+								acceptedEmploymentId: employment.id,
 							})
 							.where(eq(invitations.id, invitation.id));
 
@@ -155,8 +216,8 @@ export const invitationsRoutes = new Elysia({
 
 						return {
 							employment: {
-								id: existingEmployment.id,
-								kind: invitation.kind === "manager" ? "manager" : "worker",
+								id: employment.id,
+								kind: employment.kind,
 								workplace: { id: workplace.id, name: workplace.name },
 							},
 						};
@@ -168,38 +229,12 @@ export const invitationsRoutes = new Elysia({
 							.values({
 								workplaceId: invitation.workplaceId,
 								profileId: profile.id,
-								kind: invitation.kind === "manager" ? "manager" : "worker",
+								kind: invitationKind,
 							})
 							.returning(),
 					);
 
-					const scopedLocations = await db
-						.select({ locationId: invitationLocations.locationId })
-						.from(invitationLocations)
-						.where(eq(invitationLocations.invitationId, invitation.id));
-
-					if (scopedLocations.length > 0) {
-						await db.insert(employmentLocations).values(
-							scopedLocations.map((row) => ({
-								employmentId: employment.id,
-								locationId: row.locationId,
-							})),
-						);
-					}
-
-					const scopedPositions = await db
-						.select({ positionId: invitationPositions.positionId })
-						.from(invitationPositions)
-						.where(eq(invitationPositions.invitationId, invitation.id));
-
-					if (scopedPositions.length > 0) {
-						await db.insert(employmentPositions).values(
-							scopedPositions.map((row) => ({
-								employmentId: employment.id,
-								positionId: row.positionId,
-							})),
-						);
-					}
+					await applyInvitationScopes(db, invitation.id, employment.id);
 
 					await db
 						.update(invitations)

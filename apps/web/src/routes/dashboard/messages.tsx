@@ -7,6 +7,7 @@ import { ConversationWorkspace } from "@/components/conversation-thread";
 import { api } from "@/lib/api";
 import {
 	useConversations,
+	type ConversationMessageDto,
 	useMessages,
 	useWorkers,
 } from "@/lib/queries";
@@ -41,14 +42,33 @@ function MessagesPage() {
 
 	const send = useMutation({
 		mutationFn: (body: string) =>
-			api(`/v1/conversations/${conversationId}/messages`, {
-				method: "POST",
-				body: { body },
-			}),
-		onSuccess: () => {
-			queryClient.invalidateQueries({
-				queryKey: ["messages", conversationId],
-			});
+			api<{ message: ConversationMessageDto }>(
+				`/v1/conversations/${conversationId}/messages`,
+				{
+					method: "POST",
+					body: { body },
+				},
+			),
+		onSuccess: (result) => {
+			// Append into the newest page instead of re-downloading the thread.
+			queryClient.setQueryData(
+				["messages", conversationId],
+				(
+					existing:
+						| { pages: { messages: ConversationMessageDto[] }[]; pageParams: unknown[] }
+						| undefined,
+				) =>
+					existing
+						? {
+								pages: existing.pages.map((page, index) =>
+									index === existing.pages.length - 1
+										? { ...page, messages: [...page.messages, result.message] }
+										: page,
+								),
+								pageParams: existing.pageParams,
+							}
+						: existing,
+			);
 			queryClient.invalidateQueries({
 				queryKey: ["conversations", workplace?.id],
 			});
@@ -78,7 +98,7 @@ function MessagesPage() {
 			threadsLoading={threads.isLoading}
 			activeId={conversationId}
 			onSelect={setActive}
-			messages={messages.data?.messages ?? []}
+			messages={messages.messages}
 			messagesLoading={messages.isLoading}
 			currentEmploymentId={employmentId}
 			onSend={(body) => send.mutate(body)}
@@ -91,6 +111,9 @@ function MessagesPage() {
 				await startDirect.mutateAsync(counterpartEmploymentId);
 			}}
 			startDirectPending={startDirect.isPending}
+			hasMoreMessages={messages.hasMore}
+			loadingOlderMessages={messages.isLoadingOlder}
+			onLoadOlderMessages={messages.loadOlder}
 		/>
 	);
 }

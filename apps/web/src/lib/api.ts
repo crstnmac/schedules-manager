@@ -2,6 +2,31 @@ import { env } from "@SchedulesManager/env/web";
 
 import { supabase } from "./supabase";
 
+// The access token is cached in memory and kept current via auth state
+// changes, so each request does not pay a session-storage read.
+let cachedToken: string | null = null;
+let tokenPromise: Promise<string | null> | null = null;
+
+supabase.auth.onAuthStateChange((_event, session) => {
+	cachedToken = session?.access_token ?? null;
+});
+
+async function accessToken(): Promise<string | null> {
+	if (cachedToken) return cachedToken;
+	if (!tokenPromise) {
+		tokenPromise = supabase.auth
+			.getSession()
+			.then(({ data }) => {
+				cachedToken = data.session?.access_token ?? null;
+				return cachedToken;
+			})
+			.finally(() => {
+				tokenPromise = null;
+			});
+	}
+	return tokenPromise;
+}
+
 export class ApiError extends Error {
 	status: number;
 
@@ -23,22 +48,23 @@ export async function api<T>(
 	path: string,
 	options: ApiOptions = {},
 ): Promise<T> {
+	const method = options.method ?? "GET";
 	const idempotencyKey =
-		options.method === "POST"
+		method === "POST"
 			? (options.idempotencyKey ?? crypto.randomUUID())
 			: undefined;
-	const { data } = await supabase.auth.getSession();
-	const session = data.session;
+	const token = await accessToken();
 
-	if (!session) {
+	if (!token) {
 		throw new ApiError(401, "You are not signed in.");
 	}
 
 	const response = await fetch(`${env.VITE_SERVER_URL}${path}`, {
-		method: options.method ?? "GET",
-		cache: "no-store",
+		method,
+		// GETs may use the browser HTTP cache; writes stay uncacheable.
+		cache: method === "GET" ? "default" : "no-store",
 		headers: {
-			Authorization: `Bearer ${session.access_token}`,
+			Authorization: `Bearer ${token}`,
 			...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
 			...(options.body === undefined
 				? {}
@@ -65,13 +91,14 @@ export async function publicApi<T>(
 	path: string,
 	options: ApiOptions = {},
 ): Promise<T> {
+	const method = options.method ?? "GET";
 	const idempotencyKey =
-		options.method === "POST"
+		method === "POST"
 			? (options.idempotencyKey ?? crypto.randomUUID())
 			: undefined;
 	const response = await fetch(`${env.VITE_SERVER_URL}${path}`, {
-		method: options.method ?? "GET",
-		cache: "no-store",
+		method,
+		cache: method === "GET" ? "default" : "no-store",
 		headers: {
 			...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
 			...(options.body === undefined

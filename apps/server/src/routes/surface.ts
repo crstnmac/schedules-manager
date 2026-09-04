@@ -27,7 +27,7 @@ import {
 	workerGroups,
 	workplaceMessages,
 } from "@SchedulesManager/db";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
 import {
@@ -66,6 +66,27 @@ async function workplaceForShift(shiftId: string) {
 		.limit(1);
 	if (!row) throw new NotFoundError("Shift not found");
 	return row.workplaceId;
+}
+
+/** The caller's own published shift on an active employment, else 404. */
+async function myVersionShiftRow(profileId: string, versionShiftId: string) {
+	const [row] = await db
+		.select({
+			shift: versionShifts,
+			workplaceId: employments.workplaceId,
+		})
+		.from(versionShifts)
+		.innerJoin(employments, eq(employments.id, versionShifts.employmentId))
+		.where(
+			and(
+				eq(versionShifts.id, versionShiftId),
+				eq(employments.profileId, profileId),
+				eq(employments.status, "active"),
+			),
+		)
+		.limit(1);
+	if (!row?.shift.employmentId) throw new NotFoundError("Shift not found");
+	return row;
 }
 
 export const surfaceRoutes = new Elysia({ prefix: "/v1" })
@@ -395,11 +416,36 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers.authorization);
 			await requireManager(profile.id, params.workplaceId);
+			// Both the employment and the leave type must belong to this
+			// workplace, or the upsert could mutate another workplace's balances.
+			const [employment] = await db
+				.select({ id: employments.id })
+				.from(employments)
+				.where(
+					and(
+						eq(employments.id, params.employmentId),
+						eq(employments.workplaceId, params.workplaceId),
+					),
+				)
+				.limit(1);
+			const [leaveType] = await db
+				.select({ id: leaveTypes.id })
+				.from(leaveTypes)
+				.where(
+					and(
+						eq(leaveTypes.id, body.leaveTypeId),
+						eq(leaveTypes.workplaceId, params.workplaceId),
+					),
+				)
+				.limit(1);
+			if (!employment || !leaveType) {
+				throw new NotFoundError("Employment not found");
+			}
 			await db
 				.insert(ptoBalances)
 				.values({
-					employmentId: params.employmentId,
-					leaveTypeId: body.leaveTypeId,
+					employmentId: employment.id,
+					leaveTypeId: leaveType.id,
 					minutes: body.minutes,
 				})
 				.onConflictDoUpdate({
@@ -1188,6 +1234,20 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			if (body.counterpartEmploymentId === employment.id) {
 				throw new BadRequestError("Pick someone else to message");
 			}
+			// The counterpart must be an active member of this workplace —
+			// otherwise the thread would be created around a phantom employment.
+			const [counterpart] = await db
+				.select({ id: employments.id })
+				.from(employments)
+				.where(
+					and(
+						eq(employments.id, body.counterpartEmploymentId),
+						eq(employments.workplaceId, params.workplaceId),
+						eq(employments.status, "active"),
+					),
+				)
+				.limit(1);
+			if (!counterpart) throw new NotFoundError("Employment not found");
 
 			const myDirects = await db
 				.select({ conversationId: conversationMembers.conversationId })
@@ -1246,7 +1306,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	)
 	.get(
 		"/conversations/:conversationId/messages",
-		async ({ headers, params }) => {
+		async ({ headers, params, query }) => {
 			const { profile } = await requireSession(headers.authorization);
 			const [conversation] = await db
 				.select()
@@ -1254,12 +1314,38 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				.where(eq(conversations.id, params.conversationId))
 				.limit(1);
 			if (!conversation) throw new NotFoundError("Conversation not found");
-			await requireWorkplaceMember(profile.id, conversation.workplaceId);
-			const rows = await db
+			const membership = await requireWorkplaceMember(
+				profile.id,
+				conversation.workplaceId,
+			);
+			// Direct threads are private to their members; the workplace channel
+			// stays readable by every workplace member.
+			if (conversation.kind === "direct") {
+				const [member] = await db
+					.select({ conversationId: conversationMembers.conversationId })
+					.from(conversationMembers)
+					.where(
+						and(
+							eq(conversationMembers.conversationId, conversation.id),
+							eq(conversationMembers.employmentId, membership.id),
+						),
+					)
+					.limit(1);
+				if (!member) throw new NotFoundError("Conversation not found");
+			}
+			const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
+			// Cursor pagination from the newest page backwards: `before` is the
+			// oldest createdAt the client already has.
+			const before = query.before ? new Date(query.before) : null;
+			if (before && Number.isNaN(before.getTime())) {
+				throw new BadRequestError("before must be an ISO timestamp");
+			}
+			const descendingRows = await db
 				.select({
 					message: workplaceMessages,
 					name: profiles.fullName,
 					email: profiles.email,
+					createdAt: workplaceMessages.createdAt,
 				})
 				.from(workplaceMessages)
 				.innerJoin(
@@ -1267,9 +1353,21 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 					eq(employments.id, workplaceMessages.authorEmploymentId),
 				)
 				.innerJoin(profiles, eq(profiles.id, employments.profileId))
-				.where(eq(workplaceMessages.conversationId, conversation.id))
-				.orderBy(workplaceMessages.createdAt)
-				.limit(200);
+				.where(
+					and(
+						eq(workplaceMessages.conversationId, conversation.id),
+						before
+							? lt(workplaceMessages.createdAt, before)
+							: undefined,
+					),
+				)
+				.orderBy(desc(workplaceMessages.createdAt))
+				.limit(limit + 1);
+			const hasMore = descendingRows.length > limit;
+			// Return the page oldest→newest so existing viewers render in order.
+			const rows = descendingRows
+				.slice(0, limit)
+				.reverse();
 			return {
 				messages: rows.map((row) => ({
 					id: row.message.id,
@@ -1278,11 +1376,16 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 					authorEmploymentId: row.message.authorEmploymentId,
 					createdAt: row.message.createdAt.toISOString(),
 				})),
+				hasMore,
 			};
 		},
 		{
 			headers: t.Object({ authorization: t.String() }),
 			params: t.Object({ conversationId: uuid }),
+			query: t.Object({
+				limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
+				before: t.Optional(t.String({ format: "date-time" })),
+			}),
 		},
 	)
 	.post(
@@ -1299,6 +1402,20 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				profile.id,
 				conversation.workplaceId,
 			);
+			// Posting follows the same privacy rule as reading.
+			if (conversation.kind === "direct") {
+				const [member] = await db
+					.select({ conversationId: conversationMembers.conversationId })
+					.from(conversationMembers)
+					.where(
+						and(
+							eq(conversationMembers.conversationId, conversation.id),
+							eq(conversationMembers.employmentId, employment.id),
+						),
+					)
+					.limit(1);
+				if (!member) throw new NotFoundError("Conversation not found");
+			}
 			await assertWorkplaceEnabled(
 				conversation.workplaceId,
 				"messagingEnabled",
@@ -1314,10 +1431,18 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 					})
 					.returning(),
 			);
+			const [author] = await db
+				.select({ name: profiles.fullName, email: profiles.email })
+				.from(employments)
+				.innerJoin(profiles, eq(profiles.id, employments.profileId))
+				.where(eq(employments.id, employment.id))
+				.limit(1);
 			return {
 				message: {
 					id: created.id,
 					body: created.body,
+					author: author?.name ?? author?.email ?? "Unknown",
+					authorEmploymentId: employment.id,
 					createdAt: created.createdAt.toISOString(),
 				},
 			};
@@ -1406,7 +1531,25 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 					if (!/^\d{4,8}$/.test(body.kioskPin)) {
 						throw new BadRequestError("Worker PIN must be 4 to 8 digits");
 					}
-					values.kioskPinHash = hashPin(body.kioskPin);
+					const pinHash = hashPin(body.kioskPin);
+					// A shared PIN would make kiosk punches impossible to attribute.
+					const [pinOwner] = await db
+						.select({ id: employments.id })
+						.from(employments)
+						.where(
+							and(
+								eq(employments.workplaceId, params.workplaceId),
+								eq(employments.status, "active"),
+								eq(employments.kioskPinHash, pinHash),
+							),
+						)
+						.limit(1);
+					if (pinOwner && pinOwner.id !== params.employmentId) {
+						throw new ConflictError(
+							"This Kiosk PIN is already used by another worker",
+						);
+					}
+					values.kioskPinHash = pinHash;
 				}
 			}
 			const [updated] = await db
@@ -1497,13 +1640,15 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.get(
 		"/my/shifts/:versionShiftId/tasks",
 		async ({ headers, params }) => {
-			await requireSession(headers.authorization);
-			const [shift] = await db
-				.select()
-				.from(versionShifts)
-				.where(eq(versionShifts.id, params.versionShiftId))
-				.limit(1);
-			if (!shift?.shiftId) return { tasks: [] };
+			const { profile } = await requireSession(headers.authorization);
+			const row = await myVersionShiftRow(profile.id, params.versionShiftId);
+			await assertWorkplaceEnabled(
+				row.workplaceId,
+				"tasksEnabled",
+				"Shift tasks are turned off for this Workplace",
+			);
+			const shift = row.shift;
+			if (!shift.shiftId) return { tasks: [] };
 			const tasks = await db
 				.select()
 				.from(shiftTasks)
@@ -1541,10 +1686,28 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/my/version-shifts/:versionShiftId/tasks/:taskId/complete",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers.authorization);
+			const row = await myVersionShiftRow(profile.id, params.versionShiftId);
+			await assertWorkplaceEnabled(
+				row.workplaceId,
+				"tasksEnabled",
+				"Shift tasks are turned off for this Workplace",
+			);
+			// The task must belong to the shift being worked.
+			const [task] = await db
+				.select({ id: shiftTasks.id })
+				.from(shiftTasks)
+				.where(
+					and(
+						eq(shiftTasks.id, params.taskId),
+						eq(shiftTasks.shiftId, row.shift.shiftId ?? ""),
+					),
+				)
+				.limit(1);
+			if (!task) throw new NotFoundError("Task not found");
 			await db
 				.insert(shiftTaskCompletions)
 				.values({
-					taskId: params.taskId,
+					taskId: task.id,
 					versionShiftId: params.versionShiftId,
 					completedByProfileId: profile.id,
 				})
@@ -1616,7 +1779,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers.authorization);
 			const [row] = await db
-				.select({ entry: timeEntries })
+				.select({ entry: timeEntries, workplaceId: employments.workplaceId })
 				.from(timeEntries)
 				.innerJoin(employments, eq(employments.id, timeEntries.employmentId))
 				.where(
@@ -1637,7 +1800,15 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 					),
 				)
 				.limit(1);
-			if (!openBreak) throw new NotFoundError("No open Break");
+			if (!openBreak) {
+				// Ending is gated like starting, except a break that predates the
+				// flag flip can always be closed — never strand unpaid open time.
+				const workplace = await loadWorkplace(row.workplaceId);
+				if (!workplace.breaksEnabled) {
+					throw new BadRequestError("Breaks are turned off for this Workplace");
+				}
+				throw new NotFoundError("No open Break");
+			}
 			await db
 				.update(timeEntryBreaks)
 				.set({ endedAt: new Date() })
@@ -1654,6 +1825,19 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers.authorization);
 			await requireManager(profile.id, params.workplaceId);
+			// The entry must belong to an employment of the caller's workplace.
+			const [target] = await db
+				.select({ id: timeEntries.id })
+				.from(timeEntries)
+				.innerJoin(employments, eq(employments.id, timeEntries.employmentId))
+				.where(
+					and(
+						eq(timeEntries.id, params.timeEntryId),
+						eq(employments.workplaceId, params.workplaceId),
+					),
+				)
+				.limit(1);
+			if (!target) throw new NotFoundError("Time Entry not found");
 			const [updated] = await db
 				.update(timeEntries)
 				.set({
@@ -1661,7 +1845,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 					approvedAt: new Date(),
 					approvedByProfileId: profile.id,
 				})
-				.where(eq(timeEntries.id, params.timeEntryId))
+				.where(eq(timeEntries.id, target.id))
 				.returning();
 			if (!updated) throw new NotFoundError("Time Entry not found");
 			await writeAudit({

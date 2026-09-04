@@ -155,7 +155,7 @@ function Overview() {
 		currentWeekStart(),
 	);
 	const acceptances = useAcceptances(currentSchedule.data?.schedule.id);
-	const mySchedule = useMySchedule(workplace?.id);
+	const mySchedule = useMySchedule(workplace?.id, "home");
 	const respond = useRespondToAcceptance();
 	const nextShift = mySchedule.data?.nextShift ?? null;
 	const onClock =

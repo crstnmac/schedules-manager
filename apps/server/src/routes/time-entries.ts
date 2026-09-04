@@ -142,43 +142,47 @@ async function clockIn(
 		coords,
 	});
 	const clockedInAt = roundToMinutes(now, workplace?.clockRoundMinutes ?? 0);
-	await db.execute(
-		sql`select pg_advisory_xact_lock(hashtextextended(${`clock:${shift.shiftId ?? shift.id}`}, 0))`,
-	);
-	if (shift.shiftId) {
-		const [previousPunch] = await db
-			.select({ id: timeEntries.id })
-			.from(timeEntries)
-			.innerJoin(
-				versionShifts,
-				eq(versionShifts.id, timeEntries.versionShiftId),
-			)
-			.where(eq(versionShifts.shiftId, shift.shiftId))
-			.limit(1);
-		if (previousPunch)
-			throw new ConflictError("You already started this shift");
-	}
+	// The lock, prior-punch check, and insert must share one transaction:
+	// an autocommitted *_xact_lock releases immediately and guards nothing.
+	return db.transaction(async (tx) => {
+		await tx.execute(
+			sql`select pg_advisory_xact_lock(hashtextextended(${`clock:${shift.shiftId ?? shift.id}`}, 0))`,
+		);
+		if (shift.shiftId) {
+			const [previousPunch] = await tx
+				.select({ id: timeEntries.id })
+				.from(timeEntries)
+				.innerJoin(
+					versionShifts,
+					eq(versionShifts.id, timeEntries.versionShiftId),
+				)
+				.where(eq(versionShifts.shiftId, shift.shiftId))
+				.limit(1);
+			if (previousPunch)
+				throw new ConflictError("You already started this shift");
+		}
 
-	const [entry] = await db
-		.insert(timeEntries)
-		.values({
-			versionShiftId: shift.id,
-			employmentId: shift.employmentId,
-			clockedInAt,
-		})
-		.onConflictDoNothing({ target: timeEntries.versionShiftId })
-		.returning();
-	if (!entry) throw new ConflictError("You already started this shift");
+		const [entry] = await tx
+			.insert(timeEntries)
+			.values({
+				versionShiftId: shift.id,
+				employmentId: shift.employmentId,
+				clockedInAt,
+			})
+			.onConflictDoNothing({ target: timeEntries.versionShiftId })
+			.returning();
+		if (!entry) throw new ConflictError("You already started this shift");
 
-	await writeAudit({
-		workplaceId,
-		actorProfileId: profileId,
-		action: "time_entry.clocked_in",
-		entityType: "time_entry",
-		entityId: entry.id,
-		summary: "Worker started a shift",
+		await writeAudit({
+			workplaceId,
+			actorProfileId: profileId,
+			action: "time_entry.clocked_in",
+			entityType: "time_entry",
+			entityId: entry.id,
+			summary: "Worker started a shift",
+		});
+		return { timeEntry: toPayload(entry) };
 	});
-	return { timeEntry: toPayload(entry) };
 }
 
 async function clockOut(
@@ -203,10 +207,15 @@ async function clockOut(
 		.from(workplaces)
 		.where(eq(workplaces.id, workplaceId))
 		.limit(1);
-	const clockedOutAt = roundToMinutes(
+	const roundedNow = roundToMinutes(
 		new Date(),
 		workplace?.clockRoundMinutes ?? 0,
 	);
+	// Rounding must never pull clock-out to or before clock-in.
+	const clockedOutAt =
+		roundedNow.getTime() <= entry.clockedInAt.getTime()
+			? new Date(entry.clockedInAt.getTime() + 60_000)
+			: roundedNow;
 
 	let workerNote = entry.workerNote;
 	const noteInput = options?.workerNote?.trim();
@@ -442,7 +451,20 @@ export const timeEntryRoutes = new Elysia({
 					const [entry] = existing
 						? await db
 								.update(timeEntries)
-								.set(values)
+								.set({
+									...values,
+									// Changed punches void a prior Timesheet Approval.
+									...(existing.clockedInAt.getTime() !==
+										clockedInAt.getTime() ||
+									existing.clockedOutAt?.getTime() !==
+										clockedOutAt?.getTime()
+										? {
+												approvalStatus: "pending" as const,
+												approvedAt: null,
+												approvedByProfileId: null,
+											}
+										: {}),
+								})
 								.where(eq(timeEntries.id, existing.id))
 								.returning()
 						: await db

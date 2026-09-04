@@ -16,9 +16,11 @@ export const unstable_settings = {
 const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
-			staleTime: 0,
+			// Backgrounding/foregrounding must not refetch every active query;
+			// fresh data is reused and volatile screens opt out per hook.
+			staleTime: 30_000,
 			retry: 1,
-			refetchOnMount: "always",
+			refetchOnMount: true,
 			refetchOnWindowFocus: true,
 			refetchOnReconnect: true,
 		},

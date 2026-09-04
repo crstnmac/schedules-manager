@@ -7,6 +7,7 @@ import {
 	openShifts,
 	positions,
 	profiles,
+	scheduleVersions,
 	schedules as schedulesTable,
 	shiftPickups,
 	shiftReleases,
@@ -15,7 +16,7 @@ import {
 	unavailability,
 	versionShifts,
 } from "@SchedulesManager/db";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import {
 	requireManager,
@@ -56,6 +57,24 @@ async function ownedVersionShift(
 	}
 	if (shift.endsAt.getTime() <= Date.now()) {
 		throw new ConflictError("This shift has already ended");
+	}
+	// Releases only make sense against the latest published version — approving
+	// one from a stale snapshot would mutate the current draft.
+	const [version] = await db
+		.select({ scheduleId: scheduleVersions.scheduleId })
+		.from(scheduleVersions)
+		.where(eq(scheduleVersions.id, shift.versionId))
+		.limit(1);
+	const [latest] = await db
+		.select({ id: scheduleVersions.id })
+		.from(scheduleVersions)
+		.where(eq(scheduleVersions.scheduleId, version?.scheduleId ?? ""))
+		.orderBy(desc(scheduleVersions.versionNumber))
+		.limit(1);
+	if (!version || latest?.id !== shift.versionId) {
+		throw new ConflictError(
+			"This shift belongs to an outdated Schedule Version",
+		);
 	}
 	return { profile, shift };
 }
@@ -127,6 +146,9 @@ export async function assertEligible(
 	const tz = location?.timezone ?? "America/Chicago";
 
 	for (const window of constraintRows) {
+		// Pending windows are requests, not constraints — same rule as the
+		// schedule conflict UI in routes/schedules.ts.
+		if (window.status !== "approved") continue;
 		let blocked = false;
 		if (window.kind === "recurring" && window.weekday !== null) {
 			const firstKey = zonedDayInfo(startsAt, tz).dateKey;
@@ -529,12 +551,22 @@ export const coverageRoutes = new Elysia({
 				key: headers["idempotency-key"],
 				request: body,
 				execute: async () => {
-					const [release] = await db
-						.select()
+					const [releaseRow] = await db
+						.select({
+							release: shiftReleases,
+							workplaceId: employments.workplaceId,
+						})
 						.from(shiftReleases)
+						.innerJoin(
+							employments,
+							eq(employments.id, shiftReleases.requestedBy),
+						)
 						.where(eq(shiftReleases.id, params.releaseId))
 						.limit(1);
-					if (!release) throw new NotFoundError("Release request not found");
+					if (!releaseRow || releaseRow.workplaceId !== params.workplaceId) {
+						throw new NotFoundError("Release request not found");
+					}
+					const release = releaseRow.release;
 					if (release.status !== "pending") {
 						throw new ConflictError("This request was already decided");
 					}
@@ -615,10 +647,37 @@ export const coverageRoutes = new Elysia({
 							throw new ConflictError("This request was already decided");
 						}
 
-						await tx
+						// Lock the draft and only unassign the worker who asked for the
+						// release — a manager may have reassigned the shift meanwhile.
+						const [draft] = await tx
+							.select()
+							.from(shiftsTable)
+							.where(eq(shiftsTable.id, draftShiftId))
+							.for("update");
+						if (!draft) {
+							throw new NotFoundError("The original shift could not be found");
+						}
+						if (draft.employmentId !== release.requestedBy) {
+							throw new ConflictError(
+								"This shift was reassigned after the release request. Decline the request instead.",
+							);
+						}
+
+						const unassigned = await tx
 							.update(shiftsTable)
 							.set({ employmentId: null, updatedAt: new Date() })
-							.where(eq(shiftsTable.id, draftShiftId));
+							.where(
+								and(
+									eq(shiftsTable.id, draftShiftId),
+									eq(shiftsTable.employmentId, release.requestedBy),
+								),
+							)
+							.returning({ id: shiftsTable.id });
+						if (unassigned.length === 0) {
+							throw new ConflictError(
+								"This shift was reassigned after the release request. Decline the request instead.",
+							);
+						}
 
 						await tx.insert(openShifts).values({
 							shiftId: draftShiftId,
@@ -736,12 +795,16 @@ async function decidePickup(
 		throw new ConflictError("This request was already decided");
 	}
 
-	const [openShift] = await db
-		.select()
+	const [openShiftRow] = await db
+		.select({ openShift: openShifts, workplaceId: locations.workplaceId })
 		.from(openShifts)
+		.innerJoin(locations, eq(locations.id, openShifts.locationId))
 		.where(eq(openShifts.id, pickup.openShiftId))
 		.limit(1);
-	if (!openShift) throw new NotFoundError("Open shift not found");
+	if (!openShiftRow || openShiftRow.workplaceId !== workplaceId) {
+		throw new NotFoundError("Open shift not found");
+	}
+	const openShift = openShiftRow.openShift;
 
 	if (body.decision === "declined") {
 		const declined = await db
@@ -791,6 +854,18 @@ async function decidePickup(
 
 	const published = await publishScheduleNow(shift.scheduleId, profileId, {
 		beforePublish: async (tx) => {
+			// Lock the draft and refuse if a manager assigned it directly after
+			// the shift was opened — the marketplace is no longer the source of
+			// truth for this shift.
+			const [draft] = await tx
+				.select({ employmentId: shiftsTable.employmentId })
+				.from(shiftsTable)
+				.where(eq(shiftsTable.id, shift.id))
+				.for("update");
+			if (!draft || draft.employmentId !== null) {
+				throw new ConflictError("This open shift is no longer available");
+			}
+
 			const claimedOpenShift = await tx
 				.update(openShifts)
 				.set({ status: "filled" })
@@ -820,10 +895,19 @@ async function decidePickup(
 				throw new ConflictError("This request was already decided");
 			}
 
-			await tx
+			const assigned = await tx
 				.update(shiftsTable)
 				.set({ employmentId: pickup.requestedBy, updatedAt: new Date() })
-				.where(eq(shiftsTable.id, shift.id));
+				.where(
+					and(
+						eq(shiftsTable.id, shift.id),
+						isNull(shiftsTable.employmentId),
+					),
+				)
+				.returning({ id: shiftsTable.id });
+			if (assigned.length === 0) {
+				throw new ConflictError("This open shift is no longer available");
+			}
 			await tx
 				.update(shiftPickups)
 				.set({

@@ -144,6 +144,9 @@ export function ConversationWorkspace({
 	composeLoading,
 	onStartDirect,
 	startDirectPending,
+	hasMoreMessages,
+	loadingOlderMessages,
+	onLoadOlderMessages,
 }: {
 	threads: ConversationDto[];
 	threadsLoading?: boolean;
@@ -160,6 +163,9 @@ export function ConversationWorkspace({
 	composeLoading?: boolean;
 	onStartDirect?: (employmentId: string) => void | Promise<void>;
 	startDirectPending?: boolean;
+	hasMoreMessages?: boolean;
+	loadingOlderMessages?: boolean;
+	onLoadOlderMessages?: () => void;
 }) {
 	const active =
 		threads.find((thread) => thread.id === activeId) ??
@@ -508,6 +514,24 @@ export function ConversationWorkspace({
 							<MessageScroller className="min-h-0 flex-1">
 								<MessageScrollerViewport>
 									<MessageScrollerContent className="gap-4 px-4 py-4">
+										{!messagesLoading &&
+										hasMoreMessages &&
+										onLoadOlderMessages ? (
+											<div className="flex justify-center pb-2">
+												<Button
+													type="button"
+													variant="outline"
+													size="sm"
+													disabled={loadingOlderMessages}
+													onClick={onLoadOlderMessages}
+												>
+													{loadingOlderMessages ? (
+														<Spinner data-icon="inline-start" />
+													) : null}
+													Load earlier messages
+												</Button>
+											</div>
+										) : null}
 										{messagesLoading ? (
 											<div className="flex flex-col gap-4">
 												<Skeleton className="h-16 w-3/5" />

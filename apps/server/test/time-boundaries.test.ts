@@ -11,6 +11,15 @@ test("Notice Window excludes the exact boundary and includes one millisecond ins
 	expect(isWithinNoticeWindow(new Date(now), now, 0)).toBe(false);
 });
 
+test("Notice Window is false for shifts that already started or ended", () => {
+	const now = Date.parse("2026-03-07T15:00:00Z");
+	expect(isWithinNoticeWindow(new Date(now - 1), now, 48)).toBe(false);
+	expect(isWithinNoticeWindow(new Date(now - 48 * 3_600_000), now, 48)).toBe(
+		false,
+	);
+	expect(isWithinNoticeWindow(new Date(now + 1), now, 48)).toBe(true);
+});
+
 test("overnight shift minutes resolve onto the next local date", () => {
 	const start = wallToInstant("2026-09-01", 22 * 60, "Asia/Kolkata");
 	const end = wallToInstant("2026-09-01", 26 * 60, "Asia/Kolkata");

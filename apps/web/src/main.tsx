@@ -8,9 +8,11 @@ import { routeTree } from "./routeTree.gen";
 const queryClient = new QueryClient({
 	defaultOptions: {
 		queries: {
-			staleTime: 0,
+			// Data is considered fresh for a short window so remounts and tab
+			// focus do not storm the API; volatile screens opt out per hook.
+			staleTime: 30_000,
 			retry: 1,
-			refetchOnMount: "always",
+			refetchOnMount: true,
 			refetchOnWindowFocus: true,
 			refetchOnReconnect: true,
 		},

@@ -1,6 +1,9 @@
+import { useMemo } from "react";
 import {
 	keepPreviousData,
+	type InfiniteData,
 	queryOptions,
+	useInfiniteQuery,
 	useMutation,
 	useQuery,
 	useQueryClient,
@@ -119,6 +122,8 @@ export function useMe(enabled = true) {
 		queryKey: ["me"],
 		queryFn: () => api<MeResponse>("/v1/me"),
 		enabled,
+		// Identity and memberships change rarely; native already does this.
+		staleTime: 60_000,
 	});
 }
 
@@ -187,6 +192,8 @@ export function useLocations(workplaceId: string | undefined) {
 				`/v1/workplaces/${workplaceId}/locations`,
 			).then((data) => data.locations),
 		enabled: Boolean(workplaceId),
+		// Catalog data: cheap to keep, expensive to refetch on every focus.
+		staleTime: 60_000,
 	});
 }
 
@@ -217,6 +224,7 @@ export function usePositions(workplaceId: string | undefined) {
 				`/v1/workplaces/${workplaceId}/positions`,
 			).then((data) => data.positions),
 		enabled: Boolean(workplaceId),
+		staleTime: 60_000,
 	});
 }
 
@@ -284,6 +292,24 @@ export interface ScheduleShiftDto {
 	}[];
 }
 
+export interface ScheduleTimeclockEntry {
+	shiftId: string;
+	versionShiftId: string;
+	status: "open" | "closed" | null;
+	clockedInAt: string | null;
+	clockedOutAt: string | null;
+	workedMinutes: number | null;
+	attendance: "late" | "no_show" | "sick" | null;
+}
+
+export interface ScheduleLabor {
+	scheduledCents: number;
+	overtimeCents: number;
+	salesCents: number;
+	laborPercent: number | null;
+	byDate: { date: string; amountCents: number }[];
+}
+
 export interface ScheduleResponse {
 	schedule: {
 		id: string;
@@ -296,23 +322,23 @@ export interface ScheduleResponse {
 		latestVersionNumber: number | null;
 		publishedAt: string | null;
 		hasUnpublishedChanges: boolean;
+		versions: {
+			id: string;
+			versionNumber: number;
+			publishedAt: string;
+			workers: {
+				employmentId: string;
+				name: string;
+				email: string;
+				status: "sent" | "delivered" | "acknowledged";
+				acknowledgedAt: string | null;
+			}[];
+		}[];
 	};
-	timeclock: {
-		shiftId: string;
-		versionShiftId: string;
-		status: "open" | "closed" | null;
-		clockedInAt: string | null;
-		clockedOutAt: string | null;
-		workedMinutes: number | null;
-		attendance: "late" | "no_show" | "sick" | null;
-	}[];
-	labor: {
-		scheduledCents: number;
-		overtimeCents: number;
-		salesCents: number;
-		laborPercent: number | null;
-		byDate: { date: string; amountCents: number }[];
-	};
+	/** Omitted when the query requests exclude=timeclock. */
+	timeclock: ScheduleTimeclockEntry[];
+	/** null when the query requests exclude=labor. */
+	labor: ScheduleLabor | null;
 	shifts: ScheduleShiftDto[];
 	staff: {
 		employmentId: string;
@@ -359,8 +385,42 @@ export function scheduleQueryOptions(locationId: string, weekStart: string) {
 		queryKey: ["schedule", locationId, weekStart] as const,
 		queryFn: () =>
 			api<ScheduleResponse>(
-				`/v1/locations/${locationId}/schedules/${weekStart}`,
+				`/v1/locations/${locationId}/schedules/${weekStart}?exclude=labor,timeclock`,
 			),
+		staleTime: SCHEDULE_STALE_TIME,
+		gcTime: SCHEDULE_CACHE_TIME,
+		refetchOnMount: false,
+	});
+}
+
+export function useScheduleTimeclock(
+	locationId: string | undefined,
+	weekStart: string | undefined,
+) {
+	return useQuery({
+		queryKey: ["schedule-timeclock", locationId, weekStart] as const,
+		queryFn: () =>
+			api<{ timeclock: ScheduleTimeclockEntry[] }>(
+				`/v1/locations/${locationId}/schedules/${weekStart}/timeclock`,
+			).then((data) => data.timeclock),
+		enabled: Boolean(locationId && weekStart),
+		staleTime: SCHEDULE_STALE_TIME,
+		gcTime: SCHEDULE_CACHE_TIME,
+		refetchOnMount: false,
+	});
+}
+
+export function useScheduleLabor(
+	locationId: string | undefined,
+	weekStart: string | undefined,
+) {
+	return useQuery({
+		queryKey: ["schedule-labor", locationId, weekStart] as const,
+		queryFn: () =>
+			api<{ labor: ScheduleLabor }>(
+				`/v1/locations/${locationId}/schedules/${weekStart}/labor`,
+			).then((data) => data.labor),
+		enabled: Boolean(locationId && weekStart),
 		staleTime: SCHEDULE_STALE_TIME,
 		gcTime: SCHEDULE_CACHE_TIME,
 		refetchOnMount: false,
@@ -399,30 +459,6 @@ export function useScheduleCalendar(
 		staleTime: SCHEDULE_STALE_TIME,
 		gcTime: SCHEDULE_CACHE_TIME,
 		placeholderData: keepPreviousData,
-	});
-}
-
-export interface PublicationResponse {
-	versions: {
-		id: string;
-		versionNumber: number;
-		publishedAt: string;
-		workers: {
-			employmentId: string;
-			name: string;
-			email: string;
-			status: "sent" | "delivered" | "acknowledged";
-			acknowledgedAt: string | null;
-		}[];
-	}[];
-}
-
-export function usePublication(scheduleId: string | undefined) {
-	return useQuery({
-		queryKey: ["publication", scheduleId],
-		queryFn: () =>
-			api<PublicationResponse>(`/v1/schedules/${scheduleId}/publication`),
-		enabled: Boolean(scheduleId),
 	});
 }
 
@@ -682,11 +718,16 @@ export interface MyScheduleResponse {
 	}[];
 }
 
-export function useMySchedule(workplaceId: string | undefined) {
+export function useMySchedule(
+	workplaceId: string | undefined,
+	scope: "home" | "full" = "full",
+) {
 	return useQuery({
-		queryKey: ["my-schedule", workplaceId],
+		queryKey: ["my-schedule", workplaceId, scope],
 		queryFn: () =>
-			api<MyScheduleResponse>(`/v1/workplaces/${workplaceId}/my/schedule`),
+			api<MyScheduleResponse>(
+				`/v1/workplaces/${workplaceId}/my/schedule${scope === "home" ? "?scope=home" : ""}`,
+			),
 		enabled: Boolean(workplaceId),
 	});
 }
@@ -1069,8 +1110,11 @@ export function useApplyScheduleTemplate(locationId: string | undefined) {
 				`/v1/locations/${locationId}/schedules/${input.weekStart}/templates/${input.templateId}/apply`,
 				{ method: "POST" },
 			),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["schedule"] });
+		onSuccess: (result, input) => {
+			// The template only touches the week it was applied to.
+			queryClient.invalidateQueries({
+				queryKey: ["schedule", locationId, input.weekStart],
+			});
 		},
 	});
 }
@@ -1243,15 +1287,59 @@ export function useConversations(workplaceId: string | undefined) {
 	});
 }
 
-export function useMessages(conversationId: string | undefined) {
-	return useQuery({
+const MESSAGE_PAGE_SIZE = 50;
+
+export interface MessagesPage {
+	messages: ConversationMessageDto[];
+	hasMore: boolean;
+}
+
+/** Newest-first pages behind the scenes; `useMessagesData` stitches asc order. */
+export function useMessagesInfinite(conversationId: string | undefined) {
+	return useInfiniteQuery<
+		MessagesPage,
+		Error,
+		InfiniteData<MessagesPage>,
+		(string | undefined)[],
+		string | undefined
+	>({
 		queryKey: ["messages", conversationId],
-		queryFn: () =>
-			api<{ messages: ConversationMessageDto[] }>(
-				`/v1/conversations/${conversationId}/messages`,
+		queryFn: ({ pageParam }) =>
+			api<MessagesPage>(
+				`/v1/conversations/${conversationId}/messages${pageParam ? `?before=${encodeURIComponent(pageParam)}` : ""}`,
 			),
+		initialPageParam: undefined as string | undefined,
+		// Only paging backwards through history.
+		getNextPageParam: () => undefined,
+		getPreviousPageParam: (firstPage) =>
+			firstPage.hasMore ? firstPage.messages[0]?.createdAt : undefined,
 		enabled: Boolean(conversationId),
+		staleTime: 30_000,
 	});
+}
+
+/** Oldest→newest across all loaded pages, for thread rendering. */
+export function useMessages(conversationId: string | undefined) {
+	const query = useMessagesInfinite(conversationId);
+	const messages = useMemo(() => {
+		const pages = query.data?.pages ?? [];
+		return pages.reduce<ConversationMessageDto[]>(
+			(older, page) => [...older, ...page.messages],
+			[],
+		);
+	}, [query.data]);
+	const hasMore = query.data?.pages[0]?.hasMore ?? false;
+	return {
+		...query,
+		messages,
+		hasMore,
+		loadOlder: () => {
+			if (hasMore && !query.isFetchingPreviousPage) {
+				void query.fetchPreviousPage();
+			}
+		},
+		isLoadingOlder: query.isFetchingPreviousPage,
+	};
 }
 
 export function useTimesheets(workplaceId: string | undefined) {
