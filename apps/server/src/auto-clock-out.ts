@@ -6,7 +6,7 @@ import {
 	versionShifts,
 	workplaces,
 } from "@SchedulesManager/db";
-import { and, eq, gt, isNull, lt } from "drizzle-orm";
+import { and, eq, gt, isNull, lt, sql } from "drizzle-orm";
 
 import { roundToMinutes } from "./geo";
 import { notifyEmployments, writeAudit } from "./notify";
@@ -69,14 +69,19 @@ export async function processAutoClockOutBatch(limit = 50): Promise<number> {
 					autoClosedAt: now,
 				})
 				.where(
-					and(eq(timeEntries.id, row.entryId), isNull(timeEntries.clockedOutAt)),
+					and(
+						eq(timeEntries.id, row.entryId),
+						isNull(timeEntries.clockedOutAt),
+					),
 				)
 				.returning({ id: timeEntries.id });
 			if (!entry) return null;
 
 			await tx
 				.update(timeEntryBreaks)
-				.set({ endedAt: clockedOutAt })
+				.set({
+					endedAt: sql`GREATEST(${clockedOutAt}, ${timeEntryBreaks.startedAt})`,
+				})
 				.where(
 					and(
 						eq(timeEntryBreaks.timeEntryId, entry.id),
