@@ -1,7 +1,7 @@
 import { Badge } from "@SchedulesManager/ui/components/badge";
-import { usePostHog } from "@posthog/react";
 import { Button } from "@SchedulesManager/ui/components/button";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import { usePostHog } from "@posthog/react";
 import {
 	createFileRoute,
 	Link,
@@ -44,7 +44,7 @@ const navigation = [
 
 function WorkerLayout() {
 	const posthog = usePostHog();
-	const { isSigningOut, user, signOut } = useAuth();
+	const { isLoading: authLoading, isSigningOut, user, signOut } = useAuth();
 	const me = useMe(Boolean(user));
 	const { isLoading, workplace, kind } = useWorkplace();
 	const inbox = useNotifications(workplace?.id);
@@ -76,6 +76,17 @@ function WorkerLayout() {
 		}
 	};
 
+	if (authLoading)
+		return (
+			<main
+				id="main-content"
+				tabIndex={-1}
+				className="grid min-h-svh place-items-center"
+			>
+				<Spinner />
+				<span className="sr-only">Loading</span>
+			</main>
+		);
 	if (!user) return <Navigate to="/" replace />;
 	if (isLoading) {
 		return (
