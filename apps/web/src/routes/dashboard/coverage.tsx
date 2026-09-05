@@ -27,6 +27,7 @@ import {
 	useSwapDecision,
 } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
+import { hasCoverageItems } from "@/lib/coverage-logic";
 
 interface CoverageResponse {
 	releases: {
@@ -59,7 +60,7 @@ const releaseHelper = createDataColumnHelper<ReleaseRow>();
 const pickupHelper = createDataColumnHelper<PickupRow>();
 const swapHelper = createDataColumnHelper<SwapDetailDto>();
 
-function CoveragePage() {
+export function CoveragePage() {
 	const { workplace } = useWorkplace();
 	const queryClient = useQueryClient();
 
@@ -115,9 +116,9 @@ function CoveragePage() {
 		onError: (error) => toast.error((error as Error).message),
 	});
 
+	const swaps = useCoverageSwaps(workplace?.id);
 	const data = coverage.data;
-	const hasItems =
-		(data?.releases.length ?? 0) > 0 || (data?.pickups.length ?? 0) > 0;
+	const hasItems = hasCoverageItems(data, swaps);
 
 	const releaseColumns = useMemo(
 		() =>
