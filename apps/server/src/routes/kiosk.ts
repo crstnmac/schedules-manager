@@ -109,23 +109,40 @@ export const kioskRoutes = new Elysia({ prefix: "/v1", tags: ["Kiosk"] }).post(
 
 		let target: typeof versionShifts.$inferSelect | null = null;
 		if (latestVersionIds.length > 0) {
-			const rows = await db
-				.select()
-				.from(versionShifts)
-				.where(
-					and(
-						inArray(versionShifts.versionId, latestVersionIds),
-						eq(versionShifts.employmentId, worker.id),
-						lte(
-							versionShifts.startsAt,
-							new Date(now.getTime() + earlyMs),
+			if (body.action === "out") {
+				const rows = await db
+					.select({ shift: versionShifts })
+					.from(versionShifts)
+					.innerJoin(
+						timeEntries,
+						eq(timeEntries.versionShiftId, versionShifts.id),
+					)
+					.where(
+						and(
+							inArray(versionShifts.versionId, latestVersionIds),
+							eq(versionShifts.employmentId, worker.id),
+							isNull(timeEntries.clockedOutAt),
 						),
-						gte(versionShifts.endsAt, now),
-					),
-				)
-				.orderBy(versionShifts.startsAt)
-				.limit(1);
-			target = rows[0] ?? null;
+					)
+					.orderBy(desc(versionShifts.startsAt))
+					.limit(1);
+				target = rows[0]?.shift ?? null;
+			} else {
+				const rows = await db
+					.select()
+					.from(versionShifts)
+					.where(
+						and(
+							inArray(versionShifts.versionId, latestVersionIds),
+							eq(versionShifts.employmentId, worker.id),
+							lte(versionShifts.startsAt, new Date(now.getTime() + earlyMs)),
+							gte(versionShifts.endsAt, now),
+						),
+					)
+					.orderBy(versionShifts.startsAt)
+					.limit(1);
+				target = rows[0] ?? null;
+			}
 		}
 		if (!target) {
 			throw new NotFoundError("No published Shift is open to clock");

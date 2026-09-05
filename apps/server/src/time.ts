@@ -69,7 +69,20 @@ export function wallToInstant(
 	const candidate = new Date(naive.getTime() - offset1 * 60_000);
 	const offset2 = tzOffsetMinutes(candidate, timeZone);
 	if (offset2 !== offset1) {
-		return new Date(naive.getTime() - offset2 * 60_000);
+		// A second offset that differs from the first means we are next to a DST
+		// transition. Re-resolve once more: a stable third offset is the fall-back
+		// ambiguous hour (the wall time exists twice, we keep the first match); a
+		// third offset that still differs means the local wall time does not exist
+		// at all (the spring-forward gap), whose two-pass iteration oscillates
+		// forever. Reject instead of silently storing the time an hour off.
+		const candidate2 = new Date(naive.getTime() - offset2 * 60_000);
+		const offset3 = tzOffsetMinutes(candidate2, timeZone);
+		if (offset3 !== offset2) {
+			throw new BadRequestError(
+				`Local time ${Math.floor(rest / 60)}:${String(rest % 60).padStart(2, "0")} on ${dateKey} does not exist in ${timeZone}`,
+			);
+		}
+		return candidate2;
 	}
 	return candidate;
 }
@@ -129,4 +142,30 @@ export function shiftDays(dateKey: string, days: number): string {
 	const parsed = new Date(`${dateKey}T00:00:00Z`);
 	parsed.setUTCDate(parsed.getUTCDate() + days);
 	return parsed.toISOString().slice(0, 10);
+}
+
+/**
+ * Split an interval's minutes across the zoned calendar days it touches, so
+ * overnight spans feed daily overtime on both days instead of loading the
+ * start date with the full span.
+ */
+export function minutesByZonedDate(
+	startsAt: Date,
+	endsAt: Date,
+	timeZone: string,
+): Map<string, number> {
+	const split = new Map<string, number>();
+	let cursor = startsAt.getTime();
+	const endMs = endsAt.getTime();
+	while (cursor < endMs) {
+		const info = zonedDayInfo(new Date(cursor), timeZone);
+		const nextMidnight = wallToInstant(shiftDays(info.dateKey, 1), 0, timeZone);
+		const segmentEnd = Math.min(endMs, nextMidnight.getTime());
+		const segmentMinutes = Math.round((segmentEnd - cursor) / 60_000);
+		if (segmentMinutes > 0) {
+			split.set(info.dateKey, (split.get(info.dateKey) ?? 0) + segmentMinutes);
+		}
+		cursor = segmentEnd;
+	}
+	return split;
 }

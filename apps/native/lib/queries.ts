@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import {
 	type InfiniteData,
 	useInfiniteQuery,
@@ -7,6 +6,7 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import * as Location from "expo-location";
+import { useMemo } from "react";
 
 import { api } from "./api";
 import { useSelectedWorkplaceId } from "./workplace-store";
@@ -163,6 +163,7 @@ export function useClockIn() {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 			queryClient.invalidateQueries({ queryKey: ["timecard"] });
+			queryClient.invalidateQueries({ queryKey: ["pay-period"] });
 		},
 	});
 }
@@ -192,6 +193,7 @@ export function useClockOut() {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 			queryClient.invalidateQueries({ queryKey: ["timecard"] });
+			queryClient.invalidateQueries({ queryKey: ["pay-period"] });
 		},
 	});
 }
@@ -597,6 +599,7 @@ export interface PayPeriodInfo {
 	startsAt: string;
 	endsAt: string;
 	weekStartDay: number;
+	periodTotalMs: number;
 }
 
 export function usePayPeriod(workplaceId: string | undefined) {
