@@ -74,8 +74,11 @@ export const reportRoutes = new Elysia({
 			breakByEntry.set(
 				row.timeEntryId,
 				(breakByEntry.get(row.timeEntryId) ?? 0) +
-					Math.round(
-						(row.endedAt.getTime() - row.startedAt.getTime()) / 60_000,
+					Math.max(
+						0,
+						Math.round(
+							(row.endedAt.getTime() - row.startedAt.getTime()) / 60_000,
+						),
 					),
 			);
 		}
