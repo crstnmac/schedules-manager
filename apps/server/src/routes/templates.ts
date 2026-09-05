@@ -2,8 +2,8 @@ import {
 	db,
 	employments,
 	locations,
-	scheduleTemplates,
 	schedules,
+	scheduleTemplates,
 	shifts,
 	templateShifts,
 } from "@SchedulesManager/db";
@@ -14,7 +14,6 @@ import { requireManager, requireSession, weekStartDayFor } from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { writeAudit } from "../notify";
-import { firstRow } from "../rows";
 import {
 	assertWeekStartDay,
 	shiftDays,
@@ -165,30 +164,22 @@ export const templateRoutes = new Elysia({
 					if (draftShifts.length === 0) {
 						throw new ConflictError("This week has no shifts to save");
 					}
-					const [existingTemplate] = await db
-						.select({ id: scheduleTemplates.id })
-						.from(scheduleTemplates)
-						.where(
-							and(
-								eq(scheduleTemplates.locationId, location.id),
-								eq(scheduleTemplates.name, body.name.trim()),
-							),
-						)
-						.limit(1);
-					if (existingTemplate) {
-						throw new ConflictError("A template with that name already exists");
-					}
-
 					const template = await db.transaction(async (tx) => {
-						const created = firstRow(
-							await tx
-								.insert(scheduleTemplates)
-								.values({
-									locationId: location.id,
-									name: body.name.trim(),
-								})
-								.returning(),
-						);
+						const [created] = await tx
+							.insert(scheduleTemplates)
+							.values({
+								locationId: location.id,
+								name: body.name.trim(),
+							})
+							.onConflictDoNothing({
+								target: [scheduleTemplates.locationId, scheduleTemplates.name],
+							})
+							.returning();
+						if (!created) {
+							throw new ConflictError(
+								"A template with that name already exists",
+							);
+						}
 						await tx.insert(templateShifts).values(
 							draftShifts.map((shift) => {
 								const startInfo = zonedDayInfo(
@@ -294,7 +285,10 @@ export const templateRoutes = new Elysia({
 						throw new ConflictError("This template has no shifts");
 					}
 
-					const target = await getOrCreateSchedule(location.id, params.weekStart);
+					const target = await getOrCreateSchedule(
+						location.id,
+						params.weekStart,
+					);
 					await db.transaction(async (tx) => {
 						const activeIds = new Set(
 							(
