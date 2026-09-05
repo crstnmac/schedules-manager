@@ -10,6 +10,7 @@ import {
 	emailWebhookTestSecret,
 	registerEmailDeliveryTests,
 } from "./email-delivery-cases";
+import { registerEnsureProfileCollisionTests } from "./ensure-profile-collision-cases";
 import { registerJoinPolicyTests } from "./join-policy-cases";
 import { registerMyScheduleTests } from "./my-schedule-cases";
 import { registerOpsTests } from "./ops-cases";
@@ -84,6 +85,28 @@ integrationDescribe("Schedule publication", () => {
 			.sign(privateKey);
 	}
 
+	async function emaillessToken(profileId: string) {
+		return new SignJWT({ role: "authenticated" })
+			.setProtectedHeader({ alg: "RS256", kid: "integration-test-key" })
+			.setSubject(profileId)
+			.setIssuer(issuer)
+			.setAudience("authenticated")
+			.setIssuedAt()
+			.setExpirationTime("5m")
+			.sign(privateKey);
+	}
+
+	async function emptyEmailToken(profileId: string) {
+		return new SignJWT({ email: "", role: "authenticated" })
+			.setProtectedHeader({ alg: "RS256", kid: "integration-test-key" })
+			.setSubject(profileId)
+			.setIssuer(issuer)
+			.setAudience("authenticated")
+			.setIssuedAt()
+			.setExpirationTime("5m")
+			.sign(privateKey);
+	}
+
 	registerEmailDeliveryTests(() => ({ database, app, token: managerToken }));
 	registerTimeClockTests(() => ({ database, app, token: managerToken }));
 	registerPushReceiptTests(() => ({ database }));
@@ -106,6 +129,13 @@ integrationDescribe("Schedule publication", () => {
 		token: managerToken,
 	}));
 	registerDstRouteTests(() => ({ database, app, token: managerToken }));
+	registerEnsureProfileCollisionTests(() => ({
+		database,
+		app,
+		token: managerToken,
+		emaillessToken,
+		emptyEmailToken,
+	}));
 
 	test("republishing never changes the previous published Shift snapshot", async () => {
 		const managerProfileId = crypto.randomUUID();

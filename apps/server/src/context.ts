@@ -42,10 +42,10 @@ async function ensureProfile(user: AuthenticatedUser): Promise<Profile> {
 		.insert(profiles)
 		.values({
 			id: user.sub,
-			email: (user.email ?? "").toLowerCase(),
+			email: user.email.toLowerCase(),
 			fullName: extractFullName(user),
 		})
-		.onConflictDoNothing()
+		.onConflictDoNothing({ target: profiles.id })
 		.returning();
 
 	if (created) return created;
