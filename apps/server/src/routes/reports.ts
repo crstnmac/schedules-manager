@@ -15,7 +15,7 @@ import { and, eq, gte, lte } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
 import { requireManager, requireSession } from "../context";
-import { laborCents } from "../labor";
+import { computeLaborByEntry, type ReportRow } from "../reports-labor";
 
 function csvEscape(value: string) {
 	if (/[",\n]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
@@ -40,7 +40,10 @@ export const reportRoutes = new Elysia({
 				email: profiles.email,
 				wage: employments.hourlyWageCents,
 				locationName: locations.name,
+				locationTimezone: locations.timezone,
+				weekStartDay: workplaces.weekStartDay,
 				overtimeWeeklyMinutes: workplaces.overtimeWeeklyMinutes,
+				overtimeDailyMinutes: workplaces.overtimeDailyMinutes,
 			})
 			.from(timeEntries)
 			.innerJoin(employments, eq(employments.id, timeEntries.employmentId))
@@ -85,21 +88,42 @@ export const reportRoutes = new Elysia({
 			marks.map((row) => [row.versionShiftId, row.kind]),
 		);
 
-		const lines = [
-			"worker,email,location,clocked_in,clocked_out,worked_minutes,break_minutes,labor_cents,approval,attendance",
-		];
-		for (const row of rows) {
+		// Build per-row worked minutes (after breaks) plus the inputs the
+		// labor aggregation needs. Weekly + daily overtime are computed by
+		// aggregating per (employment, workplace-week) so the CSV matches the
+		// laborCents contract used by the scheduling endpoints.
+		const reportRows: ReportRow[] = [];
+		const perRow = rows.map((row) => {
 			const out = row.entry.clockedOutAt ?? new Date();
 			const raw = Math.round(
 				(out.getTime() - row.entry.clockedInAt.getTime()) / 60_000,
 			);
 			const brk = breakByEntry.get(row.entry.id) ?? 0;
 			const worked = Math.max(0, raw - brk);
-			const labor = laborCents({
-				minutes: worked,
+			reportRows.push({
+				entryId: row.entry.id,
+				employmentId: row.entry.employmentId,
+				intervalStart: row.entry.clockedInAt,
+				intervalEnd: out,
+				timezone: row.locationTimezone,
+				worked,
 				hourlyWageCents: row.wage ?? 0,
-				overtimeWeeklyMinutes: row.overtimeWeeklyMinutes ?? 2400,
+				overtimeWeeklyMinutes: row.overtimeWeeklyMinutes,
+				overtimeDailyMinutes: row.overtimeDailyMinutes,
 			});
+			return { row, brk, worked };
+		});
+
+		const laborByEntry = computeLaborByEntry(
+			reportRows,
+			rows[0]?.weekStartDay ?? 1,
+		);
+
+		const lines = [
+			"worker,email,location,clocked_in,clocked_out,worked_minutes,break_minutes,labor_cents,approval,attendance",
+		];
+		for (const item of perRow) {
+			const { row } = item;
 			lines.push(
 				[
 					csvEscape(row.name ?? ""),
@@ -107,9 +131,9 @@ export const reportRoutes = new Elysia({
 					csvEscape(row.locationName),
 					row.entry.clockedInAt.toISOString(),
 					row.entry.clockedOutAt?.toISOString() ?? "",
-					String(worked),
-					String(brk),
-					String(labor.totalCents),
+					String(item.worked),
+					String(item.brk),
+					String(laborByEntry.get(row.entry.id) ?? 0),
 					row.entry.approvalStatus,
 					markByShift.get(row.entry.versionShiftId) ?? "",
 				].join(","),

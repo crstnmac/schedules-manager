@@ -17,6 +17,7 @@ import { registerOpsTests } from "./ops-cases";
 import { registerOwnReleaseTests } from "./own-release-cases";
 import { registerPushReceiptTests } from "./push-receipt-cases";
 import { registerReadinessTests } from "./readiness-cases";
+import { registerReportTests } from "./report-cases";
 import { registerReminderTests } from "./reminder-cases";
 import { registerReportsTests } from "./reports-cases";
 import { registerTimeClockTests } from "./time-clock-cases";
@@ -120,6 +121,7 @@ integrationDescribe("Schedule publication", () => {
 		publishScheduleNow,
 	}));
 	registerOpsTests(() => ({ database, app, token: managerToken }));
+	registerReportTests(() => ({ database, app, token: managerToken }));
 	registerReportsTests(() => ({ database, app, token: managerToken }));
 	registerOwnReleaseTests(() => ({ database, app, token: managerToken }));
 	registerAcceptanceRaceTests(() => ({ database, app, token: managerToken }));
