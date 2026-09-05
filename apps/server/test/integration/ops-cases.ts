@@ -1066,6 +1066,243 @@ export function registerOpsTests(getContext: () => Context) {
 		expect(missingShift.status).toBe(404);
 	});
 
+	test("kiosk clock-out after the scheduled shift end closes an open punch", async () => {
+		const { database: d, app } = getContext();
+		const { hashPin } = await import("../../src/pin");
+		const seed = await seedWorkplace(d, "Kiosk Overtime Cafe");
+		await d.db
+			.update(d.locations)
+			.set({ kioskPinHash: hashPin("2468") })
+			.where(eq(d.locations.id, seed.location.id));
+		await d.db
+			.update(d.employments)
+			.set({ kioskPinHash: hashPin("1357") })
+			.where(eq(d.employments.id, seed.worker.id));
+		const [version] = await d.db
+			.insert(d.scheduleVersions)
+			.values({ scheduleId: seed.schedule.id, versionNumber: 1 })
+			.returning();
+		const now = Date.now();
+		const startsAt = new Date(now - 2 * 60 * 60_000);
+		const endsAt = new Date(now - 60_000);
+		const [snapshot] = await d.db
+			.insert(d.versionShifts)
+			.values({
+				versionId: required(version).id,
+				employmentId: seed.worker.id,
+				positionId: seed.position.id,
+				startsAt,
+				endsAt,
+			})
+			.returning();
+		await d.db.insert(d.timeEntries).values({
+			versionShiftId: required(snapshot).id,
+			employmentId: seed.worker.id,
+			clockedInAt: startsAt,
+			clockedOutAt: null,
+		});
+
+		const lateClockIn = await app.handle(
+			new Request("http://localhost/v1/kiosk/clock", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					locationId: seed.location.id,
+					locationPin: "2468",
+					workerPin: "1357",
+					action: "in",
+				}),
+			}),
+		);
+		expect(lateClockIn.status).toBe(404);
+
+		const clockOut = await app.handle(
+			new Request("http://localhost/v1/kiosk/clock", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					locationId: seed.location.id,
+					locationPin: "2468",
+					workerPin: "1357",
+					action: "out",
+				}),
+			}),
+		);
+		expect(clockOut.status).toBe(200);
+		const outBody = (await clockOut.json()) as {
+			timeEntry: { clockedOutAt: string | null };
+		};
+		expect(outBody.timeEntry.clockedOutAt).not.toBe(null);
+		expect(
+			new Date(required(outBody.timeEntry.clockedOutAt)).getTime(),
+		).toBeGreaterThan(endsAt.getTime());
+
+		const [entry] = await d.db
+			.select()
+			.from(d.timeEntries)
+			.where(eq(d.timeEntries.versionShiftId, required(snapshot).id));
+		expect(entry?.clockedOutAt).not.toBe(null);
+		expect(entry?.autoClosedAt).toBeNull();
+		expect(entry?.approvalStatus).toBe("pending");
+	});
+
+	test("kiosk clock-out without an open punch returns 404 even when the shift window is open", async () => {
+		const { database: d, app } = getContext();
+		const { hashPin } = await import("../../src/pin");
+		const seed = await seedWorkplace(d, "Kiosk Empty Cafe");
+		await d.db
+			.update(d.locations)
+			.set({ kioskPinHash: hashPin("2468") })
+			.where(eq(d.locations.id, seed.location.id));
+		await d.db
+			.update(d.employments)
+			.set({ kioskPinHash: hashPin("1357") })
+			.where(eq(d.employments.id, seed.worker.id));
+		const [version] = await d.db
+			.insert(d.scheduleVersions)
+			.values({ scheduleId: seed.schedule.id, versionNumber: 1 })
+			.returning();
+		const now = Date.now();
+		const [snapshot] = await d.db
+			.insert(d.versionShifts)
+			.values({
+				versionId: required(version).id,
+				employmentId: seed.worker.id,
+				positionId: seed.position.id,
+				startsAt: new Date(now - 10 * 60_000),
+				endsAt: new Date(now + 60 * 60_000),
+			})
+			.returning();
+
+		const clockOut = await app.handle(
+			new Request("http://localhost/v1/kiosk/clock", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					locationId: seed.location.id,
+					locationPin: "2468",
+					workerPin: "1357",
+					action: "out",
+				}),
+			}),
+		);
+		expect(clockOut.status).toBe(404);
+
+		const clockIn = await app.handle(
+			new Request("http://localhost/v1/kiosk/clock", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					locationId: seed.location.id,
+					locationPin: "2468",
+					workerPin: "1357",
+					action: "in",
+				}),
+			}),
+		);
+		expect(clockIn.status).toBe(200);
+		const punches = await d.db
+			.select()
+			.from(d.timeEntries)
+			.where(eq(d.timeEntries.versionShiftId, required(snapshot).id));
+		expect(punches).toHaveLength(1);
+	});
+
+	test("kiosk clock-out disambiguates among multiple open punches to the latest", async () => {
+		const { database: d, app } = getContext();
+		const { hashPin } = await import("../../src/pin");
+		const seed = await seedWorkplace(d, "Kiosk Disambig Cafe");
+		await d.db
+			.update(d.locations)
+			.set({ kioskPinHash: hashPin("2468") })
+			.where(eq(d.locations.id, seed.location.id));
+		await d.db
+			.update(d.employments)
+			.set({ kioskPinHash: hashPin("1357") })
+			.where(eq(d.employments.id, seed.worker.id));
+		const [version] = await d.db
+			.insert(d.scheduleVersions)
+			.values({ scheduleId: seed.schedule.id, versionNumber: 1 })
+			.returning();
+		const now = Date.now();
+		const earlierStart = new Date(now - 6 * 60 * 60_000);
+		const earlierEnd = new Date(now - 5 * 60 * 60_000);
+		const laterStart = new Date(now - 3 * 60 * 60_000);
+		const laterEnd = new Date(now - 2 * 60 * 60_000);
+		const [earlierShift] = await d.db
+			.insert(d.versionShifts)
+			.values({
+				versionId: required(version).id,
+				employmentId: seed.worker.id,
+				positionId: seed.position.id,
+				startsAt: earlierStart,
+				endsAt: earlierEnd,
+			})
+			.returning();
+		const [laterShift] = await d.db
+			.insert(d.versionShifts)
+			.values({
+				versionId: required(version).id,
+				employmentId: seed.worker.id,
+				positionId: seed.position.id,
+				startsAt: laterStart,
+				endsAt: laterEnd,
+			})
+			.returning();
+		await d.db.insert(d.timeEntries).values([
+			{
+				versionShiftId: required(earlierShift).id,
+				employmentId: seed.worker.id,
+				clockedInAt: earlierStart,
+				clockedOutAt: null,
+			},
+			{
+				versionShiftId: required(laterShift).id,
+				employmentId: seed.worker.id,
+				clockedInAt: laterStart,
+				clockedOutAt: null,
+			},
+		]);
+
+		const clockOut = () =>
+			app.handle(
+				new Request("http://localhost/v1/kiosk/clock", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						locationId: seed.location.id,
+						locationPin: "2468",
+						workerPin: "1357",
+						action: "out",
+					}),
+				}),
+			);
+
+		const first = await clockOut();
+		expect(first.status).toBe(200);
+		const [laterEntry] = await d.db
+			.select()
+			.from(d.timeEntries)
+			.where(eq(d.timeEntries.versionShiftId, required(laterShift).id));
+		const [earlierEntry] = await d.db
+			.select()
+			.from(d.timeEntries)
+			.where(eq(d.timeEntries.versionShiftId, required(earlierShift).id));
+		expect(laterEntry?.clockedOutAt).not.toBe(null);
+		expect(earlierEntry?.clockedOutAt).toBe(null);
+
+		const second = await clockOut();
+		expect(second.status).toBe(200);
+		const [earlierEntryAfter] = await d.db
+			.select()
+			.from(d.timeEntries)
+			.where(eq(d.timeEntries.versionShiftId, required(earlierShift).id));
+		expect(earlierEntryAfter?.clockedOutAt).not.toBe(null);
+
+		const third = await clockOut();
+		expect(third.status).toBe(404);
+	});
+
 	test("Time Block and Shift Template can be stored for a Location", async () => {
 		const { database: d, app, token } = getContext();
 		const seed = await seedWorkplace(d, "Block Cafe");
