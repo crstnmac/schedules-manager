@@ -156,6 +156,7 @@ import {
 	positionColor,
 	weekStartOf,
 } from "@/lib/schedule-calendar";
+import { shiftOverlapsTimeOff, timeOffCoversDay } from "@/lib/schedule-timeoff";
 import {
 	datetimeLocalToIso,
 	isoToDatetimeLocal,
@@ -589,23 +590,11 @@ interface CellConstraint {
 	label: string;
 }
 
-function localDateKey(date: Date): string {
-	return date.toLocaleDateString("sv-SE");
-}
-
-function timeOffCoversDay(
-	request: { startsAt: string; endsAt: string },
-	day: string,
-): boolean {
-	const startKey = localDateKey(new Date(request.startsAt));
-	const endExclusive = new Date(new Date(request.endsAt).getTime() - 1);
-	return day >= startKey && day <= localDateKey(endExclusive);
-}
-
 function cellConstraints(
 	member: ScheduleResponse["staff"][number],
 	day: string,
 	formatMinute: (minute: number) => string,
+	timeZone: string,
 ): CellConstraint[] {
 	const weekday = new Date(`${day}T12:00:00`).getDay();
 	const constraints: CellConstraint[] = [];
@@ -623,7 +612,7 @@ function cellConstraints(
 	}
 	for (const request of member.timeOff ?? []) {
 		if (request.status === "declined") continue;
-		if (!timeOffCoversDay(request, day)) continue;
+		if (!timeOffCoversDay(request, day, timeZone)) continue;
 		constraints.push({
 			key: `timeOff-${request.startsAt}`,
 			kind: "timeOff",
@@ -1176,6 +1165,7 @@ function SchedulePage() {
 	});
 
 	const data = schedule.data;
+	const scheduleTimeZone = data?.schedule.timezone ?? "America/Chicago";
 	const publicationState = data?.publication;
 	const scheduleIndex = useMemo(() => {
 		const shiftsByWorkerDay = new Map<string, ScheduleShiftDto[]>();
@@ -1667,29 +1657,15 @@ function SchedulePage() {
 		.flatMap((member) => member.timeOff ?? [])
 		.find((request) => {
 			if (request.status !== "approved" || !form) return false;
-			return checkDates.some((date) => {
-				const overnight = form.endMinute <= form.startMinute;
-				const [year, month, day] = date.split("-").map(Number);
-				const start = new Date(
-					year ?? 0,
-					(month ?? 1) - 1,
-					day ?? 1,
-					Math.floor(form.startMinute / 60),
-					form.startMinute % 60,
-				);
-				const endDate = overnight ? addDays(date, 1) : date;
-				const [endYear, endMonth, endDay] = endDate.split("-").map(Number);
-				const end = new Date(
-					endYear ?? 0,
-					(endMonth ?? 1) - 1,
-					endDay ?? 1,
-					Math.floor(form.endMinute / 60),
-					form.endMinute % 60,
-				);
-				return (
-					start < new Date(request.endsAt) && new Date(request.startsAt) < end
-				);
-			});
+			return checkDates.some((date) =>
+				shiftOverlapsTimeOff(
+					request,
+					date,
+					form.startMinute,
+					form.endMinute,
+					scheduleTimeZone,
+				),
+			);
 		});
 	const pendingAddCount = form ? createShiftCount(form) : 0;
 	const canSave = Boolean(
@@ -3706,6 +3682,7 @@ function SchedulePage() {
 															member,
 															day,
 															formatMinute,
+															scheduleTimeZone,
 														);
 														const isEmptyCell =
 															workerShifts.length === 0 &&
