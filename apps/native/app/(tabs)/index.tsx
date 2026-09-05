@@ -25,6 +25,7 @@ import { SwapsCard } from "@/components/worker-shifts";
 import { useAuth } from "@/lib/auth";
 import { confirmAction } from "@/lib/confirm-action";
 import { useDisplayPrefs } from "@/lib/display";
+import { formatDateKey } from "@/lib/leave";
 import { positionColor } from "@/lib/position-color";
 import {
 	useAcknowledge,
@@ -99,7 +100,11 @@ function ManagerHome() {
 						{formatDay(nextShift.startsAt)}
 					</Text>
 					<Text style={[s.nextTime, { color: theme.onPrimary }]}>
-						{formatShiftRange(nextShift.startMinute, nextShift.endMinute, nextShift.overnight)}{" "}
+						{formatShiftRange(
+							nextShift.startMinute,
+							nextShift.endMinute,
+							nextShift.overnight,
+						)}{" "}
 						· {nextShift.positionName}
 					</Text>
 					<TimeClockControls
@@ -254,7 +259,7 @@ function WorkerSchedule() {
 				title="My schedule"
 				description={
 					me.data?.profile
-						? (formatPerson(me.data.profile.fullName, me.data.profile.email))
+						? formatPerson(me.data.profile.fullName, me.data.profile.email)
 						: undefined
 				}
 			/>
@@ -288,7 +293,7 @@ function WorkerSchedule() {
 						/>
 						<View style={{ flex: 1 }}>
 							<Text style={[s.cardTitle, { color: theme.text }]}>
-								Today · {formatDay(todayKey)}
+								Today · {formatDateKey(todayKey)}
 							</Text>
 							<Text style={[s.hint, { color: theme.muted }]}>
 								No shift scheduled today.
@@ -308,7 +313,11 @@ function WorkerSchedule() {
 						{formatDay(nextShift.startsAt)}
 					</Text>
 					<Text style={[s.nextTime, { color: theme.onPrimary }]}>
-						{formatShiftRange(nextShift.startMinute, nextShift.endMinute, nextShift.overnight)}{" "}
+						{formatShiftRange(
+							nextShift.startMinute,
+							nextShift.endMinute,
+							nextShift.overnight,
+						)}{" "}
 						· {nextShift.positionName}
 					</Text>
 					<TimeClockControls
@@ -338,7 +347,7 @@ function WorkerSchedule() {
 							style={[s.acceptanceCard, { borderColor: theme.border }]}
 						>
 							<Text style={[s.acceptanceMeta, { color: theme.text }]}>
-								{formatDay(a.date)} · {formatMinute(a.startMinute)} ·{" "}
+								{formatDateKey(a.date)} · {formatMinute(a.startMinute)} ·{" "}
 								{a.positionName}
 							</Text>
 							<Text style={[s.hint, { color: theme.muted }]}>
@@ -443,7 +452,7 @@ function WorkerSchedule() {
 								This week
 							</Text>
 							<Text style={[s.hint, { color: theme.muted }]}>
-								Week of {formatDay(currentWeek.weekStart)}
+								Week of {formatDateKey(currentWeek.weekStart)}
 							</Text>
 						</View>
 						<Text style={[s.weekSummary, { color: theme.text }]}>
@@ -463,7 +472,7 @@ function WorkerSchedule() {
 											{ color: isToday ? theme.primary : theme.muted },
 										]}
 									>
-										{formatDay(date)}
+										{formatDateKey(date)}
 									</Text>
 									{isToday ? (
 										<View
@@ -583,7 +592,7 @@ function WorkerSchedule() {
 				<Card>
 					<Text style={[s.cardTitle, { color: theme.text }]}>Next week</Text>
 					<Text style={[s.hint, { color: theme.muted }]}>
-						Week of {formatDay(nextWeek.weekStart)}
+						Week of {formatDateKey(nextWeek.weekStart)}
 					</Text>
 					{nextWeek.shifts.map((sh) => {
 						const accent = positionColor(sh.positionName);
@@ -617,7 +626,11 @@ function WorkerSchedule() {
 								<View style={{ flex: 1, gap: 2, paddingLeft: 8 }}>
 									<Text style={[s.shiftTime, { color: theme.text }]}>
 										{formatDay(sh.startsAt)} ·{" "}
-										{formatShiftRange(sh.startMinute, sh.endMinute, sh.overnight)}
+										{formatShiftRange(
+											sh.startMinute,
+											sh.endMinute,
+											sh.overnight,
+										)}
 									</Text>
 									<View style={s.shiftMetaRow}>
 										<View
@@ -658,7 +671,8 @@ function WorkerSchedule() {
 							style={{ minHeight: 44, justifyContent: "center" }}
 						>
 							<Text style={[s.shiftTime, { color: theme.primary }]}>
-								Week of {formatDay(entry.weekStart)} · v{entry.versionNumber}
+								Week of {formatDateKey(entry.weekStart)} · v
+								{entry.versionNumber}
 							</Text>
 						</Pressable>
 					))}
@@ -669,11 +683,7 @@ function WorkerSchedule() {
 						? historyVersion.data.shifts.map((sh) => (
 								<Text key={sh.id} style={[s.shiftMeta, { color: theme.muted }]}>
 									{formatDay(sh.startsAt)} ·{" "}
-									{formatShiftRange(
-										sh.startMinute,
-										sh.endMinute,
-										sh.overnight,
-									)}{" "}
+									{formatShiftRange(sh.startMinute, sh.endMinute, sh.overnight)}{" "}
 									· {sh.positionName}
 								</Text>
 							))
@@ -847,8 +857,10 @@ function TimeClockControls({
 			{!canStart && entry === null ? (
 				<Text style={[s.hint, { color: theme.onPrimary }]}>
 					Clock-in opens at{" "}
-					{formatClockTime(new Date(startsAt - CLOCK_IN_EARLY_MS).toISOString())} —
-					15 minutes before your shift.
+					{formatClockTime(
+						new Date(startsAt - CLOCK_IN_EARLY_MS).toISOString(),
+					)}{" "}
+					— 15 minutes before your shift.
 				</Text>
 			) : null}
 
@@ -873,7 +885,6 @@ function TimeClockControls({
 		</View>
 	);
 }
-
 
 function formatDuration(ms: number): string {
 	const minutes = Math.max(0, Math.round(ms / 60000));
