@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, isNull, sql } from "drizzle-orm";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { registerAcceptanceRaceTests } from "./acceptance-race-cases";
 import { registerAutoClockOutBreaksTests } from "./auto-clock-out-breaks-cases";
 import { resetAndMigrateDatabase } from "./database";
 import {
@@ -9,6 +10,7 @@ import {
 } from "./email-delivery-cases";
 import { registerJoinPolicyTests } from "./join-policy-cases";
 import { registerOpsTests } from "./ops-cases";
+import { registerOwnReleaseTests } from "./own-release-cases";
 import { registerPushReceiptTests } from "./push-receipt-cases";
 import { registerReadinessTests } from "./readiness-cases";
 import { registerReminderTests } from "./reminder-cases";
@@ -85,6 +87,8 @@ integrationDescribe("Schedule publication", () => {
 	registerReminderTests(() => ({ database, app, token: managerToken }));
 	registerJoinPolicyTests(() => ({ database, app, token: managerToken }));
 	registerOpsTests(() => ({ database, app, token: managerToken }));
+	registerOwnReleaseTests(() => ({ database, app, token: managerToken }));
+	registerAcceptanceRaceTests(() => ({ database, app, token: managerToken }));
 	registerAutoClockOutBreaksTests(() => ({
 		database,
 		app,
