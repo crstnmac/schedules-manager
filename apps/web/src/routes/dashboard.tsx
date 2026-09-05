@@ -100,7 +100,7 @@ const navigation = [
 
 function DashboardLayout() {
 	const posthog = usePostHog();
-	const { isSigningOut, user, signOut } = useAuth();
+	const { isLoading: authLoading, isSigningOut, user, signOut } = useAuth();
 	const { setTheme } = useTheme();
 	const me = useMe();
 	const { formatPerson } = useDisplayPrefs();
@@ -145,6 +145,18 @@ function DashboardLayout() {
 		}
 	};
 
+	if (authLoading) {
+		return (
+			<main
+				id="main-content"
+				tabIndex={-1}
+				className="grid min-h-svh place-items-center"
+			>
+				<Spinner />
+				<span className="sr-only">Loading workspace</span>
+			</main>
+		);
+	}
 	if (!user) return <Navigate to="/" replace />;
 	if (isLoading)
 		return (
@@ -232,10 +244,7 @@ function DashboardLayout() {
 								<DropdownMenu>
 									<DropdownMenuTrigger
 										render={
-											<SidebarMenuButton
-												size="lg"
-												tooltip={displayName}
-											/>
+											<SidebarMenuButton size="lg" tooltip={displayName} />
 										}
 									>
 										<Avatar className="shrink-0">
@@ -266,9 +275,7 @@ function DashboardLayout() {
 									>
 										<DropdownMenuGroup>
 											<DropdownMenuLabel>
-												<p className="truncate">
-													{displayName}
-												</p>
+												<p className="truncate">{displayName}</p>
 												<p className="truncate font-normal text-muted-foreground text-xs capitalize">
 													{kind}
 												</p>
