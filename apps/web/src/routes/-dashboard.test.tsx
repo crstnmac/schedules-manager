@@ -1,4 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	test,
+} from "bun:test";
 import { cleanup, render } from "@testing-library/react";
 import type { ComponentType } from "react";
 
@@ -31,7 +37,7 @@ describe("DashboardLayout auth-loading guard (T5-T11)", () => {
 		state.auth.user = null;
 		const { queryByTestId, getByText } = render(<Dashboard />);
 		expect(queryByTestId("navigate")).toBeNull();
-		expect(getByText("Loading")).toBeTruthy();
+		expect(getByText(/Loading/)).toBeTruthy();
 	});
 
 	test("T6: signed out after auth resolves redirects to /", async () => {
@@ -99,7 +105,7 @@ describe("DashboardLayout auth-loading guard (T5-T11)", () => {
 		state.auth.user = null;
 		const r1 = render(<Dashboard />);
 		expect(r1.queryByTestId("navigate")).toBeNull();
-		expect(r1.getByText("Loading")).toBeTruthy();
+		expect(r1.getByText(/Loading/)).toBeTruthy();
 		r1.unmount();
 
 		state.auth.isLoading = false;

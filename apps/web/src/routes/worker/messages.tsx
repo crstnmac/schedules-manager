@@ -17,7 +17,7 @@ export const Route = createFileRoute("/worker/messages")({
 	component: WorkerMessagesPage,
 });
 
-function WorkerMessagesPage() {
+export function WorkerMessagesPage() {
 	const { workplace, employmentId } = useWorkplace();
 	const conversations = useConversations(workplace?.id);
 	const [activeId, setActiveId] = useState<string | null>(null);
