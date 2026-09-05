@@ -7,8 +7,9 @@ export function formatMinute(
 	minute: number,
 	format: TimeFormat = "12h",
 ): string {
-	const hours = Math.floor(minute / 60);
-	const mins = minute % 60;
+	const normalizedMinute = ((minute % 1440) + 1440) % 1440;
+	const hours = Math.floor(normalizedMinute / 60);
+	const mins = normalizedMinute % 60;
 	if (format === "24h") {
 		return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 	}
