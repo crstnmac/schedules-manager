@@ -102,7 +102,7 @@ function DashboardLayout() {
 	const posthog = usePostHog();
 	const { isLoading: authLoading, isSigningOut, user, signOut } = useAuth();
 	const { setTheme } = useTheme();
-	const me = useMe();
+	const me = useMe(Boolean(user));
 	const { formatPerson } = useDisplayPrefs();
 	const { isLoading, workplace, kind } = useWorkplace();
 	const inbox = useNotifications(workplace?.id);
