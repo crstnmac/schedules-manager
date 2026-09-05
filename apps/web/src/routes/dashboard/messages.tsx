@@ -6,8 +6,8 @@ import { toast } from "sonner";
 import { ConversationWorkspace } from "@/components/conversation-thread";
 import { api } from "@/lib/api";
 import {
-	useConversations,
 	type ConversationMessageDto,
+	useConversations,
 	useMessages,
 	useWorkers,
 } from "@/lib/queries";
@@ -18,7 +18,7 @@ export const Route = createFileRoute("/dashboard/messages")({
 	component: MessagesPage,
 });
 
-function MessagesPage() {
+export function MessagesPage() {
 	const { workplace, employmentId } = useWorkplace();
 	const { formatPerson } = useDisplayPrefs();
 	const threads = useConversations(workplace?.id);
@@ -41,21 +41,24 @@ function MessagesPage() {
 	);
 
 	const send = useMutation({
-		mutationFn: (body: string) =>
+		mutationFn: ({ targetId, body }: { targetId: string; body: string }) =>
 			api<{ message: ConversationMessageDto }>(
-				`/v1/conversations/${conversationId}/messages`,
+				`/v1/conversations/${targetId}/messages`,
 				{
 					method: "POST",
 					body: { body },
 				},
 			),
-		onSuccess: (result) => {
+		onSuccess: (result, variables) => {
 			// Append into the newest page instead of re-downloading the thread.
 			queryClient.setQueryData(
-				["messages", conversationId],
+				["messages", variables.targetId],
 				(
 					existing:
-						| { pages: { messages: ConversationMessageDto[] }[]; pageParams: unknown[] }
+						| {
+								pages: { messages: ConversationMessageDto[] }[];
+								pageParams: unknown[];
+						  }
 						| undefined,
 				) =>
 					existing
@@ -101,7 +104,9 @@ function MessagesPage() {
 			messages={messages.messages}
 			messagesLoading={messages.isLoading}
 			currentEmploymentId={employmentId}
-			onSend={(body) => send.mutate(body)}
+			onSend={(body) => {
+				if (conversationId) send.mutate({ targetId: conversationId, body });
+			}}
 			sendPending={send.isPending}
 			railTitle="Threads"
 			railDescription="Workplace chat and direct messages."
