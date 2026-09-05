@@ -19,21 +19,27 @@ async function dispatchNotifications() {
 	if (dispatchInFlight) return;
 	dispatchInFlight = true;
 	try {
-		await Promise.all([
+		const results = await Promise.allSettled([
 			processNotificationOutboxBatch(),
 			processEmailOutboxBatch(),
 			processPushReceiptBatch(),
 			processAutoClockOutBatch(),
 		]);
-	} catch (error) {
-		console.error(
-			JSON.stringify({
-				level: "error",
-				message: "Notification outbox dispatcher failed",
-				error: error instanceof Error ? error.message : String(error),
-				timestamp: new Date().toISOString(),
-			}),
-		);
+		for (const result of results) {
+			if (result.status === "rejected") {
+				console.error(
+					JSON.stringify({
+						level: "error",
+						message: "Notification outbox dispatcher failed",
+						error:
+							result.reason instanceof Error
+								? result.reason.message
+								: String(result.reason),
+						timestamp: new Date().toISOString(),
+					}),
+				);
+			}
+		}
 	} finally {
 		dispatchInFlight = false;
 	}

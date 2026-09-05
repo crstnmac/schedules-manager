@@ -25,6 +25,7 @@ import {
 	ScrollView,
 	StyleSheet,
 	Text,
+	TextInput as RNTextInput,
 	View,
 	type ViewStyle,
 } from "react-native";
@@ -354,24 +355,45 @@ export function Divider() {
 	);
 }
 
+const NATIVE_KEYBOARD_TYPES: Partial<
+	Record<
+		NonNullable<React.ComponentProps<typeof RNTextInput>["keyboardType"]>,
+		"text" | "number" | "email" | "phone" | "decimal" | "password"
+	>
+> = {
+	default: "text",
+	"number-pad": "number",
+	"decimal-pad": "decimal",
+	"email-address": "email",
+	"phone-pad": "phone",
+	"visible-password": "password",
+};
+
 export function NativeField({
 	label,
 	value,
 	onChange,
 	placeholder,
 	multiline = false,
+	secureTextEntry = false,
+	keyboardType,
 }: {
 	label: string;
 	value: string;
 	onChange: (value: string) => void;
 	placeholder?: string;
 	multiline?: boolean;
+	secureTextEntry?: boolean;
+	keyboardType?: React.ComponentProps<
+		typeof RNTextInput
+	>["keyboardType"];
 }) {
 	const { colorScheme } = useAppTheme();
 	const nativeValue = useNativeState(value);
 	useEffect(() => {
 		nativeValue.value = value;
 	}, [nativeValue, value]);
+	const nativeKeyboardType = NATIVE_KEYBOARD_TYPES[keyboardType ?? "default"];
 	return (
 		<Host
 			matchContents={{ vertical: true, horizontal: false }}
@@ -383,8 +405,11 @@ export function NativeField({
 				singleLine={!multiline}
 				minLines={multiline ? 3 : 1}
 				maxLines={multiline ? 5 : 1}
+				visualTransformation={secureTextEntry ? "password" : "none"}
 				keyboardOptions={{
 					capitalization: multiline ? "sentences" : "none",
+					keyboardType: nativeKeyboardType,
+					autoCorrectEnabled: multiline ? undefined : false,
 					imeAction: multiline ? "default" : "next",
 				}}
 				onValueChange={onChange}

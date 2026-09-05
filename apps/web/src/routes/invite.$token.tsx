@@ -10,7 +10,7 @@ import {
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { MailWarningIcon } from "lucide-react";
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 
 import { AuthForm } from "@/components/auth-form";
 import { CurrentProfile } from "@/components/current-profile";
@@ -35,6 +35,18 @@ function InvitePage() {
 
 	const invitation = preview.data;
 	const canAccept = Boolean(user) && invitation?.status === "pending";
+
+	// Signing out clears the query cache but not the mounted mutation
+	// observer, so its error state goes stale. Reset it whenever the
+	// signed-in account changes so acceptance can be re-attempted.
+	const signedInUserId = user?.id ?? null;
+	const lastSignedInUserId = useRef(signedInUserId);
+	useEffect(() => {
+		if (lastSignedInUserId.current !== signedInUserId) {
+			lastSignedInUserId.current = signedInUserId;
+			accept.reset();
+		}
+	}, [accept, signedInUserId]);
 
 	useEffect(() => {
 		if (!canAccept || isPending || isSuccess || isError) {
