@@ -22,7 +22,10 @@ function csvEscape(value: string) {
 	return value;
 }
 
-export const reportRoutes = new Elysia({ prefix: "/v1", tags: ["Reports"] }).get(
+export const reportRoutes = new Elysia({
+	prefix: "/v1",
+	tags: ["Reports"],
+}).get(
 	"/workplaces/:workplaceId/reports/hours.csv",
 	async ({ headers, params, query, set }) => {
 		const { profile } = await requireSession(headers.authorization);
@@ -68,12 +71,19 @@ export const reportRoutes = new Elysia({ prefix: "/v1", tags: ["Reports"] }).get
 			breakByEntry.set(
 				row.timeEntryId,
 				(breakByEntry.get(row.timeEntryId) ?? 0) +
-					Math.round((row.endedAt.getTime() - row.startedAt.getTime()) / 60_000),
+					Math.max(
+						0,
+						Math.round(
+							(row.endedAt.getTime() - row.startedAt.getTime()) / 60_000,
+						),
+					),
 			);
 		}
 
 		const marks = await db.select().from(attendanceMarks);
-		const markByShift = new Map(marks.map((row) => [row.versionShiftId, row.kind]));
+		const markByShift = new Map(
+			marks.map((row) => [row.versionShiftId, row.kind]),
+		);
 
 		const lines = [
 			"worker,email,location,clocked_in,clocked_out,worked_minutes,break_minutes,labor_cents,approval,attendance",

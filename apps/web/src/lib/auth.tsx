@@ -1,5 +1,5 @@
-import type { Session, User } from "@supabase/supabase-js";
 import { usePostHog } from "@posthog/react";
+import type { Session, User } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
 import {
 	createContext,
@@ -10,6 +10,7 @@ import {
 	useState,
 } from "react";
 
+import { applyAuthSideEffects } from "./auth-listener";
 import { supabase } from "./supabase";
 
 type AuthContextValue = {
@@ -46,19 +47,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
 		const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
 			setSession(nextSession);
 			setIsLoading(false);
-			if (nextSession?.user) {
-				posthog?.identify(nextSession.user.id, {
-					email: nextSession.user.email,
-				});
-			} else if (event === "SIGNED_OUT") {
-				posthog?.reset();
-			}
+			applyAuthSideEffects(event, nextSession, { posthog, queryClient });
 		});
 		return () => {
 			mounted = false;
 			data.subscription.unsubscribe();
 		};
-	}, [posthog]);
+	}, [posthog, queryClient]);
 
 	const value = useMemo<AuthContextValue>(
 		() => ({
