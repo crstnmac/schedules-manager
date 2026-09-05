@@ -39,9 +39,7 @@ export default function TimecardScreen() {
 	const groups = groupByDay(entries);
 	const week = currentWeekTotals(entries, payPeriod.data?.weekStartDay ?? 1);
 	const lastWeek = weekTotals(entries, -1, payPeriod.data?.weekStartDay ?? 1);
-	const periodTotal = payPeriod.data
-		? periodTotals(entries, payPeriod.data)
-		: null;
+	const periodTotal = payPeriod.data ? payPeriod.data.periodTotalMs : null;
 	const weekLabel = `Week of ${new Date(week.startsAt).toLocaleDateString(
 		undefined,
 		{ month: "short", day: "numeric" },
@@ -297,24 +295,6 @@ function mondayStart(from: Date, weekStartDay: number): Date {
 
 function currentWeekTotals(entries: TimecardEntry[], weekStartDay: number) {
 	return weekTotals(entries, 0, weekStartDay);
-}
-
-function periodTotals(
-	entries: TimecardEntry[],
-	period: { startsAt: string; endsAt: string },
-): number {
-	const start = new Date(period.startsAt).getTime();
-	const end = new Date(period.endsAt).getTime();
-	let totalMs = 0;
-	for (const entry of entries) {
-		const inAt = new Date(entry.clockedInAt).getTime();
-		if (inAt < start || inAt >= end) continue;
-		const outAt = entry.clockedOutAt
-			? new Date(entry.clockedOutAt).getTime()
-			: Date.now();
-		totalMs += Math.max(0, outAt - inAt);
-	}
-	return totalMs;
 }
 
 function weekTotals(

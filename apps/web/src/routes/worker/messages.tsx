@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { ConversationWorkspace } from "@/components/conversation-thread";
 import { api } from "@/lib/api";
+import { handleSendSuccess } from "@/lib/messages-cache";
 import {
 	type ConversationMessageDto,
 	useConversations,
@@ -16,7 +17,7 @@ export const Route = createFileRoute("/worker/messages")({
 	component: WorkerMessagesPage,
 });
 
-export function WorkerMessagesPage() {
+function WorkerMessagesPage() {
 	const { workplace, employmentId } = useWorkplace();
 	const conversations = useConversations(workplace?.id);
 	const [activeId, setActiveId] = useState<string | null>(null);
@@ -25,41 +26,22 @@ export function WorkerMessagesPage() {
 	const queryClient = useQueryClient();
 
 	const send = useMutation({
-		mutationFn: ({ targetId, body }: { targetId: string; body: string }) =>
+		mutationFn: ({
+			conversationId,
+			body,
+		}: {
+			conversationId: string;
+			body: string;
+		}) =>
 			api<{ message: ConversationMessageDto }>(
-				`/v1/conversations/${targetId}/messages`,
+				`/v1/conversations/${conversationId}/messages`,
 				{
 					method: "POST",
 					body: { body },
 				},
 			),
-		onSuccess: (result, variables) => {
-			// Append into the newest page instead of re-downloading the thread.
-			queryClient.setQueryData(
-				["messages", variables.targetId],
-				(
-					existing:
-						| {
-								pages: { messages: ConversationMessageDto[] }[];
-								pageParams: unknown[];
-						  }
-						| undefined,
-				) =>
-					existing
-						? {
-								pages: existing.pages.map((page, index) =>
-									index === existing.pages.length - 1
-										? { ...page, messages: [...page.messages, result.message] }
-										: page,
-								),
-								pageParams: existing.pageParams,
-							}
-						: existing,
-			);
-			queryClient.invalidateQueries({
-				queryKey: ["conversations", workplace?.id],
-			});
-		},
+		onSuccess: (result, vars) =>
+			handleSendSuccess(queryClient, result, vars, workplace?.id),
 		onError: (error) => toast.error((error as Error).message),
 	});
 
@@ -73,7 +55,8 @@ export function WorkerMessagesPage() {
 			messagesLoading={messages.isLoading}
 			currentEmploymentId={employmentId}
 			onSend={(body) => {
-				if (conversationId) send.mutate({ targetId: conversationId, body });
+				if (!conversationId) return;
+				send.mutate({ conversationId, body });
 			}}
 			sendPending={send.isPending}
 			hasMoreMessages={messages.hasMore}

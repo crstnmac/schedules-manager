@@ -38,6 +38,7 @@ import {
 } from "../schedule-conflicts";
 import {
 	assertWeekStartDay,
+	minutesByZonedDate,
 	shiftDays,
 	wallToInstant,
 	weekStartOfDateKey,
@@ -314,32 +315,6 @@ function recurringWindowOverlaps(
 		if (shiftStart < winEnd && winStart < shiftEnd) return true;
 	}
 	return false;
-}
-
-/**
- * Split a shift's minutes across the zoned calendar days it touches, so
- * overnight shifts feed daily overtime on both days instead of loading the
- * start date with the full span.
- */
-function minutesByZonedDate(
-	startsAt: Date,
-	endsAt: Date,
-	timeZone: string,
-): Map<string, number> {
-	const split = new Map<string, number>();
-	let cursor = startsAt.getTime();
-	const endMs = endsAt.getTime();
-	while (cursor < endMs) {
-		const info = zonedDayInfo(new Date(cursor), timeZone);
-		const nextMidnight = wallToInstant(shiftDays(info.dateKey, 1), 0, timeZone);
-		const segmentEnd = Math.min(endMs, nextMidnight.getTime());
-		const segmentMinutes = Math.round((segmentEnd - cursor) / 60_000);
-		if (segmentMinutes > 0) {
-			split.set(info.dateKey, (split.get(info.dateKey) ?? 0) + segmentMinutes);
-		}
-		cursor = segmentEnd;
-	}
-	return split;
 }
 
 function computeConflicts(
