@@ -99,8 +99,8 @@ function JoinPage() {
 								<ItemActions>
 									<Button
 										size="sm"
-										disabled={accept.isPending}
-												onClick={() => {
+										disabled={accept.isPending || accept.isSuccess}
+										onClick={() => {
 											posthog?.capture("invitation_accepted", {
 												invitee_role: invitation.kind,
 											});

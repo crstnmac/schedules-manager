@@ -1,19 +1,21 @@
 import { useQueryClient } from "@tanstack/react-query";
 import * as Notifications from "expo-notifications";
 import { router } from "expo-router";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { Platform } from "react-native";
 
 import type { MyScheduleResponse } from "./queries";
+import { createShiftNotificationCoordinator } from "./shift-notification-sync";
 
 const CATEGORY = "SHIFT_START";
 const ACTION_START = "START_SHIFT";
 const REMINDER_LEAD_MS = 15 * 60 * 1000;
 const HORIZON_MS = 14 * 24 * 60 * 60 * 1000;
 
+type Shift = NonNullable<MyScheduleResponse["currentWeek"]>["shifts"][number];
+
 let categoryReady = false;
 let scheduledIds: string[] = [];
-let lastSyncKey: string | null = null;
 
 async function ensureCategory() {
 	if (categoryReady || Platform.OS === "web") return;
@@ -42,12 +44,51 @@ function upcomingShifts(schedule: MyScheduleResponse | undefined) {
 	return shifts;
 }
 
+const coordinator = createShiftNotificationCoordinator<Shift>(
+	async (shifts) => {
+		await ensureCategory();
+		await Promise.all(
+			scheduledIds.map((id) =>
+				Notifications.cancelScheduledNotificationAsync(id).catch(
+					() => undefined,
+				),
+			),
+		);
+		scheduledIds = [];
+
+		for (const shift of shifts) {
+			const fireDate = new Date(
+				new Date(shift.startsAt).getTime() - REMINDER_LEAD_MS,
+			);
+			const id = await Notifications.scheduleNotificationAsync({
+				content: {
+					title: "Shift starting soon",
+					body: `${shift.positionName} starts at ${new Date(
+						shift.startsAt,
+					).toLocaleTimeString([], {
+						hour: "numeric",
+						minute: "2-digit",
+					})}. Ready to start?`,
+					data: {
+						kind: "shift_start",
+						versionShiftId: shift.id,
+					},
+					categoryIdentifier: CATEGORY,
+				},
+				trigger: {
+					type: Notifications.SchedulableTriggerInputTypes.DATE,
+					date: fireDate,
+				},
+			});
+			scheduledIds.push(id);
+		}
+	},
+);
+
 export function useShiftStartNotifications(
 	workplaceId: string | undefined,
 	schedule: MyScheduleResponse | undefined,
 ) {
-	const syncing = useRef(false);
-
 	useEffect(() => {
 		if (!workplaceId || !schedule || Platform.OS === "web") return;
 
@@ -56,56 +97,7 @@ export function useShiftStartNotifications(
 			.map((shift) => `${shift.id}:${shift.startsAt}`)
 			.sort()
 			.join("|");
-		if (syncing.current || syncKey === lastSyncKey) return;
-		syncing.current = true;
-
-		void (async () => {
-			try {
-				await ensureCategory();
-				await Promise.all(
-					scheduledIds.map((id) =>
-						Notifications.cancelScheduledNotificationAsync(id).catch(
-							() => undefined,
-						),
-					),
-				);
-				scheduledIds = [];
-
-				for (const shift of shifts) {
-					const fireDate = new Date(
-						new Date(shift.startsAt).getTime() - REMINDER_LEAD_MS,
-					);
-					const id = await Notifications.scheduleNotificationAsync({
-						content: {
-							title: "Shift starting soon",
-							body: `${shift.positionName} starts at ${new Date(
-								shift.startsAt,
-							).toLocaleTimeString([], {
-								hour: "numeric",
-								minute: "2-digit",
-							})}. Ready to start?`,
-							data: {
-								kind: "shift_start",
-								versionShiftId: shift.id,
-							},
-							categoryIdentifier: CATEGORY,
-						},
-						trigger: {
-							type: Notifications.SchedulableTriggerInputTypes.DATE,
-							date: fireDate,
-						},
-					});
-					scheduledIds.push(id);
-				}
-				lastSyncKey = syncKey;
-			} catch (error) {
-				console.warn(
-					`[shift-notifications] Sync failed: ${error instanceof Error ? error.message : String(error)}`,
-				);
-			} finally {
-				syncing.current = false;
-			}
-		})();
+		coordinator.submit(shifts, syncKey);
 	}, [workplaceId, schedule]);
 }
 
