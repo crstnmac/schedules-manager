@@ -7,8 +7,8 @@ import {
 	openShifts,
 	positions,
 	profiles,
-	scheduleVersions,
 	schedules as schedulesTable,
+	scheduleVersions,
 	shiftPickups,
 	shiftReleases,
 	shifts as shiftsTable,
@@ -16,7 +16,7 @@ import {
 	unavailability,
 	versionShifts,
 } from "@SchedulesManager/db";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import {
 	requireManager,
@@ -316,6 +316,10 @@ export const coverageRoutes = new Elysia({
 					and(
 						inArray(openShifts.locationId, accessible),
 						eq(openShifts.status, "open"),
+						or(
+							isNull(openShifts.releasedFrom),
+							ne(openShifts.releasedFrom, employment.id),
+						),
 					),
 				);
 
@@ -682,9 +686,9 @@ export const coverageRoutes = new Elysia({
 						await tx.insert(openShifts).values({
 							shiftId: draftShiftId,
 							locationId: draftLocationId,
-							positionId: versionShift.positionId,
+							positionId: draft.positionId,
 							releasedFrom: release.requestedBy,
-							note: versionShift.note,
+							note: draft.note,
 						});
 						await notifyEmployments(
 							[release.requestedBy],
@@ -899,10 +903,7 @@ async function decidePickup(
 				.update(shiftsTable)
 				.set({ employmentId: pickup.requestedBy, updatedAt: new Date() })
 				.where(
-					and(
-						eq(shiftsTable.id, shift.id),
-						isNull(shiftsTable.employmentId),
-					),
+					and(eq(shiftsTable.id, shift.id), isNull(shiftsTable.employmentId)),
 				)
 				.returning({ id: shiftsTable.id });
 			if (assigned.length === 0) {

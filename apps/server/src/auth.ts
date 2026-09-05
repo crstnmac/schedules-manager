@@ -15,7 +15,7 @@ export class AuthenticationError extends Error {
 
 export interface AuthenticatedUser extends JWTPayload {
 	sub: string;
-	email?: string;
+	email: string;
 	role?: string;
 }
 
@@ -34,6 +34,10 @@ export async function verifyAccessToken(authorization: string | undefined) {
 
 		if (!payload.sub) {
 			throw new AuthenticationError("Token does not identify a user");
+		}
+
+		if (typeof payload.email !== "string" || payload.email === "") {
+			throw new AuthenticationError("Token does not include an email claim");
 		}
 
 		return payload as AuthenticatedUser;

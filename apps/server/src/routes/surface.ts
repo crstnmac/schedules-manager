@@ -1458,10 +1458,21 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers.authorization);
 			await requireManager(profile.id, params.workplaceId);
+			const [employment] = await db
+				.select({ id: employments.id })
+				.from(employments)
+				.where(
+					and(
+						eq(employments.id, params.employmentId),
+						eq(employments.workplaceId, params.workplaceId),
+					),
+				)
+				.limit(1);
+			if (!employment) throw new NotFoundError("Employment not found");
 			const docs = await db
 				.select()
 				.from(employmentDocuments)
-				.where(eq(employmentDocuments.employmentId, params.employmentId));
+				.where(eq(employmentDocuments.employmentId, employment.id));
 			return {
 				documents: docs.map((row) => ({
 					id: row.id,
@@ -1482,11 +1493,22 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers.authorization);
 			await requireManager(profile.id, params.workplaceId);
+			const [employment] = await db
+				.select({ id: employments.id })
+				.from(employments)
+				.where(
+					and(
+						eq(employments.id, params.employmentId),
+						eq(employments.workplaceId, params.workplaceId),
+					),
+				)
+				.limit(1);
+			if (!employment) throw new NotFoundError("Employment not found");
 			const created = firstRow(
 				await db
 					.insert(employmentDocuments)
 					.values({
-						employmentId: params.employmentId,
+						employmentId: employment.id,
 						title: body.title.trim(),
 						url: body.url ?? null,
 						note: body.note ?? null,
