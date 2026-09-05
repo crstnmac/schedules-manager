@@ -138,11 +138,12 @@ function WorkersPage() {
 
 	const resend = useMutation({
 		mutationFn: (invitationId: string) =>
-			api(
+			api<{ invitation: { token: string } }>(
 				`/v1/workplaces/${workplace?.id}/invitations/${invitationId}/resend`,
 				{ method: "POST" },
 			),
-		onSuccess: () => {
+		onSuccess: (data) => {
+			setLastInviteToken(data.invitation.token);
 			invalidate();
 			toast.success("Invitation refreshed. Email queued for delivery.");
 		},
