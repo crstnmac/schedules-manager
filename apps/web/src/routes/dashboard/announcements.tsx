@@ -129,7 +129,11 @@ function AnnouncementsPage() {
 					/>
 					<Button
 						onClick={() => post.mutate()}
-						disabled={post.isPending || title.trim().length === 0}
+						disabled={
+						post.isPending ||
+						title.trim().length === 0 ||
+						body.trim().length === 0
+					}
 					>
 						Post
 					</Button>

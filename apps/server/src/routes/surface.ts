@@ -27,7 +27,7 @@ import {
 	workerGroups,
 	workplaceMessages,
 } from "@SchedulesManager/db";
-import { and, desc, eq, inArray, isNull, lt } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
 import {
@@ -1002,6 +1002,11 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				"announcementsEnabled",
 				"Announcements are turned off for this Workplace",
 			);
+			if (body.title.trim().length === 0 || body.body.trim().length === 0) {
+				throw new BadRequestError(
+					"Announcement title and body are required",
+				);
+			}
 			const created = firstRow(
 				await db
 					.insert(announcements)
@@ -1335,10 +1340,15 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			}
 			const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
 			// Cursor pagination from the newest page backwards: `before` is the
-			// oldest createdAt the client already has.
+			// oldest createdAt the client already has and `beforeId` breaks ties
+			// among messages that share that timestamp.
 			const before = query.before ? new Date(query.before) : null;
 			if (before && Number.isNaN(before.getTime())) {
 				throw new BadRequestError("before must be an ISO timestamp");
+			}
+			const beforeId = query.beforeId ?? null;
+			if (beforeId && !before) {
+				throw new BadRequestError("beforeId requires before");
 			}
 			const descendingRows = await db
 				.select({
@@ -1357,11 +1367,19 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 					and(
 						eq(workplaceMessages.conversationId, conversation.id),
 						before
-							? lt(workplaceMessages.createdAt, before)
+							? or(
+									lt(workplaceMessages.createdAt, before),
+									beforeId
+										? and(
+												eq(workplaceMessages.createdAt, before),
+												lt(workplaceMessages.id, beforeId),
+											)
+										: undefined,
+								)
 							: undefined,
 					),
 				)
-				.orderBy(desc(workplaceMessages.createdAt))
+				.orderBy(desc(workplaceMessages.createdAt), desc(workplaceMessages.id))
 				.limit(limit + 1);
 			const hasMore = descendingRows.length > limit;
 			// Return the page oldest→newest so existing viewers render in order.
@@ -1385,6 +1403,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			query: t.Object({
 				limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
 				before: t.Optional(t.String({ format: "date-time" })),
+				beforeId: t.Optional(t.String({ format: "uuid" })),
 			}),
 		},
 	)

@@ -2219,4 +2219,172 @@ export function registerOpsTests(getContext: () => Context) {
 			documents: [{ id: required(seeded).id, title: "Confidential review" }],
 		});
 	});
+
+	test("duplicate Position create and rename return 409, never 500", async () => {
+		const { database: d, app, token } = getContext();
+		const seed = await seedWorkplace(d, "Position Conflict Cafe");
+		const access = await token(seed.managerProfileId, seed.managerEmail);
+		const workplaceId = seed.workplace.id;
+
+		const duplicate = await authJson(
+			app,
+			`/v1/workplaces/${workplaceId}/positions`,
+			access,
+			{ method: "POST", body: { name: "Server" } },
+		);
+		expect(duplicate.status).toBe(409);
+		expect(await duplicate.clone().json()).toEqual({
+			error: "conflict",
+			message: "A position with this name already exists",
+		});
+
+		const created = await authJson(
+			app,
+			`/v1/workplaces/${workplaceId}/positions`,
+			access,
+			{ method: "POST", body: { name: "Host" } },
+		);
+		expect(created.status).toBe(200);
+		const createdBody = (await created.json()) as {
+			position: { id: string };
+		};
+
+		const renameConflict = await authJson(
+			app,
+			`/v1/positions/${createdBody.position.id}`,
+			access,
+			{ method: "PATCH", body: { name: "Server" } },
+		);
+		expect(renameConflict.status).toBe(409);
+		expect(await renameConflict.json()).toEqual({
+			error: "conflict",
+			message: "A position with this name already exists",
+		});
+
+		const renameSelf = await authJson(
+			app,
+			`/v1/positions/${createdBody.position.id}`,
+			access,
+			{ method: "PATCH", body: { name: "Host" } },
+		);
+		expect(renameSelf.status).toBe(200);
+	});
+
+	test("announcement with whitespace-only title or body is rejected", async () => {
+		const { database: d, app, token } = getContext();
+		const seed = await seedWorkplace(d, "Announcement Blank Cafe");
+		const access = await token(seed.managerProfileId, seed.managerEmail);
+		const workplaceId = seed.workplace.id;
+
+		const blankBody = await authJson(
+			app,
+			`/v1/workplaces/${workplaceId}/announcements`,
+			access,
+			{ method: "POST", body: { title: "Team update", body: "   " } },
+		);
+		expect(blankBody.status).toBe(400);
+
+		const blankTitle = await authJson(
+			app,
+			`/v1/workplaces/${workplaceId}/announcements`,
+			access,
+			{ method: "POST", body: { title: "  ", body: "See you Friday" } },
+		);
+		expect(blankTitle.status).toBe(400);
+
+		const announcements = await d.db
+			.select()
+			.from(d.announcements)
+			.where(eq(d.announcements.workplaceId, workplaceId));
+		expect(announcements).toHaveLength(0);
+
+		const valid = await authJson(
+			app,
+			`/v1/workplaces/${workplaceId}/announcements`,
+			access,
+			{ method: "POST", body: { title: "Team update", body: "See you Friday" } },
+		);
+		expect(valid.status).toBe(200);
+	});
+
+	test("message history pagination keeps every message when timestamps tie", async () => {
+		const { database: d, app, token } = getContext();
+		const seed = await seedWorkplace(d, "Message Cursor Cafe");
+		const access = await token(seed.managerProfileId, seed.managerEmail);
+
+		const conversations = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/conversations`,
+			access,
+		);
+		expect(conversations.status).toBe(200);
+		const conversationBody = (await conversations.json()) as {
+			conversations: { id: string }[];
+		};
+		const conversationId = required(
+			conversationBody.conversations[0],
+		).id;
+
+		const tiedAt = new Date("2026-09-01T15:00:00.000Z");
+		await d.db.insert(d.workplaceMessages).values([
+			{
+				conversationId,
+				authorEmploymentId: seed.manager.id,
+				body: "tied-a",
+				createdAt: tiedAt,
+			},
+			{
+				conversationId,
+				authorEmploymentId: seed.manager.id,
+				body: "tied-b",
+				createdAt: tiedAt,
+			},
+			{
+				conversationId,
+				authorEmploymentId: seed.manager.id,
+				body: "tied-c",
+				createdAt: tiedAt,
+			},
+			{
+				conversationId,
+				authorEmploymentId: seed.manager.id,
+				body: "older-1",
+				createdAt: new Date("2026-09-01T14:59:00.000Z"),
+			},
+		]);
+
+		const seen: string[] = [];
+		let cursorBefore: string | undefined;
+		let cursorBeforeId: string | undefined;
+		for (let page = 0; page < 5; page += 1) {
+			const params = new URLSearchParams({ limit: "2" });
+			if (cursorBefore) {
+				params.set("before", cursorBefore);
+				params.set("beforeId", required(cursorBeforeId));
+			}
+			const response = await authJson(
+				app,
+				`/v1/conversations/${conversationId}/messages?${params.toString()}`,
+				access,
+			);
+			expect(response.status).toBe(200);
+			const body = (await response.json()) as {
+				messages: { id: string; body: string }[];
+				hasMore: boolean;
+			};
+			seen.push(...body.messages.map((m) => m.body));
+			if (!body.hasMore) break;
+			const oldest = required(body.messages[0]);
+			cursorBefore = oldest.createdAt;
+			cursorBeforeId = oldest.id;
+		}
+
+		expect(seen).toHaveLength(4);
+		expect(seen.filter((body) => body.startsWith("tied-")).sort()).toEqual([
+			"tied-a",
+			"tied-b",
+			"tied-c",
+		]);
+		expect(seen[seen.length - 1]).toBe("older-1");
+	});
 }

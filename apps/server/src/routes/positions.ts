@@ -6,7 +6,7 @@ import {
 	shiftTemplates,
 	templateShifts,
 } from "@SchedulesManager/db";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { requireManager, requireSession } from "../context";
 import { ConflictError, NotFoundError } from "../errors";
@@ -60,8 +60,16 @@ export const positionsRoutes = new Elysia({
 						workplaceId: params.workplaceId,
 						name: body.name,
 					})
+					.onConflictDoNothing({
+						target: [positions.workplaceId, positions.name],
+					})
 					.returning(),
 			);
+			if (!position) {
+				throw new ConflictError(
+					"A position with this name already exists",
+				);
+			}
 
 			return { position: serializePosition(position) };
 		},
@@ -90,6 +98,25 @@ export const positionsRoutes = new Elysia({
 
 			if (!existing) throw new NotFoundError("Position not found");
 			await requireManager(profile.id, existing.workplaceId);
+
+			if (body.name !== undefined && body.name !== existing.name) {
+				const [sibling] = await db
+					.select({ id: positions.id })
+					.from(positions)
+					.where(
+						and(
+							eq(positions.workplaceId, existing.workplaceId),
+							eq(positions.name, body.name),
+							ne(positions.id, existing.id),
+						),
+					)
+					.limit(1);
+				if (sibling) {
+					throw new ConflictError(
+						"A position with this name already exists",
+					);
+				}
+			}
 
 			const position = firstRow(
 				await db
