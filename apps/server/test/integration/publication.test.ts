@@ -11,6 +11,7 @@ import {
 	registerEmailDeliveryTests,
 } from "./email-delivery-cases";
 import { registerJoinPolicyTests } from "./join-policy-cases";
+import { registerMyScheduleTests } from "./my-schedule-cases";
 import { registerOpsTests } from "./ops-cases";
 import { registerOwnReleaseTests } from "./own-release-cases";
 import { registerPushReceiptTests } from "./push-receipt-cases";
@@ -88,6 +89,12 @@ integrationDescribe("Schedule publication", () => {
 	registerReadinessTests(() => ({ app }));
 	registerReminderTests(() => ({ database, app, token: managerToken }));
 	registerJoinPolicyTests(() => ({ database, app, token: managerToken }));
+	registerMyScheduleTests(() => ({
+		database,
+		app,
+		token: managerToken,
+		publishScheduleNow,
+	}));
 	registerOpsTests(() => ({ database, app, token: managerToken }));
 	registerOwnReleaseTests(() => ({ database, app, token: managerToken }));
 	registerAcceptanceRaceTests(() => ({ database, app, token: managerToken }));
