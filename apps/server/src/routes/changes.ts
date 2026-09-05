@@ -269,7 +269,12 @@ async function respondToAcceptance(
 		.returning();
 	const updated = firstRowOr(updatedRows);
 	if (!updated) {
-		return { status: acceptance.status };
+		const [current] = await db
+			.select({ status: shiftAcceptances.status })
+			.from(shiftAcceptances)
+			.where(eq(shiftAcceptances.id, acceptance.id))
+			.limit(1);
+		return { status: current?.status ?? acceptance.status };
 	}
 
 	const [employment] = await db
