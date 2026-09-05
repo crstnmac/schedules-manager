@@ -686,9 +686,9 @@ export const coverageRoutes = new Elysia({
 						await tx.insert(openShifts).values({
 							shiftId: draftShiftId,
 							locationId: draftLocationId,
-							positionId: versionShift.positionId,
+							positionId: draft.positionId,
 							releasedFrom: release.requestedBy,
-							note: versionShift.note,
+							note: draft.note,
 						});
 						await notifyEmployments(
 							[release.requestedBy],
