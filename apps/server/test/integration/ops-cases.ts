@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 function required<T>(value: T | undefined): T {
 	if (value === undefined) throw new Error("Expected test fixture row");
@@ -198,6 +198,80 @@ export function registerOpsTests(getContext: () => Context) {
 				.startsAt.toISOString()
 				.replace("2026-09-08", "2026-09-15"),
 		);
+	});
+
+	test("concurrent same-name Schedule Template saves resolve to one success and one 409, never 500", async () => {
+		const { database: d, app, token } = getContext();
+		const seed = await seedWorkplace(d, "Race Template Cafe");
+		await d.db.insert(d.shifts).values({
+			scheduleId: seed.schedule.id,
+			employmentId: seed.worker.id,
+			positionId: seed.position.id,
+			startsAt: new Date("2026-09-08T16:00:00.000Z"),
+			endsAt: new Date("2026-09-08T22:00:00.000Z"),
+		});
+		const access = await token(seed.managerProfileId, seed.managerEmail);
+
+		// Widen the TOCTOU window so the concurrent duplicate is deterministic in CI
+		// (both pre-check-equivalent work runs before either transaction commits).
+		await d.db.execute(sql`
+			create function widen_template_race() returns trigger as $$
+			begin
+				perform pg_sleep(0.4);
+				return new;
+			end;
+			$$ language plpgsql
+		`);
+		await d.db.execute(sql`
+			create trigger widen_template_race
+			before insert on schedule_templates
+			for each row execute function widen_template_race()
+		`);
+		const save = (key: string) =>
+			app.handle(
+				new Request(
+					`http://localhost/v1/locations/${seed.location.id}/schedules/2026-09-07/templates`,
+					{
+						method: "POST",
+						headers: {
+							authorization: `Bearer ${access}`,
+							"content-type": "application/json",
+							"idempotency-key": key,
+						},
+						body: JSON.stringify({ name: "Brunch" }),
+					},
+				),
+			);
+		try {
+			const [first, second] = await Promise.all([
+				save("race-template-a"),
+				save("race-template-b"),
+			]);
+			const statuses = [first.status, second.status].sort();
+			expect(statuses).toEqual([200, 409]);
+			const winner = first.status === 200 ? first : second;
+			const loser = first.status === 200 ? second : first;
+			const winnerBody = (await winner.clone().json()) as {
+				template: { name: string; shiftCount: number };
+			};
+			expect(winnerBody.template.name).toBe("Brunch");
+			expect(winnerBody.template.shiftCount).toBe(1);
+			expect(await loser.clone().json()).toEqual({
+				error: "conflict",
+				message: "A template with that name already exists",
+			});
+			const templates = await d.db
+				.select()
+				.from(d.scheduleTemplates)
+				.where(eq(d.scheduleTemplates.locationId, seed.location.id));
+			expect(templates).toHaveLength(1);
+			expect(templates[0]?.name).toBe("Brunch");
+		} finally {
+			await d.db.execute(
+				sql`drop trigger if exists widen_template_race on schedule_templates`,
+			);
+			await d.db.execute(sql`drop function if exists widen_template_race()`);
+		}
 	});
 
 	test("manager can mark attendance on a published Shift without changing it", async () => {
