@@ -147,10 +147,7 @@ export async function closeOpenMarketplaceForShifts(shiftIds: string[]) {
 		.select({ id: openShifts.id })
 		.from(openShifts)
 		.where(
-			and(
-				inArray(openShifts.shiftId, shiftIds),
-				eq(openShifts.status, "open"),
-			),
+			and(inArray(openShifts.shiftId, shiftIds), eq(openShifts.status, "open")),
 		);
 	const ids = openRows.map((row) => row.id);
 	if (ids.length === 0) return;
@@ -513,10 +510,7 @@ export async function loadPublicationVersions(scheduleId: string) {
 			fullName: profiles.fullName,
 		})
 		.from(workerDeliveries)
-		.innerJoin(
-			employments,
-			eq(employments.id, workerDeliveries.employmentId),
-		)
+		.innerJoin(employments, eq(employments.id, workerDeliveries.employmentId))
 		.innerJoin(profiles, eq(profiles.id, employments.profileId))
 		.where(inArray(workerDeliveries.versionId, versionIds));
 
@@ -781,8 +775,20 @@ export const publicationRoutes = new Elysia({
 				};
 			}
 
+			const latestVersionIdBySchedule = new Map<string, string>();
+			for (const row of versionRows) {
+				if (!latestVersionIdBySchedule.has(row.schedule.id)) {
+					latestVersionIdBySchedule.set(row.schedule.id, row.version.id);
+				}
+			}
+			const latestVersionIds = [...latestVersionIdBySchedule.values()];
+
 			const upcoming = myShiftRows
-				.filter((shift) => shift.endsAt.getTime() >= now.getTime())
+				.filter(
+					(shift) =>
+						latestVersionIds.includes(shift.versionId) &&
+						shift.endsAt.getTime() >= now.getTime(),
+				)
 				.filter((shift) => {
 					const entry = timeEntryByShiftId.get(shift.id);
 					return entry == null || entry.clockedOutAt === null;
@@ -828,7 +834,10 @@ export const publicationRoutes = new Elysia({
 					: await db
 							.select({ version: scheduleVersions, schedule: schedules })
 							.from(scheduleVersions)
-							.innerJoin(schedules, eq(schedules.id, scheduleVersions.scheduleId))
+							.innerJoin(
+								schedules,
+								eq(schedules.id, scheduleVersions.scheduleId),
+							)
 							.where(inArray(schedules.locationId, locationIds))
 							.orderBy(desc(scheduleVersions.publishedAt))
 							.limit(20);

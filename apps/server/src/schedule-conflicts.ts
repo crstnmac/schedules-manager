@@ -96,15 +96,18 @@ export function consecutiveWorkDayConflicts(
 		}
 		const sorted = [...dates].sort();
 		let streakStart = 0;
+		const flagged = new Set<string>();
 		for (let index = 0; index < sorted.length; index++) {
 			const date = sorted[index];
 			const previous = index > 0 ? sorted[index - 1] : null;
 			const continues = previous != null && date === shiftDays(previous, 1);
-			if (!continues) streakStart = index;
+			if (!continues) {
+				streakStart = index;
+				flagged.clear();
+			}
 			const length = index - streakStart + 1;
 			if (length <= maxConsecutiveWorkDays) continue;
 			const streakDates = sorted.slice(streakStart, index + 1);
-			const flagged = new Set<string>();
 			for (const streakDate of streakDates) {
 				for (const shift of shiftsByDate.get(streakDate) ?? []) {
 					if (!emitForIds.has(shift.id) || flagged.has(shift.id)) continue;
