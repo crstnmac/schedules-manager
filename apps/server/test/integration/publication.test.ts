@@ -1,18 +1,24 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, isNull, sql } from "drizzle-orm";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
-
+import { registerAcceptanceRaceTests } from "./acceptance-race-cases";
+import { registerAutoClockOutBreaksTests } from "./auto-clock-out-breaks-cases";
+import { registerCoverageTests } from "./coverage-cases";
 import { resetAndMigrateDatabase } from "./database";
+import { registerDstRouteTests } from "./dst-route-cases";
 import {
 	emailWebhookTestSecret,
 	registerEmailDeliveryTests,
 } from "./email-delivery-cases";
 import { registerEnsureProfileCollisionTests } from "./ensure-profile-collision-cases";
 import { registerJoinPolicyTests } from "./join-policy-cases";
+import { registerMyScheduleTests } from "./my-schedule-cases";
 import { registerOpsTests } from "./ops-cases";
+import { registerOwnReleaseTests } from "./own-release-cases";
 import { registerPushReceiptTests } from "./push-receipt-cases";
 import { registerReadinessTests } from "./readiness-cases";
 import { registerReminderTests } from "./reminder-cases";
+import { registerReportsTests } from "./reports-cases";
 import { registerTimeClockTests } from "./time-clock-cases";
 
 const integrationDescribe =
@@ -107,7 +113,22 @@ integrationDescribe("Schedule publication", () => {
 	registerReadinessTests(() => ({ app }));
 	registerReminderTests(() => ({ database, app, token: managerToken }));
 	registerJoinPolicyTests(() => ({ database, app, token: managerToken }));
+	registerMyScheduleTests(() => ({
+		database,
+		app,
+		token: managerToken,
+		publishScheduleNow,
+	}));
 	registerOpsTests(() => ({ database, app, token: managerToken }));
+	registerReportsTests(() => ({ database, app, token: managerToken }));
+	registerOwnReleaseTests(() => ({ database, app, token: managerToken }));
+	registerAcceptanceRaceTests(() => ({ database, app, token: managerToken }));
+	registerAutoClockOutBreaksTests(() => ({
+		database,
+		app,
+		token: managerToken,
+	}));
+	registerDstRouteTests(() => ({ database, app, token: managerToken }));
 	registerEnsureProfileCollisionTests(() => ({
 		database,
 		app,
@@ -1702,4 +1723,9 @@ integrationDescribe("Schedule publication", () => {
 		expect(closed).toHaveLength(1);
 		expect(closed[0]?.status).toBe("closed");
 	});
+
+	// Registered last so its swap/release rows do not precede the fragile
+	// global-count assertion in "simultaneous swap proposals cannot reserve
+	// the same Shift" above (which counts all shift_swaps rows).
+	registerCoverageTests(() => ({ database, app, token: managerToken }));
 });
