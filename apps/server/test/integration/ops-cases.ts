@@ -652,6 +652,89 @@ export function registerOpsTests(getContext: () => Context) {
 		});
 	});
 
+	test("PTO PUT after a deduction unconditionally overwrites the deducted balance (documents the residual server-side risk that motivates the client-side reconciliation fix)", async () => {
+		const { database: d, app, token } = getContext();
+		const seed = await seedWorkplace(d, "Stale Put Cafe");
+		const managerAccess = await token(seed.managerProfileId, seed.managerEmail);
+		const workerAccess = await token(seed.workerProfileId, seed.workerEmail);
+		const leave = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/leave-types`,
+			managerAccess,
+			{ method: "POST", body: { name: "Vacation", paid: true } },
+		);
+		expect(leave.status).toBe(200);
+		const leaveBody = (await leave.json()) as { leaveType: { id: string } };
+		const leaveTypeId = leaveBody.leaveType.id;
+		expect(
+			(
+				await authJson(
+					app,
+					`/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+					managerAccess,
+					{ method: "PUT", body: { leaveTypeId, minutes: 480 } },
+				)
+			).status,
+		).toBe(200);
+		const requested = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/my/time-off`,
+			workerAccess,
+			{
+				method: "POST",
+				body: {
+					startsAt: "2026-09-10T15:00:00.000Z",
+					endsAt: "2026-09-10T19:00:00.000Z",
+					leaveTypeId,
+				},
+			},
+		);
+		expect(requested.status).toBe(200);
+		const decided = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/time-off/${
+				(await requested.json()).request.id
+			}/decision`,
+			managerAccess,
+			{ method: "POST", body: { decision: "approved" } },
+		);
+		expect(decided.status).toBe(200);
+		const afterDeduction = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+			managerAccess,
+		);
+		expect(await afterDeduction.json()).toMatchObject({
+			balances: [{ minutes: 240, name: "Vacation" }],
+		});
+		const overwrite = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+			managerAccess,
+			{ method: "PUT", body: { leaveTypeId, minutes: 480 } },
+		);
+		expect(overwrite.status).toBe(200);
+		const afterOverwrite = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+			managerAccess,
+		);
+		expect(await afterOverwrite.json()).toMatchObject({
+			balances: [{ minutes: 480, name: "Vacation" }],
+		});
+		const timeOff = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/time-off`,
+			managerAccess,
+		);
+		const timeOffBody = (await timeOff.json()) as {
+			requests: { chargeMinutes: number | null }[];
+		};
+		expect(timeOffBody.requests).toEqual(
+			expect.arrayContaining([expect.objectContaining({ chargeMinutes: 240 })]),
+		);
+	});
+
 	test("managers can record approved time off for a worker", async () => {
 		const { database: d, app, token } = getContext();
 		const seed = await seedWorkplace(d, "Record Cafe");
@@ -1954,6 +2037,112 @@ export function registerOpsTests(getContext: () => Context) {
 		expect(clockIn.status).toBe(400);
 		expect(await clockIn.json()).toMatchObject({
 			message: "This Workplace requires a Location Geofence for clock-in",
+		});
+	});
+
+	test("employment documents POST and GET accept a same-workplace employment without regression", async () => {
+		const { database: d, app, token } = getContext();
+		const seed = await seedWorkplace(d, "Documents Cafe");
+		const managerAccess = await token(seed.managerProfileId, seed.managerEmail);
+		const created = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/documents`,
+				{
+					method: "POST",
+					headers: {
+						authorization: `Bearer ${managerAccess}`,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({
+						title: "Onboarding checklist",
+						url: "https://example.test/onboarding.pdf",
+						note: "for review",
+					}),
+				},
+			),
+		);
+		expect(created.status).toBe(200);
+		const createdBody = (await created.json()) as { document: { id: string } };
+		const fetched = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/documents`,
+				{ headers: { authorization: `Bearer ${managerAccess}` } },
+			),
+		);
+		expect(fetched.status).toBe(200);
+		expect(await fetched.json()).toMatchObject({
+			documents: [
+				{
+					id: createdBody.document.id,
+					title: "Onboarding checklist",
+					url: "https://example.test/onboarding.pdf",
+					note: "for review",
+				},
+			],
+		});
+	});
+
+	test("employment documents POST rejects a foreign-workplace employment and persists no row", async () => {
+		const { database: d, app, token } = getContext();
+		const alpha = await seedWorkplace(d, "Alpha Cafe");
+		const beta = await seedWorkplace(d, "Beta Cafe");
+		const alphaAccess = await token(alpha.managerProfileId, alpha.managerEmail);
+		const created = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${alpha.workplace.id}/employments/${beta.worker.id}/documents`,
+				{
+					method: "POST",
+					headers: {
+						authorization: `Bearer ${alphaAccess}`,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({
+						title: "Forged note",
+						url: "https://attacker.test/forged.pdf",
+						note: "forged",
+					}),
+				},
+			),
+		);
+		expect(created.status).toBe(404);
+		const rows = await d.db
+			.select()
+			.from(d.employmentDocuments)
+			.where(eq(d.employmentDocuments.employmentId, beta.worker.id));
+		expect(rows).toHaveLength(0);
+	});
+
+	test("employment documents GET rejects a foreign-workplace employment and Beta's own manager can still read the row", async () => {
+		const { database: d, app, token } = getContext();
+		const alpha = await seedWorkplace(d, "Epsilon Cafe");
+		const beta = await seedWorkplace(d, "Zeta Cafe");
+		const alphaAccess = await token(alpha.managerProfileId, alpha.managerEmail);
+		const betaAccess = await token(beta.managerProfileId, beta.managerEmail);
+		const [seeded] = await d.db
+			.insert(d.employmentDocuments)
+			.values({
+				employmentId: beta.worker.id,
+				title: "Confidential review",
+				url: "https://beta.test/review.pdf",
+				note: "manager-only",
+			})
+			.returning();
+		const forgeRead = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${alpha.workplace.id}/employments/${beta.worker.id}/documents`,
+				{ headers: { authorization: `Bearer ${alphaAccess}` } },
+			),
+		);
+		expect(forgeRead.status).toBe(404);
+		const legitRead = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${beta.workplace.id}/employments/${beta.worker.id}/documents`,
+				{ headers: { authorization: `Bearer ${betaAccess}` } },
+			),
+		);
+		expect(legitRead.status).toBe(200);
+		expect(await legitRead.json()).toMatchObject({
+			documents: [{ id: required(seeded).id, title: "Confidential review" }],
 		});
 	});
 }

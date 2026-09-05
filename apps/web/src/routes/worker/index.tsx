@@ -58,6 +58,7 @@ import {
 	useRespondToSwap,
 	useShiftTasks,
 } from "@/lib/queries";
+import { formatSwapExchange } from "@/lib/swaps";
 import { formatDay } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
@@ -582,17 +583,6 @@ const SWAP_STATUS_LABELS = {
 	cancelled: "Cancelled",
 } as const;
 
-function formatSwapShift(
-	shift: {
-		positionName: string;
-		startsAt: string;
-		endsAt: string;
-	},
-	formatClockTime: (iso?: string) => string,
-) {
-	return `${formatDay(shift.startsAt)} · ${formatClockTime(shift.startsAt)}–${formatClockTime(shift.endsAt)} · ${shift.positionName}`;
-}
-
 function WorkerSwapsCard({ workplaceId }: { workplaceId: string | undefined }) {
 	const { formatClockTime } = useDisplayPrefs();
 	const swaps = useMySwaps(workplaceId);
@@ -626,18 +616,7 @@ function WorkerSwapsCard({ workplaceId }: { workplaceId: string | undefined }) {
 			header: "Status",
 		}),
 		swapHelper.accessor(
-			(row) => {
-				const incoming =
-					row.direction === "incoming" &&
-					row.swap.status === "pending_counterpart";
-				const give = incoming
-					? row.swap.counterpartShift
-					: row.swap.requesterShift;
-				const take = incoming
-					? row.swap.requesterShift
-					: row.swap.counterpartShift;
-				return `Give ${formatSwapShift(give, formatClockTime)} · take ${formatSwapShift(take, formatClockTime)}`;
-			},
+			(row) => formatSwapExchange(row.direction, row.swap, formatClockTime),
 			{ id: "details", header: "Exchange" },
 		),
 		swapHelper.display({
