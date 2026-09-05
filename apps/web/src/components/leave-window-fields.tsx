@@ -17,32 +17,14 @@ import { Textarea } from "@SchedulesManager/ui/components/textarea";
 
 import { DatePicker } from "@/components/date-picker";
 import { TimePicker } from "@/components/time-picker";
-import { formatLeaveHours, PAID_DAY_MINUTES } from "@/lib/leave";
+import {
+	formatLeaveHours,
+	leaveChargeMinutes,
+} from "@/lib/leave";
+
+export { leaveChargeMinutes };
 
 export type LeaveTypeOption = { id: string; name: string; paid: boolean };
-
-export function leaveChargeMinutes(input: {
-	startDate: string;
-	endDate: string;
-	allDay: boolean;
-	startMinute: number;
-	endMinute: number;
-}): number {
-	if (!input.startDate || !input.endDate || input.endDate < input.startDate) {
-		return 0;
-	}
-	if (input.allDay) {
-		const start = Date.parse(`${input.startDate}T00:00:00Z`);
-		const end = Date.parse(`${input.endDate}T00:00:00Z`);
-		return (Math.round((end - start) / 86_400_000) + 1) * PAID_DAY_MINUTES;
-	}
-	if (input.startDate === input.endDate && input.startMinute >= input.endMinute) {
-		return 0;
-	}
-	const start = Date.parse(`${input.startDate}T00:00:00Z`) + input.startMinute * 60_000;
-	const end = Date.parse(`${input.endDate}T00:00:00Z`) + input.endMinute * 60_000;
-	return Math.max(0, Math.round((end - start) / 60_000));
-}
 
 export function LeaveWindowFields({
 	leaveTypes,
@@ -62,6 +44,7 @@ export function LeaveWindowFields({
 	onReasonChange,
 	remainingMinutes,
 	idPrefix,
+	timeZone,
 }: {
 	leaveTypes: LeaveTypeOption[];
 	leaveTypeId: string;
@@ -80,6 +63,7 @@ export function LeaveWindowFields({
 	onReasonChange: (value: string) => void;
 	remainingMinutes?: number;
 	idPrefix: string;
+	timeZone?: string;
 }) {
 	const charge = leaveChargeMinutes({
 		startDate,
@@ -87,6 +71,7 @@ export function LeaveWindowFields({
 		allDay,
 		startMinute,
 		endMinute,
+		timeZone,
 	});
 	const selected = leaveTypes.find((type) => type.id === leaveTypeId);
 

@@ -243,6 +243,7 @@ export const constraintsRoutes = new Elysia({
 				]);
 
 			return {
+				timezone: timeZone,
 				unavailability: unavailabilityRows.map((row) => ({
 					id: row.id,
 					kind: row.kind,

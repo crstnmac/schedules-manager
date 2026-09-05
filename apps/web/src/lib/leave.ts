@@ -1,4 +1,11 @@
-import { formatDay, formatMinute, toIsoDate, type TimeFormat } from "@/lib/time";
+import {
+	datetimeLocalToIso,
+	formatDay,
+	formatMinute,
+	shiftDays,
+	toIsoDate,
+	type TimeFormat,
+} from "@/lib/time";
 
 export const PAID_DAY_MINUTES = 480;
 
@@ -52,4 +59,63 @@ export function leaveStatusLabel(status: "pending" | "approved" | "declined") {
 
 export function todayIsoDate(): string {
 	return toIsoDate(new Date());
+}
+
+function wallToInstantOrNull(
+	dateKey: string,
+	minuteOfDay: number,
+	timeZone: string,
+): Date | null {
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
+	const extraDays = Math.floor(minuteOfDay / 1440);
+	const rest = minuteOfDay % 1440;
+	const shifted = shiftDays(dateKey, extraDays);
+	const hour = String(Math.floor(rest / 60)).padStart(2, "0");
+	const minute = String(rest % 60).padStart(2, "0");
+	const iso = datetimeLocalToIso(`${shifted}T${hour}:${minute}`, timeZone);
+	return iso ? new Date(iso) : null;
+}
+
+export function leaveChargeMinutes(input: {
+	startDate: string;
+	endDate: string;
+	allDay: boolean;
+	startMinute: number;
+	endMinute: number;
+	timeZone?: string;
+}): number {
+	if (!input.startDate || !input.endDate || input.endDate < input.startDate) {
+		return 0;
+	}
+	if (input.allDay) {
+		const start = Date.parse(`${input.startDate}T00:00:00Z`);
+		const end = Date.parse(`${input.endDate}T00:00:00Z`);
+		return (Math.round((end - start) / 86_400_000) + 1) * PAID_DAY_MINUTES;
+	}
+	if (input.startDate === input.endDate && input.startMinute >= input.endMinute) {
+		return 0;
+	}
+	if (input.timeZone) {
+		const start = wallToInstantOrNull(
+			input.startDate,
+			input.startMinute,
+			input.timeZone,
+		);
+		const end = wallToInstantOrNull(
+			input.endDate,
+			input.endMinute,
+			input.timeZone,
+		);
+		if (start && end && start.getTime() < end.getTime()) {
+			return Math.max(
+				1,
+				Math.round((end.getTime() - start.getTime()) / 60_000),
+			);
+		}
+	}
+	const start =
+		Date.parse(`${input.startDate}T00:00:00Z`) + input.startMinute * 60_000;
+	const end =
+		Date.parse(`${input.endDate}T00:00:00Z`) + input.endMinute * 60_000;
+	return Math.max(0, Math.round((end - start) / 60_000));
 }

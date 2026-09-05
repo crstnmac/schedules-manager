@@ -500,10 +500,11 @@ function AvailabilityPage() {
 										endMinute={offEnd}
 										onStartMinuteChange={setOffStart}
 										onEndMinuteChange={setOffEnd}
-										reason={offReason}
-										onReasonChange={setOffReason}
-										remainingMinutes={remainingForType}
-									/>
+									reason={offReason}
+									onReasonChange={setOffReason}
+									remainingMinutes={remainingForType}
+									timeZone={constraints.data?.timezone}
+								/>
 								) : null}
 							</CardContent>
 							{canRequestTimeOff ? (
@@ -678,6 +679,7 @@ function AvailabilityPage() {
 					key={editing.id}
 					request={editing}
 					workplaceId={workplace?.id}
+					timeZone={constraints.data?.timezone}
 					leaveTypes={leaveTypes.data?.leaveTypes ?? []}
 					balances={pto.data?.balances ?? []}
 					onOpenChange={(open) => {
@@ -696,6 +698,7 @@ function AvailabilityPage() {
 function WorkerEditLeaveSheet({
 	request,
 	workplaceId,
+	timeZone,
 	leaveTypes,
 	balances,
 	onOpenChange,
@@ -703,6 +706,7 @@ function WorkerEditLeaveSheet({
 }: {
 	request: WorkerConstraints["timeOff"][number];
 	workplaceId: string | undefined;
+	timeZone?: string;
 	leaveTypes: { id: string; name: string; paid: boolean }[];
 	balances: { leaveTypeId: string; minutes: number }[];
 	onOpenChange: (open: boolean) => void;
@@ -724,6 +728,7 @@ function WorkerEditLeaveSheet({
 		allDay,
 		startMinute,
 		endMinute,
+		timeZone,
 	});
 	const save = useMutation({
 		mutationFn: () =>

@@ -72,6 +72,7 @@ import {
 import {
 	type TimeOffRequestDto,
 	useLeaveTypes,
+	useLocations,
 	useTimeOff,
 	useWorkers,
 	useWorkplacePto,
@@ -872,6 +873,9 @@ function RecordLeaveSheet({
 	const [endMinute, setEndMinute] = useState(17 * 60);
 	const [reason, setReason] = useState("");
 
+	const locations = useLocations(workplaceId);
+	const timeZone = locations.data?.[0]?.timezone;
+
 	const remaining = balances.find(
 		(row) =>
 			row.employmentId === employmentId && row.leaveTypeId === leaveTypeId,
@@ -882,6 +886,7 @@ function RecordLeaveSheet({
 		allDay,
 		startMinute,
 		endMinute,
+		timeZone,
 	});
 
 	const record = useMutation({
@@ -1019,6 +1024,9 @@ function RequestMyLeaveSheet({
 	const [endMinute, setEndMinute] = useState(17 * 60);
 	const [reason, setReason] = useState("");
 
+	const locations = useLocations(workplaceId);
+	const timeZone = locations.data?.[0]?.timezone;
+
 	const remaining = balances.find(
 		(row) =>
 			employmentId != null &&
@@ -1031,6 +1039,7 @@ function RequestMyLeaveSheet({
 		allDay,
 		startMinute,
 		endMinute,
+		timeZone,
 	});
 
 	const request = useMutation({
@@ -1150,12 +1159,14 @@ function EditLeaveSheet({
 			row.employmentId === request.employmentId &&
 			row.leaveTypeId === leaveTypeId,
 	)?.minutes;
+	const locations = useLocations(workplaceId);
 	const charge = leaveChargeMinutes({
 		startDate,
 		endDate,
 		allDay,
 		startMinute,
 		endMinute,
+		timeZone: locations.data?.[0]?.timezone,
 	});
 
 	const save = useMutation({

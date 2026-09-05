@@ -918,6 +918,7 @@ export function useRequestPickup() {
 }
 
 export interface WorkerConstraints {
+	timezone: string;
 	unavailability: {
 		id: string;
 		kind: "recurring" | "date";
@@ -1294,6 +1295,19 @@ export interface MessagesPage {
 	hasMore: boolean;
 }
 
+/** Backwards-paging cursor: timestamp plus id tie-breaker. */
+export interface MessagesCursor {
+	before: string;
+	beforeId?: string;
+}
+
+export function messagesCursorQuery(cursor: MessagesCursor | undefined) {
+	if (!cursor) return "";
+	const params = new URLSearchParams({ before: cursor.before });
+	if (cursor.beforeId) params.set("beforeId", cursor.beforeId);
+	return `?${params.toString()}`;
+}
+
 /** Newest-first pages behind the scenes; `useMessagesData` stitches asc order. */
 export function useMessagesInfinite(conversationId: string | undefined) {
 	return useInfiniteQuery<
@@ -1301,18 +1315,23 @@ export function useMessagesInfinite(conversationId: string | undefined) {
 		Error,
 		InfiniteData<MessagesPage>,
 		(string | undefined)[],
-		string | undefined
+		MessagesCursor | undefined
 	>({
 		queryKey: ["messages", conversationId],
 		queryFn: ({ pageParam }) =>
 			api<MessagesPage>(
-				`/v1/conversations/${conversationId}/messages${pageParam ? `?before=${encodeURIComponent(pageParam)}` : ""}`,
+				`/v1/conversations/${conversationId}/messages${messagesCursorQuery(pageParam)}`,
 			),
-		initialPageParam: undefined as string | undefined,
+		initialPageParam: undefined as MessagesCursor | undefined,
 		// Only paging backwards through history.
 		getNextPageParam: () => undefined,
 		getPreviousPageParam: (firstPage) =>
-			firstPage.hasMore ? firstPage.messages[0]?.createdAt : undefined,
+			firstPage.hasMore && firstPage.messages[0]
+				? {
+						before: firstPage.messages[0].createdAt,
+						beforeId: firstPage.messages[0].id,
+					}
+				: undefined,
 		enabled: Boolean(conversationId),
 		staleTime: 30_000,
 	});

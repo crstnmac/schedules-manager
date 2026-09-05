@@ -326,28 +326,44 @@ export interface MessagesPage {
 	hasMore: boolean;
 }
 
+export interface MessagesCursor {
+	before: string;
+	beforeId?: string;
+}
+
 export function useConversationMessages(conversationId: string | undefined) {
 	const query = useInfiniteQuery<
 		MessagesPage,
 		Error,
 		InfiniteData<MessagesPage>,
 		(string | undefined)[],
-		string | undefined
+		MessagesCursor | undefined
 	>({
 		queryKey: ["conversation-messages", conversationId],
 		queryFn: async ({ pageParam }) => {
+			const params = new URLSearchParams();
+			if (pageParam) {
+				params.set("before", pageParam.before);
+				if (pageParam.beforeId) params.set("beforeId", pageParam.beforeId);
+			}
+			const queryString = params.toString();
 			const data = await api<{
 				messages: WorkplaceMessage[];
 				hasMore: boolean;
 			}>(
-				`/v1/conversations/${conversationId}/messages${pageParam ? `?before=${encodeURIComponent(pageParam)}` : ""}`,
+				`/v1/conversations/${conversationId}/messages${queryString ? `?${queryString}` : ""}`,
 			);
 			return { messages: data.messages, hasMore: data.hasMore };
 		},
-		initialPageParam: undefined as string | undefined,
+		initialPageParam: undefined as MessagesCursor | undefined,
 		getNextPageParam: () => undefined,
 		getPreviousPageParam: (firstPage) =>
-			firstPage.hasMore ? firstPage.messages[0]?.createdAt : undefined,
+			firstPage.hasMore && firstPage.messages[0]
+				? {
+						before: firstPage.messages[0].createdAt,
+						beforeId: firstPage.messages[0].id,
+					}
+				: undefined,
 		enabled: Boolean(conversationId),
 	});
 	const messages = useMemo(() => {
