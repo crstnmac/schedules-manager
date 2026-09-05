@@ -5,6 +5,7 @@ import { registerAcceptanceRaceTests } from "./acceptance-race-cases";
 import { registerAutoClockOutBreaksTests } from "./auto-clock-out-breaks-cases";
 import { registerCoverageTests } from "./coverage-cases";
 import { resetAndMigrateDatabase } from "./database";
+import { registerDstRouteTests } from "./dst-route-cases";
 import {
 	emailWebhookTestSecret,
 	registerEmailDeliveryTests,
@@ -95,6 +96,7 @@ integrationDescribe("Schedule publication", () => {
 		app,
 		token: managerToken,
 	}));
+	registerDstRouteTests(() => ({ database, app, token: managerToken }));
 
 	test("republishing never changes the previous published Shift snapshot", async () => {
 		const managerProfileId = crypto.randomUUID();
