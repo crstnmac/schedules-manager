@@ -102,7 +102,7 @@ The web manager experience is a high-density workspace built around a worker-by-
 
 **Key Characteristics:**
 
-- Cool slate web surfaces, a deep navy navigation rail, and crisp blue actions with restrained teal support.
+- White web surfaces, a soft neutral navigation rail, and crisp blue actions with restrained teal support.
 - Dense, table-like manager composition; calm, stacked worker composition.
 - Status is expressed with words, counts, icons, and color together.
 - Square web primitives sit inside selectively softened feature surfaces.
@@ -110,12 +110,12 @@ The web manager experience is a high-density workspace built around a worker-by-
 
 ## Colors
 
-Slate, navy, blue, and teal give the web product clearer depth and wayfinding; amber and red remain reserved for operational exceptions, while native keeps a familiar platform blue for primary action.
+Blue and teal give the web product clearer depth and wayfinding; amber and red remain reserved for operational exceptions, while native keeps a familiar platform blue for primary action.
 
 ### Primary
 
-- **Action Teal:** Filled web buttons and text links; this color is reserved for actions.
-- **Service Blue:** Selection, informational emphasis, the worker next-shift feature, and focus rings.
+- **Action Teal:** This color is reserved for actions.
+- **Service Blue:** Filled web buttons, text links, selection, informational emphasis, the worker next-shift feature, and focus rings.
 - **Native Action Blue:** Primary buttons and the next-shift feature in the native worker client.
 
 ### Secondary
@@ -131,11 +131,11 @@ Slate, navy, blue, and teal give the web product clearer depth and wayfinding; a
 
 ### Neutral
 
-- **Cool Canvas:** Default web canvas and outlined-control fill.
+- **Cool Canvas:** Default web canvas.
 - **White Card:** Raised or bounded work surfaces.
 - **Navy Ink:** Primary text and decisive labels.
 - **Muted Ink:** Supporting copy, metadata, and secondary counts.
-- **Sidebar Navy:** Persistent navigation surface, visually separating wayfinding from the work canvas.
+- **Sidebar:** Persistent navigation surface, visually separating wayfinding from the work canvas.
 - **Hairline:** Dividers, inputs, cards, and the weekly grid structure.
 - **Conflict Red:** Scheduling conflicts, destructive feedback, and invalid states.
 
@@ -147,7 +147,7 @@ Slate, navy, blue, and teal give the web product clearer depth and wayfinding; a
 
 ## Typography
 
-**Display Font:** Inter Variable (with sans-serif fallback)  
+**Display Font:** Geist Variable (with sans-serif fallback)  
 **Body Font:** Inter Variable (with sans-serif fallback)
 
 **Character:** Neutral, compact, and highly legible. Hierarchy comes from weight, size, spacing, and alignment rather than a decorative type pairing.
@@ -175,7 +175,7 @@ Worker web and native screens use a single-column priority stack: next shift fir
 
 ## Elevation & Depth
 
-The system is primarily flat and structural. Web depth comes from white surfaces against the cool canvas, the deep navigation rail, hairline borders, and restrained small shadows on major containers; the dense card primitives themselves use a one-pixel tonal ring. Native relies on bordered cards and color contrast rather than shadows.
+The system is primarily flat and structural. Web depth comes from hairline borders and restrained small shadows on major containers; the dense card primitives themselves use a one-pixel tonal ring. Native relies on bordered cards and color contrast rather than shadows.
 
 ### Shadow Vocabulary
 
@@ -197,7 +197,7 @@ Web primitives are deliberately square: buttons, badges, inputs, and canonical c
 ### Buttons
 
 - **Shape:** Compact and square on web; comfortably rounded with at least 42px height on native.
-- **Primary:** Action Teal on web and Native Action Blue on native, with high-contrast text and medium-to-bold labels.
+- **Primary:** Service Blue on web and Native Action Blue on native, with high-contrast text and medium-to-bold labels.
 - **Hover / Focus:** Web primary controls reduce fill intensity on hover, depress by one pixel when active, and show a visible one-pixel focus ring. Native press states reduce opacity without changing meaning.
 - **Secondary / Ghost:** Outlined native controls take border and text from semantic theme tokens and use pressed opacity only as interaction feedback. Web outlined controls retain the canvas fill; ghost controls reveal a muted fill only on interaction.
 
