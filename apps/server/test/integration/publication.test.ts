@@ -3,6 +3,7 @@ import { eq, isNull, sql } from "drizzle-orm";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { registerAcceptanceRaceTests } from "./acceptance-race-cases";
 import { registerAutoClockOutBreaksTests } from "./auto-clock-out-breaks-cases";
+import { registerCoverageTests } from "./coverage-cases";
 import { resetAndMigrateDatabase } from "./database";
 import {
 	emailWebhookTestSecret,
@@ -1681,4 +1682,9 @@ integrationDescribe("Schedule publication", () => {
 		expect(closed).toHaveLength(1);
 		expect(closed[0]?.status).toBe("closed");
 	});
+
+	// Registered last so its swap/release rows do not precede the fragile
+	// global-count assertion in "simultaneous swap proposals cannot reserve
+	// the same Shift" above (which counts all shift_swaps rows).
+	registerCoverageTests(() => ({ database, app, token: managerToken }));
 });
