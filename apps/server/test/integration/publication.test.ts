@@ -9,6 +9,7 @@ import {
 } from "./email-delivery-cases";
 import { registerJoinPolicyTests } from "./join-policy-cases";
 import { registerOpsTests } from "./ops-cases";
+import { registerOwnReleaseTests } from "./own-release-cases";
 import { registerPushReceiptTests } from "./push-receipt-cases";
 import { registerReadinessTests } from "./readiness-cases";
 import { registerReminderTests } from "./reminder-cases";
@@ -85,6 +86,7 @@ integrationDescribe("Schedule publication", () => {
 	registerReminderTests(() => ({ database, app, token: managerToken }));
 	registerJoinPolicyTests(() => ({ database, app, token: managerToken }));
 	registerOpsTests(() => ({ database, app, token: managerToken }));
+	registerOwnReleaseTests(() => ({ database, app, token: managerToken }));
 
 	test("republishing never changes the previous published Shift snapshot", async () => {
 		const managerProfileId = crypto.randomUUID();
@@ -1625,9 +1627,7 @@ integrationDescribe("Schedule publication", () => {
 				},
 			])
 			.returning();
-		const worker = employments.find(
-			(row) => row.profileId === workerProfileId,
-		);
+		const worker = employments.find((row) => row.profileId === workerProfileId);
 		const [schedule] = await database.db
 			.insert(database.schedules)
 			.values({
