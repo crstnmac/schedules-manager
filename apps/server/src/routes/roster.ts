@@ -7,11 +7,12 @@ import {
 	profiles,
 	schedules,
 	scheduleVersions,
+	timeEntries,
 	timeOffRequests,
 	versionShifts,
 	workplaces,
 } from "@SchedulesManager/db";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
 import {
@@ -24,9 +25,10 @@ import {
 import { BadRequestError, NotFoundError } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { notifyEmployments, writeAudit } from "../notify";
-import { weekStartOfDateKey } from "../time";
-import { loadWorkplace } from "../workplace-policy";
 import { publicWorkerName } from "../schedule-conflicts";
+import { weekStartOfDateKey } from "../time";
+import { grossWorkedMs } from "../time-totals";
+import { loadWorkplace } from "../workplace-policy";
 
 function zonedDateKey(instant: Date, timezone: string): string {
 	return new Intl.DateTimeFormat("en-CA", {
@@ -191,7 +193,9 @@ export const rosterRoutes = new Elysia({
 					) {
 						return false;
 					}
-					return row.request.startsAt <= dayEnd && row.request.endsAt >= dayStart;
+					return (
+						row.request.startsAt <= dayEnd && row.request.endsAt >= dayStart
+					);
 				})
 				.map((row) => ({
 					employmentId: row.employmentId,
@@ -219,7 +223,10 @@ export const rosterRoutes = new Elysia({
 		"/workplaces/:workplaceId/my/pay-period",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers.authorization);
-			await requireWorkplaceMember(profile.id, params.workplaceId);
+			const employment = await requireWorkplaceMember(
+				profile.id,
+				params.workplaceId,
+			);
 
 			const [workplace] = await db
 				.select({
@@ -239,12 +246,27 @@ export const rosterRoutes = new Elysia({
 				now,
 			);
 
+			const rows = await db
+				.select({
+					clockedInAt: timeEntries.clockedInAt,
+					clockedOutAt: timeEntries.clockedOutAt,
+				})
+				.from(timeEntries)
+				.where(
+					and(
+						eq(timeEntries.employmentId, employment.id),
+						gte(timeEntries.clockedInAt, period.startsAt),
+						lt(timeEntries.clockedInAt, period.endsAt),
+					),
+				);
+
 			return {
 				payPeriod: {
 					type: workplace.payPeriodType,
 					startsAt: period.startsAt.toISOString(),
 					endsAt: period.endsAt.toISOString(),
 					weekStartDay: workplace.weekStartDay,
+					periodTotalMs: grossWorkedMs(rows, period, now),
 				},
 			};
 		},

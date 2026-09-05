@@ -257,6 +257,101 @@ export function registerTimeClockTests(getContext: () => Context) {
 		expect(punches[0]?.employmentId).toBe(required(employment).id);
 	});
 
+	test("the pay-period total sums every in-period punch even though the recent time-entries list stays capped at 50", async () => {
+		const { database: d, app, token } = getContext();
+		const profileId = crypto.randomUUID();
+		const email = "pay-period-worker@example.test";
+		await d.db.insert(d.profiles).values({ id: profileId, email });
+		const anchorDate = new Date(Date.now() - 20 * 86_400_000);
+		const [workplace] = await d.db
+			.insert(d.workplaces)
+			.values({
+				name: "Pay Period Total Restaurant",
+				payPeriodType: "biweekly",
+				payPeriodAnchor: anchorDate.toISOString().slice(0, 10),
+			})
+			.returning();
+		const [employment] = await d.db
+			.insert(d.employments)
+			.values({
+				workplaceId: required(workplace).id,
+				profileId,
+				kind: "worker",
+			})
+			.returning();
+		const [location] = await d.db
+			.insert(d.locations)
+			.values({
+				workplaceId: required(workplace).id,
+				name: "Pay Period Floor",
+				timezone: "America/Chicago",
+			})
+			.returning();
+		const [position] = await d.db
+			.insert(d.positions)
+			.values({ workplaceId: required(workplace).id, name: "Pay Period Role" })
+			.returning();
+		const [schedule] = await d.db
+			.insert(d.schedules)
+			.values({
+				locationId: required(location).id,
+				weekStartDate: "2026-09-01",
+			})
+			.returning();
+		const [version] = await d.db
+			.insert(d.scheduleVersions)
+			.values({ scheduleId: required(schedule).id, versionNumber: 1 })
+			.returning();
+
+		const shiftMs = 4 * 60 * 60 * 1000;
+		const now = Date.now();
+		for (let index = 0; index < 60; index += 1) {
+			const clockedInAt = new Date(now - (60 - index) * 10 * 60_000 - shiftMs);
+			const clockedOutAt = new Date(clockedInAt.getTime() + shiftMs);
+			const [snapshot] = await d.db
+				.insert(d.versionShifts)
+				.values({
+					versionId: required(version).id,
+					employmentId: required(employment).id,
+					positionId: required(position).id,
+					startsAt: clockedInAt,
+					endsAt: clockedOutAt,
+				})
+				.returning();
+			await d.db.insert(d.timeEntries).values({
+				versionShiftId: required(snapshot).id,
+				employmentId: required(employment).id,
+				clockedInAt,
+				clockedOutAt,
+			});
+		}
+
+		const accessToken = await token(profileId, email);
+		const payPeriodResponse = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${required(workplace).id}/my/pay-period`,
+				{ headers: { authorization: `Bearer ${accessToken}` } },
+			),
+		);
+		expect(payPeriodResponse.status).toBe(200);
+		const payPeriodBody = await payPeriodResponse.json();
+		expect(Date.parse(payPeriodBody.payPeriod.startsAt)).toBeLessThanOrEqual(
+			now,
+		);
+		expect(Date.parse(payPeriodBody.payPeriod.endsAt)).toBeGreaterThan(now);
+		expect(payPeriodBody.payPeriod.periodTotalMs).toBe(60 * shiftMs);
+
+		const timeEntriesResponse = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${required(workplace).id}/my/time-entries`,
+				{ headers: { authorization: `Bearer ${accessToken}` } },
+			),
+		);
+		expect(timeEntriesResponse.status).toBe(200);
+		const timeEntriesBody = await timeEntriesResponse.json();
+		expect(timeEntriesBody.timeEntries).toHaveLength(50);
+	});
+
 	test("an on-clock shift remains nextShift on my/schedule (no regression)", async () => {
 		const { database: d, app, token } = getContext();
 		const profileId = crypto.randomUUID();
