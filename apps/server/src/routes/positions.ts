@@ -53,18 +53,16 @@ export const positionsRoutes = new Elysia({
 			const { profile } = await requireSession(headers.authorization);
 			await requireManager(profile.id, params.workplaceId);
 
-			const position = firstRow(
-				await db
-					.insert(positions)
-					.values({
-						workplaceId: params.workplaceId,
-						name: body.name,
-					})
-					.onConflictDoNothing({
-						target: [positions.workplaceId, positions.name],
-					})
-					.returning(),
-			);
+			const [position] = await db
+				.insert(positions)
+				.values({
+					workplaceId: params.workplaceId,
+					name: body.name,
+				})
+				.onConflictDoNothing({
+					target: [positions.workplaceId, positions.name],
+				})
+				.returning();
 			if (!position) {
 				throw new ConflictError(
 					"A position with this name already exists",

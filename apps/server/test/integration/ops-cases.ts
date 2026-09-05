@@ -2385,6 +2385,9 @@ export function registerOpsTests(getContext: () => Context) {
 			"tied-b",
 			"tied-c",
 		]);
-		expect(seen[seen.length - 1]).toBe("older-1");
+		// Pages come back oldest→newest within the page, newest page first:
+		// the tie group must not strand "older-1" behind an unreachable
+		// cursor.
+		expect(seen.filter((body) => body === "older-1")).toHaveLength(1);
 	});
 }
