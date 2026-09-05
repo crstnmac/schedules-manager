@@ -122,7 +122,7 @@ No recordings were present at setup time, so both scanners are armed for the fir
 | `.claude/skills/replay-vision-scanner-broken-experiences/` | Installed breakage-monitor brief. |
 | `.claude/skills/replay-vision-scanner-user-frustration/` | Installed frustration-monitor brief. |
 
-No existing application source files were modified.
+Application source and configuration files were modified to complete the production PostHog setup.
 
 ## What happens next
 
