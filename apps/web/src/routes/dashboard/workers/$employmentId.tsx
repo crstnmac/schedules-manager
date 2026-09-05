@@ -131,7 +131,13 @@ function EmploymentPage() {
 				method: "PUT",
 				body: input,
 			}),
-		onSuccess: () => {
+		onSuccess: (_data, variables) => {
+			setPtoMinutes((values) => {
+				if (!(variables.leaveTypeId in values)) return values;
+				const next = { ...values };
+				delete next[variables.leaveTypeId];
+				return next;
+			});
 			queryClient.invalidateQueries({
 				queryKey: ["pto", workplaceId, employmentId],
 			});

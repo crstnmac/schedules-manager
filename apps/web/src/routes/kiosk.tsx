@@ -1,3 +1,4 @@
+import { env } from "@SchedulesManager/env/web";
 import { Button } from "@SchedulesManager/ui/components/button";
 import {
 	Card,
@@ -18,10 +19,9 @@ import {
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-
-import { env } from "@SchedulesManager/env/web";
 import { useAuth } from "@/lib/auth";
 import { currentCoords } from "@/lib/coords";
+import { resolveSelectedLocationId } from "@/lib/kiosk";
 import { useLocations, useMe } from "@/lib/queries";
 
 export const Route = createFileRoute("/kiosk")({
@@ -31,13 +31,16 @@ export const Route = createFileRoute("/kiosk")({
 function KioskPage() {
 	const { user } = useAuth();
 	const me = useMe(Boolean(user));
-	const workplaceId = me.data?.employments.find(
-		(row) => row.kind === "manager",
-	)?.workplace.id;
+	const workplaceId = me.data?.employments.find((row) => row.kind === "manager")
+		?.workplace.id;
 	const locations = useLocations(workplaceId);
 	const [locationId, setLocationId] = useState("");
 	const [locationPin, setLocationPin] = useState("");
 	const [workerPin, setWorkerPin] = useState("");
+	const selectedLocationId = resolveSelectedLocationId(
+		locationId,
+		locations.data,
+	);
 
 	async function clock(action: "in" | "out") {
 		const coords = await currentCoords();
@@ -45,7 +48,7 @@ function KioskPage() {
 			method: "POST",
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify({
-				locationId: locationId || locations.data?.[0]?.id,
+				locationId: selectedLocationId,
 				locationPin,
 				workerPin,
 				action,
@@ -81,7 +84,7 @@ function KioskPage() {
 								label: location.name,
 								value: location.id,
 							}))}
-							value={locationId || null}
+							value={selectedLocationId || null}
 							onValueChange={(value) => {
 								if (value) setLocationId(value);
 							}}

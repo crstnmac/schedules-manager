@@ -652,6 +652,89 @@ export function registerOpsTests(getContext: () => Context) {
 		});
 	});
 
+	test("PTO PUT after a deduction unconditionally overwrites the deducted balance (documents the residual server-side risk that motivates the client-side reconciliation fix)", async () => {
+		const { database: d, app, token } = getContext();
+		const seed = await seedWorkplace(d, "Stale Put Cafe");
+		const managerAccess = await token(seed.managerProfileId, seed.managerEmail);
+		const workerAccess = await token(seed.workerProfileId, seed.workerEmail);
+		const leave = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/leave-types`,
+			managerAccess,
+			{ method: "POST", body: { name: "Vacation", paid: true } },
+		);
+		expect(leave.status).toBe(200);
+		const leaveBody = (await leave.json()) as { leaveType: { id: string } };
+		const leaveTypeId = leaveBody.leaveType.id;
+		expect(
+			(
+				await authJson(
+					app,
+					`/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+					managerAccess,
+					{ method: "PUT", body: { leaveTypeId, minutes: 480 } },
+				)
+			).status,
+		).toBe(200);
+		const requested = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/my/time-off`,
+			workerAccess,
+			{
+				method: "POST",
+				body: {
+					startsAt: "2026-09-10T15:00:00.000Z",
+					endsAt: "2026-09-10T19:00:00.000Z",
+					leaveTypeId,
+				},
+			},
+		);
+		expect(requested.status).toBe(200);
+		const decided = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/time-off/${
+				(await requested.json()).request.id
+			}/decision`,
+			managerAccess,
+			{ method: "POST", body: { decision: "approved" } },
+		);
+		expect(decided.status).toBe(200);
+		const afterDeduction = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+			managerAccess,
+		);
+		expect(await afterDeduction.json()).toMatchObject({
+			balances: [{ minutes: 240, name: "Vacation" }],
+		});
+		const overwrite = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+			managerAccess,
+			{ method: "PUT", body: { leaveTypeId, minutes: 480 } },
+		);
+		expect(overwrite.status).toBe(200);
+		const afterOverwrite = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/employments/${seed.worker.id}/pto`,
+			managerAccess,
+		);
+		expect(await afterOverwrite.json()).toMatchObject({
+			balances: [{ minutes: 480, name: "Vacation" }],
+		});
+		const timeOff = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/time-off`,
+			managerAccess,
+		);
+		const timeOffBody = (await timeOff.json()) as {
+			requests: { chargeMinutes: number | null }[];
+		};
+		expect(timeOffBody.requests).toEqual(
+			expect.arrayContaining([expect.objectContaining({ chargeMinutes: 240 })]),
+		);
+	});
+
 	test("managers can record approved time off for a worker", async () => {
 		const { database: d, app, token } = getContext();
 		const seed = await seedWorkplace(d, "Record Cafe");
