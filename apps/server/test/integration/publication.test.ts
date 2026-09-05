@@ -11,6 +11,7 @@ import { registerJoinPolicyTests } from "./join-policy-cases";
 import { registerOpsTests } from "./ops-cases";
 import { registerPushReceiptTests } from "./push-receipt-cases";
 import { registerReadinessTests } from "./readiness-cases";
+import { registerReportTests } from "./report-cases";
 import { registerReminderTests } from "./reminder-cases";
 import { registerTimeClockTests } from "./time-clock-cases";
 
@@ -85,6 +86,7 @@ integrationDescribe("Schedule publication", () => {
 	registerReminderTests(() => ({ database, app, token: managerToken }));
 	registerJoinPolicyTests(() => ({ database, app, token: managerToken }));
 	registerOpsTests(() => ({ database, app, token: managerToken }));
+	registerReportTests(() => ({ database, app, token: managerToken }));
 
 	test("republishing never changes the previous published Shift snapshot", async () => {
 		const managerProfileId = crypto.randomUUID();
