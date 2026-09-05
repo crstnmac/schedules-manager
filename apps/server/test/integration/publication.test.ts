@@ -17,6 +17,7 @@ import { registerOwnReleaseTests } from "./own-release-cases";
 import { registerPushReceiptTests } from "./push-receipt-cases";
 import { registerReadinessTests } from "./readiness-cases";
 import { registerReminderTests } from "./reminder-cases";
+import { registerReportsTests } from "./reports-cases";
 import { registerTimeClockTests } from "./time-clock-cases";
 
 const integrationDescribe =
@@ -96,6 +97,7 @@ integrationDescribe("Schedule publication", () => {
 		publishScheduleNow,
 	}));
 	registerOpsTests(() => ({ database, app, token: managerToken }));
+	registerReportsTests(() => ({ database, app, token: managerToken }));
 	registerOwnReleaseTests(() => ({ database, app, token: managerToken }));
 	registerAcceptanceRaceTests(() => ({ database, app, token: managerToken }));
 	registerAutoClockOutBreaksTests(() => ({
