@@ -3,6 +3,7 @@ import { eq, isNull, sql } from "drizzle-orm";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 
 import { resetAndMigrateDatabase } from "./database";
+import { registerDstRouteTests } from "./dst-route-cases";
 import {
 	emailWebhookTestSecret,
 	registerEmailDeliveryTests,
@@ -85,6 +86,7 @@ integrationDescribe("Schedule publication", () => {
 	registerReminderTests(() => ({ database, app, token: managerToken }));
 	registerJoinPolicyTests(() => ({ database, app, token: managerToken }));
 	registerOpsTests(() => ({ database, app, token: managerToken }));
+	registerDstRouteTests(() => ({ database, app, token: managerToken }));
 
 	test("republishing never changes the previous published Shift snapshot", async () => {
 		const managerProfileId = crypto.randomUUID();
