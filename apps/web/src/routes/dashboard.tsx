@@ -145,7 +145,7 @@ function DashboardLayout() {
 		}
 	};
 
-	if (authLoading)
+	if (authLoading) {
 		return (
 			<main
 				id="main-content"
@@ -153,9 +153,10 @@ function DashboardLayout() {
 				className="grid min-h-svh place-items-center"
 			>
 				<Spinner />
-				<span className="sr-only">Loading</span>
+				<span className="sr-only">Loading workspace</span>
 			</main>
 		);
+	}
 	if (!user) return <Navigate to="/" replace />;
 	if (isLoading)
 		return (

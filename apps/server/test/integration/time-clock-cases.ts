@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { weekStartOfDateKey, zonedDayInfo } from "../../src/time";
+
 function required<T>(value: T | undefined): T {
 	if (value === undefined) throw new Error("Expected test fixture row");
 	return value;
@@ -253,5 +255,287 @@ export function registerTimeClockTests(getContext: () => Context) {
 			.where(eq(d.timeEntries.versionShiftId, required(snapshot).id));
 		expect(punches).toHaveLength(1);
 		expect(punches[0]?.employmentId).toBe(required(employment).id);
+	});
+
+	test("an on-clock shift remains nextShift on my/schedule (no regression)", async () => {
+		const { database: d, app, token } = getContext();
+		const profileId = crypto.randomUUID();
+		const email = "clock-onclock@example.test";
+		await d.db.insert(d.profiles).values({ id: profileId, email });
+		const [workplace] = await d.db
+			.insert(d.workplaces)
+			.values({ name: "OnClock NextShift Tests", weekStartDay: 1 })
+			.returning();
+		const workplaceId = required(workplace).id;
+		const [employment] = await d.db
+			.insert(d.employments)
+			.values({ workplaceId, profileId, kind: "worker" })
+			.returning();
+		const [location] = await d.db
+			.insert(d.locations)
+			.values({
+				workplaceId,
+				name: "OnClock Floor",
+				timezone: "America/Chicago",
+			})
+			.returning();
+		const [position] = await d.db
+			.insert(d.positions)
+			.values({ workplaceId, name: "OnClock Position" })
+			.returning();
+		const tz = "America/Chicago";
+		const now = Date.now();
+		const thisWeek = weekStartOfDateKey(
+			zonedDayInfo(new Date(now), tz).dateKey,
+			1,
+		);
+		const [schedule] = await d.db
+			.insert(d.schedules)
+			.values({ locationId: required(location).id, weekStartDate: thisWeek })
+			.returning();
+		const [version] = await d.db
+			.insert(d.scheduleVersions)
+			.values({ scheduleId: required(schedule).id, versionNumber: 1 })
+			.returning();
+		const [draftA] = await d.db
+			.insert(d.shifts)
+			.values({
+				scheduleId: required(schedule).id,
+				employmentId: required(employment).id,
+				positionId: required(position).id,
+				startsAt: new Date(now - 5 * 60_000),
+				endsAt: new Date(now + 60 * 60_000),
+			})
+			.returning();
+		const [snapshotA] = await d.db
+			.insert(d.versionShifts)
+			.values({
+				versionId: required(version).id,
+				shiftId: required(draftA).id,
+				employmentId: required(employment).id,
+				positionId: required(position).id,
+				startsAt: required(draftA).startsAt,
+				endsAt: required(draftA).endsAt,
+			})
+			.returning();
+		const accessToken = await token(profileId, email);
+		const clock = (id: string, action: string) =>
+			app.handle(
+				new Request(`http://localhost/v1/my/shifts/${id}/${action}`, {
+					method: "POST",
+					headers: { authorization: `Bearer ${accessToken}` },
+				}),
+			);
+
+		expect((await clock(required(snapshotA).id, "clock-in")).status).toBe(200);
+
+		const scheduleResponse = await app.handle(
+			new Request(`http://localhost/v1/workplaces/${workplaceId}/my/schedule`, {
+				headers: { authorization: `Bearer ${accessToken}` },
+			}),
+		);
+		expect(scheduleResponse.status).toBe(200);
+		const scheduleBody = await scheduleResponse.json();
+		expect(scheduleBody.nextShift).not.toBeNull();
+		expect(scheduleBody.nextShift.id).toBe(required(snapshotA).id);
+		expect(scheduleBody.nextShift.timeEntry).not.toBeNull();
+		expect(scheduleBody.nextShift.timeEntry.clockedOutAt).toBe(null);
+	});
+
+	test("early clock-out advances nextShift past the closed shift on my/schedule", async () => {
+		const { database: d, app, token } = getContext();
+		const profileId = crypto.randomUUID();
+		const email = "clock-advance@example.test";
+		await d.db.insert(d.profiles).values({ id: profileId, email });
+		const [workplace] = await d.db
+			.insert(d.workplaces)
+			.values({ name: "NextShift Advance Tests", weekStartDay: 1 })
+			.returning();
+		const workplaceId = required(workplace).id;
+		const [employment] = await d.db
+			.insert(d.employments)
+			.values({ workplaceId, profileId, kind: "worker" })
+			.returning();
+		const [location] = await d.db
+			.insert(d.locations)
+			.values({
+				workplaceId,
+				name: "Advance Floor",
+				timezone: "America/Chicago",
+			})
+			.returning();
+		const [position] = await d.db
+			.insert(d.positions)
+			.values({ workplaceId, name: "Advance Position" })
+			.returning();
+		const tz = "America/Chicago";
+		const now = Date.now();
+		const thisWeek = weekStartOfDateKey(
+			zonedDayInfo(new Date(now), tz).dateKey,
+			1,
+		);
+		const [schedule] = await d.db
+			.insert(d.schedules)
+			.values({ locationId: required(location).id, weekStartDate: thisWeek })
+			.returning();
+		const [version] = await d.db
+			.insert(d.scheduleVersions)
+			.values({ scheduleId: required(schedule).id, versionNumber: 1 })
+			.returning();
+		const [draftA] = await d.db
+			.insert(d.shifts)
+			.values({
+				scheduleId: required(schedule).id,
+				employmentId: required(employment).id,
+				positionId: required(position).id,
+				startsAt: new Date(now - 5 * 60_000),
+				endsAt: new Date(now + 60 * 60_000),
+			})
+			.returning();
+		const [draftB] = await d.db
+			.insert(d.shifts)
+			.values({
+				scheduleId: required(schedule).id,
+				employmentId: required(employment).id,
+				positionId: required(position).id,
+				startsAt: new Date(now + 120 * 60_000),
+				endsAt: new Date(now + 180 * 60_000),
+			})
+			.returning();
+		const [snapshotA] = await d.db
+			.insert(d.versionShifts)
+			.values({
+				versionId: required(version).id,
+				shiftId: required(draftA).id,
+				employmentId: required(employment).id,
+				positionId: required(position).id,
+				startsAt: required(draftA).startsAt,
+				endsAt: required(draftA).endsAt,
+			})
+			.returning();
+		const [snapshotB] = await d.db
+			.insert(d.versionShifts)
+			.values({
+				versionId: required(version).id,
+				shiftId: required(draftB).id,
+				employmentId: required(employment).id,
+				positionId: required(position).id,
+				startsAt: required(draftB).startsAt,
+				endsAt: required(draftB).endsAt,
+			})
+			.returning();
+		const accessToken = await token(profileId, email);
+		const clock = (id: string, action: string) =>
+			app.handle(
+				new Request(`http://localhost/v1/my/shifts/${id}/${action}`, {
+					method: "POST",
+					headers: { authorization: `Bearer ${accessToken}` },
+				}),
+			);
+
+		expect((await clock(required(snapshotA).id, "clock-in")).status).toBe(200);
+		expect((await clock(required(snapshotA).id, "clock-out")).status).toBe(200);
+
+		const scheduleResponse = await app.handle(
+			new Request(`http://localhost/v1/workplaces/${workplaceId}/my/schedule`, {
+				headers: { authorization: `Bearer ${accessToken}` },
+			}),
+		);
+		expect(scheduleResponse.status).toBe(200);
+		const scheduleBody = await scheduleResponse.json();
+		expect(scheduleBody.nextShift).not.toBeNull();
+		expect(scheduleBody.nextShift.id).toBe(required(snapshotB).id);
+		expect(scheduleBody.nextShift.timeEntry).toBe(null);
+		const weekShiftA = scheduleBody.currentWeek.shifts.find(
+			(s: { id: string }) => s.id === required(snapshotA).id,
+		);
+		expect(weekShiftA).toBeDefined();
+		expect(weekShiftA.timeEntry).not.toBeNull();
+		expect(weekShiftA.timeEntry.clockedOutAt).not.toBeNull();
+	});
+
+	test("early clock-out with no later shift leaves nextShift null on my/schedule", async () => {
+		const { database: d, app, token } = getContext();
+		const profileId = crypto.randomUUID();
+		const email = "clock-advance-last@example.test";
+		await d.db.insert(d.profiles).values({ id: profileId, email });
+		const [workplace] = await d.db
+			.insert(d.workplaces)
+			.values({ name: "NextShift Last Tests", weekStartDay: 1 })
+			.returning();
+		const workplaceId = required(workplace).id;
+		const [employment] = await d.db
+			.insert(d.employments)
+			.values({ workplaceId, profileId, kind: "worker" })
+			.returning();
+		const [location] = await d.db
+			.insert(d.locations)
+			.values({ workplaceId, name: "Last Floor", timezone: "America/Chicago" })
+			.returning();
+		const [position] = await d.db
+			.insert(d.positions)
+			.values({ workplaceId, name: "Last Position" })
+			.returning();
+		const tz = "America/Chicago";
+		const now = Date.now();
+		const thisWeek = weekStartOfDateKey(
+			zonedDayInfo(new Date(now), tz).dateKey,
+			1,
+		);
+		const [schedule] = await d.db
+			.insert(d.schedules)
+			.values({ locationId: required(location).id, weekStartDate: thisWeek })
+			.returning();
+		const [version] = await d.db
+			.insert(d.scheduleVersions)
+			.values({ scheduleId: required(schedule).id, versionNumber: 1 })
+			.returning();
+		const [draftA] = await d.db
+			.insert(d.shifts)
+			.values({
+				scheduleId: required(schedule).id,
+				employmentId: required(employment).id,
+				positionId: required(position).id,
+				startsAt: new Date(now - 5 * 60_000),
+				endsAt: new Date(now + 60 * 60_000),
+			})
+			.returning();
+		const [snapshotA] = await d.db
+			.insert(d.versionShifts)
+			.values({
+				versionId: required(version).id,
+				shiftId: required(draftA).id,
+				employmentId: required(employment).id,
+				positionId: required(position).id,
+				startsAt: required(draftA).startsAt,
+				endsAt: required(draftA).endsAt,
+			})
+			.returning();
+		const accessToken = await token(profileId, email);
+		const clock = (id: string, action: string) =>
+			app.handle(
+				new Request(`http://localhost/v1/my/shifts/${id}/${action}`, {
+					method: "POST",
+					headers: { authorization: `Bearer ${accessToken}` },
+				}),
+			);
+
+		expect((await clock(required(snapshotA).id, "clock-in")).status).toBe(200);
+		expect((await clock(required(snapshotA).id, "clock-out")).status).toBe(200);
+
+		const scheduleResponse = await app.handle(
+			new Request(`http://localhost/v1/workplaces/${workplaceId}/my/schedule`, {
+				headers: { authorization: `Bearer ${accessToken}` },
+			}),
+		);
+		expect(scheduleResponse.status).toBe(200);
+		const scheduleBody = await scheduleResponse.json();
+		expect(scheduleBody.nextShift).toBe(null);
+		const weekShiftA = scheduleBody.currentWeek.shifts.find(
+			(s: { id: string }) => s.id === required(snapshotA).id,
+		);
+		expect(weekShiftA).toBeDefined();
+		expect(weekShiftA.timeEntry).not.toBeNull();
+		expect(weekShiftA.timeEntry.clockedOutAt).not.toBeNull();
 	});
 }

@@ -76,7 +76,7 @@ function WorkerLayout() {
 		}
 	};
 
-	if (authLoading)
+	if (authLoading) {
 		return (
 			<main
 				id="main-content"
@@ -87,6 +87,7 @@ function WorkerLayout() {
 				<span className="sr-only">Loading</span>
 			</main>
 		);
+	}
 	if (!user) return <Navigate to="/" replace />;
 	if (isLoading) {
 		return (
