@@ -168,7 +168,7 @@ Set `ZEPTOMAIL_WEBHOOK_SECRET` (at least 16 characters) to the ZeptoMail Agent's
 
 `GET /v1/workplaces/:workplaceId/email-deliveries` returns the latest 100 delivery records to active managers of that workplace, without invitation tokens. `sent` means the provider accepted the send, not mailbox delivery; only a signed Delivered event marks `delivered`. Outbox delivery is at-least-once: a provider acceptance followed by a process crash before recording success can cause a duplicate email on retry. No provider or DNS configuration is performed by migrations. Validate credentials, webhook events, and device receipts in a staging environment before pilot rollout.
 
-Expo receipt `delivered` means APNs/FCM accepted the notification, not that a device displayed it. Swaps are limited to a single Schedule. Approval revalidates eligibility in its transaction; policy and unrelated cross-Schedule draft writes do not yet share a global worker-lock protocol, so concurrent policy changes need further serialization before claiming a system-wide eligibility guarantee. Attendance expansion remains deferred.
+Expo receipt `delivered` means APNs/FCM accepted the notification, not that a device displayed it. Swaps are limited to a single Schedule. Approval revalidates eligibility in its transaction; policy and unrelated cross-Schedule draft writes do not yet share a global worker-lock protocol, so concurrent policy changes need further serialization before claiming a system-wide eligibility guarantee.
 
 ## Joining a workplace
 
