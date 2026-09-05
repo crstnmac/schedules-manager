@@ -783,6 +783,10 @@ export const publicationRoutes = new Elysia({
 
 			const upcoming = myShiftRows
 				.filter((shift) => shift.endsAt.getTime() >= now.getTime())
+				.filter((shift) => {
+					const entry = timeEntryByShiftId.get(shift.id);
+					return entry == null || entry.clockedOutAt === null;
+				})
 				.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
 			const nextShiftRaw = upcoming[0] ?? null;
 			const nextShift = nextShiftRaw
