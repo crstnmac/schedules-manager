@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, isNull, sql } from "drizzle-orm";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
-
+import { registerAcceptanceRaceTests } from "./acceptance-race-cases";
 import { resetAndMigrateDatabase } from "./database";
 import {
 	emailWebhookTestSecret,
@@ -87,6 +87,7 @@ integrationDescribe("Schedule publication", () => {
 	registerJoinPolicyTests(() => ({ database, app, token: managerToken }));
 	registerOpsTests(() => ({ database, app, token: managerToken }));
 	registerOwnReleaseTests(() => ({ database, app, token: managerToken }));
+	registerAcceptanceRaceTests(() => ({ database, app, token: managerToken }));
 
 	test("republishing never changes the previous published Shift snapshot", async () => {
 		const managerProfileId = crypto.randomUUID();
