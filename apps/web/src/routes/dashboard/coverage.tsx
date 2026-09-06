@@ -18,6 +18,7 @@ import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { QueryFeedback } from "@/components/query-feedback";
 import { api } from "@/lib/api";
+import { hasCoverageItems } from "@/lib/coverage-logic";
 import {
 	type SwapDetailDto,
 	useCoverageSwaps,
@@ -25,7 +26,6 @@ import {
 } from "@/lib/queries";
 import { formatClockTime, formatDay, formatDurationMs } from "@/lib/time";
 import { useWorkplace } from "@/lib/use-workplace";
-import { hasCoverageItems } from "@/lib/coverage-logic";
 
 interface CoverageResponse {
 	releases: {

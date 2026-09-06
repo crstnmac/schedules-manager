@@ -1003,9 +1003,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				"Announcements are turned off for this Workplace",
 			);
 			if (body.title.trim().length === 0 || body.body.trim().length === 0) {
-				throw new BadRequestError(
-					"Announcement title and body are required",
-				);
+				throw new BadRequestError("Announcement title and body are required");
 			}
 			const created = firstRow(
 				await db

@@ -96,7 +96,7 @@ export function AuthScreen() {
 						value={email}
 						onChange={setEmail}
 						placeholder="name@company.com"
-						keyboardType="email"
+						keyboardType="email-address"
 						contentType="email"
 						onNext={() => void passwordRef.current?.focus()}
 						disabled={submitting}

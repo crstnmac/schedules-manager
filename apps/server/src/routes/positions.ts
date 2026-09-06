@@ -64,9 +64,7 @@ export const positionsRoutes = new Elysia({
 				})
 				.returning();
 			if (!position) {
-				throw new ConflictError(
-					"A position with this name already exists",
-				);
+				throw new ConflictError("A position with this name already exists");
 			}
 
 			return { position: serializePosition(position) };
@@ -110,9 +108,7 @@ export const positionsRoutes = new Elysia({
 					)
 					.limit(1);
 				if (sibling) {
-					throw new ConflictError(
-						"A position with this name already exists",
-					);
+					throw new ConflictError("A position with this name already exists");
 				}
 			}
 

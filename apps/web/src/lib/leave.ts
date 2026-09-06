@@ -3,8 +3,8 @@ import {
 	formatDay,
 	formatMinute,
 	shiftDays,
-	toIsoDate,
 	type TimeFormat,
+	toIsoDate,
 } from "@/lib/time";
 
 export const PAID_DAY_MINUTES = 480;
@@ -92,7 +92,10 @@ export function leaveChargeMinutes(input: {
 		const end = Date.parse(`${input.endDate}T00:00:00Z`);
 		return (Math.round((end - start) / 86_400_000) + 1) * PAID_DAY_MINUTES;
 	}
-	if (input.startDate === input.endDate && input.startMinute >= input.endMinute) {
+	if (
+		input.startDate === input.endDate &&
+		input.startMinute >= input.endMinute
+	) {
 		return 0;
 	}
 	if (input.timeZone) {

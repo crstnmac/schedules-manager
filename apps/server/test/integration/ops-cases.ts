@@ -2302,7 +2302,10 @@ export function registerOpsTests(getContext: () => Context) {
 			app,
 			`/v1/workplaces/${workplaceId}/announcements`,
 			access,
-			{ method: "POST", body: { title: "Team update", body: "See you Friday" } },
+			{
+				method: "POST",
+				body: { title: "Team update", body: "See you Friday" },
+			},
 		);
 		expect(valid.status).toBe(200);
 	});
@@ -2321,9 +2324,7 @@ export function registerOpsTests(getContext: () => Context) {
 		const conversationBody = (await conversations.json()) as {
 			conversations: { id: string }[];
 		};
-		const conversationId = required(
-			conversationBody.conversations[0],
-		).id;
+		const conversationId = required(conversationBody.conversations[0]).id;
 
 		const tiedAt = new Date("2026-09-01T15:00:00.000Z");
 		await d.db.insert(d.workplaceMessages).values([

@@ -164,8 +164,7 @@ function TimecardPage() {
 										})
 									}
 								>
-									{pendingThis &&
-									updateBreak.variables?.action === "start" ? (
+									{pendingThis && updateBreak.variables?.action === "start" ? (
 										<Spinner data-icon="inline-start" />
 									) : null}
 									Start Break

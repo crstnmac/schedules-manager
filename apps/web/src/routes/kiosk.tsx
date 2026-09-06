@@ -50,6 +50,10 @@ function KioskPage() {
 	} | null>(null);
 
 	const [pendingAction, setPendingAction] = useState<"in" | "out" | null>(null);
+	const selectedLocationId = resolveSelectedLocationId(
+		locationId,
+		locations.data,
+	);
 	const activeLocationId = selectedLocationId;
 	const canClock =
 		Boolean(activeLocationId) &&

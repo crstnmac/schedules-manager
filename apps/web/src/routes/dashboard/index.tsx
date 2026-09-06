@@ -14,8 +14,6 @@ import {
 	ItemMedia,
 	ItemTitle,
 } from "@SchedulesManager/ui/components/item";
-import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
-import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import {
 	Select,
 	SelectContent,
@@ -24,6 +22,8 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@SchedulesManager/ui/components/select";
+import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
+import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { cn } from "@SchedulesManager/ui/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";

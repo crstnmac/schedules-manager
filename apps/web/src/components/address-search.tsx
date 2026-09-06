@@ -138,7 +138,10 @@ export function AddressSearch({
 					className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
 				>
 					{search.isFetching && places.length === 0 ? (
-						<p className="px-2 py-1.5 text-muted-foreground text-xs" role="presentation">
+						<p
+							className="px-2 py-1.5 text-muted-foreground text-xs"
+							role="presentation"
+						>
 							Searching places…
 						</p>
 					) : (

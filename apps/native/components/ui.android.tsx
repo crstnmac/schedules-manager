@@ -24,6 +24,7 @@ import { useEffect, useRef, useState } from "react";
 import {
 	KeyboardAvoidingView,
 	Pressable,
+	type TextInput as RNTextInput,
 	ScrollView,
 	StyleSheet,
 	Text,
@@ -416,7 +417,7 @@ export function NativeField({
 	placeholder,
 	multiline = false,
 	keyboardType,
-	secureTextEntry,
+	secureTextEntry = false,
 	contentType,
 	inputRef,
 	onSubmit,
@@ -428,7 +429,7 @@ export function NativeField({
 	onChange: (value: string) => void;
 	placeholder?: string;
 	multiline?: boolean;
-	keyboardType?: "email" | "text" | "number";
+	keyboardType?: React.ComponentProps<typeof RNTextInput>["keyboardType"];
 	secureTextEntry?: boolean;
 	contentType?: string;
 	inputRef?: React.Ref<import("@expo/ui/jetpack-compose").TextFieldRef>;
@@ -465,12 +466,12 @@ export function NativeField({
 				singleLine={!multiline}
 				minLines={multiline ? 3 : 1}
 				maxLines={multiline ? 5 : 1}
-				visualTransformation={secureTextEntry ? "password" : "none"}
 				keyboardOptions={{
 					capitalization: multiline ? "sentences" : "none",
 					imeAction: onSubmit ? "done" : multiline ? "default" : "next",
-					keyboardType: secureTextEntry ? "password" : keyboardType,
-					autoCorrectEnabled: !secureTextEntry && keyboardType !== "email",
+					keyboardType: secureTextEntry ? "password" : nativeKeyboardType,
+					autoCorrectEnabled:
+						!secureTextEntry && keyboardType !== "email-address",
 				}}
 				onValueChange={(next) => {
 					lastEmitted.current = next;

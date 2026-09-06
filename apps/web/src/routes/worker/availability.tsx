@@ -513,11 +513,11 @@ function AvailabilityPage() {
 										endMinute={offEnd}
 										onStartMinuteChange={setOffStart}
 										onEndMinuteChange={setOffEnd}
-									reason={offReason}
-									onReasonChange={setOffReason}
-									remainingMinutes={remainingForType}
-									timeZone={constraints.data?.timezone}
-								/>
+										reason={offReason}
+										onReasonChange={setOffReason}
+										remainingMinutes={remainingForType}
+										timeZone={constraints.data?.timezone}
+									/>
 								) : null}
 							</CardContent>
 							{canRequestTimeOff ? (

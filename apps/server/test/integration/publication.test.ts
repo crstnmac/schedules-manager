@@ -17,8 +17,8 @@ import { registerOpsTests } from "./ops-cases";
 import { registerOwnReleaseTests } from "./own-release-cases";
 import { registerPushReceiptTests } from "./push-receipt-cases";
 import { registerReadinessTests } from "./readiness-cases";
-import { registerReportTests } from "./report-cases";
 import { registerReminderTests } from "./reminder-cases";
+import { registerReportTests } from "./report-cases";
 import { registerReportsTests } from "./reports-cases";
 import { registerTimeClockTests } from "./time-clock-cases";
 

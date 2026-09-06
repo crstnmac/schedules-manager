@@ -383,7 +383,10 @@ export const timeEntryRoutes = new Elysia({
 						)
 				: [];
 			const openBreakByEntry = new Map(
-				openBreakRows.map((row) => [row.timeEntryId, row.startedAt.toISOString()]),
+				openBreakRows.map((row) => [
+					row.timeEntryId,
+					row.startedAt.toISOString(),
+				]),
 			);
 
 			return {

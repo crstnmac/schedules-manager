@@ -42,8 +42,7 @@ function ReportsPage() {
 					message?: string;
 				} | null;
 				throw new Error(
-					payload?.message ??
-						"Couldn’t download the report. Please try again.",
+					payload?.message ?? "Couldn’t download the report. Please try again.",
 				);
 			}
 			const blob = await response.blob();

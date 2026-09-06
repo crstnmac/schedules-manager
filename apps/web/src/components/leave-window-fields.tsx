@@ -17,10 +17,7 @@ import { Textarea } from "@SchedulesManager/ui/components/textarea";
 
 import { DatePicker } from "@/components/date-picker";
 import { TimePicker } from "@/components/time-picker";
-import {
-	formatLeaveHours,
-	leaveChargeMinutes,
-} from "@/lib/leave";
+import { formatLeaveHours, leaveChargeMinutes } from "@/lib/leave";
 
 export { leaveChargeMinutes };
 
