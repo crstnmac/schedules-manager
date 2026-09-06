@@ -5,7 +5,6 @@ import {
 	useQuery,
 	useQueryClient,
 } from "@tanstack/react-query";
-import * as Location from "expo-location";
 import { useMemo } from "react";
 
 import { api } from "./api";
@@ -366,13 +365,10 @@ export function useConversationMessages(conversationId: string | undefined) {
 				: undefined,
 		enabled: Boolean(conversationId),
 	});
-	const messages = useMemo(() => {
-		const pages = query.data?.pages ?? [];
-		return pages.reduce<WorkplaceMessage[]>(
-			(older, page) => [...older, ...page.messages],
-			[],
-		);
-	}, [query.data]);
+	const messages = useMemo(
+		() => (query.data?.pages ?? []).flatMap((page) => page.messages),
+		[query.data],
+	);
 	return {
 		...query,
 		messages,
@@ -453,6 +449,7 @@ export async function requestForegroundCoordinates(): Promise<{
 	try {
 		const result = await Promise.race([
 			(async () => {
+				const Location = await import("expo-location");
 				const permission = await Location.requestForegroundPermissionsAsync();
 				if (permission.status !== "granted") return {};
 				const position = await Location.getCurrentPositionAsync({

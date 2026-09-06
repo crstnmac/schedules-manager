@@ -22,9 +22,11 @@ import {
 	useAppTheme,
 } from "@/components/ui";
 import { SwapsCard } from "@/components/worker-shifts";
-import { useAuth } from "@/lib/auth";
 import { confirmAction } from "@/lib/confirm-action";
 import { useDisplayPrefs } from "@/lib/display";
+import { formatDayShort as formatDay } from "@/lib/format-day";
+import { friendlyMessage } from "@/lib/friendly-message";
+import { tapMedium, tapWarning } from "@/lib/haptics";
 import { formatDateKey } from "@/lib/leave";
 import { positionColor } from "@/lib/position-color";
 import {
@@ -36,7 +38,6 @@ import {
 	useMe,
 	useMySchedule,
 	usePublishedVersion,
-	useRequestRelease,
 	useRespondToAcceptance,
 } from "@/lib/queries";
 import {
@@ -83,13 +84,8 @@ function ManagerHome() {
 	return (
 		<AppScreen>
 			<PageHeader
-				eyebrow={onClock ? "On the clock" : "Manager workspace"}
 				title={employment?.workplace.name ?? "Workplace"}
-				description={
-					onClock
-						? "Punch out from here when this shift ends."
-						: "Clock in for your shift, then clear requests. Draft and publish on the web."
-				}
+				subtitle={onClock ? "On the clock" : "Manager workspace"}
 			/>
 			{nextShift ? (
 				<FeatureCard>
@@ -191,9 +187,8 @@ function WorkerSchedule() {
 	const { formatMinute, formatPerson, formatShiftRange } = useDisplayPrefs();
 	const { theme } = useAppTheme();
 	const router = useRouter();
-	const { signOut } = useAuth();
 	const me = useMe();
-	const { selected, select } = useSelectedWorkplaceId();
+	const { selected } = useSelectedWorkplaceId();
 	const queryClient = useQueryClient();
 
 	const employments = me.data?.employments ?? [];
@@ -204,7 +199,6 @@ function WorkerSchedule() {
 	const schedule = useMySchedule(workplaceId);
 	const acknowledge = useAcknowledge();
 	const respond = useRespondToAcceptance();
-	const release = useRequestRelease();
 	const clockIn = useClockIn();
 	const clockOut = useClockOut();
 	useShiftStartNotifications(workplaceId, schedule.data);
@@ -255,12 +249,11 @@ function WorkerSchedule() {
 	return (
 		<AppScreen>
 			<PageHeader
-				eyebrow={workplaceName}
 				title="My schedule"
-				description={
+				subtitle={
 					me.data?.profile
-						? formatPerson(me.data.profile.fullName, me.data.profile.email)
-						: undefined
+						? `${workplaceName} · ${formatPerson(me.data.profile.fullName, me.data.profile.email)}`
+						: workplaceName
 				}
 			/>
 
@@ -274,7 +267,7 @@ function WorkerSchedule() {
 						We couldn’t load your schedule
 					</Text>
 					<Text style={[s.body, { color: theme.muted }]}>
-						{(schedule.error as Error).message}
+						{friendlyMessage(schedule.error)}
 					</Text>
 					<SecondaryButton
 						label="Try again"
@@ -335,35 +328,37 @@ function WorkerSchedule() {
 			{schedule.data && schedule.data.pendingAcceptances.length > 0 ? (
 				<Card>
 					<Text style={[s.cardTitle, { color: theme.text }]}>
-						Accept this change
-					</Text>
-					<Text style={[s.body, { color: theme.muted }]}>
-						Late Material Schedule Change — accepting means you agree to work
-						the shift. “I saw this” only confirms delivery.
+						Proposed change to your shift
 					</Text>
 					{schedule.data.pendingAcceptances.map((a) => (
 						<View
 							key={a.id}
-							style={[s.acceptanceCard, { borderColor: theme.border }]}
+							style={[s.acceptanceCard, { borderColor: theme.primary }]}
 						>
-							<Text style={[s.acceptanceMeta, { color: theme.text }]}>
-								{formatDateKey(a.date)} · {formatMinute(a.startMinute)} ·{" "}
-								{a.positionName}
+							<Text style={[s.acceptanceHeadline, { color: theme.text }]}>
+								{formatDay(a.date)} · {a.positionName}
+							</Text>
+							<Text style={[s.acceptanceNew, { color: theme.text }]}>
+								New time: {formatMinute(a.startMinute)}
 							</Text>
 							<Text style={[s.hint, { color: theme.muted }]}>
 								{a.changeSummary}
 							</Text>
+							<Text style={[s.hint, { color: theme.muted }]}>
+								Accept if you can work the new time. Declining keeps this in
+								your Manager’s hands — it is handled the same either way.
+							</Text>
 							<View style={s.buttonRow}>
 								<View style={{ flex: 1 }}>
 									<PrimaryButton
-										label="Accept shift"
+										label="I’ll work it"
 										disabled={respond.isPending}
 										onPress={() =>
 											confirmAction({
-												title: "Accept this shift change?",
+												title: "Work this changed shift?",
 												message:
-													"This confirms that you agree to work the changed shift.",
-												confirmLabel: "Accept shift",
+													"Accepting confirms you agree to work the new time. You are not agreeing to anything extra.",
+												confirmLabel: "Accept change",
 												onConfirm: () =>
 													respond.mutate({
 														acceptanceId: a.id,
@@ -378,17 +373,9 @@ function WorkerSchedule() {
 										label="Decline"
 										disabled={respond.isPending}
 										onPress={() =>
-											confirmAction({
-												title: "Decline this shift change?",
-												message:
-													"Your Manager will see that you declined this change.",
-												confirmLabel: "Decline shift",
-												destructive: true,
-												onConfirm: () =>
-													respond.mutate({
-														acceptanceId: a.id,
-														decision: "decline",
-													}),
+											respond.mutate({
+												acceptanceId: a.id,
+												decision: "decline",
 											})
 										}
 									/>
@@ -398,7 +385,7 @@ function WorkerSchedule() {
 					))}
 					{respond.isError ? (
 						<Text style={[s.error, { color: theme.notification }]}>
-							{(respond.error as Error).message}
+							Could not save your answer — {friendlyMessage(respond.error)}
 						</Text>
 					) : null}
 				</Card>
@@ -439,7 +426,7 @@ function WorkerSchedule() {
 			) : null}
 			{acknowledge.isError ? (
 				<Text style={[s.error, { color: theme.notification }]}>
-					{(acknowledge.error as Error).message}
+					{friendlyMessage(acknowledge.error)}
 				</Text>
 			) : null}
 
@@ -532,6 +519,9 @@ function WorkerSchedule() {
 													/>
 													<Text style={[s.shiftMeta, { color: theme.muted }]}>
 														{shift.positionName}
+														{currentWeek?.locationName
+															? ` · ${currentWeek.locationName}`
+															: ""}
 														{shift.note ? ` · ${shift.note}` : ""}
 													</Text>
 												</View>
@@ -560,7 +550,7 @@ function WorkerSchedule() {
 												) : null}
 												{!past && shift.releaseStatus === null && !entry ? (
 													<Text style={[s.releaseText, { color: theme.muted }]}>
-														Tap for options
+														Swap or release
 													</Text>
 												) : null}
 											</View>
@@ -574,16 +564,6 @@ function WorkerSchedule() {
 						You remain responsible for a released Shift until a Manager approves
 						the hand-off.
 					</Text>
-					{release.isError ? (
-						<Text style={[s.error, { color: theme.notification }]}>
-							{(release.error as Error).message}
-						</Text>
-					) : null}
-					{release.isSuccess ? (
-						<Text style={[s.releaseText, { color: theme.success }]}>
-							Release requested — your Manager will review it.
-						</Text>
-					) : null}
 				</Card>
 			) : null}
 
@@ -638,6 +618,9 @@ function WorkerSchedule() {
 										/>
 										<Text style={[s.shiftMeta, { color: theme.muted }]}>
 											{sh.positionName}
+											{nextWeek?.locationName
+												? ` · ${nextWeek.locationName}`
+												: ""}
 										</Text>
 									</View>
 								</View>
@@ -702,25 +685,8 @@ function WorkerSchedule() {
 					body="When your Manager publishes the Schedule for the week, your Shifts will appear here."
 				/>
 			) : null}
-
-			{employments.length > 1 ? (
-				<SecondaryButton
-					label="Switch Workplace"
-					onPress={() => select(null)}
-				/>
-			) : null}
-
-			<SecondaryButton label="Sign out" onPress={() => void signOut()} />
 		</AppScreen>
 	);
-}
-
-function formatDay(iso: string): string {
-	return new Date(iso).toLocaleDateString(undefined, {
-		weekday: "short",
-		month: "short",
-		day: "numeric",
-	});
 }
 
 function onClockLabel(shift: NextShift, todayKey: string): string {
@@ -746,7 +712,7 @@ function TimeClockControls({
 	clockOut: ReturnType<typeof useClockOut>;
 }) {
 	const { theme } = useAppTheme();
-	const { formatMinute, formatClockTime } = useDisplayPrefs();
+	const { formatClockTime } = useDisplayPrefs();
 	const router = useRouter();
 	const [nowMs, setNowMs] = useState(() => Date.now());
 	const entry = shift.timeEntry;
@@ -765,19 +731,8 @@ function TimeClockControls({
 		entry === null && nowMs >= startsAt - CLOCK_IN_EARLY_MS && nowMs <= endsAt;
 
 	function confirmClockIn() {
-		Alert.alert(
-			"Clock in?",
-			`${shift.positionName} · ${formatMinute(shift.startMinute)}–${formatMinute(
-				shift.endMinute,
-			)}\nStart work at ${formatClockTime(new Date().toISOString())}?`,
-			[
-				{ text: "Cancel", style: "cancel" },
-				{
-					text: "Clock in",
-					onPress: () => clockIn.mutate(shift.id),
-				},
-			],
-		);
+		tapMedium();
+		clockIn.mutate(shift.id);
 	}
 
 	function confirmClockOut() {
@@ -786,14 +741,16 @@ function TimeClockControls({
 			Date.now() - new Date(entry.clockedInAt).getTime(),
 		);
 		Alert.alert(
-			"Clock out?",
-			`You've been on the clock for ${elapsed}. This ends your Time Entry for this shift.`,
+			"Finish your shift?",
+			`You worked ${elapsed}. This records your Time Entry as it is.`,
 			[
-				{ text: "Cancel", style: "cancel" },
+				{ text: "Keep working", style: "cancel" },
 				{
 					text: "Clock out",
-					style: "destructive",
-					onPress: () => clockOut.mutate(shift.id),
+					onPress: () => {
+						tapWarning();
+						clockOut.mutate(shift.id);
+					},
 				},
 			],
 		);
@@ -848,7 +805,7 @@ function TimeClockControls({
 					/>
 					{clockIn.isError ? (
 						<Text style={[s.hint, { color: theme.onPrimary }]}>
-							{(clockIn.error as Error).message}
+							{friendlyMessage(clockIn.error)}
 						</Text>
 					) : null}
 				</>
@@ -866,7 +823,7 @@ function TimeClockControls({
 
 			{clockOut.isError ? (
 				<Text style={[s.hint, { color: theme.onPrimary }]}>
-					{(clockOut.error as Error).message}
+					{friendlyMessage(clockOut.error)}
 				</Text>
 			) : null}
 
@@ -946,9 +903,14 @@ const s = StyleSheet.create({
 		gap: 8,
 		marginTop: 8,
 	},
-	acceptanceMeta: {
-		fontSize: 15,
+	acceptanceHeadline: {
+		fontSize: 19,
 		fontWeight: "700",
+		fontVariant: ["tabular-nums"],
+	},
+	acceptanceNew: {
+		fontSize: 15,
+		fontWeight: "600",
 		fontVariant: ["tabular-nums"],
 	},
 	buttonRow: { flexDirection: "row", gap: 8, marginTop: 4 },

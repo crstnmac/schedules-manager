@@ -39,7 +39,6 @@ export default function InboxScreen() {
 		<AppScreen>
 			<PageHeader
 				title="Inbox"
-				description="Published Schedules, Material Schedule Changes, coverage, and Time-off decisions land here."
 				action={
 					unread > 0 ? (
 						<SecondaryButton
@@ -55,12 +54,10 @@ export default function InboxScreen() {
 
 			{!inbox.isLoading && items.length === 0 ? (
 				<Card>
-					<Text style={[s.title, { color: theme.text }]}>
-						No notifications yet
-					</Text>
+					<Text style={[s.title, { color: theme.text }]}>All caught up</Text>
 					<Text style={[s.body, { color: theme.muted }]}>
-						When a Manager publishes a Schedule Version or decides your Time-off
-						Request, you’ll see it here with Delivery Status.
+						When your manager publishes the schedule or answers a request,
+						you’ll hear about it here.
 					</Text>
 				</Card>
 			) : null}
@@ -87,11 +84,14 @@ export default function InboxScreen() {
 					{it.readAt ? null : (
 						<Pressable
 							accessibilityRole="button"
+							accessibilityLabel={`Mark ${it.title} as read`}
 							disabled={markRead.isPending}
 							onPress={() => markRead.mutate(it.id)}
 							style={{
 								alignSelf: "flex-start",
-								minHeight: 34,
+								minHeight: 44,
+								paddingHorizontal: 8,
+								marginLeft: -8,
 								justifyContent: "center",
 							}}
 						>

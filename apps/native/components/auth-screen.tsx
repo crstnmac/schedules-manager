@@ -1,3 +1,4 @@
+import { signUpWithEmail } from "@SchedulesManager/auth";
 import { useState } from "react";
 import {
 	ActivityIndicator,
@@ -11,7 +12,6 @@ import {
 	View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { signUpWithEmail } from "@SchedulesManager/auth";
 
 import { LogoMark } from "@/components/logo-mark";
 import { NAV_THEME } from "@/lib/constants";

@@ -1,10 +1,4 @@
-import {
-	ActivityIndicator,
-	Pressable,
-	StyleSheet,
-	Text,
-	View,
-} from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import {
 	AppScreen,
@@ -16,6 +10,7 @@ import {
 	useAppTheme,
 } from "@/components/ui";
 import { useDisplayPrefs } from "@/lib/display";
+import { formatDayShort as formatDay } from "@/lib/format-day";
 import { useMe, useOpenShifts, useRequestPickup } from "@/lib/queries";
 import { useSelectedWorkplaceId } from "@/lib/workplace-store";
 
@@ -32,10 +27,7 @@ export default function OpenShiftsScreen() {
 
 	return (
 		<AppScreen>
-			<PageHeader
-				title="Open Shifts"
-				description="A Shift that needs a Worker. Request a Shift Pickup — your Manager approves it."
-			/>
+			<PageHeader title="Open Shifts" />
 
 			{openShifts.isLoading ? (
 				<ActivityIndicator color={theme.primary} />
@@ -96,14 +88,6 @@ export default function OpenShiftsScreen() {
 			))}
 		</AppScreen>
 	);
-}
-
-function formatDay(iso: string) {
-	return new Date(iso).toLocaleDateString(undefined, {
-		weekday: "short",
-		month: "short",
-		day: "numeric",
-	});
 }
 
 const s = StyleSheet.create({

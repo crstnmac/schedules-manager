@@ -9,10 +9,18 @@ import {
 	View,
 } from "react-native";
 
-import { PrimaryButton, SecondaryButton, useAppTheme } from "@/components/ui";
-import { useDisplayPrefs } from "@/lib/display";
+import {
+	NativeCheckboxRow,
+	PrimaryButton,
+	SecondaryButton,
+	useAppTheme,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { confirmAction } from "@/lib/confirm-action";
+import { useDisplayPrefs } from "@/lib/display";
+import { formatDayLong as formatDay } from "@/lib/format-day";
+import { friendlyMessage } from "@/lib/friendly-message";
+import { tapSuccess } from "@/lib/haptics";
 import { positionColor } from "@/lib/position-color";
 import {
 	type DayRosterEntry,
@@ -29,17 +37,6 @@ import {
 
 export type WeekShift = PublishedWeek["shifts"][number];
 
-function formatDay(iso: string): string {
-	return new Date(iso).toLocaleDateString(undefined, {
-		weekday: "long",
-		month: "short",
-		day: "numeric",
-	});
-}
-
-
-
-
 export function ShiftDetailScreen({
 	shift,
 	workplaceId,
@@ -52,7 +49,7 @@ export function ShiftDetailScreen({
 	onClose: () => void;
 }) {
 	const { theme } = useAppTheme();
-	const { formatShiftRange, formatClockTime } = useDisplayPrefs();
+	const { formatShiftRange } = useDisplayPrefs();
 	const queryClient = useQueryClient();
 	const [mode, setMode] = useState<"info" | "swap">("info");
 	const roster = useDayRoster(workplaceId, shift?.date);
@@ -76,22 +73,6 @@ export function ShiftDetailScreen({
 
 	return (
 		<View style={[styles.screen, { backgroundColor: theme.background }]}>
-			<View style={styles.header}>
-				<Pressable
-					accessibilityRole="button"
-					accessibilityLabel="Close"
-					onPress={() => {
-						setMode("info");
-						onClose();
-					}}
-					style={styles.closeButton}
-				>
-					<Text style={[styles.closeText, { color: theme.primary }]}>
-						Close
-					</Text>
-				</Pressable>
-			</View>
-
 			<ScrollView
 				style={styles.contentScroll}
 				contentContainerStyle={styles.content}
@@ -109,7 +90,12 @@ export function ShiftDetailScreen({
 					</Text>
 				</View>
 				<Text style={[styles.detailLine, { color: theme.muted }]}>
-					{formatShiftRange(shift.startMinute, shift.endMinute, shift.overnight)} · {shift.positionName}
+					{formatShiftRange(
+						shift.startMinute,
+						shift.endMinute,
+						shift.overnight,
+					)}{" "}
+					· {shift.positionName}
 				</Text>
 				<Text style={[styles.detailLine, { color: theme.muted }]}>
 					{locationName ?? "Location"}
@@ -130,48 +116,17 @@ export function ShiftDetailScreen({
 						) : (
 							<View style={styles.rosterList}>
 								{(tasks.data ?? []).map((task) => (
-									<Pressable
+									<NativeCheckboxRow
 										key={task.id}
-										accessibilityRole="checkbox"
-										accessibilityState={{
-											checked: task.completed,
-											disabled: task.completed || completeTask.isPending,
-										}}
+										label={task.title}
+										checked={task.completed}
 										disabled={task.completed || completeTask.isPending}
-										onPress={() => completeTask.mutate(task.id)}
-										style={styles.taskRow}
-									>
-										<View
-											style={[
-												styles.taskCheck,
-												{
-													borderColor: task.completed
-														? theme.success
-														: theme.border,
-													backgroundColor: task.completed
-														? theme.success
-														: "transparent",
-												},
-											]}
-										>
-											{task.completed ? (
-												<Text style={{ color: theme.onSuccess }}>✓</Text>
-											) : null}
-										</View>
-										<Text
-											style={[
-												styles.rosterName,
-												{
-													color: task.completed ? theme.muted : theme.text,
-													textDecorationLine: task.completed
-														? "line-through"
-														: "none",
-												},
-											]}
-										>
-											{task.title}
-										</Text>
-									</Pressable>
+										strikethrough
+										onChange={() => {
+											tapSuccess();
+											completeTask.mutate(task.id);
+										}}
+									/>
 								))}
 								{tasks.data?.length === 0 ? (
 									<Text style={[styles.rosterEmpty, { color: theme.muted }]}>
@@ -182,7 +137,7 @@ export function ShiftDetailScreen({
 									<Text
 										style={[styles.rosterEmpty, { color: theme.notification }]}
 									>
-										{((tasks.error ?? completeTask.error) as Error).message}
+										{friendlyMessage(tasks.error ?? completeTask.error)}
 									</Text>
 								) : null}
 							</View>
@@ -330,7 +285,8 @@ function SwapProposer({
 				</View>
 			)}
 			<Text style={[styles.swapHint, { color: theme.muted }]}>
-				You give: {formatDay(shift.startsAt)} · {formatShiftRange(shift.startMinute, shift.endMinute, shift.overnight)}
+				You give: {formatDay(shift.startsAt)} ·{" "}
+				{formatShiftRange(shift.startMinute, shift.endMinute, shift.overnight)}
 			</Text>
 			<View style={styles.actions}>
 				<SecondaryButton label="Back" onPress={onCancel} style={{ flex: 1 }} />
@@ -353,7 +309,7 @@ function SwapProposer({
 			</View>
 			{propose.isError ? (
 				<Text style={[styles.swapHint, { color: theme.notification }]}>
-					{(propose.error as Error).message}
+					{friendlyMessage(propose.error)}
 				</Text>
 			) : null}
 		</>
@@ -381,7 +337,7 @@ export function SwapsCard({
 	workplaceId: string | undefined;
 }) {
 	const { theme } = useAppTheme();
-	const { formatShiftRange, formatClockTime } = useDisplayPrefs();
+	const { formatClockTime } = useDisplayPrefs();
 	const swaps = useMySwaps(workplaceId);
 	const respond = useRespondToSwap();
 	const cancel = useCancelSwap();
@@ -421,13 +377,13 @@ export function SwapsCard({
 						</Text>
 						<Text style={[styles.swapLine, { color: theme.muted }]}>
 							You would give: {formatDay(give.startsAt)} ·{" "}
-							{formatClockTime(give.startsAt)} – {formatClockTime(give.endsAt)} ·{" "}
-							{give.positionName}
+							{formatClockTime(give.startsAt)} – {formatClockTime(give.endsAt)}{" "}
+							· {give.positionName}
 						</Text>
 						<Text style={[styles.swapLine, { color: theme.muted }]}>
 							You would take: {formatDay(take.startsAt)} ·{" "}
-							{formatClockTime(take.startsAt)} – {formatClockTime(take.endsAt)} ·{" "}
-							{take.positionName}
+							{formatClockTime(take.startsAt)} – {formatClockTime(take.endsAt)}{" "}
+							· {take.positionName}
 						</Text>
 						{incoming ? (
 							<View style={styles.actions}>
@@ -487,12 +443,12 @@ export function SwapsCard({
 						) : null}
 						{respond.isError ? (
 							<Text style={[styles.swapLine, { color: theme.notification }]}>
-								{(respond.error as Error).message}
+								{friendlyMessage(respond.error)}
 							</Text>
 						) : null}
 						{cancel.isError ? (
 							<Text style={[styles.swapLine, { color: theme.notification }]}>
-								{(cancel.error as Error).message}
+								{friendlyMessage(cancel.error)}
 							</Text>
 						) : null}
 					</View>
@@ -504,20 +460,14 @@ export function SwapsCard({
 
 const styles = StyleSheet.create({
 	screen: { flex: 1 },
-	header: {
-		flexDirection: "row",
-		justifyContent: "flex-end",
-		paddingTop: 54,
-		paddingHorizontal: 16,
-	},
-	closeButton: {
-		minHeight: 44,
-		justifyContent: "center",
-		paddingHorizontal: 8,
-	},
-	closeText: { fontSize: 15, fontWeight: "700" },
 	contentScroll: { flex: 1 },
-	content: { flexGrow: 1, padding: 20, paddingBottom: 32, gap: 10 },
+	content: {
+		flexGrow: 1,
+		paddingTop: 4,
+		paddingHorizontal: 16,
+		paddingBottom: 32,
+		gap: 10,
+	},
 	dayHeader: {
 		flexDirection: "row",
 		alignItems: "center",
@@ -546,20 +496,6 @@ const styles = StyleSheet.create({
 		paddingVertical: 10,
 	},
 	rosterDot: { width: 8, height: 8, borderRadius: 4 },
-	taskRow: {
-		minHeight: 44,
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 10,
-	},
-	taskCheck: {
-		width: 22,
-		height: 22,
-		borderWidth: 1.5,
-		borderRadius: 6,
-		alignItems: "center",
-		justifyContent: "center",
-	},
 	rosterName: { fontSize: 15, fontWeight: "600" },
 	rosterMeta: { fontSize: 13, lineHeight: 18 },
 	rosterEmpty: { fontSize: 14, lineHeight: 20 },

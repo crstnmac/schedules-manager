@@ -77,9 +77,8 @@ export function ManagerOverview() {
 	return (
 		<AppScreen>
 			<PageHeader
-				eyebrow="Manager workspace"
 				title={employment?.workplace.name ?? "Workplace"}
-				description="Keep the Published Schedule current — draft and publish on the web, clear requests here."
+				subtitle="Manager workspace"
 			/>
 			<View style={s.metricGrid}>
 				<View style={s.metricCell}>
@@ -265,10 +264,8 @@ export function ManagerSchedule() {
 		<AppScreen>
 			<PageHeader
 				title="Schedule"
-				description={
-					todayFocus
-						? "Today’s published Shifts. Mark late, no-show, or sick without changing the schedule. Edit the draft on web."
-						: "Compact read-only view of the live Successor Draft. Use the web workspace to edit and publish the next Schedule Version."
+				subtitle={
+					todayFocus ? "Today's published Shifts" : "Live Successor Draft"
 				}
 			/>
 
@@ -451,10 +448,7 @@ export function ManagerTeam() {
 
 	return (
 		<AppScreen>
-			<PageHeader
-				title="Team"
-				description="Every Employment at this Workplace — Workers and Managers, active and invited."
-			/>
+			<PageHeader title="Team" />
 			{workers.isLoading ? <ActivityIndicator color={theme.primary} /> : null}
 
 			{workers.data?.workers.map((w) => (
@@ -665,10 +659,7 @@ export function ManagerRequests() {
 
 	return (
 		<AppScreen>
-			<PageHeader
-				title="Time off"
-				description="Managers and workers can take leave. Decide requests, record leave, or request your own."
-			/>
+			<PageHeader title="Time off" />
 			{editingId ? (
 				<Card>
 					<Text style={[s.cardTitle, { color: theme.text }]}>

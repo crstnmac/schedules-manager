@@ -1,14 +1,14 @@
-import { useMaterialColors } from "@expo/ui/jetpack-compose";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
+import { useTabTheme } from "@/components/tab-theme";
 
 import { usePushRegistration, usePushResponseNavigation } from "@/lib/push";
-import { useCurrentEmployment } from "@/lib/queries";
-import { useColorScheme } from "@/lib/use-color-scheme";
+import { useCurrentEmployment, useNotifications } from "@/lib/queries";
 
 export default function TabLayout() {
-	const { colorScheme } = useColorScheme();
-	const material = useMaterialColors({ colorScheme });
-	const { isManager } = useCurrentEmployment();
+	const material = useTabTheme();
+	const { isManager, employment } = useCurrentEmployment();
+	const inbox = useNotifications(employment?.workplace.id);
+	const unreadCount = isManager ? 0 : (inbox.data?.unreadCount ?? 0);
 	usePushRegistration();
 	usePushResponseNavigation();
 
@@ -45,12 +45,17 @@ export default function TabLayout() {
 			</NativeTabs.Trigger>
 
 			<NativeTabs.Trigger name="openshifts" hidden={isManager}>
-				<NativeTabs.Trigger.Icon md="pan_tool" sf="hand.raised" />
+				<NativeTabs.Trigger.Icon md="work_outline" sf="calendar.badge.plus" />
 				<NativeTabs.Trigger.Label>Open shifts</NativeTabs.Trigger.Label>
 			</NativeTabs.Trigger>
 
 			<NativeTabs.Trigger name="inbox">
 				<NativeTabs.Trigger.Icon md="notifications" sf="bell" />
+				{unreadCount > 0 ? (
+					<NativeTabs.Trigger.Badge>
+						{unreadCount > 20 ? "20+" : String(unreadCount)}
+					</NativeTabs.Trigger.Badge>
+				) : null}
 				<NativeTabs.Trigger.Label>Inbox</NativeTabs.Trigger.Label>
 			</NativeTabs.Trigger>
 

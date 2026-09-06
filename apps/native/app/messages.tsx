@@ -1,5 +1,3 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
 	ActivityIndicator,
@@ -13,7 +11,6 @@ import {
 	AppScreen,
 	Card,
 	NativeField,
-	PageHeader,
 	PrimaryButton,
 	useAppTheme,
 } from "@/components/ui";
@@ -26,7 +23,6 @@ import {
 
 export default function MessagesScreen() {
 	const { theme } = useAppTheme();
-	const router = useRouter();
 	const { workplaceId } = useCurrentEmployment();
 	const conversations = useConversations(workplaceId);
 	const [conversationId, setConversationId] = useState<string>();
@@ -45,22 +41,7 @@ export default function MessagesScreen() {
 	);
 
 	return (
-		<AppScreen>
-			<Pressable
-				accessibilityRole="button"
-				accessibilityLabel="Go back"
-				onPress={() => router.back()}
-				style={styles.backRow}
-			>
-				<Ionicons name="chevron-back" size={20} color={theme.primary} />
-				<Text style={[styles.backText, { color: theme.primary }]}>More</Text>
-			</Pressable>
-			<PageHeader
-				eyebrow="WORKPLACE"
-				title="Messages"
-				description="Keep conversations with your Workplace in one place."
-			/>
-
+		<AppScreen safeTop={false}>
 			{conversations.isLoading ? (
 				<ActivityIndicator color={theme.primary} />
 			) : null}
@@ -101,23 +82,23 @@ export default function MessagesScreen() {
 					{selected.title.toUpperCase()}
 				</Text>
 			) : null}
-		{messages.isLoading ? <ActivityIndicator color={theme.primary} /> : null}
-		{!messages.isLoading && messages.hasMore ? (
-			<Pressable
-				accessibilityRole="button"
-				accessibilityLabel="Load earlier messages"
-				disabled={messages.isFetchingPreviousPage}
-				onPress={messages.loadOlder}
-				style={styles.loadOlder}
-			>
-				<Text style={{ color: theme.primary, fontWeight: "700" }}>
-					{messages.isFetchingPreviousPage
-						? "Loading earlier messages…"
-						: "Load earlier messages"}
-				</Text>
-			</Pressable>
-		) : null}
-		{messages.messages.map((message) => (
+			{messages.isLoading ? <ActivityIndicator color={theme.primary} /> : null}
+			{!messages.isLoading && messages.hasMore ? (
+				<Pressable
+					accessibilityRole="button"
+					accessibilityLabel="Load earlier messages"
+					disabled={messages.isFetchingPreviousPage}
+					onPress={messages.loadOlder}
+					style={styles.loadOlder}
+				>
+					<Text style={{ color: theme.primary, fontWeight: "700" }}>
+						{messages.isFetchingPreviousPage
+							? "Loading earlier messages…"
+							: "Load earlier messages"}
+					</Text>
+				</Pressable>
+			) : null}
+			{messages.messages.map((message) => (
 				<Card key={message.id}>
 					<View style={styles.messageMeta}>
 						<Text style={[styles.author, { color: theme.text }]}>
@@ -137,7 +118,9 @@ export default function MessagesScreen() {
 					</Text>
 				</Card>
 			))}
-			{conversationId && messages.messages.length === 0 && !messages.isLoading ? (
+			{conversationId &&
+			messages.messages.length === 0 &&
+			!messages.isLoading ? (
 				<Card>
 					<Text style={[styles.messageBody, { color: theme.muted }]}>
 						No messages yet. Start the conversation below.
@@ -179,13 +162,6 @@ export default function MessagesScreen() {
 }
 
 const styles = StyleSheet.create({
-	backRow: {
-		minHeight: 44,
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 4,
-	},
-	backText: { fontSize: 15, fontWeight: "600" },
 	conversationRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 	conversationChip: {
 		minHeight: 40,

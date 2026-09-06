@@ -1,5 +1,3 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
 	ActivityIndicator,
@@ -14,7 +12,6 @@ import {
 	AppScreen,
 	Card,
 	NativeField,
-	PageHeader,
 	PrimaryButton,
 	useAppTheme,
 } from "@/components/ui";
@@ -28,7 +25,6 @@ import { getServerUrl } from "@/lib/server-url";
 
 export default function KioskScreen() {
 	const { theme } = useAppTheme();
-	const router = useRouter();
 	const { isManager, workplaceId } = useCurrentEmployment();
 	const locations = useWorkplaceLocations(workplaceId, isManager);
 	const [locationId, setLocationId] = useState("");
@@ -82,22 +78,7 @@ export default function KioskScreen() {
 	}
 
 	return (
-		<AppScreen>
-			<Pressable
-				accessibilityRole="button"
-				accessibilityLabel="Go back"
-				onPress={() => router.back()}
-				style={styles.backRow}
-			>
-				<Ionicons name="chevron-back" size={20} color={theme.primary} />
-				<Text style={[styles.backText, { color: theme.primary }]}>More</Text>
-			</Pressable>
-			<PageHeader
-				eyebrow="MANAGER"
-				title="Kiosk"
-				description="Clock a Worker in or out using Location and Worker PINs."
-			/>
-
+		<AppScreen safeTop={false}>
 			{locations.isLoading ? <ActivityIndicator color={theme.primary} /> : null}
 			<Card>
 				{locations.data && locations.data.length > 0 ? (
@@ -209,13 +190,6 @@ export default function KioskScreen() {
 }
 
 const styles = StyleSheet.create({
-	backRow: {
-		minHeight: 44,
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 4,
-	},
-	backText: { fontSize: 15, fontWeight: "600" },
 	label: { fontSize: 13, fontWeight: "600" },
 	chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 	chip: {

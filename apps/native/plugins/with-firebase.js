@@ -62,8 +62,11 @@ function applyGoogleServicesPlugin(config) {
 }
 
 module.exports = function withFirebaseGoogleServices(config) {
+	// biome-ignore lint/style/noParameterAssign: Expo config plugin chain idiom
 	config = addGoogleServicesClasspath(config);
+	// biome-ignore lint/style/noParameterAssign: Expo config plugin chain idiom
 	config = applyGoogleServicesPlugin(config);
+	// biome-ignore lint/style/noParameterAssign: Expo config plugin chain idiom
 	config = copyGoogleServicesFile(config);
 	return config;
 };

@@ -1,45 +1,35 @@
-import {
-	Button,
-	Card,
-	Column,
-	Host,
-	LoadingIndicator,
-	OutlinedTextField,
-	Spacer,
-	Text,
-	TextButton,
-	useMaterialColors,
-} from "@expo/ui/jetpack-compose";
-import {
-	fillMaxSize,
-	fillMaxWidth,
-	height,
-	imePadding,
-	padding,
-	paddingAll,
-} from "@expo/ui/jetpack-compose/modifiers";
-import { useState } from "react";
-import { Image, StyleSheet } from "react-native";
-
 import { signUpWithEmail } from "@SchedulesManager/auth";
-
+import type { TextFieldRef } from "@expo/ui/jetpack-compose";
+import { useRef, useState } from "react";
+import { Image, StyleSheet, Text, View } from "react-native";
+import {
+	AppScreen,
+	Card,
+	GhostButton,
+	NativeField,
+	PrimaryButton,
+	useAppTheme,
+} from "@/components/ui.android";
 import { supabase } from "@/lib/supabase";
-import { useColorScheme } from "@/lib/use-color-scheme";
 
 type Mode = "sign-in" | "sign-up";
 
 export function AuthScreen() {
-	const { colorScheme } = useColorScheme();
-	const colors = useMaterialColors({ colorScheme });
+	const { theme } = useAppTheme();
+	const passwordRef = useRef<TextFieldRef>(null);
 	const [mode, setMode] = useState<Mode>("sign-in");
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
-	const valid = email.trim().length > 0 && password.length >= 6 && !submitting;
+	const valid =
+		/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
+		password.length >= (mode === "sign-up" ? 6 : 1) &&
+		!submitting;
 
 	async function submit() {
+		if (!valid) return;
 		setSubmitting(true);
 		setError(null);
 		setMessage(null);
@@ -73,162 +63,108 @@ export function AuthScreen() {
 	}
 
 	return (
-		<Host
-			useViewportSizeMeasurement
-			colorScheme={colorScheme}
-			style={styles.host}
+		<AppScreen
+			contentStyle={{
+				justifyContent: "center",
+				paddingTop: 64,
+				paddingBottom: 32,
+			}}
 		>
-			<Column
-				verticalArrangement="center"
-				modifiers={[fillMaxSize(), imePadding(), padding(20, 32, 20, 24)]}
-			>
-				<Column modifiers={[fillMaxWidth(), padding(4, 0, 4, 24)]}>
+			<View style={styles.content}>
+				<View style={{ gap: 12 }}>
 					<Image
 						source={require("@/assets/images/logo-mark.png")}
 						style={styles.logo}
 						accessibilityLabel="jooling"
 					/>
-					<Spacer modifiers={[height(12)]} />
+					<Text style={[styles.brand, { color: theme.primary }]}>jooling</Text>
 					<Text
-						color={colors.primary}
-						style={{ typography: "titleMedium", fontWeight: "700" }}
-					>
-						jooling
-					</Text>
-					<Spacer modifiers={[height(12)]} />
-					<Text
-						color={colors.onBackground}
-						style={{
-							typography: "headlineLarge",
-							fontWeight: "700",
-							lineBreak: "heading",
-						}}
+						accessibilityRole="header"
+						style={[styles.title, { color: theme.text }]}
 					>
 						{mode === "sign-in" ? "Welcome back" : "Join your workplace"}
 					</Text>
-					<Spacer modifiers={[height(8)]} />
-					<Text
-						color={colors.onSurfaceVariant}
-						style={{ typography: "bodyLarge", lineHeight: 24 }}
-					>
+					<Text style={[styles.body, { color: theme.muted }]}>
 						{mode === "sign-in"
 							? "Sign in to view your schedule, team messages, and shift updates."
 							: "Create an account with the email used by your workplace."}
 					</Text>
-				</Column>
-
-				<Card
-					elevation={1}
-					colors={{
-						containerColor: colors.surfaceContainerLow,
-						contentColor: colors.onSurface,
-					}}
-					modifiers={[fillMaxWidth()]}
-				>
-					<Column modifiers={[paddingAll(20)]}>
-						<OutlinedTextField
-							singleLine
-							isError={Boolean(error)}
-							keyboardOptions={{
-								keyboardType: "email",
-								capitalization: "none",
-								imeAction: "next",
-							}}
-							onValueChange={setEmail}
-							modifiers={[fillMaxWidth()]}
+				</View>
+				<Card style={{ gap: 16 }}>
+					<NativeField
+						label="Work email"
+						value={email}
+						onChange={setEmail}
+						placeholder="name@company.com"
+						keyboardType="email"
+						contentType="email"
+						onNext={() => void passwordRef.current?.focus()}
+						disabled={submitting}
+					/>
+					<NativeField
+						label="Password"
+						value={password}
+						onChange={setPassword}
+						secureTextEntry
+						contentType={mode === "sign-up" ? "new-password" : "password"}
+						inputRef={passwordRef}
+						onSubmit={() => void submit()}
+						disabled={submitting}
+					/>
+					{mode === "sign-up" ? (
+						<Text style={[styles.helper, { color: theme.muted }]}>
+							Use at least 6 characters.
+						</Text>
+					) : null}
+					{error ? (
+						<Text
+							selectable
+							accessibilityRole="alert"
+							accessibilityLiveRegion="assertive"
+							style={[styles.helper, { color: theme.notification }]}
 						>
-							<OutlinedTextField.Label>
-								<Text>Work email</Text>
-							</OutlinedTextField.Label>
-							<OutlinedTextField.Placeholder>
-								<Text>name@company.com</Text>
-							</OutlinedTextField.Placeholder>
-						</OutlinedTextField>
-						<Spacer modifiers={[height(16)]} />
-						<OutlinedTextField
-							singleLine
-							isError={Boolean(error)}
-							visualTransformation="password"
-							keyboardOptions={{
-								keyboardType: "password",
-								capitalization: "none",
-								imeAction: "done",
-							}}
-							keyboardActions={{
-								onDone: () => {
-									if (valid) void submit();
-								},
-							}}
-							onValueChange={setPassword}
-							modifiers={[fillMaxWidth()]}
+							{error}
+						</Text>
+					) : null}
+					{message ? (
+						<Text
+							selectable
+							accessibilityLiveRegion="polite"
+							style={[styles.helper, { color: theme.text }]}
 						>
-							<OutlinedTextField.Label>
-								<Text>Password</Text>
-							</OutlinedTextField.Label>
-							{mode === "sign-up" ? (
-								<OutlinedTextField.SupportingText>
-									<Text>Use at least 6 characters</Text>
-								</OutlinedTextField.SupportingText>
-							) : null}
-						</OutlinedTextField>
-						{error ? (
-							<>
-								<Spacer modifiers={[height(12)]} />
-								<Text color={colors.error} style={{ typography: "bodyMedium" }}>
-									{error}
-								</Text>
-							</>
-						) : null}
-						{message ? (
-							<>
-								<Spacer modifiers={[height(12)]} />
-								<Text
-									color={colors.onSurface}
-									style={{ typography: "bodyMedium" }}
-								>
-									{message}
-								</Text>
-							</>
-						) : null}
-						<Spacer modifiers={[height(20)]} />
-						{submitting ? (
-							<LoadingIndicator modifiers={[fillMaxWidth()]} />
-						) : (
-							<Button
-								enabled={valid}
-								onClick={() => void submit()}
-								modifiers={[fillMaxWidth()]}
-							>
-								<Text>{mode === "sign-in" ? "Sign in" : "Create account"}</Text>
-							</Button>
-						)}
-					</Column>
+							{message}
+						</Text>
+					) : null}
+					<PrimaryButton
+						label={mode === "sign-in" ? "Sign in" : "Create account"}
+						disabled={!valid}
+						loading={submitting}
+						onPress={() => void submit()}
+					/>
 				</Card>
-				<Spacer modifiers={[height(12)]} />
-				<TextButton onClick={changeMode} modifiers={[fillMaxWidth()]}>
-					<Text>
-						{mode === "sign-in"
+				<GhostButton
+					label={
+						mode === "sign-in"
 							? "New to jooling? Create account"
-							: "Already have an account? Sign in"}
-					</Text>
-				</TextButton>
+							: "Already have an account? Sign in"
+					}
+					disabled={submitting}
+					onPress={changeMode}
+				/>
 				<Text
-					color={colors.onSurfaceVariant}
-					style={{
-						typography: "bodySmall",
-						textAlign: "center",
-						lineHeight: 18,
-					}}
-					modifiers={[fillMaxWidth(), padding(12, 4, 12, 0)]}
+					style={[styles.helper, { color: theme.muted, textAlign: "center" }]}
 				>
 					Secure access for managers and team members
 				</Text>
-			</Column>
-		</Host>
+			</View>
+		</AppScreen>
 	);
 }
-
 const styles = StyleSheet.create({
-	host: { flex: 1 },
+	content: { width: "100%", maxWidth: 480, alignSelf: "center", gap: 24 },
 	logo: { width: 56, height: 56 },
+	brand: { fontSize: 18, fontWeight: "700" },
+	title: { fontSize: 30, lineHeight: 38, fontWeight: "700" },
+	body: { fontSize: 16, lineHeight: 24 },
+	helper: { fontSize: 14, lineHeight: 20 },
 });

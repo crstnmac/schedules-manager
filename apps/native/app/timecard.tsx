@@ -1,18 +1,8 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import {
-	ActivityIndicator,
-	Alert,
-	Pressable,
-	StyleSheet,
-	Text,
-	View,
-} from "react-native";
+import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
 
 import {
 	AppScreen,
 	Card,
-	PageHeader,
 	PrimaryButton,
 	SecondaryButton,
 	useAppTheme,
@@ -28,7 +18,6 @@ import {
 
 export default function TimecardScreen() {
 	const { theme } = useAppTheme();
-	const router = useRouter();
 	const { workplaceId } = useCurrentEmployment();
 	const timecard = useMyTimeEntries(workplaceId);
 	const payPeriod = usePayPeriod(workplaceId);
@@ -49,28 +38,7 @@ export default function TimecardScreen() {
 	).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
 
 	return (
-		<AppScreen>
-			<Pressable
-				accessibilityRole="button"
-				accessibilityLabel="Go back"
-				onPress={() => router.back()}
-				style={({ pressed }) => [
-					styles.backRow,
-					{ opacity: pressed ? 0.6 : 1 },
-				]}
-			>
-				<Ionicons name="chevron-back" size={20} color={theme.primary} />
-				<Text style={[styles.backText, { color: theme.primary }]}>
-					My schedule
-				</Text>
-			</Pressable>
-
-			<PageHeader
-				eyebrow="TIMECLOCK"
-				title="My timecard"
-				description="Punches are your record of started and finished work."
-			/>
-
+		<AppScreen safeTop={false}>
 			{timecard.isLoading ? (
 				<ActivityIndicator color={theme.primary} style={{ marginTop: 8 }} />
 			) : null}
@@ -337,14 +305,6 @@ function formatClock(iso?: string): string {
 }
 
 const styles = StyleSheet.create({
-	backRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 4,
-		marginBottom: 4,
-		minHeight: 44,
-	},
-	backText: { fontSize: 15, fontWeight: "600" },
 	pill: {
 		borderRadius: 999,
 		paddingHorizontal: 8,

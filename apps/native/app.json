@@ -52,7 +52,10 @@
 						"backgroundColor": "#111B28"
 					}
 				}
-			]
+			],
+			"expo-font",
+			"expo-secure-store",
+			"@react-native-community/datetimepicker"
 		],
 		"experiments": {
 			"typedRoutes": true,

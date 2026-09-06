@@ -1,39 +1,15 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import {
-	ActivityIndicator,
-	Pressable,
-	StyleSheet,
-	Text,
-	View,
-} from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
-import { AppScreen, Card, PageHeader, useAppTheme } from "@/components/ui";
+import { AppScreen, Card, useAppTheme } from "@/components/ui";
 import { useAnnouncements, useCurrentEmployment } from "@/lib/queries";
 
 export default function AnnouncementsScreen() {
 	const { theme } = useAppTheme();
-	const router = useRouter();
 	const { workplaceId } = useCurrentEmployment();
 	const announcements = useAnnouncements(workplaceId);
 
 	return (
-		<AppScreen>
-			<Pressable
-				accessibilityRole="button"
-				accessibilityLabel="Go back"
-				onPress={() => router.back()}
-				style={styles.backRow}
-			>
-				<Ionicons name="chevron-back" size={20} color={theme.primary} />
-				<Text style={[styles.backText, { color: theme.primary }]}>More</Text>
-			</Pressable>
-			<PageHeader
-				eyebrow="WORKPLACE"
-				title="Announcements"
-				description="Updates shared with everyone at your Workplace."
-			/>
-
+		<AppScreen safeTop={false}>
 			{announcements.isLoading ? (
 				<ActivityIndicator color={theme.primary} />
 			) : null}
@@ -81,13 +57,6 @@ export default function AnnouncementsScreen() {
 }
 
 const styles = StyleSheet.create({
-	backRow: {
-		minHeight: 44,
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 4,
-	},
-	backText: { fontSize: 15, fontWeight: "600" },
 	title: { fontSize: 17, lineHeight: 23, fontWeight: "700" },
 	body: { fontSize: 14, lineHeight: 21 },
 	metaRow: {

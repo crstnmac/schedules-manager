@@ -1,6 +1,8 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Icon, ListItem, Text as NativeText } from "@expo/ui";
+import { MaterialIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
+import { SettingsGroup } from "@/components/settings-group";
 
 import {
 	AppScreen,
@@ -12,6 +14,50 @@ import {
 import { useAuth } from "@/lib/auth";
 import { useCurrentEmployment } from "@/lib/queries";
 import { useSelectedWorkplaceId } from "@/lib/workplace-store";
+
+// Platform-native icons: SF Symbols on iOS, Material Symbols on Android.
+const ICONS = {
+	announcements: Icon.select({
+		ios: "megaphone",
+		android: import("@expo/material-symbols/campaign.xml"),
+	}),
+	messages: Icon.select({
+		ios: "bubble.left.and.bubble.right",
+		android: import("@expo/material-symbols/chat.xml"),
+	}),
+	timecard: Icon.select({
+		ios: "stopwatch",
+		android: import("@expo/material-symbols/timer.xml"),
+	}),
+	team: Icon.select({
+		ios: "person.2",
+		android: import("@expo/material-symbols/groups.xml"),
+	}),
+	kiosk: Icon.select({
+		ios: "keyboard",
+		android: import("@expo/material-symbols/dialpad.xml"),
+	}),
+	timeOff: Icon.select({
+		ios: "calendar.badge.clock",
+		android: import("@expo/material-symbols/event_busy.xml"),
+	}),
+	switchWorkplace: Icon.select({
+		ios: "arrow.left.arrow.right",
+		android: import("@expo/material-symbols/swap_horiz.xml"),
+	}),
+	signOut: Icon.select({
+		ios: "rectangle.portrait.and.arrow.right",
+		android: import("@expo/material-symbols/logout.xml"),
+	}),
+	workplace: Icon.select({
+		ios: "building.2",
+		android: import("@expo/material-symbols/location_city.xml"),
+	}),
+	chevron: Icon.select({
+		ios: "chevron.right",
+		android: import("@expo/material-symbols/chevron_right.xml"),
+	}),
+} as const;
 
 export default function MoreScreen() {
 	const { theme } = useAppTheme();
@@ -26,7 +72,7 @@ export default function MoreScreen() {
 	const tools: {
 		label: string;
 		detail: string;
-		icon: React.ComponentProps<typeof Ionicons>["name"];
+		icon: (typeof ICONS)[keyof typeof ICONS];
 		path:
 			| "/team"
 			| "/timecard"
@@ -38,19 +84,19 @@ export default function MoreScreen() {
 		{
 			label: "Announcements",
 			detail: "Updates shared across the Workplace",
-			icon: "megaphone-outline",
+			icon: ICONS.announcements,
 			path: "/announcements",
 		},
 		{
 			label: "Messages",
 			detail: "Workplace conversations",
-			icon: "chatbubbles-outline",
+			icon: ICONS.messages,
 			path: "/messages",
 		},
 		{
 			label: "Timecard",
-			detail: "Punches and worked hours",
-			icon: "stopwatch-outline",
+			detail: "Your Time Entries and worked hours",
+			icon: ICONS.timecard,
 			path: "/timecard",
 		},
 		...(isManager
@@ -58,13 +104,13 @@ export default function MoreScreen() {
 					{
 						label: "Team",
 						detail: "People, roles, and invitations",
-						icon: "people-outline" as const,
+						icon: ICONS.team,
 						path: "/team" as const,
 					},
 					{
 						label: "Kiosk",
 						detail: "Clock Workers with Location PINs",
-						icon: "keypad-outline" as const,
+						icon: ICONS.kiosk,
 						path: "/kiosk" as const,
 					},
 				]
@@ -72,7 +118,7 @@ export default function MoreScreen() {
 					{
 						label: "Time off",
 						detail: "Requests, blocked times, and preferences",
-						icon: "time-outline" as const,
+						icon: ICONS.timeOff,
 						path: "/worker-availability" as const,
 					},
 				]),
@@ -95,11 +141,7 @@ export default function MoreScreen() {
 
 	return (
 		<AppScreen>
-			<PageHeader
-				eyebrow="ACCOUNT"
-				title="More"
-				description="Your workplace settings and tools"
-			/>
+			<PageHeader title="More" />
 
 			<Card>
 				<View style={styles.profileRow}>
@@ -139,7 +181,12 @@ export default function MoreScreen() {
 						{ backgroundColor: theme.background, borderColor: theme.border },
 					]}
 				>
-					<Ionicons name="business-outline" size={20} color={theme.primary} />
+					<MaterialIcons
+						name="business"
+						size={20}
+						color={theme.primary}
+						accessible={false}
+					/>
 					<View style={styles.profileCopy}>
 						<Text style={[styles.meta, { color: theme.muted }]}>
 							CURRENT WORKPLACE
@@ -152,100 +199,61 @@ export default function MoreScreen() {
 			</Card>
 
 			<SectionLabel>WORKPLACE TOOLS</SectionLabel>
-			<Card>
+			<SettingsGroup>
 				{tools.map((item) => (
-					<MenuRow
+					<ListItem
 						key={item.label}
-						{...item}
 						onPress={() => router.push(item.path)}
-						last={employments.length <= 1 && item === tools.at(-1)}
-					/>
+						supportingText={item.detail}
+						leading={<Icon name={item.icon} size={21} color={theme.primary} />}
+						trailing={
+							<Icon name={ICONS.chevron} size={14} color={theme.muted} />
+						}
+					>
+						{item.label}
+					</ListItem>
 				))}
 				{employments.length > 1 ? (
-					<MenuRow
-						label="Switch workplace"
-						detail={`${employments.length} workplaces available`}
-						icon="swap-horizontal-outline"
+					<ListItem
 						onPress={() => select(null)}
-						last
-					/>
+						supportingText={`${employments.length} workplaces available`}
+						leading={
+							<Icon
+								name={ICONS.switchWorkplace}
+								size={21}
+								color={theme.primary}
+							/>
+						}
+						trailing={
+							<Icon name={ICONS.chevron} size={14} color={theme.muted} />
+						}
+					>
+						Switch workplace
+					</ListItem>
 				) : null}
-			</Card>
+			</SettingsGroup>
 
 			<SectionLabel>ACCOUNT</SectionLabel>
-			<Card>
-				<Pressable
-					accessibilityRole="button"
+			<SettingsGroup>
+				<ListItem
 					onPress={confirmSignOut}
-					style={({ pressed }) => [
-						styles.menuRow,
-						styles.lastRow,
-						{ opacity: pressed ? 0.6 : 1 },
-					]}
+					supportingText="Sign out of this device"
+					leading={
+						<Icon name={ICONS.signOut} size={21} color={theme.notification} />
+					}
 				>
-					<View style={[styles.iconBox, { backgroundColor: theme.background }]}>
-						<Ionicons
-							name="log-out-outline"
-							size={21}
-							color={theme.notification}
-						/>
-					</View>
-					<View style={styles.menuCopy}>
-						<Text style={[styles.menuLabel, { color: theme.notification }]}>
-							Sign out
-						</Text>
-						<Text style={[styles.menuDetail, { color: theme.muted }]}>
-							Sign out of this device
-						</Text>
-					</View>
-				</Pressable>
-			</Card>
+					<NativeText
+						textStyle={{ color: theme.notification, fontWeight: "600" }}
+					>
+						Sign out
+					</NativeText>
+				</ListItem>
+			</SettingsGroup>
 
 			<Text style={[styles.footer, { color: theme.muted }]}>
 				jooling · Mobile workforce access
 			</Text>
 		</AppScreen>
-	);
-}
-
-function MenuRow({
-	label,
-	detail,
-	icon,
-	onPress,
-	last = false,
-}: {
-	label: string;
-	detail: string;
-	icon: React.ComponentProps<typeof Ionicons>["name"];
-	onPress: () => void;
-	last?: boolean;
-}) {
-	const { theme } = useAppTheme();
-	return (
-		<Pressable
-			accessibilityRole="button"
-			onPress={onPress}
-			style={({ pressed }) => [
-				styles.menuRow,
-				!last && {
-					borderBottomColor: theme.border,
-					borderBottomWidth: StyleSheet.hairlineWidth,
-				},
-				{ opacity: pressed ? 0.65 : 1 },
-			]}
-		>
-			<View style={[styles.iconBox, { backgroundColor: theme.background }]}>
-				<Ionicons name={icon} size={21} color={theme.primary} />
-			</View>
-			<View style={styles.menuCopy}>
-				<Text style={[styles.menuLabel, { color: theme.text }]}>{label}</Text>
-				<Text style={[styles.menuDetail, { color: theme.muted }]}>
-					{detail}
-				</Text>
-			</View>
-			<Ionicons name="chevron-forward" size={19} color={theme.muted} />
-		</Pressable>
 	);
 }
 
@@ -291,6 +299,7 @@ const styles = StyleSheet.create({
 		minHeight: 60,
 		borderWidth: StyleSheet.hairlineWidth,
 		borderRadius: 12,
+		borderCurve: "continuous",
 		paddingHorizontal: 14,
 		flexDirection: "row",
 		alignItems: "center",
@@ -306,23 +315,7 @@ const styles = StyleSheet.create({
 		fontWeight: "700",
 		letterSpacing: 0.8,
 	},
-	menuRow: {
-		minHeight: 72,
-		flexDirection: "row",
-		alignItems: "center",
-		gap: 12,
-	},
-	lastRow: { borderBottomWidth: 0 },
-	iconBox: {
-		width: 40,
-		height: 40,
-		borderRadius: 12,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	menuCopy: { flex: 1, gap: 2 },
-	menuLabel: { fontSize: 16, lineHeight: 22, fontWeight: "600" },
-	menuDetail: { fontSize: 13, lineHeight: 18 },
+	menuHost: { alignSelf: "stretch", minHeight: 56, flexGrow: 0, flexShrink: 1 },
 	footer: {
 		textAlign: "center",
 		fontSize: 12,

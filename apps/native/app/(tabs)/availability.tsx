@@ -16,6 +16,7 @@ import {
 	Hint,
 	NativeDatePickerField,
 	NativeField,
+	NativeSwitchField,
 	NativeTimePickerField,
 	NativeWeekdayPicker,
 	PageHeader,
@@ -24,11 +25,7 @@ import {
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { confirmAction } from "@/lib/confirm-action";
-import {
-	formatLeaveHours,
-	formatLeaveRange,
-	todayIsoDate,
-} from "@/lib/leave";
+import { formatLeaveHours, formatLeaveRange, todayIsoDate } from "@/lib/leave";
 import {
 	useCurrentEmployment,
 	useLeaveTypes,
@@ -103,6 +100,28 @@ function parseTime(v: string): number | null {
 	if (h > 24 || mm > 59) return null;
 	return h * 60 + mm;
 }
+function Link({
+	label,
+	color,
+	onPress,
+}: {
+	label: string;
+	color: string;
+	onPress: () => void;
+}) {
+	return (
+		<Pressable
+			accessibilityRole="button"
+			accessibilityLabel={label}
+			disabled={false}
+			onPress={onPress}
+			style={({ pressed }) => [styles.linkTap, { opacity: pressed ? 0.55 : 1 }]}
+		>
+			<Text style={[styles.link, { color }]}>{label}</Text>
+		</Pressable>
+	);
+}
+
 function toLabel(min: number) {
 	const h = Math.floor(min / 60);
 	const mm = min % 60;
@@ -203,7 +222,7 @@ export default function AvailabilityScreen() {
 			await qc.invalidateQueries({ queryKey: ["constraints", selected] });
 			Alert.alert(
 				"Saved",
-				"Unavailability updated — hard constraint for your Manager.",
+				"Your manager can’t schedule you into those times without talking to you first.",
 			);
 		} catch (e) {
 			Alert.alert("Could not save", (e as Error).message);
@@ -313,10 +332,7 @@ export default function AvailabilityScreen() {
 
 	return (
 		<AppScreen>
-			<PageHeader
-				title="Time off & availability"
-				description="Request days off first. Recurring unavailability and preferences stay separate."
-			/>
+			<PageHeader title="Time off" />
 
 			<Card>
 				<Text style={[styles.title, { color: theme.text }]}>Time off</Text>
@@ -352,7 +368,7 @@ export default function AvailabilityScreen() {
 								<Badge
 									label={
 										r.status === "pending"
-											? "Needs a decision"
+											? "Waiting for manager"
 											: r.status === "approved"
 												? "Approved"
 												: "Declined"
@@ -374,25 +390,23 @@ export default function AvailabilityScreen() {
 						</View>
 						{r.status === "pending" ? (
 							<View style={{ alignItems: "flex-end", gap: 8 }}>
-								<Pressable
+								<Link
+									label={`Edit request ${formatLeaveRange(r)}`}
+									color={theme.primary}
 									onPress={() => {
 										setEditingId(r.id);
 										setLeaveTypeId(r.leaveTypeId ?? "");
 										setOffStartDate(r.startDate ?? r.startsAt.slice(0, 10));
 										setOffEndDate(r.endDate ?? r.endsAt.slice(0, 10));
 										setOffAllDay(r.allDay ?? true);
-										setOffStart(
-											toLabel(r.startMinute ?? 9 * 60),
-										);
+										setOffStart(toLabel(r.startMinute ?? 9 * 60));
 										setOffEnd(toLabel(r.endMinute ?? 17 * 60));
 										setOffReason(r.reason ?? "");
 									}}
-								>
-									<Text style={[styles.link, { color: theme.primary }]}>
-										Edit
-									</Text>
-								</Pressable>
-								<Pressable
+								/>
+								<Link
+									label="Cancel request"
+									color={theme.primary}
 									onPress={() =>
 										confirmAction({
 											title: "Cancel this time-off request?",
@@ -403,16 +417,12 @@ export default function AvailabilityScreen() {
 											onConfirm: () => void cancelRequest(r.id),
 										})
 									}
-								>
-									<Text style={[styles.link, { color: theme.primary }]}>
-										Cancel
-									</Text>
-								</Pressable>
+								/>
 							</View>
 						) : null}
 					</View>
 				))}
-				<View style={[styles.dashed, { borderColor: theme.border }]}>
+				<View style={styles.builder}>
 					<Text style={[styles.label, { color: theme.muted }]}>
 						{editingId ? "Edit request" : "New request"}
 					</Text>
@@ -422,6 +432,9 @@ export default function AvailabilityScreen() {
 							return (
 								<Pressable
 									key={type.id}
+									accessibilityRole="radio"
+									accessibilityLabel={type.name}
+									accessibilityState={{ checked: selectedType }}
 									onPress={() => setLeaveTypeId(type.id)}
 									style={[
 										styles.chip,
@@ -448,6 +461,7 @@ export default function AvailabilityScreen() {
 					<DateField
 						label="From"
 						value={offStartDate}
+						minimumDate={new Date()}
 						onChange={(value) => {
 							setOffStartDate(value);
 							if (!offEndDate || offEndDate < value) setOffEndDate(value);
@@ -456,20 +470,14 @@ export default function AvailabilityScreen() {
 					<DateField
 						label="Until"
 						value={offEndDate}
+						minimumDate={new Date(offStartDate)}
 						onChange={setOffEndDate}
 					/>
-					<Pressable
-						onPress={() => setOffAllDay((value) => !value)}
-						style={styles.rowBetween}
-					>
-						<Text style={[styles.rowLabel, { color: theme.text }]}>
-							All day
-						</Text>
-						<Badge
-							label={offAllDay ? "On" : "Off"}
-							variant={offAllDay ? "success" : "outline"}
-						/>
-					</Pressable>
+					<NativeSwitchField
+						label="All day"
+						value={offAllDay}
+						onChange={setOffAllDay}
+					/>
 					{offAllDay ? null : (
 						<View style={styles.pickerStack}>
 							<TimeField
@@ -497,7 +505,9 @@ export default function AvailabilityScreen() {
 						onPress={() => void requestTimeOff()}
 					/>
 					{editingId ? (
-						<Pressable
+						<Link
+							label="Cancel edit"
+							color={theme.primary}
 							onPress={() => {
 								setEditingId(null);
 								setOffReason("");
@@ -505,11 +515,7 @@ export default function AvailabilityScreen() {
 								setOffEndDate(todayIsoDate());
 								setOffAllDay(true);
 							}}
-						>
-							<Text style={[styles.link, { color: theme.primary }]}>
-								Cancel edit
-							</Text>
-						</Pressable>
+						/>
 					) : null}
 				</View>
 			</Card>
@@ -533,15 +539,13 @@ export default function AvailabilityScreen() {
 								{DAY_NAMES[it.weekday]} · {it.start}–{it.end}
 							</Text>
 						</View>
-						<Pressable
+						<Link
+							label={`Remove ${DAY_NAMES[it.weekday]} ${it.start}–${it.end}`}
+							color={theme.notification}
 							onPress={() =>
 								setRecurring(recurring.filter((o) => o.id !== it.id))
 							}
-						>
-							<Text style={[styles.link, { color: theme.notification }]}>
-								Remove
-							</Text>
-						</Pressable>
+						/>
 					</View>
 				))}
 				{dates.map((it) => (
@@ -554,22 +558,20 @@ export default function AvailabilityScreen() {
 								{it.date} · {it.start}–{it.end}
 							</Text>
 						</View>
-						<Pressable
+						<Link
+							label={`Remove ${it.date} ${it.start}–${it.end}`}
+							color={theme.notification}
 							onPress={() => setDates(dates.filter((o) => o.id !== it.id))}
-						>
-							<Text style={[styles.link, { color: theme.notification }]}>
-								Remove
-							</Text>
-						</Pressable>
+						/>
 					</View>
 				))}
 				{recurring.length === 0 && dates.length === 0 ? (
-					<Hint>No Unavailability added.</Hint>
+					<Hint>Nothing blocks scheduling yet.</Hint>
 				) : null}
 
-				<View style={[styles.dashed, { borderColor: theme.border }]}>
+				<View style={styles.builder}>
 					<Text style={[styles.label, { color: theme.muted }]}>
-						Recurring Unavailability
+						Weekly unavailable times
 					</Text>
 					<NativeWeekdayPicker
 						value={recurringDraft.weekday}
@@ -597,19 +599,17 @@ export default function AvailabilityScreen() {
 							if (
 								parseTime(recurringDraft.start) === null ||
 								parseTime(recurringDraft.end) === null
-							) {
-								Alert.alert("Check times", "Use HH:mm.");
+							)
 								return;
-							}
 							setRecurring([...recurring, recurringDraft]);
 							setRecurringDraft(newRecurring());
 						}}
 					/>
 				</View>
 
-				<View style={[styles.dashed, { borderColor: theme.border }]}>
+				<View style={styles.builder}>
 					<Text style={[styles.label, { color: theme.muted }]}>
-						Date exception
+						One specific date
 					</Text>
 					<DateField
 						label="Date"
@@ -646,7 +646,7 @@ export default function AvailabilityScreen() {
 				</View>
 
 				<PrimaryButton
-					label={saving ? "Saving…" : "Save Unavailability"}
+					label={saving ? "Saving…" : "Save unavailable times"}
 					disabled={saving}
 					onPress={() => void saveUnavailability()}
 				/>
@@ -673,7 +673,6 @@ export default function AvailabilityScreen() {
 					onPress={() => void savePreference()}
 				/>
 			</Card>
-
 		</AppScreen>
 	);
 }
@@ -696,15 +695,22 @@ function Field({
 function DateField({
 	label,
 	value,
+	minimumDate,
 	onChange,
 }: {
 	label: string;
 	value: string;
+	minimumDate?: Date;
 	onChange: (v: string) => void;
 }) {
 	return (
 		<View style={styles.pickerField}>
-			<NativeDatePickerField label={label} value={value} onChange={onChange} />
+			<NativeDatePickerField
+				label={label}
+				value={value}
+				minimumDate={minimumDate}
+				onChange={onChange}
+			/>
 		</View>
 	);
 }
@@ -743,27 +749,17 @@ const styles = StyleSheet.create({
 	},
 	rowLabel: { fontSize: 15, fontWeight: "600", fontVariant: ["tabular-nums"] },
 	link: { fontSize: 13, fontWeight: "700" },
-	dashed: {
-		borderWidth: 1,
-		borderRadius: 12,
-		padding: 12,
-		gap: 10,
-		borderStyle: "dashed",
-	},
+	builder: { gap: 12, paddingTop: 2 },
 	pickerStack: { gap: 12, width: "100%" },
 	pickerField: { width: "100%", minHeight: 52 },
 	chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
 	chip: {
-		minHeight: 36,
+		minHeight: 44,
 		borderWidth: 1,
 		borderRadius: 999,
 		justifyContent: "center",
 		paddingHorizontal: 14,
 	},
 	chipText: { fontSize: 13, fontWeight: "700" },
-	rowBetween: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-	},
+	linkTap: { minHeight: 44, justifyContent: "center" },
 });
