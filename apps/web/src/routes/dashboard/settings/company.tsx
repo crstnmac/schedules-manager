@@ -18,6 +18,7 @@ function CompanySettingsPage() {
 
 	return (
 		<SettingsPage
+			queries={[settings]}
 			title="Company"
 			description="Workplace tools, team visibility, and shortcuts to your directory."
 		>

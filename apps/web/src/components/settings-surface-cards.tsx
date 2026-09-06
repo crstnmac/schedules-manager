@@ -23,7 +23,7 @@ import {
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { Textarea } from "@SchedulesManager/ui/components/textarea";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { ConfirmAction } from "@/components/confirm-action";
@@ -155,11 +155,11 @@ export function GroupsCard({
 		onError: (error) => toast.error((error as Error).message),
 	});
 
-	function edit(group?: Group) {
+	const edit = useCallback((group?: Group) => {
 		setEditingId(group?.id ?? null);
 		setName(group?.name ?? "");
 		setEmploymentIds(group?.employmentIds ?? []);
-	}
+	}, []);
 
 	const columns = useMemo(
 		() =>
@@ -205,7 +205,7 @@ export function GroupsCard({
 					),
 				}),
 			]),
-		[remove],
+		[edit, remove],
 	);
 
 	return (
@@ -295,7 +295,10 @@ export function GroupsCard({
 											htmlFor={`group-worker-${worker.employmentId}`}
 											className="font-normal"
 										>
-											{formatPerson(worker.profile.fullName, worker.profile.email)}
+											{formatPerson(
+												worker.profile.fullName,
+												worker.profile.email,
+											)}
 										</FieldLabel>
 									</Field>
 								))}
@@ -317,10 +320,10 @@ export function TagsCard({
 	const queryClient = useQueryClient();
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [tagName, setTagName] = useState("");
-	function edit(tag?: Tag) {
+	const edit = useCallback((tag?: Tag) => {
 		setEditingId(tag?.id ?? null);
 		setTagName(tag?.name ?? "");
-	}
+	}, []);
 	const save = useMutation({
 		mutationFn: () =>
 			api(
@@ -386,7 +389,7 @@ export function TagsCard({
 					),
 				}),
 			]),
-		[remove],
+		[edit, remove],
 	);
 
 	return (
@@ -468,11 +471,11 @@ export function LeaveTypesCard({
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [leaveName, setLeaveName] = useState("");
 	const [paid, setPaid] = useState(false);
-	function edit(leaveType?: LeaveType) {
+	const edit = useCallback((leaveType?: LeaveType) => {
 		setEditingId(leaveType?.id ?? null);
 		setLeaveName(leaveType?.name ?? "");
 		setPaid(leaveType?.paid ?? false);
-	}
+	}, []);
 	const save = useMutation({
 		mutationFn: () =>
 			api(
@@ -546,7 +549,7 @@ export function LeaveTypesCard({
 					),
 				}),
 			]),
-		[remove],
+		[edit, remove],
 	);
 
 	return (
@@ -657,12 +660,12 @@ function RangeSection({
 	const [name, setName] = useState("");
 	const [startMinute, setStartMinute] = useState(9 * 60);
 	const [endMinute, setEndMinute] = useState(17 * 60);
-	function edit(row?: RangeRow) {
+	const edit = useCallback((row?: RangeRow) => {
 		setEditingId(row?.id ?? null);
 		setName(row?.name ?? "");
 		setStartMinute(row?.startMinute ?? 9 * 60);
 		setEndMinute(row?.endMinute ?? 17 * 60);
-	}
+	}, []);
 	const invalidate = () =>
 		queryClient.invalidateQueries({ queryKey: ["time-blocks", locationId] });
 	const save = useMutation({
@@ -743,7 +746,7 @@ function RangeSection({
 					),
 				}),
 			]),
-		[formatMinute, label, remove],
+		[edit, formatMinute, label, remove],
 	);
 
 	return (
@@ -932,14 +935,14 @@ export function TemplatesCard({
 	const [templateStart, setTemplateStart] = useState(9 * 60);
 	const [templateEnd, setTemplateEnd] = useState(17 * 60);
 	const [note, setNote] = useState("");
-	function edit(template?: TemplateRow) {
+	const edit = useCallback((template?: TemplateRow) => {
 		setEditingId(template?.id ?? null);
 		setTemplateName(template?.name ?? "");
 		setPositionId(template?.positionId ?? "");
 		setTemplateStart(template?.startMinute ?? 9 * 60);
 		setTemplateEnd(template?.endMinute ?? 17 * 60);
 		setNote(template?.note ?? "");
-	}
+	}, []);
 	const invalidate = () =>
 		queryClient.invalidateQueries({ queryKey: ["time-blocks", locationId] });
 	const save = useMutation({
@@ -1027,7 +1030,7 @@ export function TemplatesCard({
 					),
 				}),
 			]),
-		[formatMinute, remove],
+		[edit, formatMinute, remove],
 	);
 
 	const templates = data?.shiftTemplates ?? [];

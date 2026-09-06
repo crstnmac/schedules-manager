@@ -26,7 +26,12 @@
 			"!**/.svelte-kit",
 			"!**/wrangler.jsonc",
 			"!**/.source",
-			"!**/convex/_generated"
+			"!**/convex/_generated",
+			"!**/build",
+			"!**/.agents",
+			"!**/.claude",
+			"!**/.cursor",
+			"!**/.opencode"
 		]
 	},
 	"formatter": {
@@ -64,6 +69,28 @@
 			}
 		}
 	},
+	"overrides": [
+		{
+			"includes": ["packages/ui/src/components/**"],
+			"linter": {
+				"rules": {
+					"a11y": {
+						"useSemanticElements": "off",
+						"useKeyWithClickEvents": "off",
+						"noLabelWithoutControl": "off"
+					},
+					"correctness": {
+						"useExhaustiveDependencies": "off"
+					},
+					"suspicious": {
+						"noArrayIndexKey": "off",
+						"noDoubleEquals": "off",
+						"noDocumentCookie": "off"
+					}
+				}
+			}
+		}
+	],
 	"javascript": {
 		"formatter": {
 			"quoteStyle": "double"

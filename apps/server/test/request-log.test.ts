@@ -2,10 +2,10 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
 	newRequestId,
+	type RequestLogEntry,
 	resetRequestLogSink,
 	setRequestLogSinkForTests,
 	writeRequestLog,
-	type RequestLogEntry,
 } from "../src/request-log";
 
 afterEach(() => {

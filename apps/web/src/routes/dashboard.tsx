@@ -36,6 +36,7 @@ import {
 } from "@tanstack/react-router";
 import {
 	AlarmClockIcon,
+	BarChart3Icon,
 	BellIcon,
 	CalendarDaysIcon,
 	ChevronsUpDownIcon,
@@ -88,7 +89,7 @@ const navigation = [
 		label: "Announcements",
 		icon: MegaphoneIcon,
 	},
-	{ to: "/dashboard/reports", label: "Reports", icon: Settings2Icon },
+	{ to: "/dashboard/reports", label: "Reports", icon: BarChart3Icon },
 	{ to: "/dashboard/activity", label: "Activity", icon: BellIcon },
 	{
 		to: "/dashboard/settings/workplace",

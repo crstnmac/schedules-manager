@@ -21,6 +21,7 @@ function TemplatesSettingsPage() {
 
 	return (
 		<SettingsPage
+			queries={[locations, positions, timeBlocks]}
 			title="Templates"
 			description="Reusable shift shapes for a position and time window."
 		>

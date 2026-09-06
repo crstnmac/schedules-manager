@@ -21,6 +21,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronLeftIcon, TimerIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { AppDocument } from "@/components/app-page";
+import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { api } from "@/lib/api";
 import {
 	type TimecardEntry,
@@ -30,8 +32,6 @@ import {
 import { formatDurationMs } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
-import { AppDocument } from "@/components/app-page";
-import { createDataColumnHelper, DataTable } from "@/components/data-table";
 
 export const Route = createFileRoute("/worker/timecard")({
 	component: TimecardPage,
@@ -47,7 +47,6 @@ function TimecardPage() {
 	const schedule = useMySchedule(workplace?.id);
 	const weekStartDay = schedule.data?.weekStartDay ?? 1;
 	const [nowMs, setNowMs] = useState(() => Date.now());
-	const [breakStates, setBreakStates] = useState<Record<string, boolean>>({});
 	const queryClient = useQueryClient();
 	const updateBreak = useMutation({
 		mutationFn: (input: { timeEntryId: string; action: "start" | "end" }) =>
@@ -55,10 +54,6 @@ function TimecardPage() {
 				method: "POST",
 			}),
 		onSuccess: (_, input) => {
-			setBreakStates((current) => ({
-				...current,
-				[input.timeEntryId]: input.action === "start",
-			}));
 			queryClient.invalidateQueries({ queryKey: ["timecard"] });
 			toast.success(
 				input.action === "start" ? "Break started." : "Break ended.",
@@ -98,7 +93,7 @@ function TimecardPage() {
 						id: "window",
 						header: "Clock window",
 						cell: ({ getValue }) => (
-							<span className="tabular-nums text-muted-foreground">
+							<span className="text-muted-foreground tabular-nums">
 								{getValue()}
 							</span>
 						),
@@ -114,7 +109,9 @@ function TimecardPage() {
 						id: "duration",
 						header: "Duration",
 						cell: ({ getValue }) => (
-							<span className="tabular-nums">{formatDurationMs(getValue())}</span>
+							<span className="tabular-nums">
+								{formatDurationMs(getValue())}
+							</span>
 						),
 					},
 				),
@@ -132,9 +129,14 @@ function TimecardPage() {
 					header: "Status",
 					enableSorting: false,
 					cell: ({ row }) => {
-						if (row.original.clockedOutAt !== null) return null;
-						return (
-							<Badge>{breakStates[row.original.id] ? "On Break" : "Open"}</Badge>
+						const entry = row.original;
+						if (entry.clockedOutAt !== null) return null;
+						return entry.openBreakStartedAt ? (
+							<Badge variant="secondary">
+								On break since {formatClockTime(entry.openBreakStartedAt)}
+							</Badge>
+						) : (
+							<Badge>On the clock</Badge>
 						);
 					},
 				}),
@@ -145,13 +147,16 @@ function TimecardPage() {
 					cell: ({ row }) => {
 						const entry = row.original;
 						if (entry.clockedOutAt !== null) return null;
-						const breakOpen = breakStates[entry.id];
+						const breakOpen = entry.openBreakStartedAt !== null;
+						const pendingThis =
+							updateBreak.isPending &&
+							updateBreak.variables?.timeEntryId === entry.id;
 						return (
 							<div className="flex flex-wrap items-center justify-end gap-2">
 								<Button
 									size="sm"
 									variant="outline"
-									disabled={updateBreak.isPending || breakOpen === true}
+									disabled={breakOpen || pendingThis}
 									onClick={() =>
 										updateBreak.mutate({
 											timeEntryId: entry.id,
@@ -159,7 +164,8 @@ function TimecardPage() {
 										})
 									}
 								>
-									{updateBreak.isPending ? (
+									{pendingThis &&
+									updateBreak.variables?.action === "start" ? (
 										<Spinner data-icon="inline-start" />
 									) : null}
 									Start Break
@@ -167,7 +173,7 @@ function TimecardPage() {
 								<Button
 									size="sm"
 									variant="outline"
-									disabled={updateBreak.isPending || breakOpen === false}
+									disabled={!breakOpen || pendingThis}
 									onClick={() =>
 										updateBreak.mutate({
 											timeEntryId: entry.id,
@@ -175,6 +181,9 @@ function TimecardPage() {
 										})
 									}
 								>
+									{pendingThis && updateBreak.variables?.action === "end" ? (
+										<Spinner data-icon="inline-start" />
+									) : null}
 									End Break
 								</Button>
 							</div>
@@ -182,7 +191,7 @@ function TimecardPage() {
 					},
 				}),
 			]),
-		[breakStates, formatClockTime, notesEnabled, nowMs, updateBreak],
+		[formatClockTime, notesEnabled, nowMs, updateBreak],
 	);
 
 	return (
@@ -241,7 +250,7 @@ function TimecardPage() {
 						</CardHeader>
 						<CardContent>
 							<p className="text-muted-foreground text-sm">
-								Punches are your record of started and finished work.
+								Your Time Entries record when you started and finished work.
 							</p>
 						</CardContent>
 					</Card>
@@ -252,15 +261,16 @@ function TimecardPage() {
 								<EmptyMedia variant="icon">
 									<TimerIcon />
 								</EmptyMedia>
-								<EmptyTitle>No punches yet</EmptyTitle>
+								<EmptyTitle>No Time Entries yet</EmptyTitle>
 								<EmptyDescription>
 									Clock in from your schedule when your shift starts — your
-									punches will show up here.
+									entries will show up here.
 								</EmptyDescription>
 							</EmptyHeader>
 						</Empty>
 					) : (
 						<DataTable
+							stacked
 							columns={columns}
 							data={entries}
 							getRowId={(row) => row.id}
@@ -270,7 +280,7 @@ function TimecardPage() {
 
 					{entries.length > 0 ? (
 						<p className="text-center text-muted-foreground text-xs">
-							Showing your last {entries.length} punches.
+							Showing your last {entries.length} Time Entries.
 						</p>
 					) : null}
 				</>

@@ -15,6 +15,7 @@ function PreferencesSettingsPage() {
 
 	return (
 		<SettingsPage
+			queries={[me]}
 			title="Preferences"
 			description="Choose a time and name format, then check the live preview."
 		>

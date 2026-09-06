@@ -17,6 +17,7 @@ function SchedulePoliciesSettingsPage() {
 
 	return (
 		<SettingsPage
+			queries={[settings]}
 			title="Schedule policies"
 			description="Visibility, exchanges, rest rules, and restrictions for published weeks."
 		>

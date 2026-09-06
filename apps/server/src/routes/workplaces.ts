@@ -249,7 +249,8 @@ export const workplacesRoutes = new Elysia({
 								? existing.laborCostPercentGoal
 								: body.laborCostPercentGoal,
 						managersCanViewLaborCost:
-							body.managersCanViewLaborCost ?? existing.managersCanViewLaborCost,
+							body.managersCanViewLaborCost ??
+							existing.managersCanViewLaborCost,
 						messagingEnabled:
 							body.messagingEnabled ?? existing.messagingEnabled,
 						announcementsEnabled:

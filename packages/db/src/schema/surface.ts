@@ -63,7 +63,10 @@ export const shiftTags = pgTable(
 			.notNull(),
 	},
 	(table) => [
-		unique("shift_tags_workplace_name_unique").on(table.workplaceId, table.name),
+		unique("shift_tags_workplace_name_unique").on(
+			table.workplaceId,
+			table.name,
+		),
 	],
 );
 

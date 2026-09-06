@@ -76,9 +76,7 @@ export async function sendInvitationEmail(input: {
 	try {
 		result = JSON.parse(raw) as typeof result;
 	} catch {
-		throw new Error(
-			`ZeptoMail returned non-JSON (HTTP ${response.status})`,
-		);
+		throw new Error(`ZeptoMail returned non-JSON (HTTP ${response.status})`);
 	}
 	if (!response.ok) {
 		const code =

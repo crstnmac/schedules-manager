@@ -20,6 +20,7 @@ function TimeBlocksSettingsPage() {
 
 	return (
 		<SettingsPage
+			queries={[locations, timeBlocks]}
 			title="Time blocks"
 			description="Named windows of the day you can reuse while building a week."
 		>

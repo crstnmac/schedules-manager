@@ -17,6 +17,7 @@ function LocationsSettingsPage() {
 
 	return (
 		<SettingsPage
+			queries={[locations]}
 			title="Locations"
 			description="Sites where people can be scheduled, including time zone, address, and kiosk."
 		>

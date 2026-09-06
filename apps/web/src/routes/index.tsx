@@ -36,7 +36,7 @@ function HomeComponent() {
 
 	if (!user) return <AuthForm />;
 
-	if (me.isError) {
+	if (me.isError || pending.isError) {
 		return (
 			<main
 				id="main-content"
@@ -46,9 +46,21 @@ function HomeComponent() {
 				<Card className="w-full max-w-md">
 					<CardHeader>
 						<CardTitle>Something went wrong</CardTitle>
-						<CardDescription>{(me.error as Error).message}</CardDescription>
+						<CardDescription>
+							We couldn’t load your workplace. Check your connection and try
+							again.
+						</CardDescription>
 					</CardHeader>
-					<CardFooter>
+					<CardFooter className="gap-2">
+						<Button
+							disabled={me.isFetching || pending.isFetching}
+							onClick={() => {
+								void me.refetch();
+								void pending.refetch();
+							}}
+						>
+							Try again
+						</Button>
 						<Button variant="outline" onClick={() => signOut()}>
 							Sign out
 						</Button>

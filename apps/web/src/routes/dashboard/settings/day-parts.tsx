@@ -20,6 +20,7 @@ function DayPartsSettingsPage() {
 
 	return (
 		<SettingsPage
+			queries={[locations, timeBlocks]}
 			title="Day parts"
 			description="Breakfast, lunch, dinner, and other parts of service for this location."
 		>

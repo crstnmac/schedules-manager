@@ -25,17 +25,12 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeftIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-
-import { api } from "@/lib/api";
-import {
-	useLeaveTypes,
-	usePtoBalances,
-	useWorkers,
-} from "@/lib/queries";
-import { useDisplayPrefs } from "@/lib/use-display-prefs";
-import { useWorkplace } from "@/lib/use-workplace";
 import { AppDocument } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import { api } from "@/lib/api";
+import { useLeaveTypes, usePtoBalances, useWorkers } from "@/lib/queries";
+import { useDisplayPrefs } from "@/lib/use-display-prefs";
+import { useWorkplace } from "@/lib/use-workplace";
 
 export const Route = createFileRoute("/dashboard/workers/$employmentId")({
 	component: EmploymentPage,
@@ -52,7 +47,6 @@ type DocumentRow = {
 
 const ptoHelper = createDataColumnHelper<LeaveTypeRow>();
 const documentHelper = createDataColumnHelper<DocumentRow>();
-
 
 function EmploymentPage() {
 	const { employmentId } = Route.useParams();
@@ -315,7 +309,8 @@ function EmploymentPage() {
 					<EmptyHeader>
 						<EmptyTitle>Worker not found</EmptyTitle>
 						<EmptyDescription>
-							This employment may have been removed or you no longer have access.
+							This employment may have been removed or you no longer have
+							access.
 						</EmptyDescription>
 					</EmptyHeader>
 					<Button

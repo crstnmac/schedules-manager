@@ -21,6 +21,14 @@ import { Button } from "@SchedulesManager/ui/components/button";
 import { Card, CardHeader } from "@SchedulesManager/ui/components/card";
 import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
 import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@SchedulesManager/ui/components/dialog";
+import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuGroup,
@@ -65,14 +73,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@SchedulesManager/ui/components/select";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "@SchedulesManager/ui/components/dialog";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { Textarea } from "@SchedulesManager/ui/components/textarea";
@@ -91,6 +91,7 @@ import {
 	type DragEndEvent,
 	useDroppable,
 } from "@dnd-kit/react";
+import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
@@ -110,13 +111,12 @@ import {
 	UserPlusIcon,
 	XIcon,
 } from "lucide-react";
-import { usePostHog } from "@posthog/react";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { ConfirmAction } from "@/components/confirm-action";
-import { DatePicker } from "@/components/date-picker";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import { DatePicker } from "@/components/date-picker";
 import { ScheduleMonthGrid } from "@/components/schedule-month-grid";
 import { ShiftTile } from "@/components/schedule-shift-tile";
 import { TimePicker } from "@/components/time-picker";
@@ -241,9 +241,7 @@ const hoursColumns = hoursHelper.columns([
 	hoursHelper.accessor((row) => `${(row.minutes / 60).toFixed(1)}h`, {
 		id: "total",
 		header: "Total",
-		cell: ({ getValue }) => (
-			<span className="tabular-nums">{getValue()}</span>
-		),
+		cell: ({ getValue }) => <span className="tabular-nums">{getValue()}</span>,
 	}),
 	hoursHelper.accessor(
 		(row) =>
@@ -267,7 +265,9 @@ function createScheduleAcceptanceColumns(
 			{
 				id: "worker",
 				header: "Worker",
-				cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
+				cell: ({ getValue }) => (
+					<span className="font-medium">{getValue()}</span>
+				),
 			},
 		),
 		acceptanceHelper.accessor("changeSummary", { header: "Change" }),
@@ -371,9 +371,7 @@ const publicationColumns = publicationHelper.columns([
 					<Badge
 						key={worker.employmentId}
 						title={`${worker.name} · ${worker.status}`}
-						variant={
-							worker.status === "acknowledged" ? "default" : "secondary"
-						}
+						variant={worker.status === "acknowledged" ? "default" : "secondary"}
 						className="rounded-md text-[11px]"
 					>
 						{worker.name} ·{" "}
@@ -437,6 +435,109 @@ function formatCents(cents: number) {
 		currency: "USD",
 		maximumFractionDigits: 0,
 	}).format(cents / 100);
+}
+
+function PublicationBadge({
+	publication,
+}: {
+	publication: {
+		latestVersionNumber: number | null;
+		publishedAt: string | null;
+		hasUnpublishedChanges: boolean;
+		versions: {
+			id: string;
+			versionNumber: number;
+			workers: {
+				employmentId: string;
+				name: string;
+				status: "sent" | "delivered" | "acknowledged";
+			}[];
+		}[];
+	};
+}) {
+	const published = publication.latestVersionNumber != null;
+	const dirty = publication.hasUnpublishedChanges;
+	const currentWorkers = published
+		? (publication.versions.find(
+				(version) => version.versionNumber === publication.latestVersionNumber,
+			)?.workers ?? [])
+		: [];
+	const acknowledged = currentWorkers.filter(
+		(worker) => worker.status === "acknowledged",
+	).length;
+
+	const badge = published ? (
+		<Badge variant={dirty ? "secondary" : "default"}>
+			{dirty
+				? `Draft · v${publication.latestVersionNumber} live`
+				: `Published v${publication.latestVersionNumber}`}
+		</Badge>
+	) : (
+		<Badge variant="secondary">Draft</Badge>
+	);
+
+	if (!published) {
+		return (
+			<Tooltip>
+				<TooltipTrigger render={<span className="inline-flex">{badge}</span>} />
+				<TooltipContent>This week has not been published yet.</TooltipContent>
+			</Tooltip>
+		);
+	}
+
+	return (
+		<Popover>
+			<PopoverTrigger
+				nativeButton={false}
+				render={<span className="inline-flex">{badge}</span>}
+			/>
+			<PopoverContent align="end" className="w-64">
+				<PopoverHeader>
+					<PopoverTitle>
+						{dirty
+							? `Published v${publication.latestVersionNumber} · draft changes`
+							: `Published v${publication.latestVersionNumber}`}
+					</PopoverTitle>
+					<PopoverDescription>
+						{acknowledged} of {currentWorkers.length} workers have seen this
+						version.
+					</PopoverDescription>
+				</PopoverHeader>
+				{currentWorkers.length > 0 ? (
+					<ul className="flex max-h-48 flex-col gap-1.5 overflow-y-auto">
+						{currentWorkers.map((worker) => (
+							<li
+								key={worker.employmentId}
+								className="flex items-center justify-between gap-2 text-xs"
+							>
+								<span className="truncate">{worker.name}</span>
+								<Badge
+									variant={
+										worker.status === "acknowledged"
+											? "default"
+											: worker.status === "delivered"
+												? "secondary"
+												: "outline"
+									}
+								>
+									{worker.status === "acknowledged"
+										? "Seen"
+										: worker.status === "delivered"
+											? "Delivered"
+											: "Sent"}
+								</Badge>
+							</li>
+						))}
+					</ul>
+				) : null}
+				{dirty ? (
+					<p className="text-muted-foreground text-xs">
+						Edit the draft, then publish to send the changes.
+					</p>
+				) : null}
+			</PopoverContent>
+		</Popover>
+	);
 }
 
 interface ShiftFormState {
@@ -541,7 +642,8 @@ function workerNeedsPositionApproval(
 	positionId: string,
 ): boolean {
 	if (!positionId) return false;
-	const positionIds = member?.kind === "worker" ? member.positionIds : undefined;
+	const positionIds =
+		member?.kind === "worker" ? member.positionIds : undefined;
 	if (!positionIds || positionIds.length === 0) return false;
 	return !positionIds.includes(positionId);
 }
@@ -789,6 +891,7 @@ function SchedulePage() {
 	const [repeatWeeks, setRepeatWeeks] = useState("1");
 	const [templateName, setTemplateName] = useState("");
 	const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+	const [copyPreviousConfirmOpen, setCopyPreviousConfirmOpen] = useState(false);
 	const [punchReason, setPunchReason] = useState("");
 	const [punchInLocal, setPunchInLocal] = useState("");
 	const [punchOutLocal, setPunchOutLocal] = useState("");
@@ -819,7 +922,8 @@ function SchedulePage() {
 	const respondToAcceptance = useRespondToAcceptance();
 	const pendingAcceptances = mySchedule.data?.pendingAcceptances;
 	const myAcceptanceIds = useMemo(
-		() => new Set((pendingAcceptances ?? []).map((acceptance) => acceptance.id)),
+		() =>
+			new Set((pendingAcceptances ?? []).map((acceptance) => acceptance.id)),
 		[pendingAcceptances],
 	);
 	const scheduleAcceptanceColumns = useMemo(
@@ -994,7 +1098,7 @@ function SchedulePage() {
 			});
 			return { approvePosition: approvePosition === true };
 		},
-		onSuccess: async (result) => {
+		onSuccess: async (result, variables) => {
 			setPositionApproval(null);
 			await invalidate();
 			if (result.approvePosition) {
@@ -1002,7 +1106,17 @@ function SchedulePage() {
 					queryKey: ["workplaces", workplace?.id, "workers"],
 				});
 			}
-			toast.success("Shift moved.");
+			toast.success("Shift moved.", {
+				action: {
+					label: "Undo",
+					onClick: () =>
+						moveShift.mutate({
+							shift: variables.shift,
+							employmentId: variables.shift.employmentId,
+							date: variables.shift.date,
+						}),
+				},
+			});
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
@@ -1043,10 +1157,10 @@ function SchedulePage() {
 			delete?: boolean;
 			employmentId?: string | null;
 		}) =>
-			api(
-				`/v1/locations/${activeLocationId}/schedules/${weekStart}/bulk`,
-				{ method: "POST", body },
-			),
+			api(`/v1/locations/${activeLocationId}/schedules/${weekStart}/bulk`, {
+				method: "POST",
+				body,
+			}),
 		onSuccess: async () => {
 			setSelectedShiftIds([]);
 			await invalidate();
@@ -1066,19 +1180,15 @@ function SchedulePage() {
 			),
 		onSuccess: async (result: { pasted: number }) => {
 			await invalidate();
-			toast.success(`Pasted ${result.pasted} Shift${result.pasted === 1 ? "" : "s"}.`);
+			toast.success(
+				`Pasted ${result.pasted} Shift${result.pasted === 1 ? "" : "s"}.`,
+			);
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
 
 	const saveSales = useMutation({
-		mutationFn: ({
-			day,
-			amountCents,
-		}: {
-			day: string;
-			amountCents: number;
-		}) =>
+		mutationFn: ({ day, amountCents }: { day: string; amountCents: number }) =>
 			api(`/v1/locations/${activeLocationId}/sales/${day}`, {
 				method: "PUT",
 				body: { amountCents },
@@ -1193,9 +1303,7 @@ function SchedulePage() {
 		};
 	}, [data?.hours, data?.shifts]);
 	const summaryShifts =
-		viewMode === "month"
-			? (calendar.data?.shifts ?? [])
-			: (data?.shifts ?? []);
+		viewMode === "month" ? (calendar.data?.shifts ?? []) : (data?.shifts ?? []);
 	const conflictCount = summaryShifts.reduce(
 		(sum, shift) => sum + shift.conflicts.length,
 		0,
@@ -1312,10 +1420,7 @@ function SchedulePage() {
 				!member.positionIds.includes(positionFilter)
 			)
 				return false;
-			if (
-				groupFilter !== "all" &&
-				!member.groupIds.includes(groupFilter)
-			)
+			if (groupFilter !== "all" && !member.groupIds.includes(groupFilter))
 				return false;
 			const minutes =
 				scheduleIndex.hoursByEmploymentId.get(member.employmentId) ?? 0;
@@ -1382,7 +1487,8 @@ function SchedulePage() {
 		}
 		const query = workerQuery.trim().toLowerCase();
 		if (query) {
-			const haystack = `${shift.workerName ?? "open"} ${shift.positionName}`.toLowerCase();
+			const haystack =
+				`${shift.workerName ?? "open"} ${shift.positionName}`.toLowerCase();
 			if (!haystack.includes(query)) return false;
 		}
 		if (groupFilter !== "all") {
@@ -1485,10 +1591,14 @@ function SchedulePage() {
 					: [];
 		const needingApproval = employmentIds
 			.map((employmentId) =>
-				data?.staff.find((candidate) => candidate.employmentId === employmentId),
+				data?.staff.find(
+					(candidate) => candidate.employmentId === employmentId,
+				),
 			)
 			.filter((member): member is NonNullable<typeof member> =>
-				Boolean(member && workerNeedsPositionApproval(member, state.positionId)),
+				Boolean(
+					member && workerNeedsPositionApproval(member, state.positionId),
+				),
 			);
 		if (needingApproval.length > 0) {
 			const first = needingApproval[0]?.name ?? "this worker";
@@ -1613,12 +1723,7 @@ function SchedulePage() {
 		(member.unavailability ?? []).filter((window) =>
 			checkDates.some((date) =>
 				form
-					? staffWindowOverlaps(
-							window,
-							date,
-							form.startMinute,
-							form.endMinute,
-						)
+					? staffWindowOverlaps(window, date, form.startMinute, form.endMinute)
 					: false,
 			),
 		),
@@ -1840,11 +1945,8 @@ function SchedulePage() {
 								</div>
 
 								<div className="flex shrink-0 items-center gap-1.5">
-									{publicationState?.latestVersionNumber == null ||
-									publicationState.hasUnpublishedChanges ? (
-										<span className="px-1 text-muted-foreground text-xs">
-											Draft
-										</span>
+									{publicationState ? (
+										<PublicationBadge publication={publicationState} />
 									) : null}
 									<Select
 										items={[
@@ -1901,10 +2003,14 @@ function SchedulePage() {
 										<DropdownMenuContent align="end" className="min-w-56">
 											<DropdownMenuGroup>
 												<DropdownMenuItem
-													disabled={
-														copyPrevious.isPending || !activeLocationId
-													}
-													onClick={() => copyPrevious.mutate()}
+													disabled={copyPrevious.isPending || !activeLocationId}
+													onClick={() => {
+														if (data && data.shifts.length > 0) {
+															setCopyPreviousConfirmOpen(true);
+														} else {
+															copyPrevious.mutate();
+														}
+													}}
 												>
 													{copyPrevious.isPending ? <Spinner /> : null}
 													Copy last week
@@ -1966,21 +2072,36 @@ function SchedulePage() {
 											) : null}
 										</DropdownMenuContent>
 									</DropdownMenu>
-									<Button
-										size="sm"
-										disabled={
-											previewPublish.isPending ||
-											!schedule.data ||
-											(publicationState?.latestVersionNumber != null &&
-												!publicationState.hasUnpublishedChanges)
-										}
-										onClick={() => previewPublish.mutate()}
-									>
-										{previewPublish.isPending ? (
-											<Spinner data-icon="inline-start" />
+									<Tooltip>
+										<TooltipTrigger
+											render={
+												<span className="inline-flex">
+													<Button
+														size="sm"
+														disabled={
+															previewPublish.isPending ||
+															!schedule.data ||
+															(publicationState?.latestVersionNumber != null &&
+																!publicationState.hasUnpublishedChanges)
+														}
+														onClick={() => previewPublish.mutate()}
+													>
+														{previewPublish.isPending ? (
+															<Spinner data-icon="inline-start" />
+														) : null}
+														Publish
+													</Button>
+												</span>
+											}
+										/>
+										{publicationState?.latestVersionNumber != null &&
+										!publicationState.hasUnpublishedChanges ? (
+											<TooltipContent>
+												This week is published and unchanged. Edit the schedule
+												to start a new draft.
+											</TooltipContent>
 										) : null}
-										Publish
-									</Button>
+									</Tooltip>
 									<Button
 										size="sm"
 										variant="outline"
@@ -1996,56 +2117,123 @@ function SchedulePage() {
 						)
 					: null}
 				<div className="flex min-w-0 items-center gap-2 border-b bg-background px-3 py-1.5 print:hidden">
-						{data && data.staff.length > 0 ? (
-							<>
-								<InputGroup className="max-w-52 min-w-36 flex-1 sm:flex-none">
-									<InputGroupAddon align="inline-start">
-										<SearchIcon />
-									</InputGroupAddon>
-									<InputGroupInput
-										aria-label="Search workers"
-										placeholder="Search"
-										value={workerQuery}
-										onChange={(event) => {
-											setWorkerQuery(event.target.value);
-											setVisibleStaffCount(40);
-										}}
-									/>
-								</InputGroup>
-								<Popover>
-									<PopoverTrigger
-										render={<Button variant="ghost" size="sm" />}
-									>
-										<ListFilterIcon data-icon="inline-start" />
-										Filters
-										{activeSelectFilterCount > 0 ? (
-											<Badge
-												variant="secondary"
-												className="ml-1 size-5 px-0 tabular-nums"
+					{data && data.staff.length > 0 ? (
+						<>
+							<InputGroup className="min-w-36 max-w-52 flex-1 sm:flex-none">
+								<InputGroupAddon align="inline-start">
+									<SearchIcon />
+								</InputGroupAddon>
+								<InputGroupInput
+									aria-label="Search workers"
+									placeholder="Search"
+									value={workerQuery}
+									onChange={(event) => {
+										setWorkerQuery(event.target.value);
+										setVisibleStaffCount(40);
+									}}
+								/>
+							</InputGroup>
+							<Popover>
+								<PopoverTrigger render={<Button variant="ghost" size="sm" />}>
+									<ListFilterIcon data-icon="inline-start" />
+									Filters
+									{activeSelectFilterCount > 0 ? (
+										<Badge
+											variant="secondary"
+											className="ml-1 size-5 px-0 tabular-nums"
+										>
+											{activeSelectFilterCount}
+										</Badge>
+									) : null}
+								</PopoverTrigger>
+								<PopoverContent align="start" className="w-72">
+									<PopoverHeader>
+										<PopoverTitle>Filters</PopoverTitle>
+									</PopoverHeader>
+									<FieldGroup className="gap-3">
+										<Field>
+											<FieldLabel>Position</FieldLabel>
+											<Select
+												items={[
+													{ label: "All positions", value: "all" },
+													...data.positions.map((position) => ({
+														label: position.name,
+														value: position.id,
+													})),
+												]}
+												value={positionFilter}
+												onValueChange={(value) => {
+													if (!value) return;
+													setPositionFilter(value);
+													setVisibleStaffCount(40);
+												}}
 											>
-												{activeSelectFilterCount}
-											</Badge>
-										) : null}
-									</PopoverTrigger>
-									<PopoverContent align="start" className="w-72">
-										<PopoverHeader>
-											<PopoverTitle>Filters</PopoverTitle>
-										</PopoverHeader>
-										<FieldGroup className="gap-3">
+												<SelectTrigger className="w-full">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent alignItemWithTrigger={false}>
+													<SelectGroup>
+														<SelectItem value="all">All positions</SelectItem>
+														{data.positions.map((position) => (
+															<SelectItem key={position.id} value={position.id}>
+																{position.name}
+															</SelectItem>
+														))}
+													</SelectGroup>
+												</SelectContent>
+											</Select>
+										</Field>
+										<Field>
+											<FieldLabel>Schedule state</FieldLabel>
+											<Select
+												items={[
+													{ label: "All workers", value: "all" },
+													{ label: "Scheduled", value: "scheduled" },
+													{ label: "Unscheduled", value: "unscheduled" },
+													{
+														label: "Has constraints",
+														value: "constraints",
+													},
+												]}
+												value={staffStateFilter}
+												onValueChange={(value) => {
+													if (!value) return;
+													setStaffStateFilter(value);
+													setVisibleStaffCount(40);
+												}}
+											>
+												<SelectTrigger className="w-full">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent alignItemWithTrigger={false}>
+													<SelectGroup>
+														<SelectItem value="all">All workers</SelectItem>
+														<SelectItem value="scheduled">Scheduled</SelectItem>
+														<SelectItem value="unscheduled">
+															Unscheduled
+														</SelectItem>
+														<SelectItem value="constraints">
+															Has constraints
+														</SelectItem>
+													</SelectGroup>
+												</SelectContent>
+											</Select>
+										</Field>
+										{(groups.data?.groups ?? []).length > 0 ? (
 											<Field>
-												<FieldLabel>Position</FieldLabel>
+												<FieldLabel>Worker group</FieldLabel>
 												<Select
 													items={[
-														{ label: "All positions", value: "all" },
-														...data.positions.map((position) => ({
-															label: position.name,
-															value: position.id,
+														{ label: "All groups", value: "all" },
+														...(groups.data?.groups ?? []).map((group) => ({
+															label: group.name,
+															value: group.id,
 														})),
 													]}
-													value={positionFilter}
+													value={groupFilter}
 													onValueChange={(value) => {
 														if (!value) return;
-														setPositionFilter(value);
+														setGroupFilter(value);
 														setVisibleStaffCount(40);
 													}}
 												>
@@ -2054,36 +2242,32 @@ function SchedulePage() {
 													</SelectTrigger>
 													<SelectContent alignItemWithTrigger={false}>
 														<SelectGroup>
-															<SelectItem value="all">All positions</SelectItem>
-															{data.positions.map((position) => (
-																<SelectItem
-																	key={position.id}
-																	value={position.id}
-																>
-																	{position.name}
+															<SelectItem value="all">All groups</SelectItem>
+															{(groups.data?.groups ?? []).map((group) => (
+																<SelectItem key={group.id} value={group.id}>
+																	{group.name}
 																</SelectItem>
 															))}
 														</SelectGroup>
 													</SelectContent>
 												</Select>
 											</Field>
+										) : null}
+										{(tags.data?.tags ?? []).length > 0 ? (
 											<Field>
-												<FieldLabel>Schedule state</FieldLabel>
+												<FieldLabel>Shift tag</FieldLabel>
 												<Select
 													items={[
-														{ label: "All workers", value: "all" },
-														{ label: "Scheduled", value: "scheduled" },
-														{ label: "Unscheduled", value: "unscheduled" },
-														{
-															label: "Has constraints",
-															value: "constraints",
-														},
+														{ label: "All tags", value: "all" },
+														...(tags.data?.tags ?? []).map((tag) => ({
+															label: tag.name,
+															value: tag.id,
+														})),
 													]}
-													value={staffStateFilter}
+													value={tagFilter}
 													onValueChange={(value) => {
 														if (!value) return;
-														setStaffStateFilter(value);
-														setVisibleStaffCount(40);
+														setTagFilter(value);
 													}}
 												>
 													<SelectTrigger className="w-full">
@@ -2091,224 +2275,144 @@ function SchedulePage() {
 													</SelectTrigger>
 													<SelectContent alignItemWithTrigger={false}>
 														<SelectGroup>
-															<SelectItem value="all">All workers</SelectItem>
-															<SelectItem value="scheduled">Scheduled</SelectItem>
-															<SelectItem value="unscheduled">
-																Unscheduled
-															</SelectItem>
-															<SelectItem value="constraints">
-																Has constraints
-															</SelectItem>
+															<SelectItem value="all">All tags</SelectItem>
+															{(tags.data?.tags ?? []).map((tag) => (
+																<SelectItem key={tag.id} value={tag.id}>
+																	{tag.name}
+																</SelectItem>
+															))}
 														</SelectGroup>
 													</SelectContent>
 												</Select>
 											</Field>
-											{(groups.data?.groups ?? []).length > 0 ? (
-												<Field>
-													<FieldLabel>Worker group</FieldLabel>
-													<Select
-														items={[
-															{ label: "All groups", value: "all" },
-															...(groups.data?.groups ?? []).map((group) => ({
-																label: group.name,
-																value: group.id,
-															})),
-														]}
-														value={groupFilter}
-														onValueChange={(value) => {
-															if (!value) return;
-															setGroupFilter(value);
-															setVisibleStaffCount(40);
-														}}
+										) : null}
+										{(timeBlocks.data?.dayParts ?? []).length > 0 ? (
+											<Field>
+												<FieldLabel>Day part</FieldLabel>
+												<Select
+													items={[
+														{ label: "All day parts", value: "all" },
+														...(timeBlocks.data?.dayParts ?? []).map(
+															(part) => ({
+																label: part.name,
+																value: part.id,
+															}),
+														),
+													]}
+													value={dayPartFilter}
+													onValueChange={(value) => {
+														if (!value) return;
+														setDayPartFilter(value);
+													}}
+												>
+													<SelectTrigger className="w-full">
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent alignItemWithTrigger={false}>
+														<SelectGroup>
+															<SelectItem value="all">All day parts</SelectItem>
+															{(timeBlocks.data?.dayParts ?? []).map((part) => (
+																<SelectItem key={part.id} value={part.id}>
+																	{part.name}
+																</SelectItem>
+															))}
+														</SelectGroup>
+													</SelectContent>
+												</Select>
+											</Field>
+										) : null}
+										{viewMode !== "month" ? (
+											<Field>
+												<FieldLabel>Density</FieldLabel>
+												<ToggleGroup
+													aria-label="Schedule grid density"
+													value={[gridDensity]}
+													variant="outline"
+													size="sm"
+													spacing={0}
+													className="w-full"
+													onValueChange={(value) => {
+														const next = value[0];
+														if (next === "compact" || next === "comfortable") {
+															setGridDensity(next);
+														}
+													}}
+												>
+													<ToggleGroupItem className="flex-1" value="compact">
+														Compact
+													</ToggleGroupItem>
+													<ToggleGroupItem
+														className="flex-1"
+														value="comfortable"
 													>
-														<SelectTrigger className="w-full">
-															<SelectValue />
-														</SelectTrigger>
-														<SelectContent alignItemWithTrigger={false}>
-															<SelectGroup>
-																<SelectItem value="all">All groups</SelectItem>
-																{(groups.data?.groups ?? []).map((group) => (
-																	<SelectItem key={group.id} value={group.id}>
-																		{group.name}
-																	</SelectItem>
-																))}
-															</SelectGroup>
-														</SelectContent>
-													</Select>
-												</Field>
-											) : null}
-											{(tags.data?.tags ?? []).length > 0 ? (
-												<Field>
-													<FieldLabel>Shift tag</FieldLabel>
-													<Select
-														items={[
-															{ label: "All tags", value: "all" },
-															...(tags.data?.tags ?? []).map((tag) => ({
-																label: tag.name,
-																value: tag.id,
-															})),
-														]}
-														value={tagFilter}
-														onValueChange={(value) => {
-															if (!value) return;
-															setTagFilter(value);
-														}}
-													>
-														<SelectTrigger className="w-full">
-															<SelectValue />
-														</SelectTrigger>
-														<SelectContent alignItemWithTrigger={false}>
-															<SelectGroup>
-																<SelectItem value="all">All tags</SelectItem>
-																{(tags.data?.tags ?? []).map((tag) => (
-																	<SelectItem key={tag.id} value={tag.id}>
-																		{tag.name}
-																	</SelectItem>
-																))}
-															</SelectGroup>
-														</SelectContent>
-													</Select>
-												</Field>
-											) : null}
-											{(timeBlocks.data?.dayParts ?? []).length > 0 ? (
-												<Field>
-													<FieldLabel>Day part</FieldLabel>
-													<Select
-														items={[
-															{ label: "All day parts", value: "all" },
-															...(timeBlocks.data?.dayParts ?? []).map(
-																(part) => ({
-																	label: part.name,
-																	value: part.id,
-																}),
-															),
-														]}
-														value={dayPartFilter}
-														onValueChange={(value) => {
-															if (!value) return;
-															setDayPartFilter(value);
-														}}
-													>
-														<SelectTrigger className="w-full">
-															<SelectValue />
-														</SelectTrigger>
-														<SelectContent alignItemWithTrigger={false}>
-															<SelectGroup>
-																<SelectItem value="all">All day parts</SelectItem>
-																{(timeBlocks.data?.dayParts ?? []).map(
-																	(part) => (
-																		<SelectItem key={part.id} value={part.id}>
-																			{part.name}
-																		</SelectItem>
-																	),
+														Comfortable
+													</ToggleGroupItem>
+												</ToggleGroup>
+											</Field>
+										) : null}
+										{data.positions.length > 0 ? (
+											<Field>
+												<FieldLabel>Position colors</FieldLabel>
+												<ul
+													className="flex list-none flex-wrap gap-x-3 gap-y-1.5"
+													aria-label="Position colors"
+												>
+													{data.positions.map((position) => (
+														<li
+															key={position.id}
+															className="flex items-center gap-1.5 text-muted-foreground text-xs"
+														>
+															<span
+																className={cn(
+																	"size-1.5 rounded-full",
+																	positionColor(position.name).dot,
 																)}
-															</SelectGroup>
-														</SelectContent>
-													</Select>
-												</Field>
-											) : null}
-											{viewMode !== "month" ? (
-												<Field>
-													<FieldLabel>Density</FieldLabel>
-													<ToggleGroup
-														aria-label="Schedule grid density"
-														value={[gridDensity]}
-														variant="outline"
-														size="sm"
-														spacing={0}
-														className="w-full"
-														onValueChange={(value) => {
-															const next = value[0];
-															if (
-																next === "compact" ||
-																next === "comfortable"
-															) {
-																setGridDensity(next);
-															}
-														}}
-													>
-														<ToggleGroupItem
-															className="flex-1"
-															value="compact"
-														>
-															Compact
-														</ToggleGroupItem>
-														<ToggleGroupItem
-															className="flex-1"
-															value="comfortable"
-														>
-															Comfortable
-														</ToggleGroupItem>
-													</ToggleGroup>
-												</Field>
-											) : null}
-											{data.positions.length > 0 ? (
-												<Field>
-													<FieldLabel>Position colors</FieldLabel>
-													<ul
-														className="flex list-none flex-wrap gap-x-3 gap-y-1.5"
-														aria-label="Position colors"
-													>
-														{data.positions.map((position) => (
-															<li
-																key={position.id}
-																className="flex items-center gap-1.5 text-muted-foreground text-xs"
-															>
-																<span
-																	className={cn(
-																		"size-1.5 rounded-full",
-																		positionColor(position.name).dot,
-																	)}
-																	aria-hidden
-																/>
-																{position.name}
-															</li>
-														))}
-													</ul>
-												</Field>
-											) : null}
-										</FieldGroup>
-									</PopoverContent>
-								</Popover>
-								{hasStaffFilters ? (
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={clearStaffFilters}
-									>
-										<XIcon data-icon="inline-start" />
-										Clear
-									</Button>
-								) : null}
-							</>
-						) : null}
+																aria-hidden
+															/>
+															{position.name}
+														</li>
+													))}
+												</ul>
+											</Field>
+										) : null}
+									</FieldGroup>
+								</PopoverContent>
+							</Popover>
+							{hasStaffFilters ? (
+								<Button variant="ghost" size="sm" onClick={clearStaffFilters}>
+									<XIcon data-icon="inline-start" />
+									Clear
+								</Button>
+							) : null}
+						</>
+					) : null}
 
-						{data &&
-						(openShiftCount > 0 || conflictCount > 0 || onClockCount > 0) ? (
-							<div className="ml-auto flex min-w-0 items-center gap-1.5">
-								{openShiftCount > 0 ? (
-									<ScheduleMetric
-										value={openShiftCount}
-										label="open"
-										tone="emphasis"
-									/>
-								) : null}
-								{conflictCount > 0 ? (
-									<ScheduleMetric
-										value={conflictCount}
-										label={conflictCount === 1 ? "conflict" : "conflicts"}
-										tone="danger"
-									/>
-								) : null}
-								{onClockCount > 0 ? (
-									<ScheduleMetric
-										value={onClockCount}
-										label="on clock"
-										tone="emphasis"
-									/>
-								) : null}
-							</div>
-						) : null}
+					{data &&
+					(openShiftCount > 0 || conflictCount > 0 || onClockCount > 0) ? (
+						<div className="ml-auto flex min-w-0 items-center gap-1.5">
+							{openShiftCount > 0 ? (
+								<ScheduleMetric
+									value={openShiftCount}
+									label="open"
+									tone="emphasis"
+								/>
+							) : null}
+							{conflictCount > 0 ? (
+								<ScheduleMetric
+									value={conflictCount}
+									label={conflictCount === 1 ? "conflict" : "conflicts"}
+									tone="danger"
+								/>
+							) : null}
+							{onClockCount > 0 ? (
+								<ScheduleMetric
+									value={onClockCount}
+									label="on clock"
+									tone="emphasis"
+								/>
+							) : null}
+						</div>
+					) : null}
 				</div>
 
 				<div className="flex min-h-0 flex-1 flex-col">
@@ -2483,16 +2587,16 @@ function SchedulePage() {
 															</SelectTrigger>
 															<SelectContent alignItemWithTrigger={false}>
 																<SelectGroup>
-																	{(
-																		timeBlocks.data?.shiftTemplates ?? []
-																	).map((template) => (
-																		<SelectItem
-																			key={template.id}
-																			value={template.id}
-																		>
-																			{template.name}
-																		</SelectItem>
-																	))}
+																	{(timeBlocks.data?.shiftTemplates ?? []).map(
+																		(template) => (
+																			<SelectItem
+																				key={template.id}
+																				value={template.id}
+																			>
+																				{template.name}
+																			</SelectItem>
+																		),
+																	)}
 																</SelectGroup>
 															</SelectContent>
 														</Select>
@@ -2514,8 +2618,7 @@ function SchedulePage() {
 															disabled={(date) => {
 																const key = date.toLocaleDateString("sv-SE");
 																return (
-																	key < weekStart ||
-																	key > addDays(weekStart, 6)
+																	key < weekStart || key > addDays(weekStart, 6)
 																);
 															}}
 														/>
@@ -2530,9 +2633,7 @@ function SchedulePage() {
 																	<Button
 																		key={date}
 																		type="button"
-																		variant={
-																			selected ? "default" : "outline"
-																		}
+																		variant={selected ? "default" : "outline"}
 																		className="h-auto min-h-11 flex-col gap-0.5 px-1 py-1.5 tabular-nums"
 																		aria-pressed={selected}
 																		onClick={() => toggleAddDate(date)}
@@ -2548,9 +2649,7 @@ function SchedulePage() {
 																			{weekdayShort(date)}
 																		</span>
 																		<span className="font-medium">
-																			{new Date(
-																				`${date}T12:00:00`,
-																			).getDate()}
+																			{new Date(`${date}T12:00:00`).getDate()}
 																		</span>
 																	</Button>
 																);
@@ -2661,8 +2760,7 @@ function SchedulePage() {
 																	: `${selectedStaff?.name ?? "This worker"} isn’t approved`}{" "}
 																for{" "}
 																{data.positions.find(
-																	(position) =>
-																		position.id === form.positionId,
+																	(position) => position.id === form.positionId,
 																)?.name ?? "this position"}
 															</AlertTitle>
 															<AlertDescription>
@@ -2686,8 +2784,7 @@ function SchedulePage() {
 																const nextEmploymentId = employmentId ?? "";
 																const member = data.staff.find(
 																	(candidate) =>
-																		candidate.employmentId ===
-																		nextEmploymentId,
+																		candidate.employmentId === nextEmploymentId,
 																);
 																let positionId = form.positionId;
 																if (!positionId) {
@@ -2785,9 +2882,7 @@ function SchedulePage() {
 																		onValueChange={(employmentId) => {
 																			if (!employmentId) return;
 																			if (
-																				addEmploymentIds.includes(
-																					employmentId,
-																				)
+																				addEmploymentIds.includes(employmentId)
 																			)
 																				return;
 																			const member = data.staff.find(
@@ -2959,10 +3054,7 @@ function SchedulePage() {
 																			shiftId: form.shiftId ?? "",
 																			weeks: Math.max(
 																				1,
-																				Math.min(
-																					12,
-																					Number(repeatWeeks) || 1,
-																				),
+																				Math.min(12, Number(repeatWeeks) || 1),
 																			),
 																		})
 																	}
@@ -3389,19 +3481,21 @@ function SchedulePage() {
 							>
 								Copy
 							</Button>
-							<Button
-								size="sm"
-								variant="destructive"
+							<ConfirmAction
+								trigger="Delete"
+								triggerVariant="destructive"
+								destructive
+								title={`Delete ${selectedShiftIds.length} selected ${selectedShiftIds.length === 1 ? "shift" : "shifts"}?`}
+								description="This removes them from the draft. Publish to let the team see the change."
+								confirmLabel="Delete shifts"
 								disabled={bulkShifts.isPending}
-								onClick={() =>
+								onConfirm={() =>
 									bulkShifts.mutate({
 										shiftIds: selectedShiftIds,
 										delete: true,
 									})
 								}
-							>
-								Delete
-							</Button>
+							/>
 							<Button
 								size="sm"
 								variant="ghost"
@@ -3498,7 +3592,7 @@ function SchedulePage() {
 												>
 													<span
 														className={cn(
-															"text-[11px] font-medium leading-none",
+															"font-medium text-[11px] leading-none",
 															isToday
 																? "text-primary"
 																: "text-muted-foreground",
@@ -3508,7 +3602,7 @@ function SchedulePage() {
 													</span>
 													<span
 														className={cn(
-															"flex size-7 items-center justify-center text-sm font-semibold tabular-nums leading-none",
+															"flex size-7 items-center justify-center font-semibold text-sm tabular-nums leading-none",
 															isToday &&
 																"rounded-full bg-primary text-primary-foreground",
 														)}
@@ -3535,7 +3629,7 @@ function SchedulePage() {
 																		"h-4 px-1 font-normal text-[10px] text-muted-foreground tabular-nums",
 																		daySalesCents > 0
 																			? undefined
-																			: "opacity-0 transition-opacity group-hover/day:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-60",
+																			: "opacity-0 transition-opacity focus-visible:opacity-100 group-hover/day:opacity-100 [@media(hover:none)]:opacity-60",
 																	)}
 																/>
 															}
@@ -3630,7 +3724,7 @@ function SchedulePage() {
 																{initials(member.name)}
 															</AvatarFallback>
 														</Avatar>
-														<div className="min-w-0 flex-1 flex flex-col gap-0.5">
+														<div className="flex min-w-0 flex-1 flex-col gap-0.5">
 															<p
 																className="truncate font-medium text-sm leading-tight"
 																title={member.name}
@@ -3748,7 +3842,9 @@ function SchedulePage() {
 																<Button
 																	type="button"
 																	aria-label={`Add shift for ${member.name} on ${dayHeaders[dayIndex]}`}
-																	variant={isEmptyCell ? "outline" : "secondary"}
+																	variant={
+																		isEmptyCell ? "outline" : "secondary"
+																	}
 																	size={isEmptyCell ? "sm" : "icon-xs"}
 																	className={cn(
 																		"schedule-cell-add absolute text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100",
@@ -4153,6 +4249,37 @@ function SchedulePage() {
 						>
 							{publish.isPending ? <Spinner data-icon="inline-start" /> : null}
 							Publish now
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+			<AlertDialog
+				open={copyPreviousConfirmOpen}
+				onOpenChange={setCopyPreviousConfirmOpen}
+			>
+				<AlertDialogContent size="sm">
+					<AlertDialogHeader>
+						<AlertDialogTitle>Copy last week into this draft?</AlertDialogTitle>
+						<AlertDialogDescription>
+							This draft already has {data?.shifts.length ?? 0}{" "}
+							{data?.shifts.length === 1 ? "shift" : "shifts"}. Copying adds
+							last week’s shifts on top of them — it does not replace them.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={copyPrevious.isPending}
+							onClick={(event) => {
+								event.preventDefault();
+								setCopyPreviousConfirmOpen(false);
+								copyPrevious.mutate();
+							}}
+						>
+							{copyPrevious.isPending ? (
+								<Spinner data-icon="inline-start" />
+							) : null}
+							Copy and add
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

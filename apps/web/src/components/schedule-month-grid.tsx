@@ -2,14 +2,13 @@ import { Button } from "@SchedulesManager/ui/components/button";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { cn } from "@SchedulesManager/ui/lib/utils";
 import { AlertTriangleIcon } from "lucide-react";
-
+import type { ScheduleResponse, ScheduleShiftDto } from "@/lib/queries";
 import {
 	formatCompactShiftRange,
 	monthKeys,
 	positionColor,
 	shiftDisplayStatus,
 } from "@/lib/schedule-calendar";
-import type { ScheduleResponse, ScheduleShiftDto } from "@/lib/queries";
 
 const VISIBLE_CHIPS = 4;
 
@@ -41,9 +40,10 @@ export function ScheduleMonthGrid({
 }) {
 	const days = monthKeys(monthStart, weekStartDay);
 	const weekdayNames = Array.from({ length: 7 }, (_, index) =>
-		new Date(
-			`${days[index] ?? monthStart}T12:00:00`,
-		).toLocaleDateString(undefined, { weekday: "short" }),
+		new Date(`${days[index] ?? monthStart}T12:00:00`).toLocaleDateString(
+			undefined,
+			{ weekday: "short" },
+		),
 	);
 	const monthIndex = new Date(`${monthStart}T12:00:00`).getMonth();
 	const byDay = new Map<string, ScheduleShiftDto[]>();
@@ -68,15 +68,16 @@ export function ScheduleMonthGrid({
 			</div>
 			<div className="grid min-h-0 flex-1 grid-cols-7">
 				{days.map((day) => {
-					const inMonth =
-						new Date(`${day}T12:00:00`).getMonth() === monthIndex;
+					const inMonth = new Date(`${day}T12:00:00`).getMonth() === monthIndex;
 					const isToday = day === todayKey;
 					const isWeekend = new Date(`${day}T12:00:00`).getDay() % 6 === 0;
-					const dayShifts = (byDay.get(day) ?? []).slice().sort((a, b) =>
-						a.startMinute === b.startMinute
-							? a.positionName.localeCompare(b.positionName)
-							: a.startMinute - b.startMinute,
-					);
+					const dayShifts = (byDay.get(day) ?? [])
+						.slice()
+						.sort((a, b) =>
+							a.startMinute === b.startMinute
+								? a.positionName.localeCompare(b.positionName)
+								: a.startMinute - b.startMinute,
+						);
 					const visible = dayShifts.slice(0, VISIBLE_CHIPS);
 					const hidden = dayShifts.length - visible.length;
 					const minutes = dayShifts.reduce(

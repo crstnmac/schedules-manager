@@ -1,7 +1,7 @@
 import {
 	db,
-	employments,
 	employmentLocations,
+	employments,
 	leaveTypes,
 	locations,
 	profiles,
@@ -791,10 +791,7 @@ export const constraintsRoutes = new Elysia({
 				throw new NotFoundError("Employment not found");
 			}
 
-			const timeZone = await employmentTimeZone(
-				member.id,
-				params.workplaceId,
-			);
+			const timeZone = await employmentTimeZone(member.id, params.workplaceId);
 			const window = resolveLeaveBody(body, timeZone);
 			const request = firstRow(
 				await db

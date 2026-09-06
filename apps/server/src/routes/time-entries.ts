@@ -6,10 +6,11 @@ import {
 	schedules,
 	scheduleVersions,
 	timeEntries,
+	timeEntryBreaks,
 	versionShifts,
 	workplaces,
 } from "@SchedulesManager/db";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
 import {
@@ -226,7 +227,9 @@ async function clockOut(
 			);
 		}
 		if (noteInput.length > 500) {
-			throw new BadRequestError("Timesheet note must be 500 characters or fewer");
+			throw new BadRequestError(
+				"Timesheet note must be 500 characters or fewer",
+			);
 		}
 		workerNote = noteInput;
 	}
@@ -360,6 +363,29 @@ export const timeEntryRoutes = new Elysia({
 				.orderBy(desc(timeEntries.clockedInAt))
 				.limit(50);
 
+			// Open breaks must come from the server so every client shows the
+			// same break state, even after a refresh or a punch on another device.
+			const openBreakRows = rows.length
+				? await db
+						.select({
+							timeEntryId: timeEntryBreaks.timeEntryId,
+							startedAt: timeEntryBreaks.startedAt,
+						})
+						.from(timeEntryBreaks)
+						.where(
+							and(
+								inArray(
+									timeEntryBreaks.timeEntryId,
+									rows.map((row) => row.id),
+								),
+								isNull(timeEntryBreaks.endedAt),
+							),
+						)
+				: [];
+			const openBreakByEntry = new Map(
+				openBreakRows.map((row) => [row.timeEntryId, row.startedAt.toISOString()]),
+			);
+
 			return {
 				timeEntries: rows.map((row) => ({
 					id: row.id,
@@ -370,6 +396,7 @@ export const timeEntryRoutes = new Elysia({
 					clockedInAt: row.clockedInAt.toISOString(),
 					clockedOutAt: row.clockedOutAt?.toISOString() ?? null,
 					workerNote: row.workerNote,
+					openBreakStartedAt: openBreakByEntry.get(row.id) ?? null,
 				})),
 			};
 		},
@@ -456,8 +483,7 @@ export const timeEntryRoutes = new Elysia({
 									// Changed punches void a prior Timesheet Approval.
 									...(existing.clockedInAt.getTime() !==
 										clockedInAt.getTime() ||
-									existing.clockedOutAt?.getTime() !==
-										clockedOutAt?.getTime()
+									existing.clockedOutAt?.getTime() !== clockedOutAt?.getTime()
 										? {
 												approvalStatus: "pending" as const,
 												approvedAt: null,

@@ -14,6 +14,7 @@ import { type ReactNode, useEffect, useRef } from "react";
 
 import { AuthForm } from "@/components/auth-form";
 import { CurrentProfile } from "@/components/current-profile";
+import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import {
 	useAcceptInvitation,
@@ -69,10 +70,40 @@ function InvitePage() {
 	}
 
 	if (preview.isError || !invitation) {
+		const status =
+			preview.error instanceof ApiError ? preview.error.status : null;
+		if (
+			preview.isError &&
+			status !== null &&
+			status !== 404 &&
+			status !== 410
+		) {
+			return (
+				<InviteMessage
+					title="Couldn’t load this invitation"
+					description="Check your connection and try again."
+					action={
+						<Button
+							variant="outline"
+							disabled={preview.isFetching}
+							onClick={() => void preview.refetch()}
+						>
+							{preview.isFetching ? <Spinner data-icon="inline-start" /> : null}
+							Try again
+						</Button>
+					}
+				/>
+			);
+		}
 		return (
 			<InviteMessage
 				title="Invitation not found"
 				description="This invite link is invalid. Ask your manager to send a new one."
+				action={
+					<Button nativeButton={false} render={<Link to="/" />}>
+						Sign in
+					</Button>
+				}
 			/>
 		);
 	}
@@ -82,6 +113,11 @@ function InvitePage() {
 			<InviteMessage
 				title="This invitation expired"
 				description="Ask your manager to resend an invite to your email."
+				action={
+					<Button nativeButton={false} render={<Link to="/" />}>
+						Sign in
+					</Button>
+				}
 			/>
 		);
 	}
@@ -91,6 +127,11 @@ function InvitePage() {
 			<InviteMessage
 				title="This invitation was revoked"
 				description="Ask your manager to send a new invite if you still need access."
+				action={
+					<Button nativeButton={false} render={<Link to="/" />}>
+						Sign in
+					</Button>
+				}
 			/>
 		);
 	}

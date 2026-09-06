@@ -5,10 +5,7 @@ import { Elysia, t } from "elysia";
 import { AuthenticationError } from "../auth";
 import { requireManager, requireSession } from "../context";
 import { BadRequestError } from "../errors";
-import {
-	clientIpFromRequest,
-	consumeRateLimitOrThrow,
-} from "../rate-limit";
+import { clientIpFromRequest, consumeRateLimitOrThrow } from "../rate-limit";
 import {
 	parseZeptoMailEvents,
 	verifyZeptoMailWebhook,

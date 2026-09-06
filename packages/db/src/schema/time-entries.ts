@@ -1,4 +1,12 @@
-import { index, pgEnum, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import {
+	index,
+	pgEnum,
+	pgTable,
+	text,
+	timestamp,
+	unique,
+	uuid,
+} from "drizzle-orm/pg-core";
 
 import { employments } from "./employments";
 import { profiles } from "./profiles";

@@ -18,6 +18,7 @@ function WorkplaceSettingsPage() {
 
 	return (
 		<SettingsPage
+			queries={[settings]}
 			title="General"
 			description="Name, week, pay period, and labor defaults for this workplace."
 		>

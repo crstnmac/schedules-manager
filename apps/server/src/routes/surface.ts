@@ -1383,9 +1383,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				.limit(limit + 1);
 			const hasMore = descendingRows.length > limit;
 			// Return the page oldest→newest so existing viewers render in order.
-			const rows = descendingRows
-				.slice(0, limit)
-				.reverse();
+			const rows = descendingRows.slice(0, limit).reverse();
 			return {
 				messages: rows.map((row) => ({
 					id: row.message.id,

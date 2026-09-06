@@ -107,6 +107,7 @@ export type ShiftDisplayStatus = {
 
 export function shiftDisplayStatus(input: {
 	hasConflicts: boolean;
+	isOpen?: boolean;
 	attendance: "late" | "no_show" | "sick" | null | undefined;
 	clockStatus: "open" | "closed" | null | undefined;
 	clockedInAt?: string | null;
@@ -117,6 +118,8 @@ export function shiftDisplayStatus(input: {
 	if (input.hasConflicts) {
 		return { kind: "conflict", label: "Conflict", tone: "danger" };
 	}
+	// Unassigned shifts have no worker who could clock in. Keep conflicts visible.
+	if (input.isOpen) return null;
 	if (input.attendance === "no_show") {
 		return { kind: "attendance", label: "No-show", tone: "danger" };
 	}

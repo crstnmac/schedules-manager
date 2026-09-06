@@ -1,13 +1,13 @@
-import { useMemo } from "react";
 import {
-	keepPreviousData,
 	type InfiniteData,
+	keepPreviousData,
 	queryOptions,
 	useInfiniteQuery,
 	useMutation,
 	useQuery,
 	useQueryClient,
 } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 import { api, publicApi } from "./api";
 
@@ -807,7 +807,9 @@ export function useClockIn() {
 export function useClockOut() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (input: string | { versionShiftId: string; workerNote?: string }) => {
+		mutationFn: (
+			input: string | { versionShiftId: string; workerNote?: string },
+		) => {
 			const versionShiftId =
 				typeof input === "string" ? input : input.versionShiftId;
 			const workerNote =
@@ -839,6 +841,7 @@ export interface TimecardEntry {
 	clockedInAt: string;
 	clockedOutAt: string | null;
 	workerNote: string | null;
+	openBreakStartedAt: string | null;
 }
 
 export function useMyTimeEntries(workplaceId: string | undefined) {
@@ -1111,7 +1114,7 @@ export function useApplyScheduleTemplate(locationId: string | undefined) {
 				`/v1/locations/${locationId}/schedules/${input.weekStart}/templates/${input.templateId}/apply`,
 				{ method: "POST" },
 			),
-		onSuccess: (result, input) => {
+		onSuccess: (_result, input) => {
 			// The template only touches the week it was applied to.
 			queryClient.invalidateQueries({
 				queryKey: ["schedule", locationId, input.weekStart],
@@ -1288,8 +1291,6 @@ export function useConversations(workplaceId: string | undefined) {
 	});
 }
 
-const MESSAGE_PAGE_SIZE = 50;
-
 export interface MessagesPage {
 	messages: ConversationMessageDto[];
 	hasMore: boolean;
@@ -1340,13 +1341,10 @@ export function useMessagesInfinite(conversationId: string | undefined) {
 /** Oldest→newest across all loaded pages, for thread rendering. */
 export function useMessages(conversationId: string | undefined) {
 	const query = useMessagesInfinite(conversationId);
-	const messages = useMemo(() => {
-		const pages = query.data?.pages ?? [];
-		return pages.reduce<ConversationMessageDto[]>(
-			(older, page) => [...older, ...page.messages],
-			[],
-		);
-	}, [query.data]);
+	const messages = useMemo(
+		() => (query.data?.pages ?? []).flatMap((page) => page.messages),
+		[query.data],
+	);
 	const hasMore = query.data?.pages[0]?.hasMore ?? false;
 	return {
 		...query,

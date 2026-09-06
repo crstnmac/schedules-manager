@@ -17,6 +17,7 @@ function PositionsSettingsPage() {
 
 	return (
 		<SettingsPage
+			queries={[positions]}
 			title="Positions"
 			description="Roles people can be scheduled into, like cashier, nurse, or technician."
 		>

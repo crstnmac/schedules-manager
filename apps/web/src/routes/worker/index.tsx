@@ -173,7 +173,7 @@ function WorkerHome() {
 								trigger="Decline"
 								disabled={respond.isPending}
 								title="Decline this shift change?"
-								description="Your manager will see that you declined this late material change."
+								description="Declining tells your manager you can’t work the changed shift."
 								confirmLabel="Decline shift"
 								destructive
 								onConfirm={() =>
@@ -189,7 +189,7 @@ function WorkerHome() {
 					),
 				}),
 			]),
-		[respond],
+		[formatMinute, respond],
 	);
 	const weekShiftColumns = useMemo(
 		() =>
@@ -224,6 +224,14 @@ function WorkerHome() {
 					enableSorting: false,
 					cell: ({ row }) => {
 						const shift = row.original;
+						if (new Date(shift.startsAt).getTime() <= nowMs)
+							return (
+								<span className="text-muted-foreground text-xs">
+									{new Date(shift.endsAt).getTime() <= nowMs
+										? "Past shift"
+										: "Shift started"}
+								</span>
+							);
 						return (
 							<div className="flex flex-wrap items-center justify-end gap-2">
 								<Button
@@ -262,7 +270,7 @@ function WorkerHome() {
 					},
 				}),
 			]),
-		[nowMs, release],
+		[formatShiftRange, nowMs, release],
 	);
 	const nextWeekColumns = useMemo(
 		() =>
@@ -289,7 +297,7 @@ function WorkerHome() {
 				),
 				shiftHelper.accessor("positionName", { header: "Position" }),
 			]),
-		[],
+		[formatShiftRange],
 	);
 	const historyColumns = useMemo(
 		() =>
@@ -395,12 +403,24 @@ function WorkerHome() {
 				</Alert>
 			) : null}
 
+			{!schedule.isLoading && !schedule.isError && !nextShift ? (
+				<Card>
+					<CardHeader>
+						<CardTitle>No upcoming shifts</CardTitle>
+						<CardDescription>
+							Your next assigned shift will appear here once it’s published.
+							Check Open shifts for available work.
+						</CardDescription>
+					</CardHeader>
+				</Card>
+			) : null}
 			{nextShift ? (
 				<TimeClockCard shift={nextShift} timecardTo="/worker/timecard">
 					{(shiftTasks.data?.tasks.length ?? 0) > 0 ? (
 						<div className="grid gap-2 border-primary-foreground/30 border-t pt-4">
 							<p className="font-medium text-sm">Shift Tasks</p>
 							<DataTable
+								stacked
 								fill={false}
 								columns={taskColumns}
 								data={shiftTasks.data?.tasks ?? []}
@@ -411,17 +431,43 @@ function WorkerHome() {
 				</TimeClockCard>
 			) : null}
 
+			{needsAcknowledgement && currentWeek ? (
+				<Alert>
+					<EyeIcon />
+					<AlertTitle>Your manager published the schedule</AlertTitle>
+					<AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+						<span>Let them know you saw this week’s schedule.</span>
+						<Button
+							size="sm"
+							disabled={acknowledge.isPending}
+							onClick={() =>
+								acknowledge.mutate(currentWeek.version.id, {
+									onSuccess: () => toast.success("Marked as seen."),
+									onError: (error) => toast.error((error as Error).message),
+								})
+							}
+						>
+							{acknowledge.isPending ? (
+								<Spinner data-icon="inline-start" />
+							) : null}
+							I saw this
+						</Button>
+					</AlertDescription>
+				</Alert>
+			) : null}
+
 			{pendingAcceptances.length > 0 ? (
 				<Card>
 					<CardHeader>
-						<CardTitle>Accept this change</CardTitle>
+						<CardTitle>Your shift changed</CardTitle>
 						<CardDescription>
-							This is a late material change. Accepting means you agree to work
-							the shift. Seeing the schedule is a separate action.
+							Your manager changed this shift after the schedule was sent.
+							Accept if you can work it — if not, we’ll tell your manager.
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
 						<DataTable
+							stacked
 							fill={false}
 							columns={acceptanceColumns}
 							data={pendingAcceptances}
@@ -446,33 +492,6 @@ function WorkerHome() {
 				</Alert>
 			) : null}
 
-			{needsAcknowledgement && currentWeek ? (
-				<div className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-					<div>
-						<p className="font-semibold text-sm">Schedule published</p>
-						<p className="text-muted-foreground text-sm">
-							Let your manager know you saw this week’s schedule.
-						</p>
-					</div>
-					<Button
-						disabled={acknowledge.isPending}
-						onClick={() =>
-							acknowledge.mutate(currentWeek.version.id, {
-								onSuccess: () => toast.success("Marked as seen."),
-								onError: (error) => toast.error((error as Error).message),
-							})
-						}
-					>
-						{acknowledge.isPending ? (
-							<Spinner data-icon="inline-start" />
-						) : (
-							<EyeIcon data-icon="inline-start" />
-						)}
-						I saw this
-					</Button>
-				</div>
-			) : null}
-
 			{currentWeek && currentWeek.shifts.length > 0 ? (
 				<Card>
 					<CardHeader>
@@ -492,6 +511,7 @@ function WorkerHome() {
 					</CardHeader>
 					<CardContent>
 						<DataTable
+							stacked
 							fill={false}
 							columns={weekShiftColumns}
 							data={currentWeek.shifts}
@@ -528,6 +548,7 @@ function WorkerHome() {
 					</CardHeader>
 					<CardContent>
 						<DataTable
+							stacked
 							fill={false}
 							columns={nextWeekColumns}
 							data={nextWeek.shifts}
@@ -547,6 +568,7 @@ function WorkerHome() {
 					</CardHeader>
 					<CardContent>
 						<DataTable
+							stacked
 							fill={false}
 							columns={historyColumns}
 							data={history}
@@ -708,6 +730,7 @@ function WorkerSwapsCard({ workplaceId }: { workplaceId: string | undefined }) {
 			</CardHeader>
 			<CardContent>
 				<DataTable
+					stacked
 					fill={false}
 					columns={columns}
 					data={items}
@@ -788,7 +811,7 @@ function SwapSheet({
 					},
 				}),
 			]),
-		[selectedShiftId],
+		[formatClockTime, selectedShiftId],
 	);
 
 	return (
@@ -829,6 +852,7 @@ function SwapSheet({
 					) : null}
 					{!roster.isLoading && !roster.isError ? (
 						<DataTable
+							stacked
 							fill={false}
 							columns={coworkerColumns}
 							data={coworkers}

@@ -1,9 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
 
 import {
+	type RequestLogEntry,
 	resetRequestLogSink,
 	setRequestLogSinkForTests,
-	type RequestLogEntry,
 } from "../../src/request-log";
 
 type Context = {
@@ -44,7 +44,9 @@ export function registerReadinessTests(getContext: () => Context) {
 				checks: { database: "down" },
 			}),
 		});
-		const notReady = await downApp.handle(new Request("http://localhost/ready"));
+		const notReady = await downApp.handle(
+			new Request("http://localhost/ready"),
+		);
 		expect(notReady.status).toBe(503);
 		expect(await notReady.json()).toEqual({
 			status: "not_ready",

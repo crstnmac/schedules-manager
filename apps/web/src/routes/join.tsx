@@ -107,7 +107,8 @@ function JoinPage() {
 											accept.mutate(invitation.token);
 										}}
 									>
-										{accept.isPending ? (
+										{accept.isPending &&
+										accept.variables === invitation.token ? (
 											<Spinner data-icon="inline-start" />
 										) : null}
 										Accept

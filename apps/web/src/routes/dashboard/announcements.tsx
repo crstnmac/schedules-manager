@@ -5,6 +5,7 @@ import {
 	EmptyHeader,
 	EmptyTitle,
 } from "@SchedulesManager/ui/components/empty";
+import { Field, FieldLabel } from "@SchedulesManager/ui/components/field";
 import { Input } from "@SchedulesManager/ui/components/input";
 import { Textarea } from "@SchedulesManager/ui/components/textarea";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -47,7 +48,7 @@ const columns = columnHelper.columns([
 	columnHelper.accessor("createdAt", {
 		header: "Posted",
 		cell: ({ getValue }) => (
-			<span className="tabular-nums text-muted-foreground">
+			<span className="text-muted-foreground tabular-nums">
 				{new Date(getValue()).toLocaleString()}
 			</span>
 		),
@@ -55,7 +56,7 @@ const columns = columnHelper.columns([
 	columnHelper.accessor("body", {
 		header: "Body",
 		cell: ({ getValue }) => (
-			<span className="line-clamp-3 whitespace-pre-wrap text-muted-foreground">
+			<span className="whitespace-pre-wrap break-words text-muted-foreground">
 				{getValue()}
 			</span>
 		),
@@ -72,7 +73,7 @@ function AnnouncementsPage() {
 		mutationFn: () =>
 			api(`/v1/workplaces/${workplace?.id}/announcements`, {
 				method: "POST",
-				body: { title, body },
+				body: { title: title.trim(), body: body.trim() },
 			}),
 		onSuccess: () => {
 			setTitle("");
@@ -91,6 +92,7 @@ function AnnouncementsPage() {
 				<AppPageHeader title="Announcements" />
 				<AppPageBody scroll={false}>
 					<DataTable
+						query={list}
 						columns={columns}
 						data={rows}
 						getRowId={(row) => row.id}
@@ -117,25 +119,34 @@ function AnnouncementsPage() {
 							Everyone at this workplace is notified.
 						</p>
 					</div>
-					<Input
-						value={title}
-						onChange={(event) => setTitle(event.target.value)}
-						placeholder="Title"
-					/>
-					<Textarea
-						value={body}
-						onChange={(event) => setBody(event.target.value)}
-						placeholder="Body"
-					/>
+					<Field>
+						<FieldLabel htmlFor="announcement-title">Title</FieldLabel>
+						<Input
+							id="announcement-title"
+							maxLength={200}
+							value={title}
+							onChange={(event) => setTitle(event.target.value)}
+							placeholder="Title"
+						/>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="announcement-body">Message</FieldLabel>
+						<Textarea
+							id="announcement-body"
+							value={body}
+							onChange={(event) => setBody(event.target.value)}
+							placeholder="What does your team need to know?"
+						/>
+					</Field>
 					<Button
 						onClick={() => post.mutate()}
 						disabled={
-						post.isPending ||
-						title.trim().length === 0 ||
-						body.trim().length === 0
-					}
+							post.isPending ||
+							title.trim().length === 0 ||
+							body.trim().length === 0
+						}
 					>
-						Post
+						{post.isPending ? "Posting…" : "Post announcement"}
 					</Button>
 				</section>
 			</AppRail>

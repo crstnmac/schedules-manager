@@ -15,6 +15,7 @@ function GroupsSettingsPage() {
 
 	return (
 		<SettingsPage
+			queries={[groups, workers]}
 			title="Groups"
 			description="Group people so you can filter the schedule and staff a week faster."
 		>

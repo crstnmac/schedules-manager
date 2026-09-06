@@ -1,10 +1,7 @@
 import { Avatar, AvatarFallback } from "@SchedulesManager/ui/components/avatar";
 import { Badge } from "@SchedulesManager/ui/components/badge";
+import { Bubble, BubbleContent } from "@SchedulesManager/ui/components/bubble";
 import { Button } from "@SchedulesManager/ui/components/button";
-import {
-	Bubble,
-	BubbleContent,
-} from "@SchedulesManager/ui/components/bubble";
 import {
 	Empty,
 	EmptyDescription,
@@ -19,10 +16,7 @@ import {
 	InputGroupButton,
 	InputGroupTextarea,
 } from "@SchedulesManager/ui/components/input-group";
-import {
-	Marker,
-	MarkerContent,
-} from "@SchedulesManager/ui/components/marker";
+import { Marker, MarkerContent } from "@SchedulesManager/ui/components/marker";
 import {
 	Message,
 	MessageAvatar,
@@ -52,15 +46,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import {
-	AppPane,
-	AppRail,
-	AppSplit,
-} from "@/components/app-page";
-import type {
-	ConversationDto,
-	ConversationMessageDto,
-} from "@/lib/queries";
+import { AppPane, AppRail, AppSplit } from "@/components/app-page";
+import type { ConversationDto, ConversationMessageDto } from "@/lib/queries";
 
 export type MessagePerson = {
 	employmentId: string;
@@ -71,8 +58,10 @@ export type MessagePerson = {
 function authorInitials(name: string) {
 	const parts = name.trim().split(/\s+/).filter(Boolean);
 	if (parts.length === 0) return "?";
-	if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
-	return `${parts[0]![0] ?? ""}${parts[parts.length - 1]![0] ?? ""}`.toUpperCase();
+	const first = parts[0] ?? "";
+	if (parts.length === 1) return first.slice(0, 2).toUpperCase();
+	const last = parts.at(-1) ?? "";
+	return `${first[0] ?? ""}${last[0] ?? ""}`.toUpperCase();
 }
 
 function dayKey(iso: string) {
@@ -303,17 +292,17 @@ export function ConversationWorkspace({
 							</Button>
 						</header>
 						<div className="shrink-0 border-b p-2">
-							<label className="relative block">
-								<span className="sr-only">Search people</span>
+							<div className="relative block">
 								<SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
 								<Input
 									ref={composeSearchRef}
 									value={composeQuery}
 									onChange={(event) => setComposeQuery(event.target.value)}
 									placeholder="Search by name or email"
+									aria-label="Search people"
 									className="h-8 pl-8"
 								/>
-							</label>
+							</div>
 						</div>
 						<div
 							className="flex min-h-0 flex-1 flex-col overflow-y-auto p-1.5"
@@ -457,9 +446,7 @@ export function ConversationWorkspace({
 													</span>
 													{thread.lastMessage ? (
 														<span className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums">
-															{formatThreadTime(
-																thread.lastMessage.createdAt,
-															)}
+															{formatThreadTime(thread.lastMessage.createdAt)}
 														</span>
 													) : null}
 												</span>
@@ -611,7 +598,9 @@ export function ConversationWorkspace({
 																		</MessageHeader>
 																	) : null}
 																	<Bubble
-																		variant={item.mine ? "default" : "secondary"}
+																		variant={
+																			item.mine ? "default" : "secondary"
+																		}
 																		align={item.mine ? "end" : "start"}
 																	>
 																		<BubbleContent className="whitespace-pre-wrap">

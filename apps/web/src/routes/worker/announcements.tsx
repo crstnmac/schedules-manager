@@ -9,11 +9,7 @@ import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { createFileRoute } from "@tanstack/react-router";
 import { MegaphoneIcon } from "lucide-react";
 
-import {
-	AppPage,
-	AppPageBody,
-	AppPageHeader,
-} from "@/components/app-page";
+import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { useAnnouncements } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
@@ -41,7 +37,7 @@ const columns = columnHelper.columns([
 	columnHelper.accessor("createdAt", {
 		header: "Posted",
 		cell: ({ getValue }) => (
-			<span className="tabular-nums text-muted-foreground">
+			<span className="text-muted-foreground tabular-nums">
 				{new Date(getValue()).toLocaleString()}
 			</span>
 		),
@@ -75,6 +71,8 @@ function WorkerAnnouncementsPage() {
 					</div>
 				) : (
 					<DataTable
+						stacked
+						query={announcements}
 						columns={columns}
 						data={rows}
 						getRowId={(row) => row.id}

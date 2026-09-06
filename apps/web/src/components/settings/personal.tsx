@@ -22,6 +22,7 @@ import { toast } from "sonner";
 
 import { SettingsToggleField } from "@/components/settings/core";
 import { SettingsSection } from "@/components/settings/page";
+import { useRegisterUnsavedChanges } from "@/components/unsaved-changes";
 import { api } from "@/lib/api";
 import type { MeProfile } from "@/lib/queries";
 
@@ -67,6 +68,10 @@ export function DisplayPreferencesCard({
 	const [nameFormat, setNameFormat] = useState<
 		"full" | "first_last_initial" | "first" | null
 	>(null);
+	useRegisterUnsavedChanges(
+		"display-preferences",
+		timeFormat !== null || nameFormat !== null,
+	);
 	const save = useMutation({
 		mutationFn: () =>
 			api("/v1/me", {
@@ -133,6 +138,7 @@ export function DisplayPreferencesCard({
 					>
 						<SelectTrigger
 							id="time-format"
+							aria-label="Time format"
 							className="w-full @md/field-group:max-w-xs"
 							aria-describedby="time-format-preview"
 						>
@@ -177,6 +183,7 @@ export function DisplayPreferencesCard({
 					>
 						<SelectTrigger
 							id="name-format"
+							aria-label="Name format"
 							className="w-full @md/field-group:max-w-xs"
 							aria-describedby="name-format-preview"
 						>
@@ -215,6 +222,10 @@ export function NotificationPreferencesCard({
 	const [draft, setDraft] = useState<
 		Partial<MeProfile["notificationPreferences"]>
 	>({});
+	useRegisterUnsavedChanges(
+		"notification-preferences",
+		Object.keys(draft).length > 0,
+	);
 	const save = useMutation({
 		mutationFn: () =>
 			api("/v1/me", {

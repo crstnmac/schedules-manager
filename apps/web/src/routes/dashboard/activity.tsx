@@ -41,9 +41,7 @@ const auditHelper = createDataColumnHelper<AuditEventDto>();
 const auditColumns = auditHelper.columns([
 	auditHelper.accessor("summary", {
 		header: "Event",
-		cell: ({ getValue }) => (
-			<span className="font-medium">{getValue()}</span>
-		),
+		cell: ({ getValue }) => <span className="font-medium">{getValue()}</span>,
 	}),
 	auditHelper.accessor((row) => row.actorName ?? "", {
 		id: "actor",
@@ -53,7 +51,7 @@ const auditColumns = auditHelper.columns([
 	auditHelper.accessor("createdAt", {
 		header: "When",
 		cell: ({ getValue }) => (
-			<span className="tabular-nums text-muted-foreground">
+			<span className="text-muted-foreground tabular-nums">
 				{new Date(getValue()).toLocaleString()}
 			</span>
 		),
@@ -90,7 +88,7 @@ function ActivityPage() {
 				inboxHelper.accessor("createdAt", {
 					header: "When",
 					cell: ({ getValue }) => (
-						<span className="tabular-nums text-muted-foreground">
+						<span className="text-muted-foreground tabular-nums">
 							{new Date(getValue()).toLocaleString()}
 						</span>
 					),
@@ -109,8 +107,7 @@ function ActivityPage() {
 									disabled={markRead.isPending}
 									onClick={() =>
 										markRead.mutate(row.original.id, {
-											onError: (error) =>
-												toast.error((error as Error).message),
+											onError: (error) => toast.error((error as Error).message),
 										})
 									}
 								>
@@ -162,6 +159,7 @@ function ActivityPage() {
 						</div>
 					) : (
 						<DataTable
+							query={inbox}
 							columns={inboxColumns}
 							data={items}
 							getRowId={(row) => row.id}
@@ -195,6 +193,7 @@ function ActivityPage() {
 						</div>
 					) : (
 						<DataTable
+							query={audit}
 							columns={auditColumns}
 							data={events}
 							getRowId={(row) => row.id}

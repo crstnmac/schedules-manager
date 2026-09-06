@@ -40,7 +40,7 @@ import {
 import { Textarea } from "@SchedulesManager/ui/components/textarea";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AppDocument } from "@/components/app-page";
 import { ConfirmAction } from "@/components/confirm-action";
@@ -52,6 +52,7 @@ import {
 } from "@/components/leave-window-fields";
 import { PageHeader } from "@/components/page-header";
 import { TimePicker } from "@/components/time-picker";
+import { UnsavedChangesGuard } from "@/components/unsaved-changes";
 import { api } from "@/lib/api";
 import { formatLeaveHours, todayIsoDate } from "@/lib/leave";
 import {
@@ -139,32 +140,38 @@ function AvailabilityPage() {
 		WorkerConstraints["timeOff"][number] | null
 	>(null);
 
+	const savedSnapshot = useRef<string | null>(null);
+
 	useEffect(() => {
 		const data = constraints.data;
 		if (!data) return;
-		setRecurring(
-			data.unavailability
-				.filter((row) => row.kind === "recurring")
-				.map((row) => ({
-					id: row.id,
-					weekday: row.weekday ?? 0,
-					startMinute: row.startMinute,
-					endMinute: row.endMinute,
-					note: row.note ?? undefined,
-				})),
-		);
-		setDates(
-			data.unavailability
-				.filter((row) => row.kind === "date")
-				.map((row) => ({
-					id: row.id,
-					date: row.date ?? "",
-					startMinute: row.startMinute,
-					endMinute: row.endMinute,
-					note: row.note ?? undefined,
-				})),
-		);
-		setPreference(data.preference ?? "");
+		const nextRecurring = data.unavailability
+			.filter((row) => row.kind === "recurring")
+			.map((row) => ({
+				id: row.id,
+				weekday: row.weekday ?? 0,
+				startMinute: row.startMinute,
+				endMinute: row.endMinute,
+				note: row.note ?? undefined,
+			}));
+		const nextDates = data.unavailability
+			.filter((row) => row.kind === "date")
+			.map((row) => ({
+				id: row.id,
+				date: row.date ?? "",
+				startMinute: row.startMinute,
+				endMinute: row.endMinute,
+				note: row.note ?? undefined,
+			}));
+		const nextPreference = data.preference ?? "";
+		setRecurring(nextRecurring);
+		setDates(nextDates);
+		setPreference(nextPreference);
+		savedSnapshot.current = JSON.stringify({
+			recurring: nextRecurring,
+			dates: nextDates,
+			preference: nextPreference,
+		});
 	}, [constraints.data]);
 
 	function invalidate() {
@@ -213,6 +220,10 @@ function AvailabilityPage() {
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
+
+	const unavailabilityDirty =
+		savedSnapshot.current !== null &&
+		JSON.stringify({ recurring, dates, preference }) !== savedSnapshot.current;
 
 	const requestTimeOff = useMutation({
 		mutationFn: () => {
@@ -437,6 +448,7 @@ function AvailabilityPage() {
 
 	return (
 		<AppDocument>
+			<UnsavedChangesGuard when={unavailabilityDirty} />
 			<PageHeader
 				title="Time off & availability"
 				description="Request days off first. Recurring unavailability and preferences stay separate."
@@ -473,6 +485,7 @@ function AvailabilityPage() {
 									</div>
 								) : null}
 								<DataTable
+									stacked
 									bounded
 									fill={false}
 									columns={timeOffColumns}
@@ -536,6 +549,7 @@ function AvailabilityPage() {
 							</CardHeader>
 							<CardContent className="flex flex-col gap-4">
 								<DataTable
+									stacked
 									bounded
 									fill={false}
 									columns={unavailabilityColumns}
@@ -627,15 +641,22 @@ function AvailabilityPage() {
 								</FieldGroup>
 							</CardContent>
 							<CardFooter>
-								<Button
-									disabled={saveUnavailability.isPending}
-									onClick={() => saveUnavailability.mutate()}
-								>
-									{saveUnavailability.isPending ? (
-										<Spinner data-icon="inline-start" />
+								<div className="flex items-center gap-2">
+									<Button
+										disabled={
+											saveUnavailability.isPending || !unavailabilityDirty
+										}
+										onClick={() => saveUnavailability.mutate()}
+									>
+										{saveUnavailability.isPending ? (
+											<Spinner data-icon="inline-start" />
+										) : null}
+										Save unavailability
+									</Button>
+									{unavailabilityDirty ? (
+										<Badge variant="secondary">Unsaved changes</Badge>
 									) : null}
-									Save unavailability
-								</Button>
+								</div>
 							</CardFooter>
 						</Card>
 					</TabsContent>

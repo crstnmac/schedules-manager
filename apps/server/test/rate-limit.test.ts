@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
-	RateLimitError,
 	clientIpFromRequest,
 	consumeRateLimitOrThrow,
+	RateLimitError,
 	resetRateLimitState,
 	setRateLimitPoliciesForTests,
 	tryConsumeRateLimit,

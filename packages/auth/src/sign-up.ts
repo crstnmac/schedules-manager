@@ -1,4 +1,4 @@
-import type { AuthError, AuthResponse, SupabaseClient } from "@supabase/supabase-js";
+import type { AuthResponse, SupabaseClient } from "@supabase/supabase-js";
 
 export const DUPLICATE_EMAIL_MESSAGE =
 	"An account with this email already exists. Sign in instead.";
@@ -11,13 +11,20 @@ export class AuthSignUpError extends Error {
 }
 
 export function isDuplicateSignUpResponse(
-	data: AuthResponse["data"] | null,
+	data: {
+		session?: unknown;
+		user?: { identities?: readonly unknown[] | null } | null;
+	} | null,
 ): boolean {
 	const identities = data?.user?.identities;
 	return Boolean(data?.user && identities && identities.length === 0);
 }
 
-export function normalizeAuthSignUpError(error: AuthError): Error {
+export function normalizeAuthSignUpError(error: {
+	name?: string;
+	message: string;
+	status?: number;
+}): Error {
 	const message = error.message.toLowerCase();
 	if (
 		message.includes("already registered") ||
@@ -27,7 +34,11 @@ export function normalizeAuthSignUpError(error: AuthError): Error {
 		return new AuthSignUpError(DUPLICATE_EMAIL_MESSAGE, { cause: error });
 	}
 
-	return error;
+	if (error instanceof Error) {
+		return error;
+	}
+
+	return new Error(error.message);
 }
 
 export async function signUpWithEmail(

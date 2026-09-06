@@ -51,6 +51,7 @@ import {
 } from "@/components/settings/page";
 import { TimePicker } from "@/components/time-picker";
 import { TimezoneSelect } from "@/components/timezone-select";
+import { useRegisterUnsavedChanges } from "@/components/unsaved-changes";
 import { api } from "@/lib/api";
 import type {
 	LocationDto,
@@ -136,6 +137,7 @@ export function SettingsToggleField({
 			<div className="flex shrink-0 items-center">
 				<Checkbox
 					id={id}
+					aria-label={label}
 					checked={checked}
 					onCheckedChange={(value) => onCheckedChange(value === true)}
 				/>
@@ -233,6 +235,7 @@ export function WorkplaceCard({
 		overtimeDailyMinutes !== null ||
 		laborCostPercentGoal !== undefined ||
 		managersCanViewLaborCost !== null;
+	useRegisterUnsavedChanges("workplace", dirty);
 
 	if (isLoading || !settings) {
 		return (
@@ -362,38 +365,46 @@ export function WorkplaceCard({
 				<FieldGroup>
 					<SettingsField
 						id="weekly-overtime"
-						label="Weekly overtime"
-						description={`${minutesAsHoursLabel(overtimeMinutes)}. 2,400 minutes is a standard 40-hour week.`}
+						label="Weekly overtime after"
+						description={`Overtime pay starts after ${minutesAsHoursLabel(overtimeMinutes)} in a workweek.`}
 					>
 						<InputGroup>
 							<InputGroupInput
 								id="weekly-overtime"
 								type="number"
 								min={0}
-								defaultValue={settings.overtimeWeeklyMinutes}
-								onChange={(event) =>
-									setOvertimeWeeklyMinutes(Number(event.target.value))
-								}
+								step={0.5}
+								defaultValue={(settings.overtimeWeeklyMinutes ?? 0) / 60}
+								onChange={(event) => {
+									const hours = Number(event.target.value);
+									setOvertimeWeeklyMinutes(
+										Number.isFinite(hours) ? Math.round(hours * 60) : 0,
+									);
+								}}
 							/>
-							<InputGroupAddon align="inline-end">min</InputGroupAddon>
+							<InputGroupAddon align="inline-end">hr</InputGroupAddon>
 						</InputGroup>
 					</SettingsField>
 					<SettingsField
 						id="daily-overtime"
-						label="Daily overtime"
-						description={`${minutesAsHoursLabel(dailyOvertimeMinutes)}. 480 minutes is an 8-hour day.`}
+						label="Daily overtime after"
+						description={`Overtime pay starts after ${minutesAsHoursLabel(dailyOvertimeMinutes)} in a day.`}
 					>
 						<InputGroup>
 							<InputGroupInput
 								id="daily-overtime"
 								type="number"
 								min={0}
-								defaultValue={settings.overtimeDailyMinutes}
-								onChange={(event) =>
-									setOvertimeDailyMinutes(Number(event.target.value))
-								}
+								step={0.5}
+								defaultValue={(settings.overtimeDailyMinutes ?? 0) / 60}
+								onChange={(event) => {
+									const hours = Number(event.target.value);
+									setOvertimeDailyMinutes(
+										Number.isFinite(hours) ? Math.round(hours * 60) : 0,
+									);
+								}}
 							/>
-							<InputGroupAddon align="inline-end">min</InputGroupAddon>
+							<InputGroupAddon align="inline-end">hr</InputGroupAddon>
 						</InputGroup>
 					</SettingsField>
 					<SettingsField
@@ -417,9 +428,7 @@ export function WorkplaceCard({
 									}
 									const next = Math.round(Number(raw));
 									if (!Number.isFinite(next)) return;
-									setLaborCostPercentGoal(
-										Math.min(100, Math.max(0, next)),
-									);
+									setLaborCostPercentGoal(Math.min(100, Math.max(0, next)));
 								}}
 								placeholder="e.g. 25"
 							/>
@@ -497,14 +506,18 @@ export function LocationsCard({
 	const { formatMinute } = useDisplayPrefs();
 	const { workplace } = useWorkplace();
 	const [name, setName] = useState("");
-	const [timezone, setTimezone] = useState("America/Chicago");
+	const [timezone, setTimezone] = useState(
+		() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+	);
 	const [geo, setGeo] = useState<LocationGeoValue>(EMPTY_GEO);
 	const [hoursEnabled, setHoursEnabled] = useState(false);
 	const [openMinute, setOpenMinute] = useState(9 * 60);
 	const [closeMinute, setCloseMinute] = useState(17 * 60);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [editName, setEditName] = useState("");
-	const [editTimezone, setEditTimezone] = useState("America/Chicago");
+	const [editTimezone, setEditTimezone] = useState(
+		() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+	);
 	const [editGeo, setEditGeo] = useState<LocationGeoValue>(EMPTY_GEO);
 	const [editKioskPin, setEditKioskPin] = useState("");
 	const [editHoursEnabled, setEditHoursEnabled] = useState(false);
@@ -563,9 +576,7 @@ export function LocationsCard({
 					latitude: input.latitude.trim() || null,
 					longitude: input.longitude.trim() || null,
 					geofenceRadiusMeters: input.geofenceRadiusMeters,
-					...(input.kioskPin !== undefined
-						? { kioskPin: input.kioskPin }
-						: {}),
+					...(input.kioskPin !== undefined ? { kioskPin: input.kioskPin } : {}),
 					openMinute: input.openMinute,
 					closeMinute: input.closeMinute,
 				},
@@ -955,7 +966,7 @@ export function LocationsCard({
 								id="location-name"
 								value={name}
 								onChange={(event) => setName(event.target.value)}
-								placeholder="Domain"
+								placeholder="Location name"
 								required
 							/>
 						</Field>

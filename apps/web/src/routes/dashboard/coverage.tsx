@@ -13,19 +13,17 @@ import { InboxIcon } from "lucide-react";
 import { useMemo } from "react";
 import { toast } from "sonner";
 
-import {
-	AppPage,
-	AppPageBody,
-	AppPageHeader,
-} from "@/components/app-page";
+import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import { QueryFeedback } from "@/components/query-feedback";
 import { api } from "@/lib/api";
 import {
 	type SwapDetailDto,
 	useCoverageSwaps,
 	useSwapDecision,
 } from "@/lib/queries";
+import { formatClockTime, formatDay, formatDurationMs } from "@/lib/time";
 import { useWorkplace } from "@/lib/use-workplace";
 import { hasCoverageItems } from "@/lib/coverage-logic";
 
@@ -36,6 +34,7 @@ interface CoverageResponse {
 		workerEmail: string;
 		positionName: string;
 		startsAt: string;
+		endsAt: string;
 		reason: string | null;
 		status: "pending" | "approved" | "declined";
 	}[];
@@ -45,6 +44,7 @@ interface CoverageResponse {
 		workerEmail: string;
 		positionName: string;
 		startsAt: string | null;
+		endsAt: string | null;
 		status: "pending" | "approved" | "declined";
 	}[];
 }
@@ -55,6 +55,20 @@ export const Route = createFileRoute("/dashboard/coverage")({
 
 type ReleaseRow = CoverageResponse["releases"][number];
 type PickupRow = CoverageResponse["pickups"][number];
+
+function formatShiftWindow(startsAt: string, endsAt?: string | null) {
+	if (!endsAt || new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
+		return `${formatDay(startsAt)} · ${formatClockTime(startsAt)}`;
+	}
+	const sameDay =
+		new Date(startsAt).toDateString() === new Date(endsAt).toDateString();
+	const duration = formatDurationMs(
+		new Date(endsAt).getTime() - new Date(startsAt).getTime(),
+	);
+	return sameDay
+		? `${formatDay(startsAt)} · ${formatClockTime(startsAt)} – ${formatClockTime(endsAt)} · ${duration}`
+		: `${formatDay(startsAt)} ${formatClockTime(startsAt)} → ${formatDay(endsAt)} ${formatClockTime(endsAt)} · ${duration}`;
+}
 
 const releaseHelper = createDataColumnHelper<ReleaseRow>();
 const pickupHelper = createDataColumnHelper<PickupRow>();
@@ -130,14 +144,18 @@ export function CoveragePage() {
 					),
 				}),
 				releaseHelper.accessor("positionName", { header: "Position" }),
-				releaseHelper.accessor("startsAt", {
-					header: "Shift",
-					cell: ({ getValue }) => (
-						<span className="tabular-nums text-muted-foreground">
-							{new Date(getValue()).toLocaleString()}
-						</span>
-					),
-				}),
+				releaseHelper.accessor(
+					(row) => formatShiftWindow(row.startsAt, row.endsAt),
+					{
+						id: "shift",
+						header: "Shift",
+						cell: ({ getValue }) => (
+							<span className="text-muted-foreground tabular-nums">
+								{getValue()}
+							</span>
+						),
+					},
+				),
 				releaseHelper.accessor((row) => row.reason ?? "", {
 					id: "reason",
 					header: "Reason",
@@ -205,18 +223,22 @@ export function CoveragePage() {
 					),
 				}),
 				pickupHelper.accessor("positionName", { header: "Position" }),
-				pickupHelper.accessor((row) => row.startsAt ?? "", {
-					id: "startsAt",
-					header: "Shift",
-					cell: ({ getValue }) =>
-						getValue() ? (
-							<span className="tabular-nums text-muted-foreground">
-								{new Date(getValue()).toLocaleString()}
-							</span>
-						) : (
-							"—"
-						),
-				}),
+				pickupHelper.accessor(
+					(row) =>
+						row.startsAt ? formatShiftWindow(row.startsAt, row.endsAt) : "",
+					{
+						id: "startsAt",
+						header: "Shift",
+						cell: ({ getValue }) =>
+							getValue() ? (
+								<span className="text-muted-foreground tabular-nums">
+									{getValue()}
+								</span>
+							) : (
+								"—"
+							),
+					},
+				),
 				pickupHelper.accessor("status", {
 					header: "Status",
 					cell: ({ getValue }) => (
@@ -268,6 +290,9 @@ export function CoveragePage() {
 			]),
 		[decidePickup],
 	);
+
+	if (coverage.isError)
+		return <QueryFeedback query={coverage} label="coverage requests" />;
 
 	return (
 		<AppPage>
@@ -321,9 +346,7 @@ export function CoveragePage() {
 							<AppPageHeader
 								title="Pickup requests"
 								description="Workers asking to take an open shift."
-								badge={
-									<Badge variant="secondary">{data.pickups.length}</Badge>
-								}
+								badge={<Badge variant="secondary">{data.pickups.length}</Badge>}
 							/>
 							<DataTable
 								fill={false}
@@ -348,16 +371,19 @@ function SwapsQueueCard() {
 	const columns = useMemo(
 		() =>
 			swapHelper.columns([
-				swapHelper.accessor((row) => `${row.requester.name} ⇄ ${row.counterpart.name}`, {
-					id: "workers",
-					header: "Workers",
-					cell: ({ getValue }) => (
-						<span className="font-medium">{getValue()}</span>
-					),
-				}),
+				swapHelper.accessor(
+					(row) => `${row.requester.name} ⇄ ${row.counterpart.name}`,
+					{
+						id: "workers",
+						header: "Workers",
+						cell: ({ getValue }) => (
+							<span className="font-medium">{getValue()}</span>
+						),
+					},
+				),
 				swapHelper.accessor(
 					(row) =>
-						`${row.requester.name} gives ${new Date(row.requesterShift.startsAt).toLocaleString()} (${row.requesterShift.positionName}) · takes ${new Date(row.counterpartShift.startsAt).toLocaleString()} (${row.counterpartShift.positionName})`,
+						`${row.requester.name} gives ${formatShiftWindow(row.requesterShift.startsAt, row.requesterShift.endsAt)} (${row.requesterShift.positionName}) · takes ${formatShiftWindow(row.counterpartShift.startsAt, row.counterpartShift.endsAt)} (${row.counterpartShift.positionName})`,
 					{
 						id: "exchange",
 						header: "Exchange",
@@ -421,6 +447,14 @@ function SwapsQueueCard() {
 			]),
 		[decide],
 	);
+
+	if (swaps.isError) {
+		return (
+			<section className="border-b">
+				<QueryFeedback query={swaps} label="shift swap requests" />
+			</section>
+		);
+	}
 
 	if (swaps.isLoading || items.length === 0) return null;
 

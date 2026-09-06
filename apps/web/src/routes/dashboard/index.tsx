@@ -16,6 +16,14 @@ import {
 } from "@SchedulesManager/ui/components/item";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import {
+	Select,
+	SelectContent,
+	SelectGroup,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@SchedulesManager/ui/components/select";
 import { cn } from "@SchedulesManager/ui/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -29,7 +37,7 @@ import {
 	UserPlusIcon,
 	UsersIcon,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppDocument } from "@/components/app-page";
 import { ConfirmAction } from "@/components/confirm-action";
@@ -46,7 +54,9 @@ import {
 	useRespondToAcceptance,
 	useSchedule,
 	useWorkers,
+	useWorkplaceSettings,
 } from "@/lib/queries";
+import { weekStartOf } from "@/lib/schedule-calendar";
 import { formatDay, WEEKDAY_NAMES } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
@@ -132,13 +142,6 @@ const overviewAcceptanceColumns = acceptanceHelper.columns([
 	}),
 ]);
 
-function currentWeekStart(): string {
-	const date = new Date();
-	const day = date.getDay();
-	date.setDate(date.getDate() - (day === 0 ? 6 : day - 1));
-	return date.toLocaleDateString("sv-SE");
-}
-
 function Overview() {
 	const { workplace } = useWorkplace();
 	const { formatMinute, formatShiftRange } = useDisplayPrefs();
@@ -146,13 +149,20 @@ function Overview() {
 		() => createStaffColumns(formatMinute),
 		[formatMinute],
 	);
+	const settings = useWorkplaceSettings(workplace?.id);
 	const locations = useLocations(workplace?.id);
 	const positions = usePositions(workplace?.id);
 	const workers = useWorkers(workplace?.id);
 	const pilot = usePilotStatus(workplace?.id);
+	const [focusLocationId, setFocusLocationId] = useState<string | null>(null);
+	const focusLocation =
+		locations.data?.find((location) => location.id === focusLocationId) ??
+		locations.data?.[0];
 	const currentSchedule = useSchedule(
-		locations.data?.[0]?.id,
-		currentWeekStart(),
+		focusLocation?.id,
+		settings.data
+			? weekStartOf(new Date(), settings.data.weekStartDay)
+			: undefined,
 	);
 	const acceptances = useAcceptances(currentSchedule.data?.schedule.id);
 	const mySchedule = useMySchedule(workplace?.id, "home");
@@ -367,7 +377,7 @@ function Overview() {
 							nativeButton={false}
 							render={<Link to="/dashboard/clock" />}
 						>
-							{onClock ? "Open clock" : "Clock in"}
+							{onClock ? "Open clock" : "View shift & clock"}
 						</Button>
 					</CardHeader>
 				</Card>
@@ -452,17 +462,48 @@ function Overview() {
 								<CardTitle>Needs attention</CardTitle>
 								<CardDescription>
 									Current-week constraints and unresolved shift decisions for{" "}
-									{locations.data?.[0]?.name}.
+									{focusLocation?.name ?? "your location"}.
 								</CardDescription>
 							</div>
-							<Button
-								variant="outline"
-								size="sm"
-								nativeButton={false}
-								render={<Link to="/dashboard/schedule" />}
-							>
-								Open calendar
-							</Button>
+							<div className="flex flex-wrap items-center gap-2">
+								{(locations.data?.length ?? 0) > 1 ? (
+									<Select
+										items={(locations.data ?? []).map((location) => ({
+											label: location.name,
+											value: location.id,
+										}))}
+										value={focusLocation?.id ?? null}
+										onValueChange={(value) => {
+											if (value) setFocusLocationId(value);
+										}}
+									>
+										<SelectTrigger
+											aria-label="Location for Needs attention"
+											size="sm"
+											className="w-36"
+										>
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectGroup>
+												{(locations.data ?? []).map((location) => (
+													<SelectItem key={location.id} value={location.id}>
+														{location.name}
+													</SelectItem>
+												))}
+											</SelectGroup>
+										</SelectContent>
+									</Select>
+								) : null}
+								<Button
+									variant="outline"
+									size="sm"
+									nativeButton={false}
+									render={<Link to="/dashboard/schedule" />}
+								>
+									Open schedule
+								</Button>
+							</div>
 						</div>
 					</CardHeader>
 					<CardContent className="grid gap-4">
@@ -540,10 +581,10 @@ function Overview() {
 					<div className="flex flex-wrap items-start justify-between gap-3">
 						<div>
 							<CardTitle className="flex items-center gap-2">
-								<CalendarCheckIcon /> Pilot operations
+								<CalendarCheckIcon /> Schedule follow-up
 							</CardTitle>
 							<CardDescription>
-								Use this as the daily health check while the team is piloting.
+								Check which schedule notifications still need to be seen.
 							</CardDescription>
 						</div>
 						<Button
@@ -555,7 +596,7 @@ function Overview() {
 							}
 							onClick={() => remind.mutate()}
 						>
-							Send reminder
+							{remind.isPending ? "Sending…" : "Remind workers to review"}
 						</Button>
 					</div>
 				</CardHeader>

@@ -214,15 +214,16 @@ function WaitingForInvite({
 				<CardHeader>
 					<CardTitle>Join your workplace</CardTitle>
 					<CardDescription>
-						Ask your manager to invite this account&apos;s email. New
-						invitations appear automatically, or paste an invite link.
+						Ask your manager to invite this account&apos;s email. If they
+						confirm they&apos;ve invited you, tap “Check for invitation” below —
+						or paste an invite link.
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="flex flex-col gap-4">
 					{profile ? <CurrentProfile profile={profile} /> : null}
 					<form id="join-invite-form" onSubmit={submit}>
 						<FieldGroup>
-							<Field>
+							<Field data-invalid={invite.trim().length > 0 && !token}>
 								<FieldLabel htmlFor="invite">Invite link or code</FieldLabel>
 								<Input
 									id="invite"
@@ -232,10 +233,22 @@ function WaitingForInvite({
 									autoCapitalize="off"
 									autoCorrect="off"
 									spellCheck={false}
+									aria-invalid={invite.trim().length > 0 && !token}
 								/>
-								<FieldDescription>
-									Use the email your manager invited. The link is unique to you.
-								</FieldDescription>
+								{invite.trim().length > 0 && !token ? (
+									<FieldDescription
+										aria-live="polite"
+										className="text-destructive"
+									>
+										This doesn’t look like a complete invite link — paste the
+										whole link your manager sent.
+									</FieldDescription>
+								) : (
+									<FieldDescription>
+										Use the email your manager invited. The link is unique to
+										you.
+									</FieldDescription>
+								)}
 							</Field>
 						</FieldGroup>
 					</form>

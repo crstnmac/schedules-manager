@@ -234,10 +234,7 @@ export function TimeClockCard({
 					</AlertDialogHeader>
 					{notesEnabled ? (
 						<div className="grid gap-2 px-1">
-							<label
-								htmlFor="clock-out-note"
-								className="font-medium text-sm"
-							>
+							<label htmlFor="clock-out-note" className="font-medium text-sm">
 								Note (optional)
 							</label>
 							<Textarea

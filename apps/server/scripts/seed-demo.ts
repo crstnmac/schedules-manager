@@ -245,6 +245,9 @@ async function main() {
 		.limit(1);
 	if (!location) throw new Error("Pilot Restaurant has no location");
 
+	const workplaceId = workplace.id;
+	const locationId = location.id;
+
 	const [manager] = await db
 		.select()
 		.from(employments)
@@ -357,7 +360,7 @@ async function main() {
 			.where(
 				and(
 					eq(employments.profileId, input.id),
-					eq(employments.workplaceId, workplace.id),
+					eq(employments.workplaceId, workplaceId),
 				),
 			)
 			.limit(1);
@@ -368,7 +371,7 @@ async function main() {
 				await db
 					.insert(employments)
 					.values({
-						workplaceId: workplace.id,
+						workplaceId: workplaceId,
 						profileId: input.id,
 						kind: "worker",
 					})
@@ -384,7 +387,7 @@ async function main() {
 			.onConflictDoNothing();
 		await db
 			.insert(employmentLocations)
-			.values({ employmentId: employment.id, locationId: location.id })
+			.values({ employmentId: employment.id, locationId: locationId })
 			.onConflictDoNothing();
 		await db
 			.update(employments)

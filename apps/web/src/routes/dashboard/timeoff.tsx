@@ -10,6 +10,7 @@ import {
 } from "@SchedulesManager/ui/components/alert-dialog";
 import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
+import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
 import {
 	Empty,
 	EmptyDescription,
@@ -48,12 +49,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { CalendarOffIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-
-import {
-	AppPage,
-	AppPageBody,
-	AppPageHeader,
-} from "@/components/app-page";
+import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import {
@@ -112,9 +108,41 @@ function TimeOffPage() {
 	const [editing, setEditing] = useState<TimeOffRequestDto | null>(null);
 	const [declineId, setDeclineId] = useState<string | null>(null);
 	const [declineReason, setDeclineReason] = useState("");
+	const [selectedRequestIds, setSelectedRequestIds] = useState<
+		ReadonlySet<string>
+	>(new Set());
+
+	const approveBatch = useMutation({
+		mutationFn: async (requests: { id: string }[]) => {
+			let failed = 0;
+			for (const request of requests) {
+				try {
+					await api(
+						`/v1/workplaces/${workplaceId}/time-off/${request.id}/decision`,
+						{ method: "POST", body: { decision: "approved" } },
+					);
+				} catch {
+					failed += 1;
+				}
+			}
+			return { failed, total: requests.length };
+		},
+		onSuccess: ({ failed, total }) => {
+			invalidateLeave();
+			setSelectedRequestIds(new Set());
+			if (failed > 0) {
+				toast.error(`${failed} of ${total} requests couldn't be approved.`);
+			} else {
+				toast.success(`Approved ${total} time-off requests.`);
+			}
+		},
+	});
 
 	const requests = timeOff.data ?? [];
 	const pending = requests.filter((request) => request.status === "pending");
+	const selectedPending = pending.filter((request) =>
+		selectedRequestIds.has(request.id),
+	);
 	const decided = requests.filter((request) => request.status !== "pending");
 	const types = leaveTypes.data?.leaveTypes ?? [];
 	const team: TeamMember[] =
@@ -141,15 +169,18 @@ function TimeOffPage() {
 			decision: Decision;
 			reason?: string;
 		}) =>
-			api(`/v1/workplaces/${workplaceId}/time-off/${input.requestId}/decision`, {
-				method: "POST",
-				body: {
-					decision: input.decision,
-					...(input.decision === "declined" && input.reason
-						? { reason: input.reason }
-						: {}),
+			api(
+				`/v1/workplaces/${workplaceId}/time-off/${input.requestId}/decision`,
+				{
+					method: "POST",
+					body: {
+						decision: input.decision,
+						...(input.decision === "declined" && input.reason
+							? { reason: input.reason }
+							: {}),
+					},
 				},
-			}),
+			),
 		onSuccess: (_, input) => {
 			invalidateLeave();
 			setDeclineId(null);
@@ -182,8 +213,7 @@ function TimeOffPage() {
 		onError: (error) => toast.error((error as Error).message),
 	});
 
-	const busy =
-		decide.isPending || removeLeave.isPending;
+	const busy = decide.isPending || removeLeave.isPending;
 
 	const historyColumns = useMemo(
 		() =>
@@ -206,16 +236,13 @@ function TimeOffPage() {
 						),
 					},
 				),
-				historyHelper.accessor(
-					(row) => formatLeaveRange(row),
-					{
-						id: "when",
-						header: "When",
-						cell: ({ getValue }) => (
-							<span className="tabular-nums">{getValue()}</span>
-						),
-					},
-				),
+				historyHelper.accessor((row) => formatLeaveRange(row), {
+					id: "when",
+					header: "When",
+					cell: ({ getValue }) => (
+						<span className="tabular-nums">{getValue()}</span>
+					),
+				}),
 				historyHelper.accessor((row) => row.leaveTypeName ?? "—", {
 					id: "type",
 					header: "Type",
@@ -224,7 +251,7 @@ function TimeOffPage() {
 					id: "hours",
 					header: "Hours",
 					cell: ({ getValue }) => (
-						<span className="tabular-nums text-muted-foreground">
+						<span className="text-muted-foreground tabular-nums">
 							{getValue()}
 						</span>
 					),
@@ -354,27 +381,76 @@ function TimeOffPage() {
 								</EmptyHeader>
 							</Empty>
 						) : (
-							<ul className="divide-y">
-								{pending.map((request) => (
-									<PendingRequestRow
-										key={request.id}
-										request={request}
-										busy={busy}
-										onEdit={() => setEditing(request)}
-										onDelete={() => removeLeave.mutate(request.id)}
-										onApprove={() =>
-											decide.mutate({
-												requestId: request.id,
-												decision: "approved",
-											})
-										}
-										onDecline={() => {
-											setDeclineReason("");
-											setDeclineId(request.id);
-										}}
-									/>
-								))}
-							</ul>
+							<>
+								{selectedPending.length > 0 ? (
+									<div className="flex items-center justify-between gap-2 border-b bg-muted/40 px-4 py-2">
+										<p className="text-muted-foreground text-xs">
+											{selectedPending.length} selected
+										</p>
+										<div className="flex items-center gap-2">
+											<ConfirmAction
+												trigger={`Approve selected (${selectedPending.length})`}
+												triggerVariant="default"
+												title={`Approve ${selectedPending.length} time-off requests?`}
+												description={`Approves ${selectedPending
+													.slice(0, 3)
+													.map((request) =>
+														formatPerson(
+															request.worker.fullName,
+															request.worker.email,
+														),
+													)
+													.join(
+														", ",
+													)}${selectedPending.length > 3 ? ` and ${selectedPending.length - 3} more` : ""}. Each blocks the schedule.`}
+												confirmLabel="Approve all"
+												disabled={approveBatch.isPending}
+												onConfirm={() => approveBatch.mutate(selectedPending)}
+											/>
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={() => setSelectedRequestIds(new Set())}
+											>
+												Clear
+											</Button>
+										</div>
+									</div>
+								) : null}
+								<ul className="divide-y">
+									{pending.map((request) => (
+										<PendingRequestRow
+											key={request.id}
+											request={request}
+											busy={busy}
+											selected={selectedRequestIds.has(request.id)}
+											onToggleSelect={(checked) => {
+												setSelectedRequestIds((current) => {
+													const next = new Set(current);
+													if (checked) {
+														next.add(request.id);
+													} else {
+														next.delete(request.id);
+													}
+													return next;
+												});
+											}}
+											onEdit={() => setEditing(request)}
+											onDelete={() => removeLeave.mutate(request.id)}
+											onApprove={() =>
+												decide.mutate({
+													requestId: request.id,
+													decision: "approved",
+												})
+											}
+											onDecline={() => {
+												setDeclineReason("");
+												setDeclineId(request.id);
+											}}
+										/>
+									))}
+								</ul>
+							</>
 						)}
 					</TabsContent>
 
@@ -486,7 +562,15 @@ function TimeOffPage() {
 					<AlertDialogHeader>
 						<AlertDialogTitle>Decline this request?</AlertDialogTitle>
 						<AlertDialogDescription>
-							The worker will see this decision. A reason is optional.
+							{(() => {
+								const declining = requests.find(
+									(request) => request.id === declineId,
+								);
+								if (!declining) {
+									return "The worker will see this decision. A reason is optional.";
+								}
+								return `Declining ${formatPerson(declining.worker.fullName, declining.worker.email)}’s request for ${formatLeaveRange(declining)}. The worker will see this decision.`;
+							})()}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<Input
@@ -523,6 +607,8 @@ function TimeOffPage() {
 function PendingRequestRow({
 	request,
 	busy,
+	selected,
+	onToggleSelect,
 	onEdit,
 	onDelete,
 	onApprove,
@@ -530,6 +616,8 @@ function PendingRequestRow({
 }: {
 	request: TimeOffRequestDto;
 	busy: boolean;
+	selected: boolean;
+	onToggleSelect: (checked: boolean) => void;
 	onEdit: () => void;
 	onDelete: () => void;
 	onApprove: () => void;
@@ -539,64 +627,72 @@ function PendingRequestRow({
 	const remainingAfter = request.remainingMinutes - request.chargeMinutes;
 	const short = remainingAfter < 0;
 	return (
-		<li className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-			<div className="min-w-0">
-				<p className="font-medium text-sm">
-					{formatPerson(request.worker.fullName, request.worker.email)}
-					{request.kind === "manager" ? (
-						<span className="font-normal text-muted-foreground">
-							{" "}
-							· Manager
-						</span>
-					) : null}
-				</p>
-				<p className="tabular-nums text-sm">
-					{formatLeaveRange(request)}
-					{request.leaveTypeName ? ` · ${request.leaveTypeName}` : ""}
-					{` · ${formatLeaveHours(request.chargeMinutes)}`}
-				</p>
-				<p className="text-muted-foreground text-xs">
-					{short
-						? `Uses ${formatLeaveHours(Math.abs(remainingAfter))} more than the ${formatLeaveHours(request.remainingMinutes)} remaining.`
-						: `${formatLeaveHours(request.remainingMinutes)} remaining after this.`}
-					{request.reason ? ` ${request.reason}` : ""}
-				</p>
-			</div>
-			<div className="flex flex-wrap items-center gap-2">
-				<Button size="sm" variant="outline" disabled={busy} onClick={onEdit}>
-					Edit
-				</Button>
-				<ConfirmAction
-					trigger="Approve"
-					triggerVariant="default"
-					title="Approve this time off?"
-					description={
-						short
-							? `This uses ${formatLeaveHours(request.chargeMinutes)} and they only have ${formatLeaveHours(request.remainingMinutes)} left. They will still be blocked on the schedule.`
-							: `This uses ${formatLeaveHours(request.chargeMinutes)}${request.leaveTypeName ? ` of ${request.leaveTypeName}` : ""} and blocks the schedule.`
-					}
-					confirmLabel="Approve"
-					disabled={busy}
-					onConfirm={onApprove}
-				/>
-				<Button
-					size="sm"
-					variant="outline"
-					disabled={busy}
-					onClick={onDecline}
-				>
-					Decline
-				</Button>
-				<ConfirmAction
-					trigger="Delete"
-					triggerVariant="ghost"
-					destructive
-					title="Delete this request?"
-					description="This removes the request permanently."
-					confirmLabel="Delete"
-					disabled={busy}
-					onConfirm={onDelete}
-				/>
+		<li className="flex items-start gap-3 px-4 py-3">
+			<Checkbox
+				className="mt-1"
+				aria-label={`Select ${formatPerson(request.worker.fullName, request.worker.email)}’s request`}
+				checked={selected}
+				onCheckedChange={(checked) => onToggleSelect(checked === true)}
+			/>
+			<div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div className="min-w-0">
+					<p className="font-medium text-sm">
+						{formatPerson(request.worker.fullName, request.worker.email)}
+						{request.kind === "manager" ? (
+							<span className="font-normal text-muted-foreground">
+								{" "}
+								· Manager
+							</span>
+						) : null}
+					</p>
+					<p className="text-sm tabular-nums">
+						{formatLeaveRange(request)}
+						{request.leaveTypeName ? ` · ${request.leaveTypeName}` : ""}
+						{` · ${formatLeaveHours(request.chargeMinutes)}`}
+					</p>
+					<p className="text-muted-foreground text-xs">
+						{short
+							? `Uses ${formatLeaveHours(Math.abs(remainingAfter))} more than the ${formatLeaveHours(request.remainingMinutes)} remaining.`
+							: `${formatLeaveHours(request.remainingMinutes)} remaining after this.`}
+						{request.reason ? ` ${request.reason}` : ""}
+					</p>
+				</div>
+				<div className="flex flex-wrap items-center gap-2">
+					<Button size="sm" variant="outline" disabled={busy} onClick={onEdit}>
+						Edit
+					</Button>
+					<ConfirmAction
+						trigger="Approve"
+						triggerVariant="default"
+						title="Approve this time off?"
+						description={
+							short
+								? `This uses ${formatLeaveHours(request.chargeMinutes)} and they only have ${formatLeaveHours(request.remainingMinutes)} left. They will still be blocked on the schedule.`
+								: `This uses ${formatLeaveHours(request.chargeMinutes)}${request.leaveTypeName ? ` of ${request.leaveTypeName}` : ""} and blocks the schedule.`
+						}
+						confirmLabel="Approve"
+						disabled={busy}
+						onConfirm={onApprove}
+					/>
+					<Button
+						size="sm"
+						variant="outline"
+						disabled={busy}
+						onClick={onDecline}
+					>
+						Decline
+					</Button>
+					<ConfirmAction
+						trigger="Delete"
+						triggerVariant="ghost"
+						destructive
+						title="Delete this request?"
+						description="This removes the request permanently."
+						confirmLabel="Delete"
+						disabled={busy}
+						onConfirm={onDelete}
+					/>
+				</div>
 			</div>
 		</li>
 	);
@@ -668,7 +764,7 @@ function WhoIsOut({
 								</span>
 							) : null}
 						</p>
-						<p className="tabular-nums text-sm">
+						<p className="text-sm tabular-nums">
 							{formatLeaveRange(request)}
 							{request.leaveTypeName ? ` · ${request.leaveTypeName}` : ""}
 							{` · ${formatLeaveHours(request.chargeMinutes)}`}
@@ -804,9 +900,7 @@ function BalancesPanel({
 												min={0}
 												step="0.5"
 												className="w-20 tabular-nums"
-												value={
-													draft[key] ?? minutesToHoursInput(current)
-												}
+												value={draft[key] ?? minutesToHoursInput(current)}
 												onChange={(event) =>
 													setDraft((values) => ({
 														...values,
@@ -1108,10 +1202,7 @@ function RequestMyLeaveSheet({
 				<SheetFooter>
 					<Button
 						disabled={
-							request.isPending ||
-							!employmentId ||
-							!leaveTypeId ||
-							charge <= 0
+							request.isPending || !employmentId || !leaveTypeId || charge <= 0
 						}
 						onClick={() => request.mutate()}
 					>
@@ -1148,9 +1239,7 @@ function EditLeaveSheet({
 	const [startDate, setStartDate] = useState(request.startDate);
 	const [endDate, setEndDate] = useState(request.endDate);
 	const [allDay, setAllDay] = useState(request.allDay);
-	const [startMinute, setStartMinute] = useState(
-		request.startMinute ?? 9 * 60,
-	);
+	const [startMinute, setStartMinute] = useState(request.startMinute ?? 9 * 60);
 	const [endMinute, setEndMinute] = useState(request.endMinute ?? 17 * 60);
 	const [reason, setReason] = useState(request.reason ?? "");
 

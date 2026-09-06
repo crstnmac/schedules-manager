@@ -25,6 +25,7 @@ import {
 	SettingsSaveSection,
 	SettingsSection,
 } from "@/components/settings/page";
+import { useRegisterUnsavedChanges } from "@/components/unsaved-changes";
 import { api } from "@/lib/api";
 import type { WorkplaceSettings } from "@/lib/queries";
 
@@ -108,6 +109,7 @@ function PolicyCard({
 	children: (form: ReturnType<typeof usePolicyDraft>) => ReactNode;
 }) {
 	const form = usePolicyDraft(settings, onChange);
+	useRegisterUnsavedChanges("policies", form.dirty);
 
 	if (isLoading || !settings) {
 		return (

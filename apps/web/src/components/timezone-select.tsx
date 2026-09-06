@@ -119,7 +119,10 @@ export function TimezoneSelect({
 				role="combobox"
 				aria-autocomplete="list"
 				aria-expanded={open}
-				aria-controls={listId}
+				aria-controls={open ? listId : undefined}
+				aria-activedescendant={
+					open && active ? `${listId}-option-${activeIndex}` : undefined
+				}
 				autoComplete="off"
 				spellCheck={false}
 				value={open ? query : timezoneLabel(value)}
@@ -162,6 +165,8 @@ export function TimezoneSelect({
 						<div
 							ref={listRef}
 							id={listId}
+							role="listbox"
+							aria-label="Time zones"
 							className="z-50 overflow-y-auto overscroll-contain rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
 							style={{
 								position: "fixed",
@@ -172,13 +177,16 @@ export function TimezoneSelect({
 							}}
 						>
 							{matches.length === 0 ? (
-								<p className="px-2 py-1.5 text-muted-foreground">
+								<p className="px-2 py-1.5 text-muted-foreground" role="presentation">
 									No time zones match that search.
 								</p>
 							) : (
 								groups.map((group) => (
-									<div key={group.region}>
-										<p className="sticky top-0 z-10 bg-popover px-2 py-1 font-medium text-muted-foreground">
+									<div key={group.region} role="presentation">
+										<p
+											role="presentation"
+											className="sticky top-0 z-10 bg-popover px-2 py-1 font-medium text-muted-foreground"
+										>
 											{group.region}
 										</p>
 										{group.zones.map((option) => {
@@ -189,6 +197,9 @@ export function TimezoneSelect({
 												<button
 													key={option.id}
 													type="button"
+													role="option"
+													id={`${listId}-option-${index}`}
+													aria-selected={option.id === value}
 													className={cn(
 														"flex w-full rounded-sm px-2 py-1.5 text-left text-xs hover:bg-muted/70",
 														option.id === value && "bg-muted",

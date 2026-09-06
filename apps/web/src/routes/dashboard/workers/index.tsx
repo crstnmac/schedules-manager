@@ -68,8 +68,8 @@ import {
 	useWorkers,
 	type WorkerDto,
 } from "@/lib/queries";
-import { useWorkplace } from "@/lib/use-workplace";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
+import { useWorkplace } from "@/lib/use-workplace";
 import { parseWorkerCsv, type WorkerImportRow } from "@/lib/worker-import";
 
 export const Route = createFileRoute("/dashboard/workers/")({
@@ -80,7 +80,7 @@ const workerHelper = createDataColumnHelper<WorkerDto>();
 const invitationHelper = createDataColumnHelper<InvitationDto>();
 
 function WorkersPage() {
-	const { workplace } = useWorkplace();
+	const { workplace, employmentId: myEmploymentId } = useWorkplace();
 	const { formatPerson } = useDisplayPrefs();
 	const posthog = usePostHog();
 	const workers = useWorkers(workplace?.id);
@@ -275,6 +275,7 @@ function WorkersPage() {
 					enableSorting: false,
 					cell: ({ row }) => {
 						const worker = row.original;
+						const isSelf = worker.employmentId === myEmploymentId;
 						return (
 							<div className="flex flex-wrap items-center justify-end gap-2">
 								<Button
@@ -290,46 +291,50 @@ function WorkersPage() {
 								>
 									Employment
 								</Button>
-								<AlertDialog>
-									<AlertDialogTrigger
-										render={
-											<Button
-												variant="outline"
-												size="sm"
-												disabled={deactivate.isPending}
-											/>
-										}
-									>
-										Deactivate
-									</AlertDialogTrigger>
-									<AlertDialogContent size="sm">
-										<AlertDialogHeader>
-											<AlertDialogMedia>
-												<UsersIcon />
-											</AlertDialogMedia>
-											<AlertDialogTitle>Remove this person?</AlertDialogTitle>
-											<AlertDialogDescription>
-												{worker.profile.email} will lose access to this
-												workplace.
-											</AlertDialogDescription>
-										</AlertDialogHeader>
-										<AlertDialogFooter>
-											<AlertDialogCancel>Cancel</AlertDialogCancel>
-											<AlertDialogAction
-												variant="destructive"
-												onClick={() => deactivate.mutate(worker.employmentId)}
-											>
-												Deactivate
-											</AlertDialogAction>
-										</AlertDialogFooter>
-									</AlertDialogContent>
-								</AlertDialog>
+								{isSelf ? (
+									<Badge variant="secondary">You</Badge>
+								) : (
+									<AlertDialog>
+										<AlertDialogTrigger
+											render={
+												<Button
+													variant="outline"
+													size="sm"
+													disabled={deactivate.isPending}
+												/>
+											}
+										>
+											Deactivate
+										</AlertDialogTrigger>
+										<AlertDialogContent size="sm">
+											<AlertDialogHeader>
+												<AlertDialogMedia>
+													<UsersIcon />
+												</AlertDialogMedia>
+												<AlertDialogTitle>Remove this person?</AlertDialogTitle>
+												<AlertDialogDescription>
+													{worker.profile.email} will lose access to this
+													workplace.
+												</AlertDialogDescription>
+											</AlertDialogHeader>
+											<AlertDialogFooter>
+												<AlertDialogCancel>Cancel</AlertDialogCancel>
+												<AlertDialogAction
+													variant="destructive"
+													onClick={() => deactivate.mutate(worker.employmentId)}
+												>
+													Deactivate
+												</AlertDialogAction>
+											</AlertDialogFooter>
+										</AlertDialogContent>
+									</AlertDialog>
+								)}
 							</div>
 						);
 					},
 				}),
 			]),
-		[deactivate, formatPerson],
+		[deactivate, formatPerson, myEmploymentId],
 	);
 
 	return (
@@ -344,10 +349,7 @@ function WorkersPage() {
 								Share this link with the person you just invited.
 							</p>
 							<InputGroup className="min-w-0">
-								<InputGroupInput
-									readOnly
-									value={inviteLink(lastInviteToken)}
-								/>
+								<InputGroupInput readOnly value={inviteLink(lastInviteToken)} />
 								<InputGroupAddon align="inline-end">
 									<InputGroupButton
 										aria-label="Copy invite link"
@@ -422,7 +424,9 @@ function WorkersPage() {
 			<aside className="flex max-h-[45vh] min-h-0 w-full shrink-0 flex-col overflow-y-auto border-t bg-muted/20 lg:max-h-none lg:w-80 lg:border-t-0 lg:border-l">
 				<section className="flex flex-col gap-4 border-b p-4">
 					<div>
-						<h2 className="font-heading font-medium text-sm">Invite a worker</h2>
+						<h2 className="font-heading font-medium text-sm">
+							Invite a worker
+						</h2>
 						<p className="text-muted-foreground text-xs/relaxed">
 							We’ll email the invitation automatically. You can also copy the
 							invite link after sending.
@@ -469,6 +473,7 @@ function WorkersPage() {
 											<Field key={location.id} orientation="horizontal">
 												<Checkbox
 													id={`invite-location-${location.id}`}
+													aria-label={location.name}
 													checked={selectedLocations.includes(location.id)}
 													onCheckedChange={() =>
 														toggle(
@@ -499,6 +504,7 @@ function WorkersPage() {
 											<Field key={position.id} orientation="horizontal">
 												<Checkbox
 													id={`invite-position-${position.id}`}
+													aria-label={position.name}
 													checked={selectedPositions.includes(position.id)}
 													onCheckedChange={() =>
 														toggle(
@@ -538,7 +544,9 @@ function WorkersPage() {
 
 				<section className="flex flex-col gap-4 p-4">
 					<div>
-						<h2 className="font-heading font-medium text-sm">Import your team</h2>
+						<h2 className="font-heading font-medium text-sm">
+							Import your team
+						</h2>
 						<p className="text-muted-foreground text-xs/relaxed">
 							CSV columns: name, email, phone, position, location. Names must
 							match Settings.
@@ -547,6 +555,7 @@ function WorkersPage() {
 					<Input
 						type="file"
 						accept=".csv,text/csv"
+						aria-label="Worker CSV file"
 						onChange={(event) => {
 							const file = event.target.files?.[0];
 							if (file) void readCsv(file);
@@ -655,8 +664,7 @@ function Invitations({
 				}),
 				invitationHelper.accessor("expiresAt", {
 					header: "Expires",
-					cell: ({ getValue }) =>
-						new Date(getValue()).toLocaleDateString(),
+					cell: ({ getValue }) => new Date(getValue()).toLocaleDateString(),
 				}),
 				invitationHelper.display({
 					id: "emailStatus",

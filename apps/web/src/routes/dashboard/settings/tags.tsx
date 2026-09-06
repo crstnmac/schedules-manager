@@ -14,6 +14,7 @@ function TagsSettingsPage() {
 
 	return (
 		<SettingsPage
+			queries={[tags]}
 			title="Tags"
 			description="Short labels you can attach to a shift, such as Training or Event."
 		>

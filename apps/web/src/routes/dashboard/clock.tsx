@@ -20,6 +20,7 @@ import {
 	EmptyTitle,
 } from "@SchedulesManager/ui/components/empty";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
+import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TimerIcon } from "lucide-react";
 import { useMemo } from "react";
@@ -231,9 +232,23 @@ function ManagerClockPage() {
 						<CardContent>
 							{timecard.isLoading ? <Skeleton className="h-32" /> : null}
 							{timecard.isError ? (
-								<p className="text-muted-foreground text-sm">
-									{(timecard.error as Error).message}
-								</p>
+								<Alert variant="destructive">
+									<AlertTitle>Couldn’t load your Time Entries</AlertTitle>
+									<AlertDescription className="flex flex-wrap items-center gap-2">
+										<span>Check your connection, then try again.</span>
+										<Button
+											size="sm"
+											variant="outline"
+											disabled={timecard.isFetching}
+											onClick={() => void timecard.refetch()}
+										>
+											{timecard.isFetching ? (
+												<Spinner data-icon="inline-start" />
+											) : null}
+											Try again
+										</Button>
+									</AlertDescription>
+								</Alert>
 							) : null}
 							{!timecard.isLoading &&
 							!timecard.isError &&

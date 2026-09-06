@@ -3,13 +3,12 @@ import { Button } from "@SchedulesManager/ui/components/button";
 import { cn } from "@SchedulesManager/ui/lib/utils";
 import { useDraggable } from "@dnd-kit/react";
 import { AlertTriangleIcon } from "lucide-react";
-
+import type { ScheduleResponse, ScheduleShiftDto } from "@/lib/queries";
 import {
 	formatCompactShiftRange,
 	positionColor,
 	shiftDisplayStatus,
 } from "@/lib/schedule-calendar";
-import type { ScheduleResponse, ScheduleShiftDto } from "@/lib/queries";
 
 function statusVariant(tone: "danger" | "warning" | "info") {
 	if (tone === "danger") return "destructive" as const;
@@ -46,6 +45,7 @@ export function ShiftTile({
 		60_000;
 	const status = shiftDisplayStatus({
 		hasConflicts,
+		isOpen,
 		attendance: timeclock?.attendance,
 		clockStatus: timeclock?.status,
 		clockedInAt: timeclock?.clockedInAt,

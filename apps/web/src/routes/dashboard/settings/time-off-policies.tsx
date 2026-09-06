@@ -17,6 +17,7 @@ function TimeOffPoliciesSettingsPage() {
 
 	return (
 		<SettingsPage
+			queries={[settings]}
 			title="Time-off policies"
 			description="Who can request time off, and when remaining minutes reset. Leave types stay on their own page."
 		>

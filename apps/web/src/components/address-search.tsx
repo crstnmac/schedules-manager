@@ -81,7 +81,12 @@ export function AddressSearch({
 					role="combobox"
 					aria-autocomplete="list"
 					aria-expanded={showList}
-					aria-controls={listId}
+					aria-controls={showList ? listId : undefined}
+					aria-activedescendant={
+						showList && places[activeIndex]
+							? `${listId}-option-${activeIndex}`
+							: undefined
+					}
 					autoComplete="off"
 					value={value}
 					placeholder="900 E 11th St, Austin, TX"
@@ -128,10 +133,12 @@ export function AddressSearch({
 			{showList ? (
 				<div
 					id={listId}
+					role="listbox"
+					aria-label="Address matches"
 					className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
 				>
 					{search.isFetching && places.length === 0 ? (
-						<p className="px-2 py-1.5 text-muted-foreground text-xs">
+						<p className="px-2 py-1.5 text-muted-foreground text-xs" role="presentation">
 							Searching places…
 						</p>
 					) : (
@@ -139,6 +146,9 @@ export function AddressSearch({
 							<button
 								key={place.osmId}
 								type="button"
+								role="option"
+								id={`${listId}-option-${index}`}
+								aria-selected={index === activeIndex}
 								className={`flex w-full flex-col items-start rounded-sm px-2 py-1.5 text-left text-xs ${
 									index === activeIndex ? "bg-muted" : "hover:bg-muted/70"
 								}`}

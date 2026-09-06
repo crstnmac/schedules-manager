@@ -516,6 +516,7 @@ export const coverageRoutes = new Elysia({
 					workerEmail: row.email,
 					positionName: positionNamesById.get(row.shift.positionId) ?? "Shift",
 					startsAt: row.shift.startsAt.toISOString(),
+					endsAt: row.shift.endsAt.toISOString(),
 					reason: row.release.reason,
 					status: row.release.status,
 				})),
@@ -530,6 +531,7 @@ export const coverageRoutes = new Elysia({
 						positionName:
 							positionNamesById.get(row.openShift.positionId) ?? "Shift",
 						startsAt: shift ? shift.startsAt.toISOString() : null,
+						endsAt: shift ? shift.endsAt.toISOString() : null,
 						status: row.pickup.status,
 					};
 				}),

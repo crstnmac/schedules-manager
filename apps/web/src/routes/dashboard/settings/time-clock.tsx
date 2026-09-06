@@ -17,6 +17,7 @@ function TimeClockSettingsPage() {
 
 	return (
 		<SettingsPage
+			queries={[settings]}
 			title="Time clock"
 			description="Clock-in windows, rounding, geofence, and timesheet notes."
 		>

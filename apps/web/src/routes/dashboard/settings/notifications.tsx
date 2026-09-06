@@ -15,6 +15,7 @@ function NotificationSettingsPage() {
 
 	return (
 		<SettingsPage
+			queries={[me]}
 			title="Notifications"
 			description="Turn each topic on or off. These apply only to you."
 		>

@@ -1,4 +1,11 @@
-import { pgEnum, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import {
+	pgEnum,
+	pgTable,
+	text,
+	timestamp,
+	unique,
+	uuid,
+} from "drizzle-orm/pg-core";
 
 import { profiles } from "./profiles";
 import { versionShifts } from "./publication";

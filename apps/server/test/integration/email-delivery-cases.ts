@@ -317,7 +317,9 @@ export function registerEmailDeliveryTests(getContext: () => Context) {
 			"rate-c@integration.schedulesmanager.dev",
 			"rate-create-3",
 		);
-		expect([first.status, second.status, third.status]).toEqual([200, 200, 200]);
+		expect([first.status, second.status, third.status]).toEqual([
+			200, 200, 200,
+		]);
 		const firstBody = await first.json();
 		const blocked = await create(
 			"rate-d@integration.schedulesmanager.dev",

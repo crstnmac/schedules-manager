@@ -14,13 +14,13 @@ import { CalendarPlusIcon } from "lucide-react";
 import { useMemo } from "react";
 import { toast } from "sonner";
 
-import {
-	AppPage,
-	AppPageBody,
-	AppPageHeader,
-} from "@/components/app-page";
+import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
-import { type OpenShiftDto, useOpenShifts, useRequestPickup } from "@/lib/queries";
+import {
+	type OpenShiftDto,
+	useOpenShifts,
+	useRequestPickup,
+} from "@/lib/queries";
 import { formatDay } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
@@ -80,8 +80,7 @@ function OpenShiftsPage() {
 												toast.success(
 													"Pickup requested. Your manager will decide.",
 												),
-											onError: (error) =>
-												toast.error((error as Error).message),
+											onError: (error) => toast.error((error as Error).message),
 										})
 									}
 								>
@@ -112,6 +111,8 @@ function OpenShiftsPage() {
 					</div>
 				) : (
 					<DataTable
+						stacked
+						query={openShifts}
 						columns={columns}
 						data={shifts}
 						getRowId={(row) => row.id}

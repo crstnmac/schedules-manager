@@ -90,9 +90,7 @@ export const ptoBalances = pgTable(
 			.references(() => leaveTypes.id, { onDelete: "cascade" }),
 		minutes: integer("minutes").notNull().default(0),
 	},
-	(table) => [
-		primaryKey({ columns: [table.employmentId, table.leaveTypeId] }),
-	],
+	(table) => [primaryKey({ columns: [table.employmentId, table.leaveTypeId] })],
 );
 
 export const timeOffRequests = pgTable("time_off_requests", {

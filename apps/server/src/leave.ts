@@ -88,7 +88,11 @@ export function resolveLeaveWindow(input: {
 
 	if (input.allDay) {
 		const startsAt = wallToInstant(input.startDate, 0, input.timeZone);
-		const endsAt = wallToInstant(shiftDays(input.endDate, 1), 0, input.timeZone);
+		const endsAt = wallToInstant(
+			shiftDays(input.endDate, 1),
+			0,
+			input.timeZone,
+		);
 		return {
 			startsAt,
 			endsAt,
@@ -97,8 +101,8 @@ export function resolveLeaveWindow(input: {
 			allDay: true,
 			startMinute: null,
 			endMinute: null,
-			chargeMinutes: inclusiveDayCount(input.startDate, input.endDate) *
-				PAID_DAY_MINUTES,
+			chargeMinutes:
+				inclusiveDayCount(input.startDate, input.endDate) * PAID_DAY_MINUTES,
 		};
 	}
 
@@ -180,10 +184,7 @@ export function nextLeaveCapReset(input: {
 }
 
 export function leaveCapResetPayload(
-	workplace: Pick<
-		Workplace,
-		"leaveCapReset" | "leaveCapResetMonthDay"
-	>,
+	workplace: Pick<Workplace, "leaveCapReset" | "leaveCapResetMonthDay">,
 	hiredAt: Date,
 	timeZone: string,
 	now?: Date,

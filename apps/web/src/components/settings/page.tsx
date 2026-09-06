@@ -11,17 +11,27 @@ import {
 import { cn } from "@SchedulesManager/ui/lib/utils";
 import type { ReactNode } from "react";
 
+import {
+	QueryFeedback,
+	type QueryFeedbackState,
+} from "@/components/query-feedback";
+
 export function SettingsPage({
 	title,
 	description,
 	children,
 	className,
+	queries = [],
 }: {
 	title: string;
 	description?: string;
 	children: ReactNode;
 	className?: string;
+	queries?: (QueryFeedbackState & { data?: unknown })[];
 }) {
+	const blocked = queries.find(
+		(query) => query.data === undefined && (query.isLoading || query.isError),
+	);
 	return (
 		<div
 			className={cn("mx-auto flex w-full max-w-3xl flex-col gap-6", className)}
@@ -34,7 +44,11 @@ export function SettingsPage({
 					</p>
 				) : null}
 			</header>
-			{children}
+			{blocked ? (
+				<QueryFeedback query={blocked} label={title.toLowerCase()} />
+			) : (
+				children
+			)}
 		</div>
 	);
 }

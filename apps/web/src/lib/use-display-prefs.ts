@@ -24,9 +24,8 @@ export function useDisplayPrefs() {
 			endMinute: number,
 			overnight: boolean,
 		) => formatShiftRange(startMinute, endMinute, overnight, timeFormat),
-		formatLeaveRange: (
-			input: Parameters<typeof formatLeaveRange>[0],
-		) => formatLeaveRange(input, timeFormat),
+		formatLeaveRange: (input: Parameters<typeof formatLeaveRange>[0]) =>
+			formatLeaveRange(input, timeFormat),
 		formatPerson: (fullName: string | null | undefined, email: string) =>
 			formatPersonName(fullName, email, nameFormat),
 	};

@@ -1,5 +1,6 @@
 import { env } from "@SchedulesManager/env/web";
 import { Button } from "@SchedulesManager/ui/components/button";
+import { Field, FieldLabel } from "@SchedulesManager/ui/components/field";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -21,14 +22,17 @@ function ReportsPage() {
 	});
 	const [to, setTo] = useState(() => new Date().toLocaleDateString("sv-SE"));
 
+	const [isDownloading, setIsDownloading] = useState(false);
+	const invalidRange = !from || !to || from > to;
+
 	async function download() {
+		if (invalidRange || isDownloading || !workplace) return;
+		setIsDownloading(true);
 		try {
 			const { data } = await supabase.auth.getSession();
 			const token = data.session?.access_token;
-			if (!token) {
-				toast.error("You are not signed in.");
-				return;
-			}
+			if (!token)
+				throw new Error("Please sign in again to download your report.");
 			const response = await fetch(
 				`${env.VITE_SERVER_URL}/v1/workplaces/${workplace?.id}/reports/hours.csv?from=${from}&to=${to}`,
 				{ headers: { authorization: `Bearer ${token}` } },
@@ -37,8 +41,10 @@ function ReportsPage() {
 				const payload = (await response.json().catch(() => null)) as {
 					message?: string;
 				} | null;
-				toast.error(payload?.message ?? `Export failed (${response.status}).`);
-				return;
+				throw new Error(
+					payload?.message ??
+						"Couldn’t download the report. Please try again.",
+				);
 			}
 			const blob = await response.blob();
 			const url = URL.createObjectURL(blob);
@@ -47,8 +53,15 @@ function ReportsPage() {
 			link.download = `hours-${from}-${to}.csv`;
 			link.click();
 			URL.revokeObjectURL(url);
-		} catch {
-			toast.error("Export failed. Check your connection and try again.");
+			toast.success("Report downloaded");
+		} catch (error) {
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Couldn’t download the report. Please try again.",
+			);
+		} finally {
+			setIsDownloading(false);
 		}
 	}
 
@@ -64,9 +77,35 @@ function ReportsPage() {
 				</p>
 			</div>
 			<div className="grid max-w-xl gap-3">
-				<DatePicker value={from} onValueChange={setFrom} />
-				<DatePicker value={to} onValueChange={setTo} />
-				<Button onClick={() => void download()}>Download CSV</Button>
+				<Field>
+					<FieldLabel htmlFor="report-from">From date</FieldLabel>
+					<DatePicker
+						id="report-from"
+						value={from}
+						onValueChange={setFrom}
+						displayValue={from}
+					/>
+				</Field>
+				<Field>
+					<FieldLabel htmlFor="report-to">To date</FieldLabel>
+					<DatePicker
+						id="report-to"
+						value={to}
+						onValueChange={setTo}
+						displayValue={to}
+					/>
+				</Field>
+				{invalidRange ? (
+					<p role="alert" className="text-destructive text-sm">
+						Choose an end date on or after the start date.
+					</p>
+				) : null}
+				<Button
+					disabled={invalidRange || isDownloading || !workplace}
+					onClick={() => void download()}
+				>
+					{isDownloading ? "Downloading…" : "Download CSV"}
+				</Button>
 			</div>
 		</AppDocument>
 	);

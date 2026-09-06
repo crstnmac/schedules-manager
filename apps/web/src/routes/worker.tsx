@@ -22,7 +22,6 @@ import {
 import { useEffect } from "react";
 import { toast } from "sonner";
 
-import { CurrentProfile } from "@/components/current-profile";
 import { ModeToggle } from "@/components/mode-toggle";
 import { useAuth } from "@/lib/auth";
 import { useMe, useNotifications } from "@/lib/queries";
@@ -34,7 +33,11 @@ export const Route = createFileRoute("/worker")({
 
 const navigation = [
 	{ to: "/worker", label: "My schedule", icon: CalendarDaysIcon, exact: true },
-	{ to: "/worker/availability", label: "Time off", icon: Clock3Icon },
+	{
+		to: "/worker/availability",
+		label: "Time off & availability",
+		icon: Clock3Icon,
+	},
 	{ to: "/worker/openshifts", label: "Open shifts", icon: InboxIcon },
 	{ to: "/worker/timecard", label: "Timecard", icon: TimerIcon },
 	{ to: "/worker/messages", label: "Messages", icon: MessageSquareIcon },
@@ -111,15 +114,18 @@ function WorkerLayout() {
 					<div className="flex items-center justify-between gap-2 sm:gap-3">
 						<div className="min-w-0">
 							<p className="truncate font-medium text-lg">{workplace.name}</p>
-							<p className="text-muted-foreground text-sm">Your schedule</p>
+							<p className="truncate text-muted-foreground text-sm">
+								{me.data?.profile.fullName ||
+									me.data?.profile.email ||
+									"Your schedule"}
+							</p>
 						</div>
 						<div className="flex items-center gap-2">
 							<ModeToggle />
 							<Button
 								aria-label={isSigningOut ? "Signing out" : "Sign out"}
 								variant="outline"
-								size="icon-sm"
-								className="sm:w-auto sm:px-3"
+								size="sm"
 								disabled={isSigningOut}
 								onClick={() => void handleSignOut()}
 							>
@@ -128,16 +134,14 @@ function WorkerLayout() {
 								) : (
 									<LogOutIcon data-icon="inline-start" />
 								)}
-								<span className="hidden sm:inline">
-									{isSigningOut ? "Signing out…" : "Sign out"}
-								</span>
+								{isSigningOut ? "Signing out…" : "Sign out"}
 							</Button>
 						</div>
 					</div>
-					{me.data?.profile ? (
-						<CurrentProfile profile={me.data.profile} kind="worker" />
-					) : null}
-					<nav aria-label="Worker navigation" className="flex flex-wrap gap-1">
+					<nav
+						aria-label="Worker navigation"
+						className="-mx-4 flex gap-1 overflow-x-auto overscroll-x-contain px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+					>
 						{navigation.map((item) => {
 							const active =
 								"exact" in item && item.exact

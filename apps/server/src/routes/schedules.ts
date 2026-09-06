@@ -12,9 +12,9 @@ import {
 	profiles,
 	schedules,
 	scheduleVersions,
+	shifts,
 	shiftTagAssignments,
 	shiftTasks,
-	shifts,
 	timeEntries,
 	timeOffRequests,
 	unavailability,
@@ -23,11 +23,7 @@ import {
 } from "@SchedulesManager/db";
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { Elysia, t } from "elysia";
-import {
-	requireManager,
-	requireSession,
-	weekStartDayFor,
-} from "../context";
+import { requireManager, requireSession, weekStartDayFor } from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { laborCents, laborPercent } from "../labor";
 import { firstRow } from "../rows";
@@ -321,7 +317,12 @@ function computeConflicts(
 	location: Location,
 	shiftRows: ShiftRow[],
 	workforce: Awaited<ReturnType<typeof loadWorkforce>>,
-	nearbyShifts: { id: string; employmentId: string | null; startsAt: Date; endsAt: Date }[],
+	nearbyShifts: {
+		id: string;
+		employmentId: string | null;
+		startsAt: Date;
+		endsAt: Date;
+	}[],
 	policy: { clopeningMinutes: number; maxConsecutiveWorkDays: number },
 ): Conflict[] {
 	const conflicts: Conflict[] = [];
@@ -487,10 +488,16 @@ async function loadSchedulePayload(
 		weekStart,
 		location.timezone,
 	);
-	const conflicts = computeConflicts(location, shiftRows, workforce, nearbyShifts, {
-		clopeningMinutes: workplace.clopeningMinutes,
-		maxConsecutiveWorkDays: workplace.maxConsecutiveWorkDays,
-	});
+	const conflicts = computeConflicts(
+		location,
+		shiftRows,
+		workforce,
+		nearbyShifts,
+		{
+			clopeningMinutes: workplace.clopeningMinutes,
+			maxConsecutiveWorkDays: workplace.maxConsecutiveWorkDays,
+		},
+	);
 	const timeclock = exclude.timeclock
 		? []
 		: await timeclockSummary(schedule.id, workplace.lateArrivalGraceMinutes);
@@ -547,7 +554,10 @@ async function loadSchedulePayload(
 	}
 	const taskCountByShift = new Map<string, number>();
 	for (const row of taskRows) {
-		taskCountByShift.set(row.shiftId, (taskCountByShift.get(row.shiftId) ?? 0) + 1);
+		taskCountByShift.set(
+			row.shiftId,
+			(taskCountByShift.get(row.shiftId) ?? 0) + 1,
+		);
 	}
 
 	const groupRows =
@@ -937,7 +947,10 @@ async function assertAssignmentValid(
 	}
 }
 
-async function timeclockSummary(scheduleId: string, lateArrivalGraceMinutes: number) {
+async function timeclockSummary(
+	scheduleId: string,
+	lateArrivalGraceMinutes: number,
+) {
 	const [latest] = await db
 		.select()
 		.from(scheduleVersions)
@@ -971,11 +984,7 @@ async function timeclockSummary(scheduleId: string, lateArrivalGraceMinutes: num
 		.map((row) => {
 			const late =
 				row.clockedInAt != null &&
-				isLateArrival(
-					row.clockedInAt,
-					row.startsAt,
-					lateArrivalGraceMinutes,
-				);
+				isLateArrival(row.clockedInAt, row.startsAt, lateArrivalGraceMinutes);
 			const attendance =
 				row.attendanceKind ?? (late ? ("late" as const) : null);
 			if (!row.entryId || !row.clockedInAt) {
@@ -1024,9 +1033,7 @@ async function publicationSummary(scheduleId: string, draftShifts: ShiftRow[]) {
 			latestVersionNumber: null as number | null,
 			publishedAt: null as string | null,
 			hasUnpublishedChanges: draftShifts.length > 0,
-			versions: [] as Awaited<
-				ReturnType<typeof loadPublicationVersions>
-			>,
+			versions: [] as Awaited<ReturnType<typeof loadPublicationVersions>>,
 		};
 	}
 
@@ -1262,9 +1269,7 @@ export const schedulesRoutes = new Elysia({
 				await weekStartDayFor(location.workplaceId),
 			);
 
-			const parts = (query.exclude ?? "")
-				.split(",")
-				.map((part) => part.trim());
+			const parts = (query.exclude ?? "").split(",").map((part) => part.trim());
 			return loadSchedulePayload(location, params.weekStart, {
 				labor: parts.includes("labor"),
 				timeclock: parts.includes("timeclock"),
@@ -1323,7 +1328,8 @@ export const schedulesRoutes = new Elysia({
 				weekStart: dateSchema,
 			}),
 			detail: {
-				summary: "Time-clock state for the published shifts of one week (Manager)",
+				summary:
+					"Time-clock state for the published shifts of one week (Manager)",
 				security: [{ bearerAuth: [] }],
 			},
 		},
@@ -1691,14 +1697,14 @@ export const schedulesRoutes = new Elysia({
 					} catch {
 						continue;
 					}
-				await db
-					.update(shifts)
-					.set({ employmentId: worker.id, updatedAt: new Date() })
-					.where(eq(shifts.id, shift.id));
-				await closeOpenMarketplaceForShifts([shift.id]);
-				shift.employmentId = worker.id;
-				assigned += 1;
-				break;
+					await db
+						.update(shifts)
+						.set({ employmentId: worker.id, updatedAt: new Date() })
+						.where(eq(shifts.id, shift.id));
+					await closeOpenMarketplaceForShifts([shift.id]);
+					shift.employmentId = worker.id;
+					assigned += 1;
+					break;
 				}
 			}
 			return { assigned };
@@ -1754,9 +1760,11 @@ export const schedulesRoutes = new Elysia({
 			const rows = await db.select().from(shifts).where(inSchedule);
 			for (const shift of rows) {
 				const date = zonedDayInfo(shift.startsAt, location.timezone).dateKey;
-				const startMinute = body.startMinute ??
+				const startMinute =
+					body.startMinute ??
 					zonedDayInfo(shift.startsAt, location.timezone).minuteOfDay;
-				const endMinute = body.endMinute ??
+				const endMinute =
+					body.endMinute ??
 					zonedDayInfo(shift.endsAt, location.timezone).minuteOfDay;
 				const { startsAt, endsAt } = resolveShiftTimes(
 					{ date, startMinute, endMinute },

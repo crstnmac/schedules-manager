@@ -120,8 +120,7 @@ export function LeaveWindowFields({
 						value={endDate}
 						onValueChange={onEndDateChange}
 						disabled={(date) =>
-							Boolean(startDate) &&
-							date < new Date(`${startDate}T00:00:00`)
+							Boolean(startDate) && date < new Date(`${startDate}T00:00:00`)
 						}
 					/>
 				</Field>
@@ -158,7 +157,7 @@ export function LeaveWindowFields({
 			)}
 			<Field>
 				<FieldLabel htmlFor={`${idPrefix}-reason`}>
-					Note for the other person (optional)
+					Note shared with your workplace (optional)
 				</FieldLabel>
 				<Textarea
 					id={`${idPrefix}-reason`}
@@ -169,9 +168,11 @@ export function LeaveWindowFields({
 			</Field>
 			{charge > 0 ? (
 				<FieldDescription>
+					Time off:{" "}
 					{selected
 						? `${formatLeaveHours(charge)} of ${selected.name}`
 						: formatLeaveHours(charge)}
+					{allDay ? " (8 hours per day)" : ""}
 					{remainingMinutes == null
 						? "."
 						: remainingMinutes >= charge

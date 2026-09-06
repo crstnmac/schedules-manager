@@ -1,5 +1,6 @@
 import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
+import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
 import {
 	Empty,
 	EmptyDescription,
@@ -9,22 +10,31 @@ import {
 import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import {
-	AppPage,
-	AppPageBody,
-	AppPageHeader,
-} from "@/components/app-page";
+import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
+import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { api } from "@/lib/api";
 import { useTimesheets } from "@/lib/queries";
+import { formatClockTime, formatDay, formatDurationMs } from "@/lib/time";
 import { useWorkplace } from "@/lib/use-workplace";
 
 export const Route = createFileRoute("/dashboard/timesheets")({
 	component: TimesheetsPage,
 });
+
+function formatClockWindow(inIso: string, outIso: string | null) {
+	if (!outIso) {
+		return `On the clock since ${formatDay(inIso)} · ${formatClockTime(inIso)}`;
+	}
+	const sameDay =
+		new Date(inIso).toDateString() === new Date(outIso).toDateString();
+	return sameDay
+		? `${formatDay(inIso)} · ${formatClockTime(inIso)} – ${formatClockTime(outIso)}`
+		: `${formatDay(inIso)} ${formatClockTime(inIso)} → ${formatDay(outIso)} ${formatClockTime(outIso)}`;
+}
 
 type TimesheetRow = {
 	id: string;
@@ -42,6 +52,9 @@ function TimesheetsPage() {
 	const sheets = useTimesheets(workplace?.id);
 	const posthog = usePostHog();
 	const queryClient = useQueryClient();
+	const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
+		new Set(),
+	);
 	const decide = useMutation({
 		mutationFn: (input: {
 			timeEntryId: string;
@@ -61,10 +74,84 @@ function TimesheetsPage() {
 		onError: (error) => toast.error((error as Error).message),
 	});
 
+	const approveBatch = useMutation({
+		mutationFn: async (ids: string[]) => {
+			let failed = 0;
+			for (const id of ids) {
+				try {
+					await api(
+						`/v1/workplaces/${workplace?.id}/time-entries/${id}/approval`,
+						{ method: "POST", body: { decision: "approved" } },
+					);
+				} catch {
+					failed += 1;
+				}
+			}
+			return { failed, total: ids.length };
+		},
+		onSuccess: ({ failed, total }) => {
+			queryClient.invalidateQueries({ queryKey: ["timesheets"] });
+			setSelectedIds(new Set());
+			if (failed > 0) {
+				toast.error(`${failed} of ${total} entries couldn't be approved.`);
+			} else {
+				posthog?.capture("timesheet_approved");
+				toast.success(`Approved ${total} time entries.`);
+			}
+		},
+	});
+
 	const rows = sheets.data?.timesheets ?? [];
+	const eligibleRows = rows.filter(
+		(row) => row.approvalStatus === "pending" && row.clockedOutAt,
+	);
+	const selectedRows = eligibleRows.filter((row) => selectedIds.has(row.id));
 	const columns = useMemo(
 		() =>
 			columnHelper.columns([
+				columnHelper.display({
+					id: "select",
+					enableSorting: false,
+					header: () => (
+						<Checkbox
+							aria-label="Select all pending entries"
+							checked={
+								eligibleRows.length > 0 &&
+								eligibleRows.every((row) => selectedIds.has(row.id))
+							}
+							onCheckedChange={(checked) => {
+								setSelectedIds(
+									checked === true
+										? new Set(eligibleRows.map((row) => row.id))
+										: new Set(),
+								);
+							}}
+						/>
+					),
+					cell: ({ row }) => {
+						const entry = row.original;
+						const selectable =
+							entry.approvalStatus === "pending" && entry.clockedOutAt;
+						if (!selectable) return null;
+						return (
+							<Checkbox
+								aria-label={`Select entry for ${entry.worker}`}
+								checked={selectedIds.has(entry.id)}
+								onCheckedChange={(checked) => {
+									setSelectedIds((current) => {
+										const next = new Set(current);
+										if (checked === true) {
+											next.add(entry.id);
+										} else {
+											next.delete(entry.id);
+										}
+										return next;
+									});
+								}}
+							/>
+						);
+					},
+				}),
 				columnHelper.accessor("worker", {
 					header: "Worker",
 					cell: ({ getValue }) => (
@@ -72,12 +159,7 @@ function TimesheetsPage() {
 					),
 				}),
 				columnHelper.accessor(
-					(row) =>
-						`${new Date(row.clockedInAt).toLocaleString()} → ${
-							row.clockedOutAt
-								? new Date(row.clockedOutAt).toLocaleString()
-								: "still on the clock"
-						}`,
+					(row) => formatClockWindow(row.clockedInAt, row.clockedOutAt),
 					{
 						id: "window",
 						header: "Clock window",
@@ -86,6 +168,25 @@ function TimesheetsPage() {
 								{getValue()}
 							</span>
 						),
+					},
+				),
+				columnHelper.accessor(
+					(row) =>
+						row.clockedOutAt
+							? new Date(row.clockedOutAt).getTime() -
+								new Date(row.clockedInAt).getTime()
+							: Number.POSITIVE_INFINITY,
+					{
+						id: "hours",
+						header: "Hours",
+						cell: ({ getValue }) => {
+							const ms = getValue();
+							return (
+								<span className="tabular-nums">
+									{Number.isFinite(ms) ? formatDurationMs(ms) : "On the clock"}
+								</span>
+							);
+						},
 					},
 				),
 				columnHelper.display({
@@ -126,25 +227,26 @@ function TimesheetsPage() {
 								>
 									Approve
 								</Button>
-								<Button
-									size="sm"
-									variant="outline"
+								<ConfirmAction
+									trigger="Decline"
 									disabled={decide.isPending}
-									onClick={() =>
+									title="Decline this time entry?"
+									description={`Declining rejects the recorded hours for ${formatClockWindow(entry.clockedInAt, entry.clockedOutAt)}. The worker may need to record it again.`}
+									confirmLabel="Decline entry"
+									destructive
+									onConfirm={() =>
 										decide.mutate({
 											timeEntryId: entry.id,
 											decision: "declined",
 										})
 									}
-								>
-									Decline
-								</Button>
+								/>
 							</div>
 						);
 					},
 				}),
 			]),
-		[decide],
+		[decide, eligibleRows, selectedIds],
 	);
 
 	return (
@@ -152,9 +254,25 @@ function TimesheetsPage() {
 			<AppPageHeader
 				title="Timesheet approval"
 				description="Accept or decline completed time entries."
+				actions={
+					selectedRows.length > 0 ? (
+						<ConfirmAction
+							trigger={`Approve selected (${selectedRows.length})`}
+							triggerVariant="default"
+							title={`Approve ${selectedRows.length} time entries?`}
+							description={`Approves the recorded hours for ${selectedRows.length} ${selectedRows.length === 1 ? "entry" : "entries"}. Approved hours count toward the timesheet.`}
+							confirmLabel="Approve all"
+							disabled={approveBatch.isPending}
+							onConfirm={() =>
+								approveBatch.mutate(selectedRows.map((row) => row.id))
+							}
+						/>
+					) : null
+				}
 			/>
 			<AppPageBody scroll={false}>
 				<DataTable
+					query={sheets}
 					columns={columns}
 					data={rows}
 					getRowId={(row) => row.id}

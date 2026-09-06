@@ -33,6 +33,7 @@ import {
 	TabsList,
 	TabsTrigger,
 } from "@SchedulesManager/ui/components/tabs";
+import { usePostHog } from "@posthog/react";
 import {
 	CalendarDaysIcon,
 	EyeIcon,
@@ -40,8 +41,7 @@ import {
 	MailIcon,
 	UserPlusIcon,
 } from "lucide-react";
-import { usePostHog } from "@posthog/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { AuthShell } from "@/components/auth-shell";
 import { supabase } from "@/lib/supabase";
@@ -90,11 +90,16 @@ export function AuthForm({
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
+	const [resetSending, setResetSending] = useState(false);
+	const [resetSent, setResetSent] = useState(false);
 
 	const posthog = usePostHog();
 	const isInvite = Boolean(invite);
 	const emailLocked = Boolean(lockedEmail) && isInvite;
 	const activeCopy = copy[mode];
+	useEffect(() => {
+		document.title = `${mode === "sign-in" ? "Sign in" : "Create account"} · jooling`;
+	}, [mode]);
 	const inviteTitle = title ?? (invite ? `Join ${invite.workplaceName}` : null);
 	const inviteDescription =
 		description ??
@@ -104,6 +109,31 @@ export function AuthForm({
 				: `Sign in with ${invite.email} to accept this ${invite.kind} invitation.`
 			: null);
 
+	async function handleResetPassword() {
+		if (resetSending) return;
+		const target = (lockedEmail ?? email).trim();
+		if (!target) {
+			setError("Enter your email first, then tap Forgot password.");
+			return;
+		}
+		setResetSending(true);
+		setError(null);
+		try {
+			const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+				target.toLowerCase(),
+			);
+			if (resetError) {
+				setError(
+					"Couldn't send the reset email right now. Check the address and try again.",
+				);
+				return;
+			}
+			setResetSent(true);
+		} finally {
+			setResetSending(false);
+		}
+	}
+
 	async function submit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		setError(null);
@@ -112,10 +142,11 @@ export function AuthForm({
 		const submitEmail = (lockedEmail ?? email).trim().toLowerCase();
 		try {
 			if (mode === "sign-in") {
-				const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-					email: submitEmail,
-					password,
-				});
+				const { data: authData, error: authError } =
+					await supabase.auth.signInWithPassword({
+						email: submitEmail,
+						password,
+					});
 				if (authError) throw authError;
 				if (authData.user) {
 					posthog?.identify(authData.user.id, { email: authData.user.email });
@@ -258,7 +289,7 @@ export function AuthForm({
 										placeholder={
 											mode === "sign-up" ? "At least 6 characters" : undefined
 										}
-										minLength={6}
+										minLength={mode === "sign-up" ? 6 : undefined}
 										value={password}
 										onChange={(event) => setPassword(event.target.value)}
 										required
@@ -287,6 +318,29 @@ export function AuthForm({
 							</Field>
 
 							{error ? <FieldError id="auth-error">{error}</FieldError> : null}
+							{mode === "sign-in" ? (
+								<Button
+									type="button"
+									variant="link"
+									size="sm"
+									className="-ml-2 self-start px-2"
+									disabled={isSubmitting || resetSending}
+									onClick={() => void handleResetPassword()}
+								>
+									{resetSending ? <Spinner data-icon="inline-start" /> : null}
+									Forgot password?
+								</Button>
+							) : null}
+							{resetSent ? (
+								<Alert>
+									<MailIcon />
+									<AlertTitle>Check your email</AlertTitle>
+									<AlertDescription>
+										If an account exists for {email.trim()}, a password reset
+										link is on its way. It can take a minute to arrive.
+									</AlertDescription>
+								</Alert>
+							) : null}
 							{message ? (
 								<Alert>
 									<CalendarDaysIcon />

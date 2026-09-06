@@ -43,31 +43,33 @@ export const shiftReleases = pgTable("shift_releases", {
 		.notNull(),
 });
 
-export const openShifts = pgTable("open_shifts", {
-	id: uuid("id").defaultRandom().primaryKey(),
-	shiftId: uuid("shift_id")
-		.notNull()
-		.references(() => shifts.id, { onDelete: "cascade" }),
-	locationId: uuid("location_id")
-		.notNull()
-		.references(() => locations.id, { onDelete: "cascade" }),
-	positionId: uuid("position_id")
-		.notNull()
-		.references(() => positions.id, { onDelete: "cascade" }),
-	releasedFrom: uuid("released_from").references(() => employments.id, {
-		onDelete: "set null",
-	}),
-	note: text("note"),
-	status: openShiftStatusEnum("status").notNull().default("open"),
-	offeredAt: timestamp("offered_at", { withTimezone: true })
-		.defaultNow()
-		.notNull(),
-},
-(table) => [
-	uniqueIndex("open_shifts_one_open_per_shift")
-		.on(table.shiftId)
-		.where(sql`status = 'open'`),
-],
+export const openShifts = pgTable(
+	"open_shifts",
+	{
+		id: uuid("id").defaultRandom().primaryKey(),
+		shiftId: uuid("shift_id")
+			.notNull()
+			.references(() => shifts.id, { onDelete: "cascade" }),
+		locationId: uuid("location_id")
+			.notNull()
+			.references(() => locations.id, { onDelete: "cascade" }),
+		positionId: uuid("position_id")
+			.notNull()
+			.references(() => positions.id, { onDelete: "cascade" }),
+		releasedFrom: uuid("released_from").references(() => employments.id, {
+			onDelete: "set null",
+		}),
+		note: text("note"),
+		status: openShiftStatusEnum("status").notNull().default("open"),
+		offeredAt: timestamp("offered_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [
+		uniqueIndex("open_shifts_one_open_per_shift")
+			.on(table.shiftId)
+			.where(sql`status = 'open'`),
+	],
 );
 
 export const shiftPickups = pgTable(

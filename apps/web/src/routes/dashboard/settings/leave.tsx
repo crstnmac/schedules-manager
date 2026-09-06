@@ -14,6 +14,7 @@ function LeaveSettingsPage() {
 
 	return (
 		<SettingsPage
+			queries={[leaveTypes]}
 			title="Leave types"
 			description="Categories people pick when they request time off. Paid types deduct remaining hours when a request is approved."
 		>

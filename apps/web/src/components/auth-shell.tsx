@@ -14,9 +14,9 @@ import { LogoMark } from "@/components/logo-mark";
 const highlights = [
 	{
 		icon: CalendarDaysIcon,
-		title: "Versioned weekly schedules",
+		title: "Everyone sees the latest schedule",
 		description:
-			"Publish immutable schedule snapshots and notify workers when plans change.",
+			"Publish the week and let your team know whenever their shifts change.",
 	},
 	{
 		icon: UsersIcon,
@@ -28,7 +28,7 @@ const highlights = [
 		icon: BellIcon,
 		title: "Clear worker responses",
 		description:
-			"Track acknowledgements, time-off requests, and pickup activity in one place.",
+			"See who has viewed the schedule and review requests for time off or extra shifts.",
 	},
 ] as const;
 
@@ -60,8 +60,8 @@ export function AuthShell({ children }: { children: ReactNode }) {
 							The schedule board for your team
 						</h2>
 						<p className="text-sidebar-foreground/70 text-sm leading-relaxed">
-							Build, publish, and operate schedules from one operational
-							workspace — with explicit status for every shift change.
+							Plan the week, fill open shifts, and keep your team informed when
+							work changes.
 						</p>
 					</div>
 					<ItemGroup className="max-w-md">

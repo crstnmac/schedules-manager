@@ -1,4 +1,3 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
 import { Button } from "@SchedulesManager/ui/components/button";
 import {
 	Card,
@@ -15,14 +14,14 @@ import {
 	EmptyTitle,
 } from "@SchedulesManager/ui/components/empty";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeftIcon, CalendarDaysIcon } from "lucide-react";
-
+import { useMemo } from "react";
+import { AppDocument } from "@/components/app-page";
+import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { usePublishedVersion } from "@/lib/queries";
 import { formatDay } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
-import { AppDocument } from "@/components/app-page";
-import { createDataColumnHelper, DataTable } from "@/components/data-table";
-import { useMemo } from "react";
 
 export const Route = createFileRoute("/worker/history/$versionId")({
 	component: WorkerHistory,
@@ -55,7 +54,7 @@ function WorkerHistory() {
 						id: "window",
 						header: "Shift",
 						cell: ({ getValue }) => (
-							<span className="tabular-nums text-muted-foreground">
+							<span className="text-muted-foreground tabular-nums">
 								{getValue()}
 							</span>
 						),
@@ -112,6 +111,7 @@ function WorkerHistory() {
 					</CardHeader>
 					<CardContent className="flex flex-col gap-3">
 						<DataTable
+							stacked
 							fill={false}
 							columns={historyShiftColumns}
 							data={data.shifts}

@@ -151,8 +151,8 @@ export function registerReminderTests(getContext: () => Context) {
 			.select()
 			.from(auditEvents)
 			.where(eq(auditEvents.workplaceId, workplace.id));
-		expect(
-			audits.some((event) => event.action === "schedule.reminder"),
-		).toBe(true);
+		expect(audits.some((event) => event.action === "schedule.reminder")).toBe(
+			true,
+		);
 	});
 }
