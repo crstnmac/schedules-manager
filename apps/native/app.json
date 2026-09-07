@@ -9,7 +9,12 @@
 		"userInterfaceStyle": "automatic",
 		"ios": {
 			"supportsTablet": true,
-			"bundleIdentifier": "com.jooling.SchedulesManager"
+			"bundleIdentifier": "com.jooling.SchedulesManager",
+			"infoPlist": {
+				"UIApplicationSceneManifest": {
+					"UIApplicationSupportsMultipleScenes": false
+				}
+			}
 		},
 		"android": {
 			"adaptiveIcon": {
@@ -20,7 +25,10 @@
 			},
 			"predictiveBackGestureEnabled": false,
 			"package": "com.jooling.schedulesmanager",
-			"permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+			"permissions": [
+				"ACCESS_COARSE_LOCATION",
+				"ACCESS_FINE_LOCATION"
+			]
 		},
 		"web": {
 			"output": "static",
@@ -41,6 +49,7 @@
 				}
 			],
 			"./plugins/with-firebase",
+			"./plugins/with-scene-lifecycle",
 			[
 				"expo-splash-screen",
 				{
