@@ -42,4 +42,8 @@ local.db
 local.db-*
 tmp
 temp
-docs
+docs/*
+!docs/ui-audit/
+docs/ui-audit/*
+!docs/ui-audit/schedule-after.png
+!docs/ui-audit/worker-home-mobile-after.png
