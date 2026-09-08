@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="logoTitle">
+  <title id="logoTitle">jooling</title>
+  <!--
+    Construction: two overlapping rounded shift blocks on a navy service-board plate.
+    Primary reading: adjacent shifts sharing a handoff window.
+    Secondary reading: continuous coverage through the overlap zone.
+    Colors: navy-ink #111B28, cool-canvas #F3F8FD, service-blue #006EDC.
+  -->
+  <rect width="96" height="96" rx="22" fill="#111B28"/>
+  <rect x="16" y="24" width="44" height="48" rx="11" fill="#F3F8FD"/>
+  <rect x="36" y="24" width="44" height="48" rx="11" fill="#006EDC"/>
+</svg>
