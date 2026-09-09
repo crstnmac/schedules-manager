@@ -74,7 +74,7 @@ const releaseHelper = createDataColumnHelper<ReleaseRow>();
 const pickupHelper = createDataColumnHelper<PickupRow>();
 const swapHelper = createDataColumnHelper<SwapDetailDto>();
 
-export function CoveragePage() {
+function CoveragePage() {
 	const { workplace } = useWorkplace();
 	const queryClient = useQueryClient();
 

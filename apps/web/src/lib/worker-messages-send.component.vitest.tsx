@@ -157,7 +157,7 @@ const echoed: ConversationMessageDto = {
 	createdAt: "2026-09-05T00:00:00.000Z",
 };
 
-import { WorkerMessagesPage } from "@/routes/worker/messages";
+import { WorkerMessagesPage } from "@/components/pages/worker-messages-page";
 
 function lastMessageOf(
 	client: QueryClient,

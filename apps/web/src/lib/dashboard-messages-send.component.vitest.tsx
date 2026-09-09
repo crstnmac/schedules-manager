@@ -171,7 +171,7 @@ const echoed: ConversationMessageDto = {
 };
 
 // Importing the route component pulls in the mocked api and sonner.
-import { MessagesPage } from "@/routes/dashboard/messages";
+import { MessagesPage } from "@/components/pages/dashboard-messages-page";
 
 function lastMessageOf(
 	client: QueryClient,
