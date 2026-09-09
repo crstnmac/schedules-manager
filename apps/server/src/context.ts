@@ -45,7 +45,7 @@ async function ensureProfile(user: AuthenticatedUser): Promise<Profile> {
 			email: user.email.toLowerCase(),
 			fullName: extractFullName(user),
 		})
-		.onConflictDoNothing({ target: profiles.id })
+		.onConflictDoNothing()
 		.returning();
 
 	if (created) return created;
