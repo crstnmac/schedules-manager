@@ -20,6 +20,7 @@ import { registerReadinessTests } from "./readiness-cases";
 import { registerReminderTests } from "./reminder-cases";
 import { registerReportTests } from "./report-cases";
 import { registerReportsTests } from "./reports-cases";
+import { registerStalePositionTests } from "./stale-position-cases";
 import { registerTimeClockTests } from "./time-clock-cases";
 
 const integrationDescribe =
@@ -123,6 +124,7 @@ integrationDescribe("Schedule publication", () => {
 	registerOpsTests(() => ({ database, app, token: managerToken }));
 	registerReportTests(() => ({ database, app, token: managerToken }));
 	registerReportsTests(() => ({ database, app, token: managerToken }));
+	registerStalePositionTests(() => ({ database, app, token: managerToken }));
 	registerOwnReleaseTests(() => ({ database, app, token: managerToken }));
 	registerAcceptanceRaceTests(() => ({ database, app, token: managerToken }));
 	registerAutoClockOutBreaksTests(() => ({
