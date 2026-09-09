@@ -2326,7 +2326,12 @@ export function registerOpsTests(getContext: () => Context) {
 		};
 		const conversationId = required(conversationBody.conversations[0]).id;
 
-		const tiedAt = new Date("2026-09-01T15:00:00.000Z");
+		// Seed the tie at a nonzero millisecond so the round-trip is not the
+		// degenerate ".000" frontier where Date millisecond-quantization is
+		// trivially lossless. The column is timestamp(3) (migration 0023), so
+		// this stored value reproduces exactly through toISOString() -> client
+		// -> new Date() and the eq/lt cursor predicates form a total order.
+		const tiedAt = new Date("2026-09-01T15:00:00.452Z");
 		await d.db.insert(d.workplaceMessages).values([
 			{
 				conversationId,
@@ -2390,5 +2395,88 @@ export function registerOpsTests(getContext: () => Context) {
 		// the tie group must not strand "older-1" behind an unreachable
 		// cursor.
 		expect(seen.filter((body) => body === "older-1")).toHaveLength(1);
+	});
+
+	test("message history survives a now()-generated tie straddling the page boundary", async () => {
+		const { database: d, app, token } = getContext();
+		const seed = await seedWorkplace(d, "Message Cursor Boundary Cafe");
+		const access = await token(seed.managerProfileId, seed.managerEmail);
+
+		const conversations = await authJson(
+			app,
+			`/v1/workplaces/${seed.workplace.id}/conversations`,
+			access,
+		);
+		expect(conversations.status).toBe(200);
+		const conversationBody = (await conversations.json()) as {
+			conversations: { id: string }[];
+		};
+		const conversationId = required(conversationBody.conversations[0]).id;
+
+		// 49 filler rows with distinct timestamps in the near future so they
+		// are newer than the bulk-insert tie and sort ABOVE it in
+		// desc(createdAt, desc(id)) order — pushing the tied pair to
+		// positions 50 and 51, exactly straddling the default 50-row page
+		// (the bug's trigger condition: a tie lands at position `limit`).
+		const futureBase = new Date(Date.now() + 120_000);
+		const fillers = Array.from({ length: 49 }, (_, i) => ({
+			conversationId,
+			authorEmploymentId: seed.manager.id,
+			body: `filler-${i}`,
+			createdAt: new Date(futureBase.getTime() + i * 1000),
+		}));
+		await d.db.insert(d.workplaceMessages).values(fillers);
+
+		// Production insertion path: one bulk INSERT with DEFAULT now() so
+		// both rows share transaction_timestamp(). Before migration 0023
+		// the timestamptz column stored a nonzero microsecond tail that
+		// toISOString() dropped, so the cursor's lt was truncated below the
+		// stored value and the eq tie-break guard could never match — the
+		// row at position 51 was unreachable. timestamp(3) quantizes now()
+		// to milliseconds, so the cursor and the stored value share one
+		// total order and both tied rows survive the page split.
+		await d.db.insert(d.workplaceMessages).values([
+			{
+				conversationId,
+				authorEmploymentId: seed.manager.id,
+				body: "tie-alpha",
+			},
+			{
+				conversationId,
+				authorEmploymentId: seed.manager.id,
+				body: "tie-beta",
+			},
+		]);
+
+		const seen: string[] = [];
+		let cursorBefore: string | undefined;
+		let cursorBeforeId: string | undefined;
+		for (let page = 0; page < 5; page += 1) {
+			const params = new URLSearchParams({ limit: "50" });
+			if (cursorBefore) {
+				params.set("before", cursorBefore);
+				params.set("beforeId", required(cursorBeforeId));
+			}
+			const response = await authJson(
+				app,
+				`/v1/conversations/${conversationId}/messages?${params.toString()}`,
+				access,
+			);
+			expect(response.status).toBe(200);
+			const body = (await response.json()) as {
+				messages: { id: string; body: string }[];
+				hasMore: boolean;
+			};
+			seen.push(...body.messages.map((m) => m.body));
+			if (!body.hasMore) break;
+			const oldest = required(body.messages[0]);
+			cursorBefore = oldest.createdAt;
+			cursorBeforeId = oldest.id;
+		}
+
+		expect(seen).toHaveLength(51);
+		expect(seen.filter((body) => body === "tie-alpha")).toHaveLength(1);
+		expect(seen.filter((body) => body === "tie-beta")).toHaveLength(1);
+		expect(seen.filter((body) => body.startsWith("filler-"))).toHaveLength(49);
 	});
 }

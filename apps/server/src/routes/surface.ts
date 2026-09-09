@@ -1339,7 +1339,12 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
 			// Cursor pagination from the newest page backwards: `before` is the
 			// oldest createdAt the client already has and `beforeId` breaks ties
-			// among messages that share that timestamp.
+			// among messages that share that timestamp. The cursor is a JS
+			// `Date` (millisecond precision), so this only forms a total order
+			// because `workplace_messages.created_at` is quantized to
+			// millisecond precision (see packages/db schema + migration 0023).
+			// A microsecond-precision column would truncate the cursor below a
+			// `now()`-generated tie and strand rows across page splits.
 			const before = query.before ? new Date(query.before) : null;
 			if (before && Number.isNaN(before.getTime())) {
 				throw new BadRequestError("before must be an ISO timestamp");
