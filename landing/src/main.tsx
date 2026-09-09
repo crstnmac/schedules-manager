@@ -414,6 +414,7 @@ function App() {
 							style={{ width: "100%", height: "100%" }}
 						/>
 					</div>
+					<img className="hero-illustration" src="/illustration-hero.webp" alt="" aria-hidden="true" />
 					<h1>
 						Good weeks
 						<br />
@@ -460,6 +461,7 @@ function App() {
 							<Users /> Your team, too
 						</span>
 					</div>
+					<img className="industries-illustration" src="/illustration-industries.webp" alt="A connected neighborhood of café, retail, healthcare, hospitality, and field teams" />
 				</section>
 				<section className="workflow-section" id="how-it-works">
 					<div className="section-container workflow-layout">
@@ -467,6 +469,7 @@ function App() {
 							<p className="eyebrow">HOW IT WORKS</p>
 							<h2>Set up.<br />Schedule.<br />Send.</h2>
 							<p>Take the week from an empty workplace to a published schedule.</p>
+							<img className="workflow-illustration" src="/illustration-workflow.webp" alt="" aria-hidden="true" />
 						</div>
 						<ol className="workflow-list">
 							<li>
@@ -515,6 +518,7 @@ function App() {
 						<CTA>Bring your team together</CTA>
 					</div>
 					<div className="phone-scene">
+						<img className="team-illustration" src="/illustration-team.webp" alt="Four hourly workers reviewing their week together" />
 						<span className="scene-note">
 							A little more clarity.
 							<br />A lot less “just checking…”
@@ -596,10 +600,11 @@ function App() {
 					</div>
 				</section>
 				<section className="faq-section section-container" id="faq">
-					<div>
+					<div className="faq-intro">
 						<p className="eyebrow">A FEW THINGS TO KNOW</p>
 						<h2>Glad you asked.</h2>
 						<p>Good questions. Straight answers.</p>
+						<img className="faq-illustration" src="/illustration-faq.webp" alt="" aria-hidden="true" />
 					</div>
 					<div className="faq-list">
 						{faqs.map(([q, a]) => (
