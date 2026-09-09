@@ -19,19 +19,19 @@ import {
 } from "../errors";
 import { assertClockInGeofence, roundToMinutes } from "../geo";
 import { hashPin, pinMatches } from "../pin";
-import { tryConsumeRateLimit } from "../rate-limit";
+import { clientIpFromRequest, tryConsumeRateLimit } from "../rate-limit";
 import { firstRow } from "../rows";
 
 export const kioskRoutes = new Elysia({ prefix: "/v1", tags: ["Kiosk"] }).post(
 	"/kiosk/clock",
 	async ({ request, body }) => {
-		const ip =
-			request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-			"unknown";
-		const limited = tryConsumeRateLimit(`kiosk:${ip}`, {
-			limit: 40,
-			windowMs: 10 * 60 * 1000,
-		});
+		const limited = tryConsumeRateLimit(
+			`kiosk:${clientIpFromRequest(request)}`,
+			{
+				limit: 40,
+				windowMs: 10 * 60 * 1000,
+			},
+		);
 		if (!limited.allowed) throw new RateLimitError();
 
 		const [location] = await db
