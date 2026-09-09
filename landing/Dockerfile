@@ -27,8 +27,6 @@ ENV VITE_APP_URL=${VITE_APP_URL}
 
 COPY landing landing
 COPY packages/ui packages/ui
-COPY docs/ui-audit/schedule-after.png docs/ui-audit/schedule-after.png
-COPY docs/ui-audit/worker-home-mobile-after.png docs/ui-audit/worker-home-mobile-after.png
 
 RUN bun run --cwd landing build
 

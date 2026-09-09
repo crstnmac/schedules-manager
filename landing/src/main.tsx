@@ -29,8 +29,6 @@ import {
 	CheckCheck,
 } from "lucide-react";
 import "./styles.css";
-import scheduleScreenshot from "../../docs/ui-audit/schedule-after.png";
-import workerMobileScreenshot from "../../docs/ui-audit/worker-home-mobile-after.png";
 const appUrl = import.meta.env.VITE_APP_URL || "http://localhost:3001";
 const people = [
 	{
@@ -137,7 +135,7 @@ function SchedulePreview() {
 		<div className="schedule-frame" id="product-demo">
 			<img
 				className="real-schedule-screenshot"
-				src={scheduleScreenshot}
+				src="/schedule-after.png"
 				alt="The jooling weekly schedule shown in the real web product"
 			/>
 			<div className="schedule-app">
@@ -611,7 +609,7 @@ function App() {
 						</span>
 						<img
 							className="real-mobile-screenshot"
-							src={workerMobileScreenshot}
+							src="/worker-home-mobile-after.png"
 							alt="The real jooling worker schedule on mobile"
 						/>
 						<div className="phone" aria-hidden="true">
