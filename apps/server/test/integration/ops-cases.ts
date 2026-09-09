@@ -1460,6 +1460,77 @@ export function registerOpsTests(getContext: () => Context) {
 		expect(third.status).toBe(404);
 	});
 
+	test("kiosk clock-in disambiguates to the latest-starting eligible shift in the overlap window", async () => {
+		const { database: d, app } = getContext();
+		const { hashPin } = await import("../../src/pin");
+		const seed = await seedWorkplace(d, "Kiosk Adjacency Cafe");
+		await d.db
+			.update(d.locations)
+			.set({ kioskPinHash: hashPin("2468") })
+			.where(eq(d.locations.id, seed.location.id));
+		await d.db
+			.update(d.employments)
+			.set({ kioskPinHash: hashPin("1357") })
+			.where(eq(d.employments.id, seed.worker.id));
+		const [version] = await d.db
+			.insert(d.scheduleVersions)
+			.values({ scheduleId: seed.schedule.id, versionNumber: 1 })
+			.returning();
+		const now = Date.now();
+		// Back-to-back shifts at the same location/worker: A is running and
+		// ends in 5 min, B starts exactly when A ends. With the default
+		// earlyClockInMinutes = 15, B's early-clock-in window opens 15 min
+		// before B.startsAt, which overlaps A's tail, so at `now` both A and B
+		// pass the clock-in candidate filter.
+		const aStart = new Date(now - 2 * 60 * 60_000);
+		const aEnd = new Date(now + 5 * 60_000);
+		const bStart = new Date(now + 5 * 60_000);
+		const bEnd = new Date(now + 5 * 60 * 60_000);
+		const [aShift] = await d.db
+			.insert(d.versionShifts)
+			.values({
+				versionId: required(version).id,
+				employmentId: seed.worker.id,
+				positionId: seed.position.id,
+				startsAt: aStart,
+				endsAt: aEnd,
+			})
+			.returning();
+		const [bShift] = await d.db
+			.insert(d.versionShifts)
+			.values({
+				versionId: required(version).id,
+				employmentId: seed.worker.id,
+				positionId: seed.position.id,
+				startsAt: bStart,
+				endsAt: bEnd,
+			})
+			.returning();
+		const res = await app.handle(
+			new Request("http://localhost/v1/kiosk/clock", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					locationId: seed.location.id,
+					locationPin: "2468",
+					workerPin: "1357",
+					action: "in",
+				}),
+			}),
+		);
+		expect(res.status).toBe(200);
+		const [bEntry] = await d.db
+			.select()
+			.from(d.timeEntries)
+			.where(eq(d.timeEntries.versionShiftId, required(bShift).id));
+		expect(bEntry?.clockedInAt).toBeDefined();
+		const aPunches = await d.db
+			.select()
+			.from(d.timeEntries)
+			.where(eq(d.timeEntries.versionShiftId, required(aShift).id));
+		expect(aPunches).toHaveLength(0);
+	});
+
 	test("Time Block and Shift Template can be stored for a Location", async () => {
 		const { database: d, app, token } = getContext();
 		const seed = await seedWorkplace(d, "Block Cafe");
