@@ -139,7 +139,7 @@ export const kioskRoutes = new Elysia({ prefix: "/v1", tags: ["Kiosk"] }).post(
 							gte(versionShifts.endsAt, now),
 						),
 					)
-					.orderBy(versionShifts.startsAt)
+					.orderBy(desc(versionShifts.startsAt))
 					.limit(1);
 				target = rows[0] ?? null;
 			}
