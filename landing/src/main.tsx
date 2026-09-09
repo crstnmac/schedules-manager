@@ -466,8 +466,8 @@ function App() {
 				<section className="workflow-section" id="how-it-works">
 					<div className="section-container workflow-layout">
 						<div className="workflow-heading">
-							<p className="eyebrow">HOW IT WORKS</p>
-							<h2>Set up.<br />Schedule.<br />Send.</h2>
+							<p className="eyebrow">How it works</p>
+							<h2>Set up. Schedule. Send.</h2>
 							<p>Take the week from an empty workplace to a published schedule.</p>
 							<img className="workflow-illustration" src="/illustration-workflow.webp" alt="" aria-hidden="true" />
 						</div>
@@ -599,22 +599,20 @@ function App() {
 						</div>
 					</div>
 				</section>
-				<section className="faq-section section-container" id="faq">
+				<section className="faq-section" id="faq">
 					<div className="faq-intro">
-						<p className="eyebrow">A FEW THINGS TO KNOW</p>
+						<p className="eyebrow">Questions, answered</p>
 						<h2>Glad you asked.</h2>
-						<p>Good questions. Straight answers.</p>
+						<p>Everything your team needs to get started.</p>
 						<img className="faq-illustration" src="/illustration-faq.webp" alt="" aria-hidden="true" />
 					</div>
 					<div className="faq-list">
-						{faqs.map(([q, a]) => (
-							<details key={q}>
-								<summary>
-									{q}
-									<Plus size={18} />
-								</summary>
+						{faqs.map(([q, a], index) => (
+							<article key={q}>
+								<span>{String(index + 1).padStart(2, "0")}</span>
+								<h3>{q}</h3>
 								<p>{a}</p>
-							</details>
+							</article>
 						))}
 					</div>
 				</section>
