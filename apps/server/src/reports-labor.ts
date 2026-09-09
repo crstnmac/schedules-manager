@@ -47,6 +47,7 @@ export function computeLaborByEntry(
 	weekStartDay: number,
 ): Map<string, number> {
 	type WeekGroup = {
+		/** Per `(timezone, dateKey)` worked minutes for daily OT, keyed as `tz:date`. */
 		rawByDate: Map<string, number>;
 		totalRaw: number;
 		totalWorked: number;
@@ -77,7 +78,16 @@ export function computeLaborByEntry(
 			row.intervalEnd,
 			row.timezone,
 		)) {
-			group.rawByDate.set(day, (group.rawByDate.get(day) ?? 0) + dayRaw);
+			// Key the per-day bucket on the row's timezone as well as the
+			// zoned date string. `minutesByZonedDate` splits this row's
+			// minutes into days defined in `row.timezone`; a bare date string
+			// from a *different* timezone denotes a different absolute 24h
+			// window, so merging by date string alone would assemble a "day"
+			// that exists under no single timezone and inflate daily OT.
+			// Same-timezone rows still share a key, preserving the existing
+			// workplace-wide daily-OT pool for single-zone workplaces.
+			const dayKey = `${row.timezone}:${day}`;
+			group.rawByDate.set(dayKey, (group.rawByDate.get(dayKey) ?? 0) + dayRaw);
 			group.totalRaw += dayRaw;
 		}
 		group.totalWorked += row.worked;

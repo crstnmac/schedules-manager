@@ -542,3 +542,74 @@ describe("computeLaborByEntry DST-at-midnight zones", () => {
 		);
 	});
 });
+
+describe("computeLaborByEntry cross-timezone daily overtime", () => {
+	// One employment with two non-overlapping shifts whose own-timezone date
+	// keys coincide. Tokyo shift 2026-09-07T23:00Z..2026-09-08T08:00Z is
+	// 2026-09-08 08:00..17:00 in Asia/Tokyo (540 min). UTC shift
+	// 2026-09-08T10:00Z..2026-09-08T19:00Z is 2026-09-08 10:00..19:00 in UTC
+	// (540 min). Both resolve to zoned date-key "2026-09-08" in their own
+	// timezone, and both fall in the workplace week starting Mon 2026-09-07.
+	const crossTz = (): ReportRow[] => [
+		row({
+			entryId: "t",
+			employmentId: "emp",
+			start: "2026-09-07T23:00:00Z",
+			end: "2026-09-08T08:00:00Z",
+			timezone: "Asia/Tokyo",
+			overtimeDailyMinutes: 480,
+		}),
+		row({
+			entryId: "u",
+			employmentId: "emp",
+			start: "2026-09-08T10:00:00Z",
+			end: "2026-09-08T19:00:00Z",
+			timezone: "UTC",
+			overtimeDailyMinutes: 480,
+		}),
+	];
+
+	test("cross-timezone rows are not merged into one daily-OT bucket", () => {
+		// Before the fix, both rows' 540 min landed in one shared "2026-09-08"
+		// bucket (1080 min -> 600 daily OT), yielding 46000. After the fix, the
+		// buckets are keyed per timezone, so each location's 540 min is its own
+		// day: daily OT = (540-480) + (540-480) = 120 min, total 960 regular.
+		// total = 960/60*2000 + 120/60*2000*1.5 = 32000 + 6000 = 38000.
+		expect(sum(computeLaborByEntry(crossTz(), 1))).toBe(38000);
+	});
+
+	test("same-timezone rows on the same date still merge into one daily-OT bucket", () => {
+		// The fix keys on `${timezone}:${date}` precisely so same-timezone
+		// rows keep sharing a bucket. Two UTC shifts on 2026-09-08 (each
+		// 540 min) must merge to a 1080-min day under one "UTC:2026-09-08"
+		// key, giving 600 daily OT -> 46000 (not two separate 540-min days
+		// which would yield 38000).
+		const rows = [
+			row({
+				entryId: "a",
+				employmentId: "emp",
+				start: "2026-09-08T00:00:00Z",
+				end: "2026-09-08T09:00:00Z",
+				overtimeDailyMinutes: 480,
+			}),
+			row({
+				entryId: "b",
+				employmentId: "emp",
+				start: "2026-09-08T12:00:00Z",
+				end: "2026-09-08T21:00:00Z",
+>>>>>>> eaa1fe5 (fix(reports): key hours CSV daily OT buckets per timezone)
+				overtimeDailyMinutes: 480,
+			}),
+		];
+		const labor = computeLaborByEntry(rows, 1);
+		const expected = laborCents({
+			minutes: 1080,
+			hourlyWageCents: 2000,
+			overtimeWeeklyMinutes: 2400,
+			overtimeDailyMinutes: 480,
+			dailyMinutes: [1080],
+		}).totalCents;
+		expect(sum(labor)).toBe(46000);
+		expect(sum(labor)).toBe(expected);
+	});
+});
