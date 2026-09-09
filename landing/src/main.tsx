@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { MeshGradient } from "@paper-design/shaders-react";
 import {
 	ArrowRight,
 	ArrowUpRight,
@@ -346,21 +345,12 @@ function SchedulePreview() {
 function App() {
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [scrolled, setScrolled] = useState(false);
-	const [reducedMotion, setReducedMotion] = useState(false);
 
 	useEffect(() => {
 		const updateHeader = () => setScrolled(window.scrollY > 12);
 		updateHeader();
 		window.addEventListener("scroll", updateHeader, { passive: true });
 		return () => window.removeEventListener("scroll", updateHeader);
-	}, []);
-
-	useEffect(() => {
-		const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-		const updateMotion = () => setReducedMotion(media.matches);
-		updateMotion();
-		media.addEventListener("change", updateMotion);
-		return () => media.removeEventListener("change", updateMotion);
 	}, []);
 
 	return (
@@ -403,17 +393,7 @@ function App() {
 			</header>
 			<main id="main-content">
 				<section className="hero">
-					<div className="hero-shader" aria-hidden="true">
-						<MeshGradient
-							colors={["#ffffff", "#dceeff", "#b9dcff", "#f3f9ff"]}
-							distortion={0.72}
-							swirl={0.38}
-							grainMixer={0.08}
-							grainOverlay={0.025}
-							speed={reducedMotion ? 0 : 0.08}
-							style={{ width: "100%", height: "100%" }}
-						/>
-					</div>
+					<div className="hero-wash" aria-hidden="true" />
 					<img className="hero-illustration" src="/illustration-hero.webp" alt="" aria-hidden="true" />
 					<h1>
 						Good weeks

@@ -2428,6 +2428,7 @@ body {
 	font-family: var(--font-ui);
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
+	overflow-x: clip;
 }
 .hero h1,
 .product-section .section-heading h2,
@@ -3113,12 +3114,8 @@ body {
 }
 .workflow-heading .workflow-illustration {
 	display: block;
-	width: min(390px, 100%);
+	width: 100%;
 	margin-top: 48px;
-	border-radius: 2px;
-	box-shadow: 0 18px 50px rgba(23, 50, 79, .08);
-	-webkit-mask-image: linear-gradient(145deg, #000 72%, transparent 100%);
-	mask-image: linear-gradient(145deg, #000 72%, transparent 100%);
 }
 .phone-scene {
 	position: relative;
@@ -3238,8 +3235,14 @@ body {
 	object-position: center 48%;
 	border-radius: 0;
 	box-shadow: none;
-	-webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8%, #000 92%, transparent 100%);
-	mask-image: linear-gradient(to bottom, transparent 0, #000 8%, #000 92%, transparent 100%);
+	-webkit-mask-image:
+		linear-gradient(to right, transparent 0, #000 6%, #000 94%, transparent 100%),
+		linear-gradient(to bottom, transparent 0, #000 8%, #000 92%, transparent 100%);
+	mask-image:
+		linear-gradient(to right, transparent 0, #000 6%, #000 94%, transparent 100%),
+		linear-gradient(to bottom, transparent 0, #000 8%, #000 92%, transparent 100%);
+	-webkit-mask-composite: source-in;
+	mask-composite: intersect;
 }
 .workflow-list {
 	display: grid;
@@ -3339,4 +3342,39 @@ body {
 	.faq-list { grid-template-columns: 1fr; }
 	.faq-list article { min-height: 0; }
 	.faq-list article > span { margin-bottom: 24px; }
+}
+
+/* Atmospheric hero wash replaces the animated shader. */
+.hero > .hero-wash {
+	position: absolute;
+	top: 0;
+	right: auto;
+	bottom: auto;
+	left: 50%;
+	z-index: 0;
+	width: 100vw;
+	height: 620px;
+	transform: translateX(-50%);
+	background:
+		radial-gradient(circle at 18% 22%, rgba(255, 244, 218, .52), transparent 34%),
+		radial-gradient(circle at 82% 30%, rgba(180, 219, 255, .5), transparent 38%),
+		linear-gradient(180deg, rgba(236, 246, 255, .78), rgba(255, 255, 255, .12) 82%, transparent);
+	pointer-events: none;
+}
+.hero > .hero-illustration { z-index: 0; }
+.hero > :not(.hero-shader):not(.hero-wash):not(.hero-illustration) { position: relative; z-index: 1; }
+
+/* True viewport bleed, independent of parent width. */
+.industries { overflow: visible; }
+.industries-illustration {
+	left: auto;
+	width: 100dvw;
+	max-width: none;
+	margin-left: calc(50% - 50dvw);
+	transform: none;
+}
+
+@media (max-width: 640px) {
+	.hero-wash { height: 520px; }
+	.workflow-heading .workflow-illustration { height: 300px; margin-top: 34px; }
 }
