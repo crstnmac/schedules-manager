@@ -416,14 +416,18 @@ async function main() {
 
 	let pin = 1010;
 	for (const worker of REAL_WORKERS) {
-		const id = authByEmail.get(worker.email);
-		if (!id) {
-			throw new Error(`Auth user missing for ${worker.email}`);
-		}
+		const authId = authByEmail.get(worker.email);
+		const [existing] = authId
+			? []
+			: await db
+					.select()
+					.from(profiles)
+					.where(eq(profiles.email, worker.email))
+					.limit(1);
 		await ensureWorker({
 			...worker,
-			id,
-			login: true,
+			id: authId ?? existing?.id ?? crypto.randomUUID(),
+			login: Boolean(authId),
 			pin: String(pin++),
 		});
 	}

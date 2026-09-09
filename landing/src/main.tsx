@@ -142,7 +142,7 @@ function SchedulePreview() {
 		<div className="schedule-frame" id="product-demo">
 			<img
 				className="real-schedule-screenshot"
-				src="/schedule-after.png"
+				src="/schedule.webp"
 				alt="The jooling weekly schedule shown in the real web product"
 			/>
 			<div className="schedule-app">
@@ -616,7 +616,7 @@ function App() {
 						</span>
 						<img
 							className="real-mobile-screenshot"
-							src="/worker-home-mobile-after.png"
+							src="/worker-home-mobile.webp"
 							alt="The real jooling worker schedule on mobile"
 						/>
 						<div className="phone" aria-hidden="true">
