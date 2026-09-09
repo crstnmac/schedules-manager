@@ -335,4 +335,134 @@ export function registerReportTests(getContext: () => Context) {
 		expect(csvTotal).toBe(laborBody.labor.scheduledCents);
 		expect(csvTotal).toBe(95000);
 	});
+
+	test("hours.csv does not over-count daily OT for a cross-timezone employment", async () => {
+		// Reproduce the reported bug end-to-end through the HTTP stack: one
+		// employment with time entries at two locations in genuinely different
+		// timezones whose own-timezone date-keys coincide. Pre-fix the CSV
+		// merged both rows' minutes into one shared "2026-09-08" bucket and
+		// over-counted daily OT (46000); post-fix the per-timezone key keeps
+		// each location's day separate and the total is 38000.
+		const { database: d, app, token } = getContext();
+		const managerProfileId = crypto.randomUUID();
+		const workerProfileId = crypto.randomUUID();
+		const managerEmail = "cross-tz-manager@example.test";
+		const workerEmail = "cross-tz-worker@example.test";
+		const [workplace] = await d.db
+			.insert(d.workplaces)
+			.values({
+				name: "Cross Timezone CSV Cafe",
+				overtimeWeeklyMinutes: 2400,
+				overtimeDailyMinutes: 480,
+				weekStartDay: 1,
+			})
+			.returning();
+		// Two locations in different timezones.
+		const locations = await d.db
+			.insert(d.locations)
+			.values([
+				{
+					workplaceId: required(workplace).id,
+					name: "Tokyo Floor",
+					timezone: "Asia/Tokyo",
+				},
+				{
+					workplaceId: required(workplace).id,
+					name: "UTC Floor",
+					timezone: "UTC",
+				},
+			])
+			.returning();
+		const locationTokyo = required(locations[0]);
+		const locationUtc = required(locations[1]);
+		const [position] = await d.db
+			.insert(d.positions)
+			.values({ workplaceId: required(workplace).id, name: "Server" })
+			.returning();
+		await d.db.insert(d.profiles).values([
+			{ id: managerProfileId, email: managerEmail },
+			{ id: workerProfileId, email: workerEmail },
+		]);
+		const employments = await d.db
+			.insert(d.employments)
+			.values([
+				{
+					workplaceId: required(workplace).id,
+					profileId: managerProfileId,
+					kind: "manager",
+				},
+				{
+					workplaceId: required(workplace).id,
+					profileId: workerProfileId,
+					kind: "worker",
+					hourlyWageCents: 2000,
+				},
+			])
+			.returning();
+		const workerEmployment = required(
+			employments.find((row) => row.profileId === workerProfileId),
+		);
+		// One schedule + version per location, both for the 2026-09-07 week.
+		const schedules = await d.db
+			.insert(d.schedules)
+			.values([
+				{ locationId: locationTokyo.id, weekStartDate: "2026-09-07" },
+				{ locationId: locationUtc.id, weekStartDate: "2026-09-07" },
+			])
+			.returning();
+		const versions = await d.db
+			.insert(d.scheduleVersions)
+			.values([
+				{ scheduleId: required(schedules[0]).id, versionNumber: 1 },
+				{ scheduleId: required(schedules[1]).id, versionNumber: 1 },
+			])
+			.returning();
+		// Tokyo shift 2026-09-07T23:00Z..2026-09-08T08:00Z (= 09-08 08:00..17:00
+		// Asia/Tokyo, 540 min). UTC shift 2026-09-08T10:00Z..2026-09-08T19:00Z
+		// (= 09-08 10:00..19:00 UTC, 540 min). Both resolve to zoned date-key
+		// "2026-09-08" in their own timezone and share the week of 2026-09-07.
+		const tokyoShift = {
+			start: new Date("2026-09-07T23:00:00.000Z"),
+			end: new Date("2026-09-08T08:00:00.000Z"),
+		};
+		const utcShift = {
+			start: new Date("2026-09-08T10:00:00.000Z"),
+			end: new Date("2026-09-08T19:00:00.000Z"),
+		};
+		for (const [index, shift] of [tokyoShift, utcShift].entries()) {
+			const [snapshot] = await d.db
+				.insert(d.versionShifts)
+				.values({
+					versionId: required(versions[index]).id,
+					employmentId: workerEmployment.id,
+					positionId: required(position).id,
+					startsAt: shift.start,
+					endsAt: shift.end,
+				})
+				.returning();
+			await d.db.insert(d.timeEntries).values({
+				versionShiftId: required(snapshot).id,
+				employmentId: workerEmployment.id,
+				clockedInAt: shift.start,
+				clockedOutAt: shift.end,
+			});
+		}
+
+		const access = await token(managerProfileId, managerEmail);
+		const response = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${required(workplace).id}/reports/hours.csv?from=2026-09-01&to=2026-09-30`,
+				{ headers: { authorization: `Bearer ${access}` } },
+			),
+		);
+		expect(response.status).toBe(200);
+		const csv = parseCsv(await response.text());
+		expect(csv.rows).toHaveLength(2);
+		const total = csv.rows.reduce((sum, row) => sum + Number(row[7]), 0);
+		// Per-location-day coherence: two 540-min days, daily OT = 60+60 = 120,
+		// regular 960 -> 32000 + 6000 = 38000 (not the pre-fix 46000).
+		expect(total).toBe(38000);
+		// Equal worked minutes prorate evenly: 19000 each.
+		expect(csv.rows.map((row) => Number(row[7]))).toEqual([19000, 19000]);
+	});
 }
