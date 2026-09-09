@@ -19,6 +19,7 @@ import {
 	Settings2,
 	ShieldCheck,
 	ShoppingBag,
+	Smartphone,
 	Users,
 	Utensils,
 	X,
@@ -98,22 +99,23 @@ const people = [
 		],
 	},
 ];
+const faqIcons = [Users, Smartphone, Bell, MapPin];
 const faqs = [
 	[
 		"Who is jooling for?",
 		"jooling is built for hourly teams in hospitality, retail, healthcare, and beyond. Managers plan and publish schedules, while team members stay on top of their shifts and requests.",
 	],
 	[
-		"Can my team access their schedules on mobile?",
-		"Yes. Workers and managers can access schedules on web and through the mobile app. Workers can view upcoming shifts, submit availability, and respond to schedule changes.",
+		"Can my team use it on mobile?",
+		"Yes. Teammates can check shifts, submit availability, and respond to schedule changes on the web or in the mobile app.",
 	],
 	[
-		"What happens when a published schedule changes?",
-		"Each published update creates a new schedule version. Affected workers receive explicit notifications, and material late changes can require their acceptance. You can see who has acknowledged an update.",
+		"What if the schedule changes?",
+		"Affected teammates are notified when you publish a change. You can track acknowledgements, and important late changes can require their acceptance.",
 	],
 	[
-		"Can I manage more than one location?",
-		"Yes. You can organize your workplace into locations, define positions, and give managers access to the teams and schedules they are responsible for.",
+		"Can I manage multiple locations?",
+		"Yes. Create locations and roles, then give managers access to the teams and schedules they oversee.",
 	],
 ];
 function Brand() {
@@ -362,6 +364,7 @@ function App() {
 				<div className="nav-container">
 					<Brand />
 					<nav
+						id="main-navigation"
 						aria-label="Main navigation"
 						className={"nav-links " + (menuOpen ? "open" : "")}
 					>
@@ -384,6 +387,7 @@ function App() {
 							className="menu-toggle"
 							aria-label={menuOpen ? "Close navigation" : "Open navigation"}
 							aria-expanded={menuOpen}
+							aria-controls="main-navigation"
 							onClick={() => setMenuOpen(!menuOpen)}
 						>
 							{menuOpen ? <X /> : <Menu />}
@@ -408,19 +412,16 @@ function App() {
 						</svg>
 					</h1>
 					<p className="hero-description">
-						A calmer way to schedule your team.
+						Shift scheduling for hourly teams.
 						<br />
 						Plan shifts, handle changes, and keep everyone in sync.
 					</p>
 					<div className="hero-actions">
-						<CTA>Start your next chapter</CTA>
+						<CTA>Get started</CTA>
 						<a className="button button-secondary" href="#product-demo">
 							See it in action <ArrowRight size={16} />
 						</a>
 					</div>
-					<p className="hero-note">
-						Less back-and-forth. More getting on with your day.
-					</p>
 					<SchedulePreview />
 				</section>
 				<section className="industries" aria-label="Built for hourly teams">
@@ -441,7 +442,7 @@ function App() {
 							<Users /> Your team, too
 						</span>
 					</div>
-					<img className="industries-illustration" src="/illustration-industries.webp" alt="A connected neighborhood of café, retail, healthcare, hospitality, and field teams" />
+					<img className="industries-illustration" loading="lazy" decoding="async" src="/illustration-industries.webp" alt="A connected neighborhood of café, retail, healthcare, hospitality, and field teams" />
 				</section>
 				<section className="workflow-section" id="how-it-works">
 					<div className="section-container workflow-layout">
@@ -449,23 +450,17 @@ function App() {
 							<p className="eyebrow">How it works</p>
 							<h2>Set up. Schedule. Send.</h2>
 							<p>Take the week from an empty workplace to a published schedule.</p>
-							<img className="workflow-illustration" src="/illustration-workflow.webp" alt="" aria-hidden="true" />
+							<img className="workflow-illustration" loading="lazy" decoding="async" src="/illustration-workflow.webp" alt="" aria-hidden="true" />
 						</div>
 						<ol className="workflow-list">
 							<li>
-								<span className="workflow-index">01</span>
 								<div><h3>Set up your workplace.</h3><p>Add each location, role, and teammate.</p></div>
-								<span className="workflow-meta">Locations · roles · people</span>
 							</li>
 							<li>
-								<span className="workflow-index">02</span>
 								<div><h3>Build the schedule.</h3><p>Assign shifts around availability and resolve uncovered work.</p></div>
-								<span className="workflow-meta">Availability · coverage · open shifts</span>
 							</li>
 							<li>
-								<span className="workflow-index">03</span>
 								<div><h3>Publish the week.</h3><p>Notify the team, track acknowledgements, and keep later changes with the schedule.</p></div>
-								<span className="workflow-meta">Notifications · acknowledgements · updates</span>
 							</li>
 						</ol>
 					</div>
@@ -495,10 +490,10 @@ function App() {
 								<Check /> A shared plan, on web and mobile
 							</li>
 						</ul>
-						<CTA>Bring your team together</CTA>
+						<CTA>Get started</CTA>
 					</div>
 					<div className="phone-scene">
-						<img className="team-illustration" src="/illustration-team.webp" alt="Four hourly workers reviewing their week together" />
+						<img className="team-illustration" loading="lazy" decoding="async" src="/illustration-team.webp" alt="Four hourly workers reviewing their week together" />
 						<span className="scene-note">
 							A little more clarity.
 							<br />A lot less “just checking…”
@@ -584,16 +579,19 @@ function App() {
 						<p className="eyebrow">Questions, answered</p>
 						<h2>Glad you asked.</h2>
 						<p>Everything your team needs to get started.</p>
-						<img className="faq-illustration" src="/illustration-faq.webp" alt="" aria-hidden="true" />
+						<img className="faq-illustration" loading="lazy" decoding="async" src="/illustration-faq.webp" alt="" aria-hidden="true" />
 					</div>
 					<div className="faq-list">
-						{faqs.map(([q, a], index) => (
+						{faqs.map(([q, a], index) => {
+							const Icon = faqIcons[index];
+							return (
 							<article key={q}>
-								<span>{String(index + 1).padStart(2, "0")}</span>
+								<div className="faq-icon" aria-hidden="true"><Icon size={22} strokeWidth={1.5} /></div>
 								<h3>{q}</h3>
 								<p>{a}</p>
 							</article>
-						))}
+							);
+						})}
 					</div>
 				</section>
 			</main>
@@ -603,7 +601,7 @@ function App() {
 					<span className="footer-kicker"><CheckCheck size={15} /> Your week, sorted</span>
 					<h2>Good weeks<br />start with a clear plan.</h2>
 					<p>Build the schedule, bring your team along, and get back to the work that matters.</p>
-					<CTA>Plan your first week</CTA>
+					<CTA>Get started</CTA>
 				</div>
 				<div className="footer-directory section-container">
 					<div className="footer-intro">
@@ -623,9 +621,9 @@ function App() {
 					</div>
 				</div>
 				<div className="footer-bottom section-container">
-					<span className="footer-status"><i /> All systems ready</span>
+					
 					<span>© {new Date().getFullYear()} jooling</span>
-					<a href={signUpUrl.toString()}>Start planning <ArrowRight size={13} /></a>
+					
 				</div>
 				<div className="footer-landscape" role="img" aria-label="A café, shop, clinic, and hotel beginning a calm, well-planned day" />
 			</footer>

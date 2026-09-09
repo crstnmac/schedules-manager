@@ -1,8 +1,7 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Manrope:wght@400;500;550;600;650;700;750;800&display=swap");
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/geist";
 :root {
-	font-family: "DM Sans", sans-serif;
+	font-family: var(--font-ui);
 	color: #111b28;
 	background: #ffffff;
 	font-synthesis: none;
@@ -74,7 +73,7 @@ h1,
 h2,
 h3,
 h4 {
-	font-family: "Manrope", sans-serif;
+	font-family: var(--font-ui);
 }
 h2 {
 	font-size: 48px;
@@ -122,7 +121,7 @@ h2 span {
 .brand {
 	display: inline-flex;
 	align-items: center;
-	font-family: "Manrope", sans-serif;
+	font-family: var(--font-ui);
 	font-size: 29px;
 	font-weight: 750;
 	letter-spacing: -1.7px;
@@ -432,7 +431,7 @@ h2 span {
 	padding: 21px 22px 18px;
 }
 .schedule-toolbar h3 {
-	font-size: 19px;
+	font-size: 1.5rem;
 	letter-spacing: -0.5px;
 	font-weight: 650;
 }
@@ -1669,7 +1668,7 @@ h2 span {
 		padding: 25px 25px 0;
 	}
 	.feature-copy h3 {
-		font-size: 19px;
+		font-size: 1.5rem;
 	}
 	.feature-copy p {
 		font-size: 13px;
@@ -2246,16 +2245,22 @@ h2 span { color: var(--muted); }
 .sky-footer {
 	position: relative;
 	overflow: hidden;
-	background: #fbfbfa;
+	background: transparent;
 	color: #11110f;
 }
 .footer-sky {
 	height: clamp(330px, 40vw, 520px);
-	background-image: url("/footer-sky.webp");
+	background-image: url("/footer-sky-natural.png");
 	background-position: 50% 18%;
 	background-size: cover;
-	-webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 54%, rgba(0,0,0,.8) 70%, transparent 100%);
-	mask-image: linear-gradient(to bottom, #000 0%, #000 54%, rgba(0,0,0,.8) 70%, transparent 100%);
+	-webkit-mask-image:
+		radial-gradient(ellipse 75% 100% at 50% 105%, #000 72%, transparent 100%),
+		linear-gradient(to bottom, #000 0%, #000 54%, rgba(0,0,0,.8) 70%, transparent 100%);
+	mask-image:
+		radial-gradient(ellipse 75% 100% at 50% 105%, #000 72%, transparent 100%),
+		linear-gradient(to bottom, #000 0%, #000 54%, rgba(0,0,0,.8) 70%, transparent 100%);
+	-webkit-mask-composite: source-in;
+	mask-composite: intersect;
 }
 .footer-callout {
 	position: relative;
@@ -2298,7 +2303,7 @@ h2 span { color: var(--muted); }
 	gap: 64px;
 	padding-top: 74px;
 	padding-bottom: 78px;
-	border-top: 1px solid rgba(17,17,15,.1);
+	border-top: 0;
 }
 .footer-intro .brand { font-size: 26px; }
 .footer-intro p {
@@ -2338,7 +2343,7 @@ h2 span { color: var(--muted); }
 	gap: 28px;
 	padding-top: 24px;
 	padding-bottom: 28px;
-	border-top: 1px solid rgba(17,17,15,.1);
+	border-top: 0;
 	color: #7b8389;
 	font-size: 11px;
 }
@@ -2364,6 +2369,8 @@ h2 span { color: var(--muted); }
 	background-position: center bottom;
 	background-repeat: no-repeat;
 	background-size: cover;
+	-webkit-mask-image: linear-gradient(to bottom, transparent, #000 48%);
+	mask-image: linear-gradient(to bottom, transparent, #000 48%);
 }
 
 @media (max-width: 760px) {
@@ -2987,7 +2994,7 @@ body {
 .workflow-section {
 	padding: 132px 0;
 	border: 0;
-	background: #fbfbfa;
+	background: linear-gradient(to bottom, #fbfbfa 0%, #fbfbfa calc(100% - 132px), #fff 100%);
 }
 .workflow-layout {
 	display: grid;
@@ -3377,4 +3384,127 @@ body {
 @media (max-width: 640px) {
 	.hero-wash { height: 520px; }
 	.workflow-heading .workflow-illustration { height: 300px; margin-top: 34px; }
+}
+
+/* Feather every edge into the page with a soft oval silhouette. */
+.workflow-heading .workflow-illustration,
+.faq-illustration,
+.team-illustration {
+	-webkit-mask-image: radial-gradient(ellipse 50% 50% at center, #000 56%, rgba(0, 0, 0, .92) 68%, rgba(0, 0, 0, .5) 84%, transparent 100%);
+	mask-image: radial-gradient(ellipse 50% 50% at center, #000 56%, rgba(0, 0, 0, .92) 68%, rgba(0, 0, 0, .5) 84%, transparent 100%);
+	-webkit-mask-composite: source-over;
+	mask-composite: add;
+}
+
+/* Keep the product screenshot crisp over the feathered illustration. */
+.phone-scene {
+	background: transparent;
+	border: 0;
+}
+
+/* Quiet, readable FAQ cards with topic-specific iconography. */
+.faq-list {
+	gap: 16px;
+	border-top: 0;
+	align-items: stretch;
+}
+.faq-list article {
+	min-height: 0;
+	padding: 28px;
+	border: 1px solid var(--line);
+	border-radius: 16px;
+	background: linear-gradient(145deg, color-mix(in srgb, var(--blue) 3%, white), white 65%);
+}
+.faq-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	margin-bottom: 24px;
+	border-radius: 12px;
+	color: var(--blue);
+	background: color-mix(in srgb, var(--blue) 8%, white);
+}
+.faq-list h3 {
+	max-width: none;
+	font-size: 1.5rem;
+	font-weight: 600;
+	line-height: 1.35;
+	letter-spacing: -.025em;
+}
+.faq-list article p {
+	max-width: none;
+	margin-top: 12px;
+	font-size: 14px;
+	line-height: 1.7;
+}
+@media (max-width: 640px) {
+	.faq-list article { padding: 24px; }
+	.faq-icon { margin-bottom: 20px; }
+}
+
+.workflow-heading .workflow-illustration {
+	-webkit-mask-image: radial-gradient(ellipse 60% 50% at center, #000 56%, rgba(0, 0, 0, .92) 68%, rgba(0, 0, 0, .5) 84%, transparent 100%);
+	mask-image: radial-gradient(ellipse 60% 50% at center, #000 56%, rgba(0, 0, 0, .92) 68%, rgba(0, 0, 0, .5) 84%, transparent 100%);
+}
+
+/* Unnumbered workflow steps with a shared text alignment. */
+.workflow-list li {
+	grid-template-columns: minmax(0, 1fr);
+	border: 0;
+	padding-top: 12px;
+}
+.workflow-list p,
+.workflow-list .workflow-meta {
+	grid-column: 1;
+}
+
+.workflow-heading .workflow-illustration {
+	width: 100dvw;
+	max-width: none;
+	margin-left: calc(50% - 50dvw);
+}
+
+/* Open FAQ layout, without card containers. */
+.faq-list {
+	gap: 48px 36px;
+}
+.faq-list article {
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+}
+
+/* Page-wide refinement: clear navigation, readable copy, quieter decoration. */
+.header::before {
+	inset: 0;
+	background: var(--surface);
+	-webkit-backdrop-filter: none;
+	backdrop-filter: none;
+	-webkit-mask-image: none;
+	mask-image: none;
+}
+.hero-description { color: var(--ink); }
+.workflow-list p,
+.team-copy > p:not(.eyebrow),
+.faq-list article p { font-size: 1rem; line-height: 1.65; color: var(--muted); }
+.faq-list h3 { font-size: 1.25rem; line-height: 1.4; text-wrap: balance; }
+.faq-icon { background: transparent; width: 24px; height: 24px; border-radius: 0; margin-bottom: 20px; }
+.faq-section { padding-block: 88px; }
+.footer-callout { padding-bottom: 56px; }
+.footer-directory { padding-top: 40px; padding-bottom: 40px; }
+.footer-bottom { display: flex; justify-content: center; padding-block: 16px; }
+.footer-callout .button { background: var(--blue); box-shadow: none; }
+.footer-callout .button:hover { background: var(--blue); filter: brightness(.92); }
+.footer-column a { min-height: 32px; display: inline-flex; align-items: center; }
+@media (max-width: 640px) {
+	.faq-section { padding-block: 64px; }
+	.faq-list { gap: 36px; }
+	.faq-illustration { display: none; }
+	.faq-intro { display: block; }
+	.footer-callout { padding-bottom: 32px; }
+	.footer-column a { min-height: 44px; }
+	.menu-toggle { min-width: 44px; min-height: 44px; }
 }
