@@ -346,7 +346,6 @@ function SchedulePreview() {
 function App() {
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [scrolled, setScrolled] = useState(false);
-	const [productFeature, setProductFeature] = useState(0);
 	const [reducedMotion, setReducedMotion] = useState(false);
 
 	useEffect(() => {
@@ -376,9 +375,6 @@ function App() {
 						aria-label="Main navigation"
 						className={"nav-links " + (menuOpen ? "open" : "")}
 					>
-						<a href="#product" onClick={() => setMenuOpen(false)}>
-							Product
-						</a>
 						<a href="#how-it-works" onClick={() => setMenuOpen(false)}>
 							How it works
 						</a>
@@ -463,41 +459,6 @@ function App() {
 						<span>
 							<Users /> Your team, too
 						</span>
-					</div>
-				</section>
-				<section id="product" className="product-section section-container">
-					<div className="product-heading">
-						<p className="eyebrow">ONE PLACE FOR THE WHOLE WEEK</p>
-						<h2>Build the week.<br /><span>Keep it current.</span></h2>
-						<p>Assign shifts, send the schedule, and review team requests in one place.</p>
-					</div>
-					<div className="product-explorer">
-						<div className="product-tabs" role="tablist" aria-label="Explore Jooling features">
-							{[
-								{ icon: CalendarDays, title: "Schedule", text: "Assign shifts and check coverage." },
-								{ icon: Bell, title: "Publish", text: "Send the week and see who’s opened it." },
-								{ icon: Settings2, title: "Requests", text: "Review time off and shift changes." },
-							].map(({ icon: Icon, title, text }, index) => (
-								<button key={title} role="tab" aria-selected={productFeature === index} aria-controls="product-panel" onClick={() => setProductFeature(index)}>
-									<span className="product-tab-icon"><Icon size={18} /></span>
-									<span><strong>{title}</strong><small>{text}</small></span>
-									<ArrowRight size={16} />
-								</button>
-							))}
-						</div>
-						<div className="product-stage" id="product-panel" role="tabpanel" aria-live="polite">
-							<div className="product-stage-top"><span><img src="/logo-mark.svg" alt="" /> Daybreak Café</span><span>{["Schedule", "Publish", "Requests"][productFeature]}</span></div>
-							{productFeature === 0 && <div className="schedule-stage"><img src="/schedule.webp" alt="Jooling’s weekly schedule showing people, shifts, and coverage" /></div>}
-							{productFeature === 1 && <div className="publish-stage">
-								<div className="publish-stage-card"><span className="publish-mark"><CheckCheck size={22} /></span><p>Schedule published</p><h3>Sep 7–13 is ready.</h3><span className="publish-audience"><Users size={15} /> 18 teammates notified</span></div>
-								<div className="delivery-list"><div><span className="avatar blue">AR</span><p><strong>Alex Rivera</strong><small>Seen just now</small></p><Check size={16} /></div><div><span className="avatar teal">JC</span><p><strong>Jordan Chen</strong><small>Seen 2 min ago</small></p><Check size={16} /></div><div><span className="avatar purple">SP</span><p><strong>Sam Patel</strong><small>Notification sent</small></p><Send size={16} /></div></div>
-							</div>}
-							{productFeature === 2 && <div className="requests-stage">
-								<div className="request-summary"><span><Settings2 size={18} /> Requests</span><strong>2 need review</strong></div>
-								<div className="request-stage-card"><span className="avatar purple">AO</span><div><strong>Amara requested time off</strong><small>Friday, Sep 18 · Full day</small></div><button>Review</button></div>
-								<div className="request-stage-card"><span className="avatar teal">JW</span><div><strong>James offered a shift</strong><small>Saturday, Sep 19 · 11:00–15:00</small></div><span className="matched-tag"><Check size={13} /> Match found</span></div>
-							</div>}
-						</div>
 					</div>
 				</section>
 				<section className="workflow-section" id="how-it-works">
@@ -668,7 +629,6 @@ function App() {
 					</div>
 					<div className="footer-column">
 						<strong>Product</strong>
-						<a href="#product">Overview</a>
 						<a href="#how-it-works">How it works</a>
 						<a href="#faq">FAQs</a>
 					</div>
