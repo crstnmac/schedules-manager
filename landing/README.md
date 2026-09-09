@@ -13,7 +13,7 @@ Open http://localhost:3002. Build with `bun run build` and preview with `bun run
 
 Set `VITE_APP_URL` in `.env.local` to your deployed application URL. It defaults to http://localhost:3001 for local development. All get-started and log-in links open that application.
 
-The landing page packages high-resolution WebP captures of the seeded web and mobile product in `landing/public`. FAQs use native accessible disclosure controls, and the layout adapts to desktop and mobile viewports while respecting reduced-motion preferences.
+The landing page packages high-resolution WebP captures of the seeded web and mobile product in `landing/public`. The layout adapts to desktop and mobile viewports while respecting reduced-motion preferences.
 
 ## Docker
 
