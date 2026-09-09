@@ -159,8 +159,25 @@ export function minutesByZonedDate(
 	const endMs = endsAt.getTime();
 	while (cursor < endMs) {
 		const info = zonedDayInfo(new Date(cursor), timeZone);
-		const nextMidnight = wallToInstant(shiftDays(info.dateKey, 1), 0, timeZone);
-		const segmentEnd = Math.min(endMs, nextMidnight.getTime());
+		// The next calendar day begins at local 00:00; in zones that spring
+		// forward at midnight (e.g. Egypt) that wall time is in the gap and
+		// wallToInstant throws, so fall back to the first existing minute
+		// (01:00) of the new day.
+		let nextMidnight: number;
+		try {
+			nextMidnight = wallToInstant(
+				shiftDays(info.dateKey, 1),
+				0,
+				timeZone,
+			).getTime();
+		} catch {
+			nextMidnight = wallToInstant(
+				shiftDays(info.dateKey, 1),
+				60,
+				timeZone,
+			).getTime();
+		}
+		const segmentEnd = Math.min(endMs, nextMidnight);
 		const segmentMinutes = Math.round((segmentEnd - cursor) / 60_000);
 		if (segmentMinutes > 0) {
 			split.set(info.dateKey, (split.get(info.dateKey) ?? 0) + segmentMinutes);
