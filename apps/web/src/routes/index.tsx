@@ -14,9 +14,14 @@ import { useAuth } from "@/lib/auth";
 import { homePath } from "@/lib/home-path";
 import { useMe, usePendingInvitations } from "@/lib/queries";
 
-export const Route = createFileRoute("/")({ component: HomeComponent });
+export const Route = createFileRoute("/")({
+	validateSearch: (search: Record<string, unknown>): { mode?: "sign-up" } =>
+		search.mode === "sign-up" ? { mode: "sign-up" } : {},
+	component: HomeComponent,
+});
 
 function HomeComponent() {
+	const { mode } = Route.useSearch();
 	const { isLoading: authLoading, user, signOut } = useAuth();
 	const me = useMe(Boolean(user));
 	const pending = usePendingInvitations(Boolean(user));
@@ -34,7 +39,7 @@ function HomeComponent() {
 		);
 	}
 
-	if (!user) return <AuthForm />;
+	if (!user) return <AuthForm defaultMode={mode ?? "sign-in"} />;
 
 	if (me.isError || pending.isError) {
 		return (

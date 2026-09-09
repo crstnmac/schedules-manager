@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { MeshGradient } from "@paper-design/shaders-react";
 import {
 	ArrowRight,
 	ArrowUpRight,
@@ -26,9 +27,6 @@ import {
 	CheckCheck,
 } from "lucide-react";
 import "./styles.css";
-function Card({ className, ...props }: React.ComponentProps<"div">) {
-	return <div className={className} {...props} />;
-}
 function Badge({
 	className,
 	variant: _variant,
@@ -37,6 +35,8 @@ function Badge({
 	return <span className={className} {...props} />;
 }
 const appUrl = import.meta.env.VITE_APP_URL || "http://localhost:3001";
+const signUpUrl = new URL(appUrl);
+signUpUrl.searchParams.set("mode", "sign-up");
 const people = [
 	{
 		name: "Olivia Chen",
@@ -127,7 +127,7 @@ function Brand() {
 }
 function CTA({ children = "Get started" }: { children?: React.ReactNode }) {
 	return (
-		<a className="button button-primary" href={appUrl}>
+		<a className="button button-primary" href={signUpUrl.toString()}>
 			{children}
 			<ArrowUpRight data-icon="inline-end" />
 		</a>
@@ -345,12 +345,31 @@ function SchedulePreview() {
 }
 function App() {
 	const [menuOpen, setMenuOpen] = useState(false);
+	const [scrolled, setScrolled] = useState(false);
+	const [productFeature, setProductFeature] = useState(0);
+	const [reducedMotion, setReducedMotion] = useState(false);
+
+	useEffect(() => {
+		const updateHeader = () => setScrolled(window.scrollY > 12);
+		updateHeader();
+		window.addEventListener("scroll", updateHeader, { passive: true });
+		return () => window.removeEventListener("scroll", updateHeader);
+	}, []);
+
+	useEffect(() => {
+		const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+		const updateMotion = () => setReducedMotion(media.matches);
+		updateMotion();
+		media.addEventListener("change", updateMotion);
+		return () => media.removeEventListener("change", updateMotion);
+	}, []);
+
 	return (
 		<div className="site">
 			<a className="skip-link" href="#main-content">
 				Skip to content
 			</a>
-			<header className="header">
+			<header className={`header${scrolled ? " is-scrolled" : ""}`}>
 				<div className="nav-container">
 					<Brand />
 					<nav
@@ -388,6 +407,17 @@ function App() {
 			</header>
 			<main id="main-content">
 				<section className="hero">
+					<div className="hero-shader" aria-hidden="true">
+						<MeshGradient
+							colors={["#ffffff", "#dceeff", "#b9dcff", "#f3f9ff"]}
+							distortion={0.72}
+							swirl={0.38}
+							grainMixer={0.08}
+							grainOverlay={0.025}
+							speed={reducedMotion ? 0 : 0.08}
+							style={{ width: "100%", height: "100%" }}
+						/>
+					</div>
 					<h1>
 						Good weeks
 						<br />
@@ -417,8 +447,7 @@ function App() {
 					<SchedulePreview />
 				</section>
 				<section className="industries" aria-label="Built for hourly teams">
-					<p>For teams that don’t sit still.</p>
-					<div>
+					<div className="industry-list">
 						<span>
 							<Coffee /> Cafés & restaurants
 						</span>
@@ -437,150 +466,68 @@ function App() {
 					</div>
 				</section>
 				<section id="product" className="product-section section-container">
-					<div className="section-heading">
-						<div>
-							<p className="eyebrow">LESS ADMIN. MORE HUMAN.</p>
-							<h2>
-								The whole week.
-								<br />
-								<span>Off your mind.</span>
-							</h2>
-						</div>
-						<p>
-							Great teams deserve better than a spreadsheet
-							<br className="desktop-break" /> and a never-ending group chat.
-							Give everyone
-							<br className="desktop-break" /> one clear place to know what’s
-							next.
-						</p>
+					<div className="product-heading">
+						<p className="eyebrow">ONE PLACE FOR THE WHOLE WEEK</p>
+						<h2>Build the week.<br /><span>Keep it current.</span></h2>
+						<p>Assign shifts, send the schedule, and review team requests in one place.</p>
 					</div>
-					<div className="feature-grid">
-						<Card className="feature-card feature-schedule">
-							<div className="feature-copy">
-								<CalendarDays />
-								<h3>Make the week make sense.</h3>
-								<p>
-									Build a clear weekly schedule with the right people, in the
-									right places. See your whole team at a glance.
-								</p>
-							</div>
-							<div className="mini-schedule" aria-hidden="true">
-								<div className="mini-days">
-									<span>MON</span>
-									<span>TUE</span>
-									<span>WED</span>
-									<span>THU</span>
-								</div>
-								<div className="mini-shifts">
-									<i className="blue">
-										Opening shift<span>07:00 – 15:00</span>
-									</i>
-									<i className="teal">
-										Front of house<span>09:00 – 17:00</span>
-									</i>
-									<i className="purple">
-										Closing shift<span>14:00 – 22:00</span>
-									</i>
-								</div>
-								<span className="mini-badge">
-									<Check size={13} /> A place for every shift
-								</span>
-							</div>
-						</Card>
-						<Card className="feature-card feature-notify">
-							<div className="feature-copy">
-								<Bell />
-								<h3>Hit publish. Bring everyone along.</h3>
-								<p>
-									Keep your team in the loop with explicit updates. See who’s
-									seen the schedule and who needs a nudge.
-								</p>
-							</div>
-							<div className="notification-card">
-								<span className="notification-logo">
-									<img src="/logo-mark.svg" alt="" /> jooling <small>now</small>
-								</span>
-								<strong>Your new week is ready.</strong>
-								<p>Alex published the schedule for Sep 7–13.</p>
-								<span className="notification-confirm">
-									<CheckCheck size={15} /> Schedule acknowledged
-								</span>
-							</div>
-						</Card>
-						<Card className="feature-card feature-changes">
-							<div className="feature-copy">
-								<Settings2 />
-								<h3>Life changes. Your plan can, too.</h3>
-								<p>
-									Time off, shift pickups, and availability, all in one place.
-									Handle requests without losing the thread.
-								</p>
-							</div>
-							<div className="request-card">
-								<span className="avatar purple">AO</span>
-								<div>
-									<strong>Amara requested time off</strong>
-									<small>Friday, Sep 18 · Full day</small>
-								</div>
-								<span className="request-status">
-									<Check size={13} /> Approved
-								</span>
-							</div>
-							<div className="request-card second-request">
-								<span className="avatar teal">JW</span>
-								<div>
-									<strong>James requested a shift</strong>
-									<small>Saturday, Sep 19 · Barista</small>
-								</div>
-								<span className="request-review">In review</span>
-							</div>
-						</Card>
+					<div className="product-explorer">
+						<div className="product-tabs" role="tablist" aria-label="Explore Jooling features">
+							{[
+								{ icon: CalendarDays, title: "Schedule", text: "Assign shifts and check coverage." },
+								{ icon: Bell, title: "Publish", text: "Send the week and see who’s opened it." },
+								{ icon: Settings2, title: "Requests", text: "Review time off and shift changes." },
+							].map(({ icon: Icon, title, text }, index) => (
+								<button key={title} role="tab" aria-selected={productFeature === index} aria-controls="product-panel" onClick={() => setProductFeature(index)}>
+									<span className="product-tab-icon"><Icon size={18} /></span>
+									<span><strong>{title}</strong><small>{text}</small></span>
+									<ArrowRight size={16} />
+								</button>
+							))}
+						</div>
+						<div className="product-stage" id="product-panel" role="tabpanel" aria-live="polite">
+							<div className="product-stage-top"><span><img src="/logo-mark.svg" alt="" /> Daybreak Café</span><span>{["Schedule", "Publish", "Requests"][productFeature]}</span></div>
+							{productFeature === 0 && <div className="schedule-stage"><img src="/schedule.webp" alt="Jooling’s weekly schedule showing people, shifts, and coverage" /></div>}
+							{productFeature === 1 && <div className="publish-stage">
+								<div className="publish-stage-card"><span className="publish-mark"><CheckCheck size={22} /></span><p>Schedule published</p><h3>Sep 7–13 is ready.</h3><span className="publish-audience"><Users size={15} /> 18 teammates notified</span></div>
+								<div className="delivery-list"><div><span className="avatar blue">AR</span><p><strong>Alex Rivera</strong><small>Seen just now</small></p><Check size={16} /></div><div><span className="avatar teal">JC</span><p><strong>Jordan Chen</strong><small>Seen 2 min ago</small></p><Check size={16} /></div><div><span className="avatar purple">SP</span><p><strong>Sam Patel</strong><small>Notification sent</small></p><Send size={16} /></div></div>
+							</div>}
+							{productFeature === 2 && <div className="requests-stage">
+								<div className="request-summary"><span><Settings2 size={18} /> Requests</span><strong>2 need review</strong></div>
+								<div className="request-stage-card"><span className="avatar purple">AO</span><div><strong>Amara requested time off</strong><small>Friday, Sep 18 · Full day</small></div><button>Review</button></div>
+								<div className="request-stage-card"><span className="avatar teal">JW</span><div><strong>James offered a shift</strong><small>Saturday, Sep 19 · 11:00–15:00</small></div><span className="matched-tag"><Check size={13} /> Match found</span></div>
+							</div>}
+						</div>
 					</div>
 				</section>
 				<section className="workflow-section" id="how-it-works">
-					<div className="section-container">
-						<p className="eyebrow">A BETTER RHYTHM</p>
-						<h2>
-							From “who’s working?”
-							<br />
-							to “we’re all set.”
-						</h2>
-						<div className="steps">
-							{[
-								{
-									n: "01",
-									title: "Make it your workplace.",
-									text: "Add your locations, positions, and people. A little setup brings your whole team together.",
-									icon: Users,
-								},
-								{
-									n: "02",
-									title: "Put a good week together.",
-									text: "Build shifts around your team’s availability. Spot open shifts before they become last-minute scrambles.",
-									icon: CalendarDays,
-								},
-								{
-									n: "03",
-									title: "Publish. Then breathe.",
-									text: "Share the schedule and keep changes clear. Your team knows where to be, and you know where things stand.",
-									icon: CheckCheck,
-								},
-							].map(({ n, title, text, icon: Icon }) => (
-								<article key={n}>
-									<div className="step-top">
-										<span>{n}</span>
-										<Icon size={22} />
-									</div>
-									<h3>{title}</h3>
-									<p>{text}</p>
-								</article>
-							))}
+					<div className="section-container workflow-layout">
+						<div className="workflow-heading">
+							<p className="eyebrow">HOW IT WORKS</p>
+							<h2>Set up.<br />Schedule.<br />Send.</h2>
+							<p>Take the week from an empty workplace to a published schedule.</p>
 						</div>
+						<ol className="workflow-list">
+							<li>
+								<span className="workflow-index">01</span>
+								<div><h3>Set up your workplace.</h3><p>Add each location, role, and teammate.</p></div>
+								<span className="workflow-meta">Locations · roles · people</span>
+							</li>
+							<li>
+								<span className="workflow-index">02</span>
+								<div><h3>Build the schedule.</h3><p>Assign shifts around availability and resolve uncovered work.</p></div>
+								<span className="workflow-meta">Availability · coverage · open shifts</span>
+							</li>
+							<li>
+								<span className="workflow-index">03</span>
+								<div><h3>Publish the week.</h3><p>Notify the team, track acknowledgements, and keep later changes with the schedule.</p></div>
+								<span className="workflow-meta">Notifications · acknowledgements · updates</span>
+							</li>
+						</ol>
 					</div>
 				</section>
 				<section className="team-section section-container" id="for-your-team">
 					<div className="team-copy">
-						<p className="eyebrow">A GOOD DAY GOES BOTH WAYS</p>
 						<h2>
 							Built for managers.
 							<br />
@@ -705,36 +652,39 @@ function App() {
 						))}
 					</div>
 				</section>
-				<section className="final-cta">
-					<div className="cta-grid" aria-hidden="true" />
-					<h2>
-						Less juggling.
-						<br />
-						More jooling.
-					</h2>
-					<p>Make room for the work. And the people behind it.</p>
-					<CTA>Let’s get your team in sync</CTA>
-					<div className="cta-decoration" aria-hidden="true">
-						<div />
-						<div />
-						<div />
-					</div>
-				</section>
 			</main>
-			<footer className="footer section-container">
-				<div>
-					<Brand />
-					<p>Good weeks start here.</p>
+			<footer className="sky-footer">
+				<div className="footer-sky" aria-hidden="true" />
+				<div className="footer-callout section-container">
+					<span className="footer-kicker"><CheckCheck size={15} /> Your week, sorted</span>
+					<h2>Good weeks<br />start with a clear plan.</h2>
+					<p>Build the schedule, bring your team along, and get back to the work that matters.</p>
+					<CTA>Plan your first week</CTA>
 				</div>
-				<div className="footer-links">
-					<a href="#product">Product</a>
-					<a href="#how-it-works">How it works</a>
-					<a href="#faq">FAQs</a>
-					<a href={appUrl}>
-						Log in <ArrowUpRight size={13} />
-					</a>
+				<div className="footer-directory section-container">
+					<div className="footer-intro">
+						<Brand />
+						<p>A calmer way to schedule hourly teams.</p>
+					</div>
+					<div className="footer-column">
+						<strong>Product</strong>
+						<a href="#product">Overview</a>
+						<a href="#how-it-works">How it works</a>
+						<a href="#faq">FAQs</a>
+					</div>
+					<div className="footer-column">
+						<strong>For teams</strong>
+						<a href="#for-your-team">Team experience</a>
+						<a href={appUrl}>Log in</a>
+						<a href={signUpUrl.toString()}>Get started</a>
+					</div>
 				</div>
-				<span className="copyright">© {new Date().getFullYear()} jooling</span>
+				<div className="footer-bottom section-container">
+					<span className="footer-status"><i /> All systems ready</span>
+					<span>© {new Date().getFullYear()} jooling</span>
+					<a href={signUpUrl.toString()}>Start planning <ArrowRight size={13} /></a>
+				</div>
+				<div className="footer-landscape" role="img" aria-label="A café, shop, clinic, and hotel beginning a calm, well-planned day" />
 			</footer>
 		</div>
 	);
