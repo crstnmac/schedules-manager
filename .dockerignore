@@ -25,6 +25,11 @@ apps/web/src/routeTree.gen.ts
 .vercel
 **/.vercel
 **/.expo
+apps/native/ios/Pods
+apps/native/ios/build
+apps/native/android/.gradle
+apps/native/android/build
+apps/native/android/app/build
 
 # Environment files (values are passed via build args / runtime env)
 .env
