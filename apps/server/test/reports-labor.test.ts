@@ -486,3 +486,59 @@ describe("computeLaborByEntry edge cases", () => {
 		expect(computeLaborByEntry(rows, 1).get("open")).toBe(18000);
 	});
 });
+
+describe("computeLaborByEntry DST-at-midnight zones", () => {
+	test("an overnight shift crossing a midnight spring-forward exports labor instead of throwing (Egypt)", () => {
+		// Egypt springs forward at midnight on 2024-04-26, so the splitter's
+		// "next 00:00" lies in the gap. With daily overtime disabled, the only
+		// output is regular pay for 420 worked minutes (7h * $20 = 14000).
+		const rows = [
+			row({
+				entryId: "e1",
+				employmentId: "emp",
+				start: "2024-04-25T20:00:00Z",
+				end: "2024-04-26T03:00:00Z",
+				timezone: "Egypt",
+			}),
+		];
+		const labor = computeLaborByEntry(rows, 1);
+		expect(labor.get("e1")).toBe(14000);
+		expect(sum(labor)).toBe(14000);
+	});
+
+	test("daily overtime is honored for an overnight shift crossing a midnight spring-forward (Egypt)", () => {
+		// 14:00 EET 04-25 -> 07:00 EEST 04-26 = 960 worked min, split 600/360.
+		// Day 1 (600) exceeds the 480 daily threshold -> 120 daily OT minutes.
+		// regular 840 + OT 120 -> 28000 + 6000 = 34000.
+		const rows = [
+			row({
+				entryId: "e2",
+				employmentId: "emp",
+				start: "2024-04-25T12:00:00Z",
+				end: "2024-04-26T04:00:00Z",
+				timezone: "Egypt",
+				overtimeDailyMinutes: 480,
+			}),
+		];
+		const labor = computeLaborByEntry(rows, 1);
+		const expected = laborCents({
+			minutes: 960,
+			hourlyWageCents: 2000,
+			overtimeWeeklyMinutes: 2400,
+			overtimeDailyMinutes: 480,
+			dailyMinutes: [600, 360],
+		}).totalCents;
+		expect(labor.get("e2")).toBe(expected);
+		expect(sum(labor)).toBe(expected);
+		// The daily OT path must cost more than if daily OT were disabled
+		// (proves the midnight-DST split fed the daily overtime breakdown).
+		expect(sum(labor)).toBeGreaterThan(
+			laborCents({
+				minutes: 960,
+				hourlyWageCents: 2000,
+				overtimeWeeklyMinutes: 2400,
+				overtimeDailyMinutes: 0,
+			}).totalCents,
+		);
+	});
+});

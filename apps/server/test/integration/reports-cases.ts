@@ -197,4 +197,110 @@ export function registerReportsTests(getContext: () => Context) {
 		const body = await response.text();
 		expect(body.startsWith("worker,email,location,clocked_in")).toBe(false);
 	});
+
+	test("C5: an overnight shift crossing a midnight DST spring-forward exports a 200 CSV (Egypt)", async () => {
+		const { database: d, app, token } = getContext();
+
+		const managerProfileId = crypto.randomUUID();
+		const workerProfileId = crypto.randomUUID();
+		const managerEmail = "reports-c5-manager@example.test";
+		const workerEmail = "reports-c5-worker@example.test";
+		await d.db.insert(d.profiles).values([
+			{ id: managerProfileId, email: managerEmail },
+			{ id: workerProfileId, email: workerEmail },
+		]);
+		const [workplace] = await d.db
+			.insert(d.workplaces)
+			.values({ name: "Reports C5 Workplace" })
+			.returning();
+		const employments = await d.db
+			.insert(d.employments)
+			.values([
+				{
+					workplaceId: required(workplace).id,
+					profileId: managerProfileId,
+					kind: "manager",
+				},
+				{
+					workplaceId: required(workplace).id,
+					profileId: workerProfileId,
+					kind: "worker",
+					hourlyWageCents: 2000,
+				},
+			])
+			.returning();
+		const worker = required(
+			employments.find((row) => row.profileId === workerProfileId),
+		);
+		// Egypt springs forward at midnight on 2024-04-26: local 00:00–00:59
+		// does not exist. The overnight interval 22:00 EET -> 06:00 EEST crosses
+		// that boundary, which used to make minutesByZonedDate throw and abort
+		// the whole CSV export with HTTP 400.
+		const [location] = await d.db
+			.insert(d.locations)
+			.values({
+				workplaceId: required(workplace).id,
+				name: "C5 Floor",
+				timezone: "Egypt",
+			})
+			.returning();
+		const [position] = await d.db
+			.insert(d.positions)
+			.values({ workplaceId: required(workplace).id, name: "Server" })
+			.returning();
+		const [schedule] = await d.db
+			.insert(d.schedules)
+			.values({
+				locationId: required(location).id,
+				weekStartDate: "2024-04-22",
+			})
+			.returning();
+		const [version] = await d.db
+			.insert(d.scheduleVersions)
+			.values({ scheduleId: required(schedule).id, versionNumber: 1 })
+			.returning();
+		const [versionShift] = await d.db
+			.insert(d.versionShifts)
+			.values({
+				versionId: required(version).id,
+				employmentId: worker.id,
+				positionId: required(position).id,
+				startsAt: new Date("2024-04-25T20:00:00.000Z"),
+				endsAt: new Date("2024-04-26T03:00:00.000Z"),
+			})
+			.returning();
+		await d.db.insert(d.timeEntries).values({
+			versionShiftId: required(versionShift).id,
+			employmentId: worker.id,
+			clockedInAt: new Date("2024-04-25T20:00:00.000Z"),
+			clockedOutAt: new Date("2024-04-26T03:00:00.000Z"),
+		});
+
+		const access = await token(managerProfileId, managerEmail);
+		const response = await hoursCsv(
+			app,
+			required(workplace).id,
+			`Bearer ${access}`,
+			"2024-04-01",
+			"2024-04-30",
+		);
+		// Before the fix this returned 400 with a DST message and no file.
+		expect(response.status).toBe(200);
+		expect(response.headers.get("content-type") ?? "").toStartWith("text/csv");
+		expect(response.headers.get("content-disposition")).toBe(
+			'attachment; filename="hours-2024-04-01-2024-04-30.csv"',
+		);
+		const csv = await response.text();
+		const lines = csv.split("\n");
+		expect(lines[0]).toBe(
+			"worker,email,location,clocked_in,clocked_out,worked_minutes,break_minutes,labor_cents,approval,attendance",
+		);
+		expect(lines.length).toBe(2);
+		expect(lines[1]).toContain(workerEmail);
+		expect(lines[1]).toContain("C5 Floor");
+		expect(lines[1]).toContain("2024-04-25T20:00:00.000Z");
+		expect(lines[1]).toContain("2024-04-26T03:00:00.000Z");
+		// 420 worked minutes (the skipped spring-forward hour is not counted).
+		expect(lines[1]).toContain(",420,0,14000,pending,");
+	});
 }
