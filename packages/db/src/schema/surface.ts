@@ -239,7 +239,14 @@ export const workplaceMessages = pgTable("workplace_messages", {
 		.notNull()
 		.references(() => employments.id, { onDelete: "cascade" }),
 	body: text("body").notNull(),
-	createdAt: timestamp("created_at", { withTimezone: true })
+	// Pagination cursors round-trip the boundary `created_at` through a JS
+	// `Date` (`toISOString()` -> client -> `new Date()`) which only carries
+	// milliseconds. The default `timestamptz` stores microseconds, so a
+	// `now()`-generated tie with a nonzero microsecond tail truncated below
+	// its stored value and became unreachable across a page split. Quantize
+	// the column to millisecond precision so the cursor and stored value
+	// share one total order; `eq`/`lt` then match exactly.
+	createdAt: timestamp("created_at", { withTimezone: true, precision: 3 })
 		.defaultNow()
 		.notNull(),
 });
