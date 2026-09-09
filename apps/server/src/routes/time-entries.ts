@@ -271,7 +271,7 @@ export const timeEntryRoutes = new Elysia({
 				actorProfileId: profile.id,
 				scope: `time-entry.clock-in:${params.versionShiftId}`,
 				key: headers["idempotency-key"],
-				request: { versionShiftId: params.versionShiftId, ...body },
+				request: { versionShiftId: params.versionShiftId },
 				execute: () =>
 					clockIn(profile.id, params.versionShiftId, {
 						latitude: body?.latitude,
