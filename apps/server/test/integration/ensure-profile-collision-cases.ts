@@ -92,6 +92,42 @@ export function registerEnsureProfileCollisionTests(getContext: () => Context) {
 		expect(rows.rows.length).toBe(2);
 	});
 
+	test("a new sub reusing an existing email yields a clean 401, not a 500 SQL leak", async () => {
+		const { database, app, token } = getContext();
+		const userA = crypto.randomUUID();
+		const userB = crypto.randomUUID();
+		const email = `profile-email-collision-${userA}@example.test`;
+
+		const responseA = await app.handle(
+			new Request("http://localhost/v1/me", {
+				headers: { authorization: `Bearer ${await token(userA, email)}` },
+			}),
+		);
+		expect(responseA.status).toBe(200);
+		expect((await responseA.json()).profile).toMatchObject({
+			id: userA,
+			email,
+		});
+
+		const responseB = await app.handle(
+			new Request("http://localhost/v1/me", {
+				headers: { authorization: `Bearer ${await token(userB, email)}` },
+			}),
+		);
+		expect(responseB.status).toBe(401);
+		const body = await responseB.json();
+		expect(body.error).toBe("unauthorized");
+		expect(body.message).toBe("Profile could not be resolved");
+		expect(JSON.stringify(body)).not.toContain("Failed query");
+		expect(JSON.stringify(body)).not.toContain("insert into");
+
+		const rows = await database.db.execute(
+			sql`select id from ${database.profiles} where ${database.profiles.email} = ${email}`,
+		);
+		expect(rows.rows.length).toBe(1);
+		expect(rows.rows[0]?.id).toBe(userA);
+	});
+
 	test("a returning user reuses their existing profile instead of re-inserting", async () => {
 		const { database, app, token } = getContext();
 		const userA = crypto.randomUUID();
