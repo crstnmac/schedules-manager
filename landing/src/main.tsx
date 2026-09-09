@@ -1,8 +1,5 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Badge } from "@SchedulesManager/ui/components/badge";
-import { Button } from "@SchedulesManager/ui/components/button";
-import { Card } from "@SchedulesManager/ui/components/card";
 import {
 	ArrowRight,
 	ArrowUpRight,
@@ -29,6 +26,16 @@ import {
 	CheckCheck,
 } from "lucide-react";
 import "./styles.css";
+function Card({ className, ...props }: React.ComponentProps<"div">) {
+	return <div className={className} {...props} />;
+}
+function Badge({
+	className,
+	variant: _variant,
+	...props
+}: React.ComponentProps<"span"> & { variant?: string }) {
+	return <span className={className} {...props} />;
+}
 const appUrl = import.meta.env.VITE_APP_URL || "http://localhost:3001";
 const people = [
 	{
@@ -120,10 +127,10 @@ function Brand() {
 }
 function CTA({ children = "Get started" }: { children?: React.ReactNode }) {
 	return (
-		<Button className="button button-primary" render={<a href={appUrl} />}>
+		<a className="button button-primary" href={appUrl}>
 			{children}
 			<ArrowUpRight data-icon="inline-end" />
-		</Button>
+		</a>
 	);
 }
 function SchedulePreview() {

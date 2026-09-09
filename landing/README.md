@@ -17,11 +17,11 @@ The landing page packages real web and mobile product screenshots in `landing/pu
 
 ## Docker
 
-Build from the repository root so workspace dependencies and screenshot assets are available:
+Build from the repository root using `landing` as the Docker context:
 
     docker build -f landing/Dockerfile \
       --build-arg VITE_APP_URL=https://app.example.com \
-      -t jooling-landing .
+      -t jooling-landing landing
 
 Run the non-root image on port 8080:
 
