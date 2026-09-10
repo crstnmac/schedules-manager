@@ -4202,25 +4202,25 @@
 					"primaryKey": false,
 					"notNull": true
 				},
-			"author_employment_id": {
-				"name": "author_employment_id",
-				"type": "uuid",
-				"primaryKey": false,
-				"notNull": true
-			},
-			"body": {
-				"name": "body",
-				"type": "text",
-				"primaryKey": false,
-				"notNull": true
-			},
-			"created_at": {
-				"name": "created_at",
-				"type": "timestamp (3) with time zone",
-				"primaryKey": false,
-				"notNull": true,
-				"default": "now()"
-			}
+				"author_employment_id": {
+					"name": "author_employment_id",
+					"type": "uuid",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"body": {
+					"name": "body",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"created_at": {
+					"name": "created_at",
+					"type": "timestamp (3) with time zone",
+					"primaryKey": false,
+					"notNull": true,
+					"default": "now()"
+				}
 			},
 			"indexes": {},
 			"foreignKeys": {
