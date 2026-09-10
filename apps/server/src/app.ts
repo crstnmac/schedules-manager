@@ -14,6 +14,7 @@ import {
 import { getReadinessReport, type ReadinessReport } from "./readiness";
 import { newRequestId, writeRequestLog } from "./request-log";
 import { changesRoutes } from "./routes/changes";
+import { billingRoutes } from "./routes/billing";
 import { constraintsRoutes } from "./routes/constraints";
 import { coverageRoutes } from "./routes/coverage";
 import { emailDeliveryRoutes } from "./routes/email-delivery";
@@ -180,6 +181,7 @@ export function createApp(options: CreateAppOptions = {}) {
 			},
 		)
 		.use(meRoutes)
+		.use(billingRoutes)
 		.use(workplacesRoutes)
 		.use(locationsRoutes)
 		.use(placesRoutes)

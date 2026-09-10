@@ -1,0 +1,285 @@
+import {
+	db,
+	locations,
+	polarWebhookEvents,
+	workplaceSubscriptions,
+	workplaces,
+} from "@SchedulesManager/db";
+import { env } from "@SchedulesManager/env/server";
+import {
+	validateEvent,
+	WebhookVerificationError,
+} from "@polar-sh/sdk/webhooks";
+import { count, eq } from "drizzle-orm";
+import { Elysia, t } from "elysia";
+
+import {
+	type BillingInterval,
+	type BillingPlan,
+	billingCatalog,
+	billingProduct,
+	hasActiveSubscription,
+	polarClient,
+} from "../billing";
+import { requireManager, requireSession } from "../context";
+import { BadRequestError, ForbiddenError, NotFoundError } from "../errors";
+
+function clientIp(request: Request) {
+	const forwarded = request.headers
+		.get("x-forwarded-for")
+		?.split(",")[0]
+		?.trim();
+	return request.headers.get("cf-connecting-ip") ?? forwarded ?? undefined;
+}
+
+function subscriptionPayload(
+	row: typeof workplaceSubscriptions.$inferSelect | undefined,
+) {
+	return row
+		? {
+				plan: row.plan,
+				billingInterval: row.billingInterval,
+				status: row.status,
+				locationCount: row.locationCount,
+				currentPeriodEnd: row.currentPeriodEnd?.toISOString() ?? null,
+				cancelAtPeriodEnd: row.cancelAtPeriodEnd,
+				canManage:
+					hasActiveSubscription(row.status) || row.status === "past_due",
+			}
+		: null;
+}
+
+export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
+	.get(
+		"/workplaces/:workplaceId/billing",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const [subscription] = await db
+				.select()
+				.from(workplaceSubscriptions)
+				.where(eq(workplaceSubscriptions.workplaceId, params.workplaceId))
+				.limit(1);
+			const [locationTotal] = await db
+				.select({ value: count() })
+				.from(locations)
+				.where(eq(locations.workplaceId, params.workplaceId));
+
+			return {
+				subscription: subscriptionPayload(subscription),
+				locationCount: Math.max(1, locationTotal?.value ?? 1),
+				catalog: {
+					schedule: { month: 3900, year: 37200 },
+					operations: { month: 7900, year: 75600 },
+				},
+			};
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			detail: {
+				summary: "Get Workplace subscription",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.post(
+		"/workplaces/:workplaceId/billing/checkout",
+		async ({ headers, params, body, request }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const [existing] = await db
+				.select()
+				.from(workplaceSubscriptions)
+				.where(eq(workplaceSubscriptions.workplaceId, params.workplaceId))
+				.limit(1);
+			if (
+				existing &&
+				(hasActiveSubscription(existing.status) ||
+					existing.status === "past_due")
+			) {
+				throw new ForbiddenError(
+					"Manage your existing subscription in the billing portal",
+				);
+			}
+
+			const [workplace] = await db
+				.select()
+				.from(workplaces)
+				.where(eq(workplaces.id, params.workplaceId))
+				.limit(1);
+			if (!workplace) throw new NotFoundError("Workplace not found");
+			const [locationTotal] = await db
+				.select({ value: count() })
+				.from(locations)
+				.where(eq(locations.workplaceId, params.workplaceId));
+			const locationCount = Math.max(1, locationTotal?.value ?? 1);
+			const selected = billingCatalog[body.plan][body.billingInterval];
+			const checkout = await polarClient().checkouts.create({
+				products: [selected.productId],
+				prices: {
+					[selected.productId]: [
+						{
+							amountType: "fixed",
+							priceAmount: selected.unitAmount * locationCount,
+							priceCurrency: "usd",
+						},
+					],
+				},
+				externalCustomerId: params.workplaceId,
+				customerEmail: profile.email,
+				customerName: workplace.name,
+				isBusinessCustomer: true,
+				customerIpAddress: clientIp(request),
+				metadata: {
+					workplace_id: params.workplaceId,
+					plan: body.plan,
+					billing_interval: body.billingInterval,
+					location_count: locationCount,
+				},
+				trialInterval: "day",
+				trialIntervalCount: 30,
+				allowDiscountCodes: true,
+				requireBillingAddress: true,
+				successUrl: `${env.APP_URL}/dashboard/settings/subscription?checkout=success&checkout_id={CHECKOUT_ID}`,
+				returnUrl: `${env.APP_URL}/dashboard/settings/subscription`,
+			});
+
+			return { url: checkout.url };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			body: t.Object({
+				plan: t.Union([t.Literal("schedule"), t.Literal("operations")]),
+				billingInterval: t.Union([t.Literal("month"), t.Literal("year")]),
+			}),
+			detail: {
+				summary: "Create a Polar checkout",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.post(
+		"/workplaces/:workplaceId/billing/portal",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers.authorization);
+			await requireManager(profile.id, params.workplaceId);
+			const [subscription] = await db
+				.select({ id: workplaceSubscriptions.id })
+				.from(workplaceSubscriptions)
+				.where(eq(workplaceSubscriptions.workplaceId, params.workplaceId))
+				.limit(1);
+			if (!subscription)
+				throw new BadRequestError("This Workplace has no subscription yet");
+			const session = await polarClient().customerSessions.create({
+				externalCustomerId: params.workplaceId,
+				returnUrl: `${env.APP_URL}/dashboard/settings/subscription`,
+			});
+			return { url: session.customerPortalUrl };
+		},
+		{
+			headers: t.Object({ authorization: t.String() }),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			detail: {
+				summary: "Open the Polar customer portal",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.post(
+		"/webhooks/polar",
+		async ({ request, set }) => {
+			if (!env.POLAR_WEBHOOK_SECRET)
+				throw new Error("Polar webhook is not configured");
+			const rawBody = await request.text();
+			const webhookHeaders = Object.fromEntries(request.headers.entries());
+			let event: ReturnType<typeof validateEvent>;
+			try {
+				event = validateEvent(
+					rawBody,
+					webhookHeaders,
+					env.POLAR_WEBHOOK_SECRET,
+				);
+			} catch (error) {
+				if (error instanceof WebhookVerificationError) {
+					set.status = 403;
+					return { accepted: false };
+				}
+				throw error;
+			}
+
+			switch (event.type) {
+				case "subscription.created":
+				case "subscription.updated":
+				case "subscription.active":
+				case "subscription.canceled":
+				case "subscription.uncanceled":
+				case "subscription.revoked":
+				case "subscription.past_due":
+					break;
+				default:
+					return { accepted: true };
+			}
+			const subscription = event.data;
+			const workplaceId = subscription.customer.externalId;
+			if (!workplaceId || !subscription.productId) return { accepted: true };
+			const product = billingProduct(subscription.productId);
+			if (!product) return { accepted: true };
+			const eventId =
+				request.headers.get("webhook-id") ??
+				`${event.type}:${subscription.id}:${event.timestamp.toISOString()}`;
+			const locationCount = Number(subscription.metadata.location_count ?? 1);
+
+			await db.transaction(async (tx) => {
+				const inserted = await tx
+					.insert(polarWebhookEvents)
+					.values({ id: eventId, type: event.type })
+					.onConflictDoNothing()
+					.returning({ id: polarWebhookEvents.id });
+				if (inserted.length === 0) return;
+				await tx
+					.insert(workplaceSubscriptions)
+					.values({
+						workplaceId,
+						polarSubscriptionId: subscription.id,
+						polarCustomerId: subscription.customerId,
+						polarProductId: subscription.productId,
+						plan: product.plan as BillingPlan,
+						billingInterval: product.interval as BillingInterval,
+						status: subscription.status,
+						locationCount:
+							Number.isInteger(locationCount) && locationCount > 0
+								? locationCount
+								: 1,
+						currentPeriodEnd: subscription.currentPeriodEnd,
+						cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+					})
+					.onConflictDoUpdate({
+						target: workplaceSubscriptions.workplaceId,
+						set: {
+							polarSubscriptionId: subscription.id,
+							polarCustomerId: subscription.customerId,
+							polarProductId: subscription.productId,
+							plan: product.plan,
+							billingInterval: product.interval,
+							status: subscription.status,
+							locationCount:
+								Number.isInteger(locationCount) && locationCount > 0
+									? locationCount
+									: 1,
+							currentPeriodEnd: subscription.currentPeriodEnd,
+							cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+							updatedAt: new Date(),
+						},
+					});
+			});
+
+			set.status = 202;
+			return { accepted: true };
+		},
+		{
+			parse: "none",
+			detail: { summary: "Receive signed Polar subscription events" },
+		},
+	);

@@ -14,6 +14,13 @@ export {
 	attendanceMarkKindEnum,
 	attendanceMarks,
 } from "./attendance-marks";
+export type { WorkplaceSubscription } from "./billing";
+export {
+	billingIntervalEnum,
+	polarWebhookEvents,
+	subscriptionPlanEnum,
+	workplaceSubscriptions,
+} from "./billing";
 export type {
 	LeaveType,
 	NewTimeOffRequest,

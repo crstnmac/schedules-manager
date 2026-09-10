@@ -553,6 +553,28 @@ export function useWorkplaceSettings(workplaceId: string | undefined) {
 	});
 }
 
+export interface BillingSummary {
+	subscription: {
+		plan: "schedule" | "operations";
+		billingInterval: "month" | "year";
+		status: string;
+		locationCount: number;
+		currentPeriodEnd: string | null;
+		cancelAtPeriodEnd: boolean;
+		canManage: boolean;
+	} | null;
+	locationCount: number;
+	catalog: Record<"schedule" | "operations", Record<"month" | "year", number>>;
+}
+
+export function useBilling(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["billing", workplaceId],
+		queryFn: () => api<BillingSummary>(`/v1/workplaces/${workplaceId}/billing`),
+		enabled: Boolean(workplaceId),
+	});
+}
+
 export interface SwapDetailDto {
 	id: string;
 	status:

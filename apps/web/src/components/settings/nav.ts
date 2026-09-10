@@ -14,7 +14,8 @@ export type SettingsSection = {
 		| "/dashboard/settings/day-parts"
 		| "/dashboard/settings/templates"
 		| "/dashboard/settings/preferences"
-		| "/dashboard/settings/notifications";
+		| "/dashboard/settings/notifications"
+		| "/dashboard/settings/subscription";
 	label: string;
 	description: string;
 };
@@ -28,6 +29,11 @@ export const settingsGroups: SettingsGroup[] = [
 	{
 		label: "Workplace",
 		items: [
+			{
+				to: "/dashboard/settings/subscription",
+				label: "Subscription",
+				description: "Plan, billing, and invoices",
+			},
 			{
 				to: "/dashboard/settings/workplace",
 				label: "General",
