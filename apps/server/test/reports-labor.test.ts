@@ -597,7 +597,6 @@ describe("computeLaborByEntry cross-timezone daily overtime", () => {
 				employmentId: "emp",
 				start: "2026-09-08T12:00:00Z",
 				end: "2026-09-08T21:00:00Z",
->>>>>>> eaa1fe5 (fix(reports): key hours CSV daily OT buckets per timezone)
 				overtimeDailyMinutes: 480,
 			}),
 		];
