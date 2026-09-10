@@ -14,6 +14,121 @@ type Context = {
 	token: (profileId: string, email: string) => Promise<string>;
 };
 
+async function clockShiftFixture(
+	d: Context["database"],
+	token: Context["token"],
+	opts: {
+		workplaceName: string;
+		geofenceRequired?: boolean;
+		locationName: string;
+		latitude?: string;
+		longitude?: string;
+		geofenceRadiusMeters?: number;
+		positionName: string;
+		email: string;
+	},
+): Promise<{ snapshotId: string; accessToken: string; employmentId: string }> {
+	const profileId = crypto.randomUUID();
+	await d.db.insert(d.profiles).values({ id: profileId, email: opts.email });
+	const [workplace] = await d.db
+		.insert(d.workplaces)
+		.values({
+			name: opts.workplaceName,
+			geofenceRequired: opts.geofenceRequired ?? false,
+		})
+		.returning();
+	const [employment] = await d.db
+		.insert(d.employments)
+		.values({
+			workplaceId: required(workplace).id,
+			profileId,
+			kind: "worker",
+		})
+		.returning();
+	const [location] = await d.db
+		.insert(d.locations)
+		.values({
+			workplaceId: required(workplace).id,
+			name: opts.locationName,
+			timezone: "America/Chicago",
+			...(opts.latitude != null ? { latitude: opts.latitude } : {}),
+			...(opts.longitude != null ? { longitude: opts.longitude } : {}),
+			...(opts.geofenceRadiusMeters != null
+				? { geofenceRadiusMeters: opts.geofenceRadiusMeters }
+				: {}),
+		})
+		.returning();
+	const [position] = await d.db
+		.insert(d.positions)
+		.values({
+			workplaceId: required(workplace).id,
+			name: opts.positionName,
+		})
+		.returning();
+	const [schedule] = await d.db
+		.insert(d.schedules)
+		.values({
+			locationId: required(location).id,
+			weekStartDate: "2026-09-01",
+		})
+		.returning();
+	const [version] = await d.db
+		.insert(d.scheduleVersions)
+		.values({
+			scheduleId: required(schedule).id,
+			versionNumber: 1,
+		})
+		.returning();
+	const now = Date.now();
+	const [draft] = await d.db
+		.insert(d.shifts)
+		.values({
+			scheduleId: required(schedule).id,
+			employmentId: required(employment).id,
+			positionId: required(position).id,
+			startsAt: new Date(now - 5 * 60_000),
+			endsAt: new Date(now + 60 * 60_000),
+		})
+		.returning();
+	const [snapshot] = await d.db
+		.insert(d.versionShifts)
+		.values({
+			versionId: required(version).id,
+			shiftId: required(draft).id,
+			employmentId: required(employment).id,
+			positionId: required(position).id,
+			startsAt: required(draft).startsAt,
+			endsAt: required(draft).endsAt,
+		})
+		.returning();
+	const accessToken = await token(profileId, opts.email);
+	return {
+		snapshotId: required(snapshot).id,
+		accessToken,
+		employmentId: required(employment).id,
+	};
+}
+
+function clockInRequest(
+	app: Context["app"],
+	snapshotId: string,
+	accessToken: string,
+	body: unknown,
+	key: string,
+) {
+	return app.handle(
+		new Request(`http://localhost/v1/my/shifts/${snapshotId}/clock-in`, {
+			method: "POST",
+			headers: {
+				authorization: `Bearer ${accessToken}`,
+				"content-type": "application/json",
+				"idempotency-key": key,
+			},
+			body: JSON.stringify(body),
+		}),
+	);
+}
+
 export function registerTimeClockTests(getContext: () => Context) {
 	test("clock commands enforce ownership, timing, replay, and duplicate-punch restrictions", async () => {
 		const { database: d, app, token } = getContext();
@@ -632,5 +747,163 @@ export function registerTimeClockTests(getContext: () => Context) {
 		expect(weekShiftA).toBeDefined();
 		expect(weekShiftA.timeEntry).not.toBeNull();
 		expect(weekShiftA.timeEntry.clockedOutAt).not.toBeNull();
+	});
+
+	test("clock-in same-key replay across GPS jitter returns the cached punch (coords are a transient geofence gate)", async () => {
+		const { database: d, app, token } = getContext();
+		const { snapshotId, accessToken, employmentId } = await clockShiftFixture(
+			d,
+			token,
+			{
+				workplaceName: "Clock Hash Jitter",
+				locationName: "Clock Hash Jitter Loc",
+				positionName: "Clock Hash Jitter Pos",
+				email: "clock-hash-jitter@example.test",
+			},
+		);
+		const key = "clock-hash-jitter-key";
+		const first = await clockInRequest(
+			app,
+			snapshotId,
+			accessToken,
+			{
+				latitude: 41.88,
+				longitude: -87.63,
+			},
+			key,
+		);
+		expect(first.status).toBe(200);
+		const firstBody = await first.json();
+		const second = await clockInRequest(
+			app,
+			snapshotId,
+			accessToken,
+			{
+				latitude: 41.89,
+				longitude: -87.64,
+			},
+			key,
+		);
+		expect(second.status).toBe(200);
+		expect(await second.json()).toEqual(firstBody);
+		const third = await clockInRequest(app, snapshotId, accessToken, {}, key);
+		expect(third.status).toBe(200);
+		expect(await third.json()).toEqual(firstBody);
+		const punches = await d.db
+			.select()
+			.from(d.timeEntries)
+			.where(eq(d.timeEntries.versionShiftId, snapshotId));
+		expect(punches).toHaveLength(1);
+		expect(punches[0]?.employmentId).toBe(employmentId);
+	});
+
+	test("clock-in geofence stays enforced on first execution while same-key replay across in-geofence GPS jitter returns the cached punch", async () => {
+		const { database: d, app, token } = getContext();
+		const { snapshotId, accessToken } = await clockShiftFixture(d, token, {
+			workplaceName: "Clock Hash Geofence",
+			geofenceRequired: true,
+			locationName: "Clock Hash Geofence Loc",
+			latitude: "41.88",
+			longitude: "-87.63",
+			geofenceRadiusMeters: 500,
+			positionName: "Clock Hash Geofence Pos",
+			email: "clock-hash-geofence@example.test",
+		});
+		const outside = await clockInRequest(
+			app,
+			snapshotId,
+			accessToken,
+			{ latitude: 42.0, longitude: -88.0 },
+			"geofence-outside-fresh-key",
+		);
+		expect(outside.status).toBe(400);
+		expect((await outside.json()).message).toBe(
+			"You are outside this Location's Geofence",
+		);
+		const missing = await clockInRequest(
+			app,
+			snapshotId,
+			accessToken,
+			{},
+			"geofence-missing-fresh-key",
+		);
+		expect(missing.status).toBe(400);
+		expect((await missing.json()).message).toBe(
+			"This Location requires a Geofence check",
+		);
+		const key = "geofence-inside-key";
+		const first = await clockInRequest(
+			app,
+			snapshotId,
+			accessToken,
+			{
+				latitude: 41.8801,
+				longitude: -87.6301,
+			},
+			key,
+		);
+		expect(first.status).toBe(200);
+		const firstBody = await first.json();
+		const second = await clockInRequest(
+			app,
+			snapshotId,
+			accessToken,
+			{
+				latitude: 41.8802,
+				longitude: -87.6298,
+			},
+			key,
+		);
+		expect(second.status).toBe(200);
+		expect(await second.json()).toEqual(firstBody);
+		const punches = await d.db
+			.select()
+			.from(d.timeEntries)
+			.where(eq(d.timeEntries.versionShiftId, snapshotId));
+		expect(punches).toHaveLength(1);
+	});
+
+	test("clock-out same-key replay with a different workerNote still returns 409 (fix is scoped to clock-in)", async () => {
+		const { database: d, app, token } = getContext();
+		const { snapshotId, accessToken } = await clockShiftFixture(d, token, {
+			workplaceName: "Clock Out Hash Scope",
+			locationName: "Clock Out Hash Scope Loc",
+			positionName: "Clock Out Hash Scope Pos",
+			email: "clock-out-hash-scope@example.test",
+		});
+		const clockInKey = "clock-out-scope-clock-in-key";
+		const first = await clockInRequest(
+			app,
+			snapshotId,
+			accessToken,
+			{},
+			clockInKey,
+		);
+		expect(first.status).toBe(200);
+		const clockOut = (note: string, key: string) =>
+			app.handle(
+				new Request(`http://localhost/v1/my/shifts/${snapshotId}/clock-out`, {
+					method: "POST",
+					headers: {
+						authorization: `Bearer ${accessToken}`,
+						"content-type": "application/json",
+						"idempotency-key": key,
+					},
+					body: JSON.stringify({ workerNote: note }),
+				}),
+			);
+		const key = "clock-out-different-note-key";
+		const ok = await clockOut("Note A", key);
+		expect(ok.status).toBe(200);
+		const conflict = await clockOut("Note B", key);
+		expect(conflict.status).toBe(409);
+		expect((await conflict.json()).message).toBe(
+			"This idempotency key was already used for a different request",
+		);
+		const [entry] = await d.db
+			.select()
+			.from(d.timeEntries)
+			.where(eq(d.timeEntries.versionShiftId, snapshotId));
+		expect(entry?.workerNote).toBe("Note A");
 	});
 }

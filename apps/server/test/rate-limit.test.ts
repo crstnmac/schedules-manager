@@ -64,4 +64,33 @@ describe("rate limit", () => {
 			),
 		).toBe("unknown");
 	});
+
+	test("clientIpFromRequest falls back to x-real-ip when x-forwarded-for is absent", () => {
+		expect(
+			clientIpFromRequest(
+				new Request("http://localhost/v1/kiosk/clock", {
+					headers: { "x-real-ip": "198.51.100.42" },
+				}),
+			),
+		).toBe("198.51.100.42");
+		// Whitespace is trimmed, matching the helper's contract.
+		expect(
+			clientIpFromRequest(
+				new Request("http://localhost/v1/kiosk/clock", {
+					headers: { "x-real-ip": "  198.51.100.42  " },
+				}),
+			),
+		).toBe("198.51.100.42");
+		// An empty x-forwarded-for value still falls through to x-real-ip.
+		expect(
+			clientIpFromRequest(
+				new Request("http://localhost/v1/kiosk/clock", {
+					headers: {
+						"x-forwarded-for": "",
+						"x-real-ip": "198.51.100.42",
+					},
+				}),
+			),
+		).toBe("198.51.100.42");
+	});
 });

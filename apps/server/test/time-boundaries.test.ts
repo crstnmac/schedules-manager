@@ -1,7 +1,7 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { BadRequestError } from "../src/errors";
 import { isWithinNoticeWindow } from "../src/notice-window";
-import { wallToInstant, zonedDayInfo } from "../src/time";
+import { minutesByZonedDate, wallToInstant, zonedDayInfo } from "../src/time";
 
 test("Notice Window excludes the exact boundary and includes one millisecond inside", () => {
 	const now = Date.parse("2026-03-07T15:00:00Z");
@@ -93,4 +93,41 @@ test("fall-back unambiguous post-transition minutes round-trip to themselves", (
 			zonedDayInfo(wallToInstant("2026-11-01", m, tz), tz).minuteOfDay,
 		).toBe(m);
 	}
+});
+
+describe("minutesByZonedDate DST-at-midnight", () => {
+	function sum(split: Map<string, number>): number {
+		let total = 0;
+		for (const value of split.values()) total += value;
+		return total;
+	}
+
+	test("splits an overnight shift crossing an Egypt spring-forward-at-midnight without throwing", () => {
+		// Egypt springs forward at midnight on 2024-04-26: local 00:00–00:59
+		// does not exist. 22:00 EET on 04-25 -> 06:00 EEST on 04-26.
+		const start = new Date("2024-04-25T20:00:00.000Z");
+		const end = new Date("2024-04-26T03:00:00.000Z");
+		const split = minutesByZonedDate(start, end, "Egypt");
+		expect([...split.entries()]).toEqual([
+			["2024-04-25", 120],
+			["2024-04-26", 300],
+		]);
+		// The split sums to actual elapsed minutes (the skipped spring-forward
+		// hour is NOT counted), matching how the caller derives `worked`.
+		expect(sum(split)).toBe((end.getTime() - start.getTime()) / 60_000);
+	});
+
+	test("does not change the split for a 02:00 spring-forward zone (America/New_York regression)", () => {
+		// New York springs forward at 02:00, so local 00:00 always exists and the
+		// midnight conversion never threw; this path must keep its prior behavior.
+		// 17:00 EST 03-07 -> 08:00 EDT 03-08.
+		const start = new Date("2026-03-07T22:00:00Z");
+		const end = new Date("2026-03-08T12:00:00Z");
+		expect([
+			...minutesByZonedDate(start, end, "America/New_York").entries(),
+		]).toEqual([
+			["2026-03-07", 420],
+			["2026-03-08", 420],
+		]);
+	});
 });

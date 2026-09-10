@@ -22,6 +22,7 @@ import {
 	useAppTheme,
 } from "@/components/ui";
 import { SwapsCard } from "@/components/worker-shifts";
+import { acceptanceHeadline } from "@/lib/acceptance-headline";
 import { confirmAction } from "@/lib/confirm-action";
 import { useDisplayPrefs } from "@/lib/display";
 import { formatDayShort as formatDay } from "@/lib/format-day";
@@ -336,7 +337,7 @@ function WorkerSchedule() {
 							style={[s.acceptanceCard, { borderColor: theme.primary }]}
 						>
 							<Text style={[s.acceptanceHeadline, { color: theme.text }]}>
-								{formatDay(a.date)} · {a.positionName}
+								{acceptanceHeadline(a.date, a.positionName)}
 							</Text>
 							<Text style={[s.acceptanceNew, { color: theme.text }]}>
 								New time: {formatMinute(a.startMinute)}

@@ -850,27 +850,36 @@ async function decidePickup(
 		.limit(1);
 	if (!shift) throw new NotFoundError("Shift not found");
 
-	await assertEligible(
-		pickup.requestedBy,
-		openShift.locationId,
-		openShift.positionId,
-		shift.startsAt,
-		shift.endsAt,
-	);
-
 	const published = await publishScheduleNow(shift.scheduleId, profileId, {
 		beforePublish: async (tx) => {
 			// Lock the draft and refuse if a manager assigned it directly after
 			// the shift was opened — the marketplace is no longer the source of
-			// truth for this shift.
+			// truth for this shift. The same lock freezes the draft's position
+			// and times for the eligibility re-check below, so the check and
+			// the assignment read the same row (no TOCTOU window).
 			const [draft] = await tx
-				.select({ employmentId: shiftsTable.employmentId })
+				.select()
 				.from(shiftsTable)
 				.where(eq(shiftsTable.id, shift.id))
 				.for("update");
 			if (!draft || draft.employmentId !== null) {
 				throw new ConflictError("This open shift is no longer available");
 			}
+			// Re-validate eligibility against the *locked* live draft position,
+			// not openShifts.positionId. That column is frozen at
+			// release-approval time and never resynced, so a manager's
+			// position-only edit of the released draft can leave it stale;
+			// gating on the stale value would assign a worker to a position
+			// they are not approved for. Running the check here with `tx` as
+			// the reader makes it atomic with the assignment below.
+			await assertEligible(
+				pickup.requestedBy,
+				openShift.locationId,
+				draft.positionId,
+				draft.startsAt,
+				draft.endsAt,
+				tx,
+			);
 
 			const claimedOpenShift = await tx
 				.update(openShifts)

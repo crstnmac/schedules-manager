@@ -486,3 +486,129 @@ describe("computeLaborByEntry edge cases", () => {
 		expect(computeLaborByEntry(rows, 1).get("open")).toBe(18000);
 	});
 });
+
+describe("computeLaborByEntry DST-at-midnight zones", () => {
+	test("an overnight shift crossing a midnight spring-forward exports labor instead of throwing (Egypt)", () => {
+		// Egypt springs forward at midnight on 2024-04-26, so the splitter's
+		// "next 00:00" lies in the gap. With daily overtime disabled, the only
+		// output is regular pay for 420 worked minutes (7h * $20 = 14000).
+		const rows = [
+			row({
+				entryId: "e1",
+				employmentId: "emp",
+				start: "2024-04-25T20:00:00Z",
+				end: "2024-04-26T03:00:00Z",
+				timezone: "Egypt",
+			}),
+		];
+		const labor = computeLaborByEntry(rows, 1);
+		expect(labor.get("e1")).toBe(14000);
+		expect(sum(labor)).toBe(14000);
+	});
+
+	test("daily overtime is honored for an overnight shift crossing a midnight spring-forward (Egypt)", () => {
+		// 14:00 EET 04-25 -> 07:00 EEST 04-26 = 960 worked min, split 600/360.
+		// Day 1 (600) exceeds the 480 daily threshold -> 120 daily OT minutes.
+		// regular 840 + OT 120 -> 28000 + 6000 = 34000.
+		const rows = [
+			row({
+				entryId: "e2",
+				employmentId: "emp",
+				start: "2024-04-25T12:00:00Z",
+				end: "2024-04-26T04:00:00Z",
+				timezone: "Egypt",
+				overtimeDailyMinutes: 480,
+			}),
+		];
+		const labor = computeLaborByEntry(rows, 1);
+		const expected = laborCents({
+			minutes: 960,
+			hourlyWageCents: 2000,
+			overtimeWeeklyMinutes: 2400,
+			overtimeDailyMinutes: 480,
+			dailyMinutes: [600, 360],
+		}).totalCents;
+		expect(labor.get("e2")).toBe(expected);
+		expect(sum(labor)).toBe(expected);
+		// The daily OT path must cost more than if daily OT were disabled
+		// (proves the midnight-DST split fed the daily overtime breakdown).
+		expect(sum(labor)).toBeGreaterThan(
+			laborCents({
+				minutes: 960,
+				hourlyWageCents: 2000,
+				overtimeWeeklyMinutes: 2400,
+				overtimeDailyMinutes: 0,
+			}).totalCents,
+		);
+	});
+});
+
+describe("computeLaborByEntry cross-timezone daily overtime", () => {
+	// One employment with two non-overlapping shifts whose own-timezone date
+	// keys coincide. Tokyo shift 2026-09-07T23:00Z..2026-09-08T08:00Z is
+	// 2026-09-08 08:00..17:00 in Asia/Tokyo (540 min). UTC shift
+	// 2026-09-08T10:00Z..2026-09-08T19:00Z is 2026-09-08 10:00..19:00 in UTC
+	// (540 min). Both resolve to zoned date-key "2026-09-08" in their own
+	// timezone, and both fall in the workplace week starting Mon 2026-09-07.
+	const crossTz = (): ReportRow[] => [
+		row({
+			entryId: "t",
+			employmentId: "emp",
+			start: "2026-09-07T23:00:00Z",
+			end: "2026-09-08T08:00:00Z",
+			timezone: "Asia/Tokyo",
+			overtimeDailyMinutes: 480,
+		}),
+		row({
+			entryId: "u",
+			employmentId: "emp",
+			start: "2026-09-08T10:00:00Z",
+			end: "2026-09-08T19:00:00Z",
+			timezone: "UTC",
+			overtimeDailyMinutes: 480,
+		}),
+	];
+
+	test("cross-timezone rows are not merged into one daily-OT bucket", () => {
+		// Before the fix, both rows' 540 min landed in one shared "2026-09-08"
+		// bucket (1080 min -> 600 daily OT), yielding 46000. After the fix, the
+		// buckets are keyed per timezone, so each location's 540 min is its own
+		// day: daily OT = (540-480) + (540-480) = 120 min, total 960 regular.
+		// total = 960/60*2000 + 120/60*2000*1.5 = 32000 + 6000 = 38000.
+		expect(sum(computeLaborByEntry(crossTz(), 1))).toBe(38000);
+	});
+
+	test("same-timezone rows on the same date still merge into one daily-OT bucket", () => {
+		// The fix keys on `${timezone}:${date}` precisely so same-timezone
+		// rows keep sharing a bucket. Two UTC shifts on 2026-09-08 (each
+		// 540 min) must merge to a 1080-min day under one "UTC:2026-09-08"
+		// key, giving 600 daily OT -> 46000 (not two separate 540-min days
+		// which would yield 38000).
+		const rows = [
+			row({
+				entryId: "a",
+				employmentId: "emp",
+				start: "2026-09-08T00:00:00Z",
+				end: "2026-09-08T09:00:00Z",
+				overtimeDailyMinutes: 480,
+			}),
+			row({
+				entryId: "b",
+				employmentId: "emp",
+				start: "2026-09-08T12:00:00Z",
+				end: "2026-09-08T21:00:00Z",
+				overtimeDailyMinutes: 480,
+			}),
+		];
+		const labor = computeLaborByEntry(rows, 1);
+		const expected = laborCents({
+			minutes: 1080,
+			hourlyWageCents: 2000,
+			overtimeWeeklyMinutes: 2400,
+			overtimeDailyMinutes: 480,
+			dailyMinutes: [1080],
+		}).totalCents;
+		expect(sum(labor)).toBe(46000);
+		expect(sum(labor)).toBe(expected);
+	});
+});
