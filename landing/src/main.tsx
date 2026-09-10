@@ -1,13 +1,14 @@
-import React, { useEffect, useState } from "react";
-import { createRoot } from "react-dom/client";
 import {
 	ArrowRight,
 	ArrowUpRight,
+	Bell,
 	CalendarDays,
 	Check,
+	CheckCheck,
 	ChevronDown,
 	ChevronLeft,
 	ChevronRight,
+	CircleDollarSign,
 	Coffee,
 	HeartPulse,
 	LayoutGrid,
@@ -23,10 +24,11 @@ import {
 	Users,
 	Utensils,
 	X,
-	Bell,
-	CheckCheck,
 } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
 import "./styles.css";
+
 function Badge({
 	className,
 	variant: _variant,
@@ -99,7 +101,7 @@ const people = [
 		],
 	},
 ];
-const faqIcons = [Users, Smartphone, Bell, MapPin];
+const faqIcons = [Users, Smartphone, Bell, MapPin, CircleDollarSign];
 const faqs = [
 	[
 		"Who is jooling for?",
@@ -117,6 +119,10 @@ const faqs = [
 		"Can I manage multiple locations?",
 		"Yes. Create locations and roles, then give managers access to the teams and schedules they oversee.",
 	],
+	[
+		"How does the free trial work?",
+		"Every plan starts with 30 days free. You can invite your whole team and use the complete plan before your first charge, then manage or cancel billing at any time.",
+	],
 ];
 function Brand() {
 	return (
@@ -132,6 +138,118 @@ function CTA({ children = "Get started" }: { children?: React.ReactNode }) {
 			{children}
 			<ArrowUpRight data-icon="inline-end" />
 		</a>
+	);
+}
+
+const pricingFeatures = {
+	schedule: [
+		"Weekly schedules and reusable templates",
+		"Availability, time off, open shifts, and swaps",
+		"Versioned publishing and change history",
+		"Team notifications and messaging",
+		"Unlimited workers and managers",
+	],
+	operations: [
+		"Everything in Schedule",
+		"Time clock, kiosk, and geofencing",
+		"Attendance, breaks, and timesheet approval",
+		"Labor cost and overtime reporting",
+		"Auto-assign and workforce controls",
+	],
+} as const;
+
+function Pricing() {
+	const [annual, setAnnual] = useState(true);
+	return (
+		<section className="pricing-section" id="pricing">
+			<div className="section-container">
+				<div className="pricing-heading">
+					<div>
+						<p className="eyebrow">Simple pricing</p>
+						<h2>
+							One price for the place.
+							<br />
+							<span>Everyone included.</span>
+						</h2>
+					</div>
+					<div
+						className="billing-toggle"
+						role="group"
+						aria-label="Billing interval"
+					>
+						<button
+							type="button"
+							aria-pressed={!annual}
+							onClick={() => setAnnual(false)}
+						>
+							Monthly
+						</button>
+						<button
+							type="button"
+							aria-pressed={annual}
+							onClick={() => setAnnual(true)}
+						>
+							Annual <small>Save 20%</small>
+						</button>
+					</div>
+				</div>
+				<div className="pricing-grid">
+					{(["schedule", "operations"] as const).map((plan) => {
+						const price =
+							plan === "schedule" ? (annual ? 31 : 39) : annual ? 63 : 79;
+						return (
+							<article
+								className={`pricing-card pricing-card-${plan}`}
+								key={plan}
+							>
+								<div className="pricing-card-heading">
+									<div>
+										<p>
+											{plan === "schedule"
+												? "For clear, dependable scheduling"
+												: "For complete workforce operations"}
+										</p>
+										<h3>{plan === "schedule" ? "Schedule" : "Operations"}</h3>
+									</div>
+									{plan === "operations" ? <span>Recommended</span> : null}
+								</div>
+								<div className="pricing-price">
+									<strong>${price}</strong>
+									<span>
+										per location
+										<br />
+										per month
+									</span>
+								</div>
+								<p className="pricing-billed">
+									{annual
+										? `Billed annually at $${plan === "schedule" ? 372 : 756} per location.`
+										: "Billed monthly. Cancel any time."}
+								</p>
+								<ul>
+									{pricingFeatures[plan].map((feature) => (
+										<li key={feature}>
+											<Check size={16} />
+											{feature}
+										</li>
+									))}
+								</ul>
+								<a
+									className={`button ${plan === "operations" ? "button-primary" : "button-secondary"}`}
+									href={signUpUrl.toString()}
+								>
+									Start 30 days free <ArrowUpRight data-icon="inline-end" />
+								</a>
+							</article>
+						);
+					})}
+				</div>
+				<p className="pricing-note">
+					No worker fees. No setup fee. Your team keeps access to its schedule
+					history.
+				</p>
+			</div>
+		</section>
 	);
 }
 function SchedulePreview() {
@@ -163,9 +281,7 @@ function SchedulePreview() {
 						{ icon: Bell, name: "Activity" },
 					].map(({ icon: Icon, name }) => (
 						<div
-							className={
-								"sidebar-item " + (name === "Schedule" ? "selected" : "")
-							}
+							className={`sidebar-item${name === "Schedule" ? " selected" : ""}`}
 							key={name}
 						>
 							<Icon size={15} />
@@ -194,7 +310,7 @@ function SchedulePreview() {
 							</p>
 						</div>
 						<button
-							className={"publish-button " + (published ? "is-published" : "")}
+							className={`publish-button${published ? " is-published" : ""}`}
 							onClick={() => setPublished(!published)}
 						>
 							{published ? <CheckCheck size={14} /> : <Send size={14} />}{" "}
@@ -233,7 +349,10 @@ function SchedulePreview() {
 							>
 								<ChevronRight size={15} />
 							</button>
-							<Badge variant={published ? "secondary" : "outline"} className="draft-label">
+							<Badge
+								variant={published ? "secondary" : "outline"}
+								className="draft-label"
+							>
 								{published ? "Published · v1" : "Draft"}
 							</Badge>
 						</div>
@@ -255,7 +374,7 @@ function SchedulePreview() {
 								(day, i) => (
 									<div
 										key={day}
-										className={"grid-head " + (i === 1 ? "today" : "")}
+										className={`grid-head${i === 1 ? " today" : ""}`}
 									>
 										{day} <b>{new Date(2026, 8, 7 + week * 7 + i).getDate()}</b>
 									</div>
@@ -264,7 +383,7 @@ function SchedulePreview() {
 							{people.map((p) => (
 								<React.Fragment key={p.name}>
 									<div className="person-cell">
-										<span className={"avatar " + p.color}>{p.initials}</span>
+										<span className={`avatar ${p.color}`}>{p.initials}</span>
 										<div>
 											<strong>{p.name}</strong>
 											<small>{p.role} · 32h</small>
@@ -272,11 +391,11 @@ function SchedulePreview() {
 									</div>
 									{p.shifts.map((s, i) => (
 										<div
-											className={"shift-cell " + (i === 1 ? "today" : "")}
+											className={`shift-cell${i === 1 ? " today" : ""}`}
 											key={p.initials + i}
 										>
 											{s ? (
-												<div className={"shift " + p.color}>
+												<div className={`shift ${p.color}`}>
 													<strong>{s}</strong>
 													<span>{p.role}</span>
 												</div>
@@ -317,7 +436,7 @@ function SchedulePreview() {
 				</div>
 			</div>
 			<div
-				className={"publish-toast " + (published ? "toast-active" : "")}
+				className={`publish-toast${published ? " toast-active" : ""}`}
 				role="status"
 			>
 				<span className="toast-icon">
@@ -366,13 +485,16 @@ function App() {
 					<nav
 						id="main-navigation"
 						aria-label="Main navigation"
-						className={"nav-links " + (menuOpen ? "open" : "")}
+						className={`nav-links${menuOpen ? " open" : ""}`}
 					>
 						<a href="#how-it-works" onClick={() => setMenuOpen(false)}>
 							How it works
 						</a>
 						<a href="#for-your-team" onClick={() => setMenuOpen(false)}>
 							For your team
+						</a>
+						<a href="#pricing" onClick={() => setMenuOpen(false)}>
+							Pricing
 						</a>
 						<a href="#faq" onClick={() => setMenuOpen(false)}>
 							FAQs
@@ -398,7 +520,12 @@ function App() {
 			<main id="main-content">
 				<section className="hero">
 					<div className="hero-wash" aria-hidden="true" />
-					<img className="hero-illustration" src="/illustration-hero.webp" alt="" aria-hidden="true" />
+					<img
+						className="hero-illustration"
+						src="/illustration-hero.webp"
+						alt=""
+						aria-hidden="true"
+					/>
 					<h1>
 						Good weeks
 						<br />
@@ -442,25 +569,55 @@ function App() {
 							<Users /> Your team, too
 						</span>
 					</div>
-					<img className="industries-illustration" loading="lazy" decoding="async" src="/illustration-industries.webp" alt="A connected neighborhood of café, retail, healthcare, hospitality, and field teams" />
+					<img
+						className="industries-illustration"
+						loading="lazy"
+						decoding="async"
+						src="/illustration-industries.webp"
+						alt="A connected neighborhood of café, retail, healthcare, hospitality, and field teams"
+					/>
 				</section>
 				<section className="workflow-section" id="how-it-works">
 					<div className="section-container workflow-layout">
 						<div className="workflow-heading">
 							<p className="eyebrow">How it works</p>
 							<h2>Set up. Schedule. Send.</h2>
-							<p>Take the week from an empty workplace to a published schedule.</p>
-							<img className="workflow-illustration" loading="lazy" decoding="async" src="/illustration-workflow.webp" alt="" aria-hidden="true" />
+							<p>
+								Take the week from an empty workplace to a published schedule.
+							</p>
+							<img
+								className="workflow-illustration"
+								loading="lazy"
+								decoding="async"
+								src="/illustration-workflow.webp"
+								alt=""
+								aria-hidden="true"
+							/>
 						</div>
 						<ol className="workflow-list">
 							<li>
-								<div><h3>Set up your workplace.</h3><p>Add each location, role, and teammate.</p></div>
+								<div>
+									<h3>Set up your workplace.</h3>
+									<p>Add each location, role, and teammate.</p>
+								</div>
 							</li>
 							<li>
-								<div><h3>Build the schedule.</h3><p>Assign shifts around availability and resolve uncovered work.</p></div>
+								<div>
+									<h3>Build the schedule.</h3>
+									<p>
+										Assign shifts around availability and resolve uncovered
+										work.
+									</p>
+								</div>
 							</li>
 							<li>
-								<div><h3>Publish the week.</h3><p>Notify the team, track acknowledgements, and keep later changes with the schedule.</p></div>
+								<div>
+									<h3>Publish the week.</h3>
+									<p>
+										Notify the team, track acknowledgements, and keep later
+										changes with the schedule.
+									</p>
+								</div>
 							</li>
 						</ol>
 					</div>
@@ -493,7 +650,13 @@ function App() {
 						<CTA>Get started</CTA>
 					</div>
 					<div className="phone-scene">
-						<img className="team-illustration" loading="lazy" decoding="async" src="/illustration-team.webp" alt="Four hourly workers reviewing their week together" />
+						<img
+							className="team-illustration"
+							loading="lazy"
+							decoding="async"
+							src="/illustration-team.webp"
+							alt="Four hourly workers reviewing their week together"
+						/>
 						<span className="scene-note">
 							A little more clarity.
 							<br />A lot less “just checking…”
@@ -574,22 +737,32 @@ function App() {
 						</div>
 					</div>
 				</section>
+				<Pricing />
 				<section className="faq-section" id="faq">
 					<div className="faq-intro">
 						<p className="eyebrow">Questions, answered</p>
 						<h2>Glad you asked.</h2>
 						<p>Everything your team needs to get started.</p>
-						<img className="faq-illustration" loading="lazy" decoding="async" src="/illustration-faq.webp" alt="" aria-hidden="true" />
+						<img
+							className="faq-illustration"
+							loading="lazy"
+							decoding="async"
+							src="/illustration-faq.webp"
+							alt=""
+							aria-hidden="true"
+						/>
 					</div>
 					<div className="faq-list">
 						{faqs.map(([q, a], index) => {
 							const Icon = faqIcons[index];
 							return (
-							<article key={q}>
-								<div className="faq-icon" aria-hidden="true"><Icon size={22} strokeWidth={1.5} /></div>
-								<h3>{q}</h3>
-								<p>{a}</p>
-							</article>
+								<article key={q}>
+									<div className="faq-icon" aria-hidden="true">
+										<Icon size={22} strokeWidth={1.5} />
+									</div>
+									<h3>{q}</h3>
+									<p>{a}</p>
+								</article>
 							);
 						})}
 					</div>
@@ -598,9 +771,18 @@ function App() {
 			<footer className="sky-footer">
 				<div className="footer-sky" aria-hidden="true" />
 				<div className="footer-callout section-container">
-					<span className="footer-kicker"><CheckCheck size={15} /> Your week, sorted</span>
-					<h2>Good weeks<br />start with a clear plan.</h2>
-					<p>Build the schedule, bring your team along, and get back to the work that matters.</p>
+					<span className="footer-kicker">
+						<CheckCheck size={15} /> Your week, sorted
+					</span>
+					<h2>
+						Good weeks
+						<br />
+						start with a clear plan.
+					</h2>
+					<p>
+						Build the schedule, bring your team along, and get back to the work
+						that matters.
+					</p>
 					<CTA>Get started</CTA>
 				</div>
 				<div className="footer-directory section-container">
@@ -611,6 +793,7 @@ function App() {
 					<div className="footer-column">
 						<strong>Product</strong>
 						<a href="#how-it-works">How it works</a>
+						<a href="#pricing">Pricing</a>
 						<a href="#faq">FAQs</a>
 					</div>
 					<div className="footer-column">
@@ -621,11 +804,13 @@ function App() {
 					</div>
 				</div>
 				<div className="footer-bottom section-container">
-					
 					<span>© {new Date().getFullYear()} jooling</span>
-					
 				</div>
-				<div className="footer-landscape" role="img" aria-label="A café, shop, clinic, and hotel beginning a calm, well-planned day" />
+				<div
+					className="footer-landscape"
+					role="img"
+					aria-label="A café, shop, clinic, and hotel beginning a calm, well-planned day"
+				/>
 			</footer>
 		</div>
 	);
