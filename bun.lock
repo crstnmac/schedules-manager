@@ -17,6 +17,26 @@
         "typescript": "^6.0.3",
       },
     },
+    "apps/landing": {
+      "name": "jooling-landing",
+      "version": "1.0.0",
+      "dependencies": {
+        "@SchedulesManager/ui": "workspace:*",
+        "@fontsource-variable/geist": "^5.3.0",
+        "@fontsource-variable/inter": "^5.3.0",
+        "lucide-react": "^1.27.0",
+        "react": "19.2.3",
+        "react-dom": "19.2.3",
+      },
+      "devDependencies": {
+        "@tailwindcss/vite": "^4.3.3",
+        "@types/react": "^19.2.17",
+        "@types/react-dom": "^19.2.3",
+        "@vitejs/plugin-react": "^6.0.4",
+        "typescript": "^6.0.3",
+        "vite": "^8.1.5",
+      },
+    },
     "apps/native": {
       "name": "native",
       "version": "1.0.0",
@@ -138,26 +158,6 @@
         "typescript": "^6.0.3",
         "vite": "^8.1.5",
         "vitest": "^5.0.0",
-      },
-    },
-    "landing": {
-      "name": "jooling-landing",
-      "version": "1.0.0",
-      "dependencies": {
-        "@SchedulesManager/ui": "workspace:*",
-        "@fontsource-variable/geist": "^5.3.0",
-        "@fontsource-variable/inter": "^5.3.0",
-        "lucide-react": "^1.27.0",
-        "react": "19.2.3",
-        "react-dom": "19.2.3",
-      },
-      "devDependencies": {
-        "@tailwindcss/vite": "^4.3.3",
-        "@types/react": "^19.2.17",
-        "@types/react-dom": "^19.2.3",
-        "@vitejs/plugin-react": "^6.0.4",
-        "typescript": "^6.0.3",
-        "vite": "^8.1.5",
       },
     },
     "packages/auth": {
@@ -1559,7 +1559,7 @@
 
     "jiti": ["jiti@2.7.0", "", { "bin": { "jiti": "lib/jiti-cli.mjs" } }, "sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ=="],
 
-    "jooling-landing": ["jooling-landing@workspace:landing"],
+    "jooling-landing": ["jooling-landing@workspace:apps/landing"],
 
     "jose": ["jose@6.2.10", "", {}, "sha512-iiW7J9qRFlGxvCOIBDBDxFePQSn7ZMAnrYGhrrOo6siO/MIqwfyilLR27pkfDgUk+raLuzADS8A3S/KLBisc0g=="],
 

@@ -2,7 +2,7 @@
 
 # Build context must be the repository root (landing depends on the
 # @SchedulesManager/ui workspace package):
-#   docker build -f landing/Dockerfile \
+#   docker build -f apps/landing/Dockerfile \
 #     --build-arg VITE_APP_URL=https://app.example.com \
 #     -t jooling-landing .
 
@@ -16,7 +16,7 @@ COPY package.json bun.lock ./
 COPY apps/native/package.json apps/native/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
-COPY landing/package.json landing/
+COPY apps/landing/package.json apps/landing/
 COPY packages/auth/package.json packages/auth/
 COPY packages/config/package.json packages/config/
 COPY packages/db/package.json packages/db/
@@ -32,12 +32,12 @@ ENV VITE_APP_URL=${VITE_APP_URL}
 
 COPY . .
 
-RUN bun run --cwd landing build
+RUN bun run --cwd apps/landing build
 
 # ---- Runtime: nginx serves the static bundle with SPA fallback ----
 FROM nginxinc/nginx-unprivileged:1.30.4-alpine AS runtime
-COPY landing/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build --chown=nginx:nginx /app/landing/dist /usr/share/nginx/html
+COPY apps/landing/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build --chown=nginx:nginx /app/apps/landing/dist /usr/share/nginx/html
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
