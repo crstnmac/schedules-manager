@@ -14,6 +14,10 @@ import {
 	CardTitle,
 } from "@SchedulesManager/ui/components/card";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import {
+	ToggleGroup,
+	ToggleGroupItem,
+} from "@SchedulesManager/ui/components/toggle-group";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { CheckIcon, CreditCardIcon } from "lucide-react";
@@ -57,7 +61,7 @@ function money(cents: number) {
 function SubscriptionPage() {
 	const { workplace } = useWorkplace();
 	const billing = useBilling(workplace?.id);
-	const [interval, setIntervalValue] = useState<"month" | "year">("year");
+	const [interval, setInterval] = useState<"month" | "year">("year");
 
 	useEffect(() => {
 		if (
@@ -136,22 +140,22 @@ function SubscriptionPage() {
 			) : null}
 
 			<div className="flex items-center justify-between gap-4">
-				<div className="inline-flex rounded-lg bg-muted p-1">
-					<Button
-						size="sm"
-						variant={interval === "month" ? "secondary" : "ghost"}
-						onClick={() => setIntervalValue("month")}
-					>
-						Monthly
-					</Button>
-					<Button
-						size="sm"
-						variant={interval === "year" ? "secondary" : "ghost"}
-						onClick={() => setIntervalValue("year")}
-					>
+				<ToggleGroup
+					aria-label="Billing interval"
+					value={[interval]}
+					variant="outline"
+					size="lg"
+					spacing={0}
+					onValueChange={(value) => {
+						const next = value[0];
+						if (next === "month" || next === "year") setInterval(next);
+					}}
+				>
+					<ToggleGroupItem value="month">Monthly</ToggleGroupItem>
+					<ToggleGroupItem value="year">
 						Annual <Badge variant="secondary">Save 20%</Badge>
-					</Button>
-				</div>
+					</ToggleGroupItem>
+				</ToggleGroup>
 				{current?.canManage ? (
 					<Button
 						variant="outline"
