@@ -14,6 +14,7 @@ import {
 import { and, eq, gte, lte } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
+import { requireSubscriptionCapability } from "../billing";
 import { requireManager, requireSession } from "../context";
 import { computeLaborByEntry, type ReportRow } from "../reports-labor";
 
@@ -30,6 +31,7 @@ export const reportRoutes = new Elysia({
 	async ({ headers, params, query, set }) => {
 		const { profile } = await requireSession(headers.authorization);
 		await requireManager(profile.id, params.workplaceId);
+		await requireSubscriptionCapability(params.workplaceId, "labor_reports");
 		const from = new Date(`${query.from}T00:00:00Z`);
 		const to = new Date(`${query.to}T23:59:59Z`);
 

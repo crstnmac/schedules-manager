@@ -49,7 +49,7 @@ function WorkerLayout() {
 	const posthog = usePostHog();
 	const { isLoading: authLoading, isSigningOut, user, signOut } = useAuth();
 	const me = useMe(Boolean(user));
-	const { isLoading, workplace, kind } = useWorkplace();
+	const { isLoading, workplace, kind, capabilities } = useWorkplace();
 	const inbox = useNotifications(workplace?.id);
 	const unreadCount = inbox.data?.unreadCount ?? 0;
 	const pathname = useRouterState({
@@ -106,6 +106,9 @@ function WorkerLayout() {
 	}
 	if (!workplace) return <Navigate to="/" replace />;
 	if (kind === "manager") return <Navigate to="/dashboard" replace />;
+	if (pathname.startsWith("/worker/timecard") && !capabilities.operations) {
+		return <Navigate to="/worker" replace />;
+	}
 
 	return (
 		<div className="flex h-svh min-h-0 flex-col overflow-hidden bg-background">
@@ -142,28 +145,33 @@ function WorkerLayout() {
 						aria-label="Worker navigation"
 						className="-mx-4 flex gap-1 overflow-x-auto overscroll-x-contain px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
 					>
-						{navigation.map((item) => {
-							const active =
-								"exact" in item && item.exact
-									? pathname === item.to
-									: pathname.startsWith(item.to);
-							return (
-								<Button
-									key={item.to}
-									size="sm"
-									variant={active ? "secondary" : "ghost"}
-									aria-current={active ? "page" : undefined}
-									nativeButton={false}
-									render={<Link to={item.to} />}
-								>
-									<item.icon data-icon="inline-start" />
-									{item.label}
-									{item.to === "/worker/inbox" && unreadCount > 0 ? (
-										<Badge variant="secondary">{unreadCount}</Badge>
-									) : null}
-								</Button>
-							);
-						})}
+						{navigation
+							.filter(
+								(item) =>
+									item.to !== "/worker/timecard" || capabilities.operations,
+							)
+							.map((item) => {
+								const active =
+									"exact" in item && item.exact
+										? pathname === item.to
+										: pathname.startsWith(item.to);
+								return (
+									<Button
+										key={item.to}
+										size="sm"
+										variant={active ? "secondary" : "ghost"}
+										aria-current={active ? "page" : undefined}
+										nativeButton={false}
+										render={<Link to={item.to} />}
+									>
+										<item.icon data-icon="inline-start" />
+										{item.label}
+										{item.to === "/worker/inbox" && unreadCount > 0 ? (
+											<Badge variant="secondary">{unreadCount}</Badge>
+										) : null}
+									</Button>
+								);
+							})}
 					</nav>
 				</div>
 			</header>

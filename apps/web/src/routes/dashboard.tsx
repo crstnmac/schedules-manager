@@ -43,6 +43,7 @@ import {
 	ClipboardListIcon,
 	Clock3Icon,
 	LayoutDashboardIcon,
+	LockIcon,
 	LogOutIcon,
 	MegaphoneIcon,
 	MessageSquareIcon,
@@ -61,7 +62,7 @@ import { PilotFeedback } from "@/components/pilot-feedback";
 import { settingsSectionLabel } from "@/components/settings/nav";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
-import { useMe, useNotifications } from "@/lib/queries";
+import { useBilling, useMe, useNotifications } from "@/lib/queries";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -76,12 +77,22 @@ const navigation = [
 		icon: LayoutDashboardIcon,
 		exact: true,
 	},
-	{ to: "/dashboard/clock", label: "Clock", icon: AlarmClockIcon },
+	{
+		to: "/dashboard/clock",
+		label: "Clock",
+		icon: AlarmClockIcon,
+		operations: true,
+	},
 	{ to: "/dashboard/schedule", label: "Schedule", icon: CalendarDaysIcon },
 	{ to: "/dashboard/roster", label: "Roster", icon: ClipboardListIcon },
 	{ to: "/dashboard/workers", label: "Workers", icon: UsersIcon },
 	{ to: "/dashboard/timeoff", label: "Time off", icon: Clock3Icon },
-	{ to: "/dashboard/timesheets", label: "Timesheets", icon: TimerIcon },
+	{
+		to: "/dashboard/timesheets",
+		label: "Timesheets",
+		icon: TimerIcon,
+		operations: true,
+	},
 	{ to: "/dashboard/coverage", label: "Coverage", icon: WorkflowIcon },
 	{ to: "/dashboard/messages", label: "Messages", icon: MessageSquareIcon },
 	{
@@ -89,7 +100,12 @@ const navigation = [
 		label: "Announcements",
 		icon: MegaphoneIcon,
 	},
-	{ to: "/dashboard/reports", label: "Reports", icon: BarChart3Icon },
+	{
+		to: "/dashboard/reports",
+		label: "Reports",
+		icon: BarChart3Icon,
+		operations: true,
+	},
 	{ to: "/dashboard/activity", label: "Activity", icon: BellIcon },
 	{
 		to: "/dashboard/settings/workplace",
@@ -106,6 +122,7 @@ function DashboardLayout() {
 	const me = useMe(Boolean(user));
 	const { formatPerson } = useDisplayPrefs();
 	const { isLoading, workplace, kind } = useWorkplace();
+	const billing = useBilling(kind === "manager" ? workplace?.id : undefined);
 	const inbox = useNotifications(workplace?.id);
 	const unreadCount = inbox.data?.unreadCount ?? 0;
 	const profile = me.data?.profile;
@@ -117,6 +134,14 @@ function DashboardLayout() {
 	});
 	const isSchedule = pathname.startsWith("/dashboard/schedule");
 	const isSettings = pathname.startsWith("/dashboard/settings");
+	const isSubscription = pathname.startsWith(
+		"/dashboard/settings/subscription",
+	);
+	const operationsRoute =
+		pathname.startsWith("/dashboard/clock") ||
+		pathname.startsWith("/dashboard/timesheets") ||
+		pathname.startsWith("/dashboard/reports") ||
+		pathname.startsWith("/dashboard/settings/time-clock");
 	const settingsLabel = isSettings ? settingsSectionLabel(pathname) : undefined;
 	const activePage =
 		navigation.find((item) => {
@@ -172,6 +197,20 @@ function DashboardLayout() {
 		);
 	if (!workplace) return <Navigate to="/" replace />;
 	if (kind === "worker") return <Navigate to="/worker" replace />;
+	if (billing.isLoading) {
+		return (
+			<main id="main-content" className="grid min-h-svh place-items-center">
+				<Spinner />
+				<span className="sr-only">Checking subscription</span>
+			</main>
+		);
+	}
+	if (!isSubscription && !billing.data?.capabilities.scheduling) {
+		return <Navigate to="/dashboard/settings/subscription" replace />;
+	}
+	if (operationsRoute && !billing.data?.capabilities.operations) {
+		return <Navigate to="/dashboard/settings/subscription" replace />;
+	}
 
 	return (
 		<SidebarProvider>
@@ -198,6 +237,10 @@ function DashboardLayout() {
 							<nav aria-label="Manager navigation">
 								<SidebarMenu>
 									{navigation.map((item) => {
+										const locked =
+											"operations" in item &&
+											item.operations &&
+											!billing.data?.capabilities.operations;
 										const exact = "exact" in item && item.exact;
 										const matchPath =
 											"match" in item && item.match ? item.match : item.to;
@@ -212,13 +255,20 @@ function DashboardLayout() {
 													tooltip={item.label}
 													render={
 														<Link
-															to={item.to}
+															to={
+																locked
+																	? "/dashboard/settings/subscription"
+																	: item.to
+															}
 															activeOptions={{ exact: Boolean(exact) }}
 														/>
 													}
 												>
 													<item.icon />
 													<span>{item.label}</span>
+													{locked ? (
+														<LockIcon className="ml-auto size-3.5" />
+													) : null}
 													{item.to === "/dashboard/activity" &&
 													unreadCount > 0 ? (
 														<SidebarMenuBadge>{unreadCount}</SidebarMenuBadge>

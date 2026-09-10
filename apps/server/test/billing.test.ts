@@ -4,6 +4,7 @@ import {
 	billingCatalog,
 	billingProduct,
 	hasActiveSubscription,
+	planAllows,
 } from "../src/billing";
 
 describe("billing catalog", () => {
@@ -29,5 +30,18 @@ describe("billing catalog", () => {
 		expect(hasActiveSubscription("trialing")).toBe(true);
 		expect(hasActiveSubscription("past_due")).toBe(false);
 		expect(hasActiveSubscription("revoked")).toBe(false);
+	});
+
+	test("scopes operational capabilities to the Operations plan", () => {
+		expect(planAllows("schedule", "scheduling")).toBe(true);
+		expect(planAllows("operations", "scheduling")).toBe(true);
+		expect(planAllows("schedule", "time_clock")).toBe(false);
+		expect(planAllows("schedule", "labor_reports")).toBe(false);
+		expect(planAllows("operations", "time_clock")).toBe(true);
+		expect(planAllows("operations", "kiosk")).toBe(true);
+		expect(planAllows("operations", "timesheets")).toBe(true);
+		expect(planAllows("operations", "attendance")).toBe(true);
+		expect(planAllows("operations", "labor_reports")).toBe(true);
+		expect(planAllows("operations", "auto_assign")).toBe(true);
 	});
 });

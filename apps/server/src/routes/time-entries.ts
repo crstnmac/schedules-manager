@@ -12,6 +12,7 @@ import {
 } from "@SchedulesManager/db";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
+import { requireSubscriptionCapability } from "../billing";
 
 import {
 	requireManager,
@@ -96,6 +97,7 @@ async function clockIn(
 		profileId,
 		versionShiftId,
 	);
+	await requireSubscriptionCapability(workplaceId, "time_clock");
 	const now = new Date();
 	const [workplace] = await db
 		.select()
@@ -195,6 +197,7 @@ async function clockOut(
 		profileId,
 		versionShiftId,
 	);
+	await requireSubscriptionCapability(workplaceId, "time_clock");
 	const [entry] = await db
 		.select()
 		.from(timeEntries)
@@ -341,6 +344,7 @@ export const timeEntryRoutes = new Elysia({
 				profile.id,
 				params.workplaceId,
 			);
+			await requireSubscriptionCapability(params.workplaceId, "time_clock");
 
 			const rows = await db
 				.select({
@@ -417,6 +421,7 @@ export const timeEntryRoutes = new Elysia({
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers.authorization);
 			await requireManager(profile.id, params.workplaceId);
+			await requireSubscriptionCapability(params.workplaceId, "timesheets");
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `time-entry.edit:${params.versionShiftId}`,

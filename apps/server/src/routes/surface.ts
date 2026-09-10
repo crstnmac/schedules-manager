@@ -29,6 +29,7 @@ import {
 } from "@SchedulesManager/db";
 import { and, desc, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { Elysia, t } from "elysia";
+import { requireSubscriptionCapability } from "../billing";
 
 import {
 	requireManager,
@@ -1568,6 +1569,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				values.emergencyContactPhone = body.emergencyContactPhone;
 			}
 			if (body.kioskPin !== undefined) {
+				await requireSubscriptionCapability(params.workplaceId, "kiosk");
 				if (body.kioskPin === null) values.kioskPinHash = null;
 				else {
 					if (!/^\d{4,8}$/.test(body.kioskPin)) {
@@ -1782,6 +1784,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			if (!row?.entry || row.entry.clockedOutAt) {
 				throw new NotFoundError("Time Entry not found");
 			}
+			await requireSubscriptionCapability(row.workplaceId, "time_clock");
 			await assertWorkplaceEnabled(
 				row.workplaceId,
 				"breaksEnabled",
@@ -1832,6 +1835,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				)
 				.limit(1);
 			if (!row?.entry) throw new NotFoundError("Time Entry not found");
+			await requireSubscriptionCapability(row.workplaceId, "time_clock");
 			const [openBreak] = await db
 				.select()
 				.from(timeEntryBreaks)
@@ -1867,6 +1871,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers.authorization);
 			await requireManager(profile.id, params.workplaceId);
+			await requireSubscriptionCapability(params.workplaceId, "timesheets");
 			// The entry must belong to an employment of the caller's workplace.
 			const [target] = await db
 				.select({ id: timeEntries.id })
@@ -1918,6 +1923,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers.authorization);
 			await requireManager(profile.id, params.workplaceId);
+			await requireSubscriptionCapability(params.workplaceId, "timesheets");
 			const rows = await db
 				.select({
 					entry: timeEntries,

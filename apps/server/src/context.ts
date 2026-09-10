@@ -5,6 +5,7 @@ import {
 	employments,
 	locations,
 	profiles,
+	workplaceSubscriptions,
 	workplaces,
 } from "@SchedulesManager/db";
 import { and, eq } from "drizzle-orm";
@@ -72,9 +73,14 @@ export async function listActiveEmployments(profileId: string) {
 		.select({
 			employment: employments,
 			workplace: workplaces,
+			subscription: workplaceSubscriptions,
 		})
 		.from(employments)
 		.innerJoin(workplaces, eq(workplaces.id, employments.workplaceId))
+		.leftJoin(
+			workplaceSubscriptions,
+			eq(workplaceSubscriptions.workplaceId, workplaces.id),
+		)
 		.where(
 			and(
 				eq(employments.profileId, profileId),

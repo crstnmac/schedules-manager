@@ -2,6 +2,7 @@ import { db, profiles } from "@SchedulesManager/db";
 import { eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
+import { hasActiveSubscription, planAllows } from "../billing";
 import { listActiveEmployments, requireSession } from "../context";
 import { firstRow } from "../rows";
 import {
@@ -19,15 +20,27 @@ export const meRoutes = new Elysia({ prefix: "/v1", tags: ["Identity"] })
 
 			return {
 				profile: profilePreferencesPayload(profile),
-				employments: memberships.map(({ employment, workplace }) => ({
-					id: employment.id,
-					kind: employment.kind,
-					workplace: {
-						id: workplace.id,
-						name: workplace.name,
-						policies: workplaceWorkerPolicies(workplace),
-					},
-				})),
+				employments: memberships.map(
+					({ employment, workplace, subscription }) => ({
+						id: employment.id,
+						kind: employment.kind,
+						capabilities: {
+							scheduling: Boolean(
+								subscription && hasActiveSubscription(subscription.status),
+							),
+							operations: Boolean(
+								subscription &&
+									hasActiveSubscription(subscription.status) &&
+									planAllows(subscription.plan, "time_clock"),
+							),
+						},
+						workplace: {
+							id: workplace.id,
+							name: workplace.name,
+							policies: workplaceWorkerPolicies(workplace),
+						},
+					}),
+				),
 			};
 		},
 		{

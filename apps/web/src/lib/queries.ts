@@ -43,6 +43,10 @@ export interface WorkplaceWorkerPolicies {
 export interface MeEmployment {
 	id: string;
 	kind: "manager" | "worker";
+	capabilities: {
+		scheduling: boolean;
+		operations: boolean;
+	};
 	workplace: {
 		id: string;
 		name: string;
@@ -564,6 +568,10 @@ export interface BillingSummary {
 		canManage: boolean;
 	} | null;
 	locationCount: number;
+	capabilities: {
+		scheduling: boolean;
+		operations: boolean;
+	};
 	catalog: Record<"schedule" | "operations", Record<"month" | "year", number>>;
 }
 

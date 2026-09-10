@@ -1,6 +1,7 @@
 import { db, locations, schedules } from "@SchedulesManager/db";
 import { eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
+import { requireSubscriptionCapability } from "../billing";
 import { requireManager, requireSession } from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { fillPlaceFromAddress } from "../geocode";
@@ -80,6 +81,9 @@ export const locationsRoutes = new Elysia({
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers.authorization);
 			await requireManager(profile.id, params.workplaceId);
+			if (body.geofenceRadiusMeters != null) {
+				await requireSubscriptionCapability(params.workplaceId, "kiosk");
+			}
 			assertTimeZone(body.timezone);
 
 			const filled = await fillPlaceFromAddress({
@@ -155,6 +159,12 @@ export const locationsRoutes = new Elysia({
 
 			if (!existing) throw new NotFoundError("Location not found");
 			await requireManager(profile.id, existing.workplaceId);
+			if (
+				body.geofenceRadiusMeters !== undefined ||
+				body.kioskPin !== undefined
+			) {
+				await requireSubscriptionCapability(existing.workplaceId, "kiosk");
+			}
 
 			if (body.timezone) assertTimeZone(body.timezone);
 

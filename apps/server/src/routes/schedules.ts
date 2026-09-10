@@ -23,6 +23,7 @@ import {
 } from "@SchedulesManager/db";
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { Elysia, t } from "elysia";
+import { requireSubscriptionCapability } from "../billing";
 import { requireManager, requireSession, weekStartDayFor } from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { laborCents, laborPercent } from "../labor";
@@ -1302,6 +1303,7 @@ export const schedulesRoutes = new Elysia({
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
 			await requireManager(profile.id, location.workplaceId);
+			await requireSubscriptionCapability(location.workplaceId, "time_clock");
 			const [schedule] = await db
 				.select()
 				.from(schedules)
@@ -1650,6 +1652,7 @@ export const schedulesRoutes = new Elysia({
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
 			await requireManager(profile.id, location.workplaceId);
+			await requireSubscriptionCapability(location.workplaceId, "auto_assign");
 			const [schedule] = await db
 				.select()
 				.from(schedules)

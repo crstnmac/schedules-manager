@@ -1,5 +1,9 @@
+import { db, workplaceSubscriptions } from "@SchedulesManager/db";
 import { env } from "@SchedulesManager/env/server";
 import { Polar } from "@polar-sh/sdk";
+import { eq } from "drizzle-orm";
+
+import { ForbiddenError } from "./errors";
 
 export type BillingPlan = "schedule" | "operations";
 export type BillingInterval = "month" | "year";
@@ -67,4 +71,58 @@ export function polarClient() {
 
 export function hasActiveSubscription(status: string) {
 	return status === "active" || status === "trialing";
+}
+
+export type ProductCapability =
+	| "scheduling"
+	| "time_clock"
+	| "kiosk"
+	| "timesheets"
+	| "attendance"
+	| "labor_reports"
+	| "auto_assign";
+
+const operationsCapabilities = new Set<ProductCapability>([
+	"time_clock",
+	"kiosk",
+	"timesheets",
+	"attendance",
+	"labor_reports",
+	"auto_assign",
+]);
+
+export function planAllows(
+	plan: BillingPlan,
+	capability: ProductCapability,
+): boolean {
+	return (
+		capability === "scheduling" ||
+		(plan === "operations" && operationsCapabilities.has(capability))
+	);
+}
+
+export async function requireSubscriptionCapability(
+	workplaceId: string,
+	capability: ProductCapability,
+) {
+	const [subscription] = await db
+		.select({
+			plan: workplaceSubscriptions.plan,
+			status: workplaceSubscriptions.status,
+		})
+		.from(workplaceSubscriptions)
+		.where(eq(workplaceSubscriptions.workplaceId, workplaceId))
+		.limit(1);
+
+	if (!subscription || !hasActiveSubscription(subscription.status)) {
+		throw new ForbiddenError(
+			"An active subscription is required. Choose a plan in Subscription settings.",
+		);
+	}
+	if (!planAllows(subscription.plan, capability)) {
+		throw new ForbiddenError(
+			"This feature requires the Operations plan. Upgrade in Subscription settings.",
+		);
+	}
+	return subscription;
 }

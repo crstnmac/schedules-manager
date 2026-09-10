@@ -11,6 +11,7 @@ import {
 import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
+import { requireSubscriptionCapability } from "../billing";
 import {
 	BadRequestError,
 	ConflictError,
@@ -45,6 +46,7 @@ export const kioskRoutes = new Elysia({ prefix: "/v1", tags: ["Kiosk"] }).post(
 		) {
 			throw new BadRequestError("Location PIN is not valid");
 		}
+		await requireSubscriptionCapability(location.workplaceId, "kiosk");
 
 		// Resolve by exact hash within the workplace. More than one active match
 		// means the PIN is shared and punches could be misattributed — refuse

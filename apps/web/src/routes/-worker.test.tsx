@@ -28,7 +28,12 @@ const workerMeData = {
 		},
 	},
 	employments: [
-		{ id: "we1", kind: "worker" as const, workplace: workerWorkplace },
+		{
+			id: "we1",
+			kind: "worker" as const,
+			capabilities: { scheduling: true, operations: true },
+			workplace: workerWorkplace,
+		},
 	],
 };
 
@@ -90,6 +95,7 @@ describe("WorkerLayout auth-loading guard (T12-T17)", () => {
 		state.workplace.isLoading = false;
 		state.workplace.workplace = workerWorkplace;
 		state.workplace.kind = "worker";
+		state.workplace.capabilities = { scheduling: true, operations: true };
 		state.me.isLoading = false;
 		state.me.data = workerMeData;
 		const { queryByTestId, getByTestId, queryByText } = render(<Worker />);
@@ -112,11 +118,24 @@ describe("WorkerLayout auth-loading guard (T12-T17)", () => {
 		state.workplace.isLoading = false;
 		state.workplace.workplace = workerWorkplace;
 		state.workplace.kind = "worker";
+		state.workplace.capabilities = { scheduling: true, operations: true };
 		state.me.isLoading = false;
 		state.me.data = workerMeData;
 		const r2 = render(<Worker />);
 		expect(r2.queryByTestId("navigate")).toBeNull();
 		expect(r2.getByTestId("outlet")).toBeTruthy();
 		expect(state.pathname).toBe("/worker/timecard");
+	});
+
+	test("redirects workers without Operations away from the timecard", async () => {
+		const Worker = await WorkerLayout;
+		state.auth.isLoading = false;
+		state.auth.user = workerUser;
+		state.workplace.isLoading = false;
+		state.workplace.workplace = workerWorkplace;
+		state.workplace.kind = "worker";
+		state.workplace.capabilities = { scheduling: true, operations: false };
+		const { getByTestId } = render(<Worker />);
+		expect(getByTestId("navigate").getAttribute("data-to")).toBe("/worker");
 	});
 });

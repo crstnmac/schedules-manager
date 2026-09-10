@@ -10,6 +10,7 @@ import {
 import { and, eq, gt } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
+import { requireSubscriptionCapability } from "../billing";
 import {
 	listActiveEmployments,
 	requireManager,
@@ -200,6 +201,21 @@ export const workplacesRoutes = new Elysia({
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers.authorization);
 			await requireManager(profile.id, params.workplaceId);
+			if (
+				body.earlyClockInMinutes !== undefined ||
+				body.clockRoundMinutes !== undefined ||
+				body.autoClockOutGraceMinutes !== undefined ||
+				body.overtimeWeeklyMinutes !== undefined ||
+				body.overtimeDailyMinutes !== undefined ||
+				body.laborCostPercentGoal !== undefined ||
+				body.managersCanViewLaborCost !== undefined ||
+				body.breaksEnabled !== undefined ||
+				body.geofenceRequired !== undefined ||
+				body.lateArrivalGraceMinutes !== undefined ||
+				body.timesheetNotesEnabled !== undefined
+			) {
+				await requireSubscriptionCapability(params.workplaceId, "time_clock");
+			}
 
 			const existing = await loadWorkplace(params.workplaceId);
 			const leaveCapReset = body.leaveCapReset ?? existing.leaveCapReset;

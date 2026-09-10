@@ -29,6 +29,7 @@ export type WorkplaceState = {
 	workplace: { id: string; name: string } | null;
 	kind: "manager" | "worker" | null;
 	employmentId: string | null;
+	capabilities: { scheduling: boolean; operations: boolean };
 };
 
 export type MeState = {
@@ -46,6 +47,7 @@ export type MeState = {
 				employments: {
 					id: string;
 					kind: "manager" | "worker";
+					capabilities: { scheduling: boolean; operations: boolean };
 					workplace: { id: string; name: string };
 				}[];
 		  }
@@ -60,6 +62,12 @@ export type RouteState = {
 	workplace: WorkplaceState;
 	me: MeState;
 	inbox: { data: { unreadCount: number } | undefined };
+	billing: {
+		isLoading: boolean;
+		data:
+			| { capabilities: { scheduling: boolean; operations: boolean } }
+			| undefined;
+	};
 	displayPrefs: {
 		formatPerson: (fullName: string | null, email: string) => string;
 	};
@@ -89,7 +97,14 @@ const meData: MeState["data"] = {
 			timeClock: true,
 		},
 	},
-	employments: [{ id: "e1", kind: "manager", workplace: managerWorkplace }],
+	employments: [
+		{
+			id: "e1",
+			kind: "manager",
+			capabilities: { scheduling: true, operations: true },
+			workplace: managerWorkplace,
+		},
+	],
 };
 
 export const state: RouteState = {
@@ -106,9 +121,14 @@ export const state: RouteState = {
 		workplace: null,
 		kind: null,
 		employmentId: null,
+		capabilities: { scheduling: false, operations: false },
 	},
 	me: { isLoading: true, data: undefined, isError: false, error: null },
 	inbox: { data: { unreadCount: 0 } },
+	billing: {
+		isLoading: false,
+		data: { capabilities: { scheduling: true, operations: true } },
+	},
 	displayPrefs: {
 		formatPerson: (fullName, email) => fullName ?? email,
 	},
@@ -138,9 +158,14 @@ export function resetState(pathname: string) {
 		workplace: null,
 		kind: null,
 		employmentId: null,
+		capabilities: { scheduling: false, operations: false },
 	};
 	state.me = { isLoading: true, data: undefined, isError: false, error: null };
 	state.inbox = { data: { unreadCount: 0 } };
+	state.billing = {
+		isLoading: false,
+		data: { capabilities: { scheduling: true, operations: true } },
+	};
 	state.displayPrefs = {
 		formatPerson: (fullName, email) => fullName ?? email,
 	};
@@ -188,6 +213,7 @@ export function registerMocks() {
 	}));
 
 	mock.module("@/lib/queries", () => ({
+		useBilling: () => state.billing,
 		useMe: () => state.me,
 		useNotifications: () => state.inbox,
 	}));

@@ -19,6 +19,7 @@ import {
 	billingCatalog,
 	billingProduct,
 	hasActiveSubscription,
+	planAllows,
 	polarClient,
 } from "../billing";
 import { requireManager, requireSession } from "../context";
@@ -67,6 +68,16 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 
 			return {
 				subscription: subscriptionPayload(subscription),
+				capabilities: {
+					scheduling: Boolean(
+						subscription && hasActiveSubscription(subscription.status),
+					),
+					operations: Boolean(
+						subscription &&
+							hasActiveSubscription(subscription.status) &&
+							planAllows(subscription.plan, "time_clock"),
+					),
+				},
 				locationCount: Math.max(1, locationTotal?.value ?? 1),
 				catalog: {
 					schedule: { month: 3900, year: 37200 },

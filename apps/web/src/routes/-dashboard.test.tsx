@@ -114,4 +114,37 @@ describe("DashboardLayout auth-loading guard (T5-T11)", () => {
 		expect(r2.getByTestId("outlet")).toBeTruthy();
 		expect(state.pathname).toBe("/dashboard/schedule");
 	});
+
+	test("redirects an unsubscribed manager to Subscription settings", async () => {
+		const Dashboard = await DashboardLayout;
+		state.auth.isLoading = false;
+		state.auth.user = defaults.managerUser;
+		state.workplace.isLoading = false;
+		state.workplace.workplace = defaults.managerWorkplace;
+		state.workplace.kind = "manager";
+		state.billing.data = {
+			capabilities: { scheduling: false, operations: false },
+		};
+		const { getByTestId } = render(<Dashboard />);
+		expect(getByTestId("navigate").getAttribute("data-to")).toBe(
+			"/dashboard/settings/subscription",
+		);
+	});
+
+	test("redirects a Schedule subscriber away from Operations pages", async () => {
+		const Dashboard = await DashboardLayout;
+		resetState("/dashboard/timesheets");
+		state.auth.isLoading = false;
+		state.auth.user = defaults.managerUser;
+		state.workplace.isLoading = false;
+		state.workplace.workplace = defaults.managerWorkplace;
+		state.workplace.kind = "manager";
+		state.billing.data = {
+			capabilities: { scheduling: true, operations: false },
+		};
+		const { getByTestId } = render(<Dashboard />);
+		expect(getByTestId("navigate").getAttribute("data-to")).toBe(
+			"/dashboard/settings/subscription",
+		);
+	});
 });

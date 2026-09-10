@@ -14,6 +14,7 @@ import {
 } from "@SchedulesManager/db";
 import { and, desc, eq, gte, inArray, lt } from "drizzle-orm";
 import { Elysia, t } from "elysia";
+import { requireSubscriptionCapability } from "../billing";
 
 import {
 	locationScopeFor,
@@ -284,6 +285,7 @@ export const rosterRoutes = new Elysia({
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers.authorization);
 			await requireManager(profile.id, params.workplaceId);
+			await requireSubscriptionCapability(params.workplaceId, "attendance");
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `attendance.mark:${params.versionShiftId}`,
