@@ -1,17 +1,17 @@
 import { Button } from "@SchedulesManager/ui/components/button";
 import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
 import {
-	Empty,
-	EmptyDescription,
-	EmptyHeader,
-	EmptyTitle,
-} from "@SchedulesManager/ui/components/empty";
-import {
 	Field,
 	FieldGroup,
 	FieldLabel,
+	FieldTitle,
 } from "@SchedulesManager/ui/components/field";
 import { Input } from "@SchedulesManager/ui/components/input";
+import {
+	InputGroup,
+	InputGroupAddon,
+	InputGroupInput,
+} from "@SchedulesManager/ui/components/input-group";
 import {
 	Select,
 	SelectContent,
@@ -23,12 +23,23 @@ import {
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { Textarea } from "@SchedulesManager/ui/components/textarea";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import {
+	CalendarOffIcon,
+	ClockIcon,
+	LayoutTemplateIcon,
+	SearchIcon,
+	SunIcon,
+	TagsIcon,
+	UsersIcon,
+} from "lucide-react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { ConfirmAction } from "@/components/confirm-action";
-import { createDataColumnHelper, DataTable } from "@/components/data-table";
-import { SettingsSection } from "@/components/settings/page";
+import { createDataColumnHelper } from "@/components/data-table";
+import {
+	SettingsCrudCard,
+	SettingsFormSheet,
+} from "@/components/settings/crud";
 import { TimePicker } from "@/components/time-picker";
 import { api } from "@/lib/api";
 import type { LocationDto, PositionDto, WorkerDto } from "@/lib/queries";
@@ -109,6 +120,9 @@ function SettingsLocationField({
 	);
 }
 
+const sheetFooterClassName =
+	"flex flex-col-reverse gap-2 sm:flex-row sm:justify-end";
+
 export function GroupsCard({
 	workplaceId,
 	groups,
@@ -120,9 +134,33 @@ export function GroupsCard({
 }) {
 	const { formatPerson } = useDisplayPrefs();
 	const queryClient = useQueryClient();
+	const [open, setOpen] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [name, setName] = useState("");
 	const [employmentIds, setEmploymentIds] = useState<string[]>([]);
+	const [memberSearch, setMemberSearch] = useState("");
+
+	const activeWorkers = useMemo(
+		() => workers.filter((worker) => worker.status === "active"),
+		[workers],
+	);
+	const visibleWorkers = useMemo(() => {
+		const term = memberSearch.trim().toLowerCase();
+		if (!term) return activeWorkers;
+		return activeWorkers.filter((worker) =>
+			formatPerson(worker.profile.fullName, worker.profile.email)
+				.toLowerCase()
+				.includes(term),
+		);
+	}, [activeWorkers, formatPerson, memberSearch]);
+
+	const resetForm = useCallback(() => {
+		setEditingId(null);
+		setName("");
+		setEmploymentIds([]);
+		setMemberSearch("");
+	}, []);
+
 	const save = useMutation({
 		mutationFn: () =>
 			api(
@@ -135,9 +173,8 @@ export function GroupsCard({
 				},
 			),
 		onSuccess: () => {
-			setEditingId(null);
-			setName("");
-			setEmploymentIds([]);
+			resetForm();
+			setOpen(false);
 			queryClient.invalidateQueries({ queryKey: ["groups", workplaceId] });
 			toast.success("Worker Group saved.");
 		},
@@ -155,11 +192,17 @@ export function GroupsCard({
 		onError: (error) => toast.error((error as Error).message),
 	});
 
-	const edit = useCallback((group?: Group) => {
-		setEditingId(group?.id ?? null);
-		setName(group?.name ?? "");
-		setEmploymentIds(group?.employmentIds ?? []);
-	}, []);
+	const startAdd = () => {
+		resetForm();
+		setOpen(true);
+	};
+	const startEdit = (group: Group) => {
+		setEditingId(group.id);
+		setName(group.name);
+		setEmploymentIds(group.employmentIds);
+		setMemberSearch("");
+		setOpen(true);
+	};
 
 	const columns = useMemo(
 		() =>
@@ -178,57 +221,43 @@ export function GroupsCard({
 						return `${count} member${count === 1 ? "" : "s"}`;
 					},
 				}),
-				groupHelper.display({
-					id: "actions",
-					header: "Actions",
-					enableSorting: false,
-					cell: ({ row }) => (
-						<div className="flex flex-wrap items-center justify-end gap-2">
-							<Button
-								size="sm"
-								variant="outline"
-								onClick={() => edit(row.original)}
-							>
-								Edit
-							</Button>
-							<ConfirmAction
-								trigger="Delete"
-								triggerVariant="ghost"
-								destructive
-								title="Delete this group?"
-								description="Workers will be removed from the group. Their employment is unchanged."
-								confirmLabel="Delete"
-								disabled={remove.isPending}
-								onConfirm={() => remove.mutate(row.original.id)}
-							/>
-						</div>
-					),
-				}),
 			]),
-		[edit, remove],
+		[],
 	);
 
 	return (
-		<div className="flex flex-col gap-6">
-			<SettingsSection
+		<>
+			<SettingsCrudCard
 				title="All groups"
 				description="Team filters you can use on the schedule."
 				count={groups.length}
-			>
-				<DataTable
-					bounded
-					columns={columns}
-					data={groups}
-					getRowId={(row) => row.id}
-					empty={
-						<p className="text-muted-foreground text-sm">
-							No worker groups yet.
-						</p>
-					}
-				/>
-			</SettingsSection>
+				data={groups}
+				columns={columns}
+				getRowId={(row) => row.id}
+				getSearchText={(row) => row.name}
+				searchPlaceholder="Search groups"
+				entityLabel="group"
+				emptyIcon={<UsersIcon />}
+				emptyTitle="No worker groups yet"
+				emptyDescription="Group people so you can filter the schedule and staff a week faster."
+				addLabel="Add group"
+				onAdd={startAdd}
+				rowActions={{
+					onEdit: startEdit,
+					onDelete: (row) => remove.mutate(row.id),
+					deleteTitle: "Delete this group?",
+					deleteDescription:
+						"Workers will be removed from the group. Their employment is unchanged.",
+					deleteDisabled: remove.isPending,
+				}}
+			/>
 
-			<SettingsSection
+			<SettingsFormSheet
+				open={open}
+				onOpenChange={(next) => {
+					setOpen(next);
+					if (!next) resetForm();
+				}}
 				title={editingId ? "Edit group" : "Add group"}
 				description={
 					editingId
@@ -236,25 +265,30 @@ export function GroupsCard({
 						: "Create a team filter for the schedule."
 				}
 				footer={
-					<div className="flex flex-wrap gap-2">
+					<div className={sheetFooterClassName}>
+						<Button
+							variant="outline"
+							onClick={() => {
+								setOpen(false);
+								resetForm();
+							}}
+						>
+							Cancel
+						</Button>
 						<Button
 							type="submit"
 							form="group-form"
 							disabled={save.isPending || !name.trim()}
 						>
 							{save.isPending ? <Spinner data-icon="inline-start" /> : null}
-							{editingId ? "Update group" : "Add group"}
+							{editingId ? "Save group" : "Add group"}
 						</Button>
-						{editingId ? (
-							<Button type="button" variant="ghost" onClick={() => edit()}>
-								Cancel
-							</Button>
-						) : null}
 					</div>
 				}
 			>
 				<form
 					id="group-form"
+					className="flex flex-col gap-4"
 					onSubmit={(event) => {
 						event.preventDefault();
 						save.mutate();
@@ -268,45 +302,69 @@ export function GroupsCard({
 								value={name}
 								onChange={(event) => setName(event.target.value)}
 								placeholder="Closing team"
+								autoFocus
 								required
 							/>
 						</Field>
-						<div className="grid gap-2 sm:grid-cols-2">
-							{workers
-								.filter((worker) => worker.status === "active")
-								.map((worker) => (
-									<Field
-										key={worker.employmentId}
-										orientation="horizontal"
-										className="items-center"
-									>
-										<Checkbox
-											id={`group-worker-${worker.employmentId}`}
-											checked={employmentIds.includes(worker.employmentId)}
-											onCheckedChange={() =>
-												setEmploymentIds((current) =>
-													current.includes(worker.employmentId)
-														? current.filter((id) => id !== worker.employmentId)
-														: [...current, worker.employmentId],
-												)
-											}
-										/>
-										<FieldLabel
-											htmlFor={`group-worker-${worker.employmentId}`}
-											className="font-normal"
-										>
-											{formatPerson(
-												worker.profile.fullName,
-												worker.profile.email,
-											)}
-										</FieldLabel>
-									</Field>
-								))}
-						</div>
+						<Field>
+							<FieldTitle>Members</FieldTitle>
+							<div className="flex flex-col gap-2">
+								<InputGroup className="max-w-xs">
+									<InputGroupAddon>
+										<SearchIcon />
+									</InputGroupAddon>
+									<InputGroupInput
+										type="search"
+										value={memberSearch}
+										onChange={(event) => setMemberSearch(event.target.value)}
+										placeholder="Search people"
+										aria-label="Search people"
+									/>
+								</InputGroup>
+								<div className="max-h-64 overflow-y-auto rounded-lg border p-1">
+									{visibleWorkers.length === 0 ? (
+										<p className="px-2 py-3 text-muted-foreground text-xs">
+											No people match.
+										</p>
+									) : (
+										visibleWorkers.map((worker) => (
+											<Field
+												key={worker.employmentId}
+												orientation="horizontal"
+												className="items-center rounded-md px-2 py-1.5 hover:bg-muted/50"
+											>
+												<Checkbox
+													id={`group-worker-${worker.employmentId}`}
+													checked={employmentIds.includes(worker.employmentId)}
+													onCheckedChange={() =>
+														setEmploymentIds((current) =>
+															current.includes(worker.employmentId)
+																? current.filter(
+																		(id) => id !== worker.employmentId,
+																	)
+																: [...current, worker.employmentId],
+														)
+													}
+												/>
+												<FieldLabel
+													htmlFor={`group-worker-${worker.employmentId}`}
+													className="font-normal"
+												>
+													{formatPerson(
+														worker.profile.fullName,
+														worker.profile.email,
+													)}
+												</FieldLabel>
+											</Field>
+										))
+									)}
+								</div>
+							</div>
+						</Field>
 					</FieldGroup>
 				</form>
-			</SettingsSection>
-		</div>
+			</SettingsFormSheet>
+		</>
 	);
 }
 
@@ -318,12 +376,15 @@ export function TagsCard({
 	tags: Tag[];
 }) {
 	const queryClient = useQueryClient();
+	const [open, setOpen] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [tagName, setTagName] = useState("");
-	const edit = useCallback((tag?: Tag) => {
-		setEditingId(tag?.id ?? null);
-		setTagName(tag?.name ?? "");
+
+	const resetForm = useCallback(() => {
+		setEditingId(null);
+		setTagName("");
 	}, []);
+
 	const save = useMutation({
 		mutationFn: () =>
 			api(
@@ -336,7 +397,8 @@ export function TagsCard({
 				},
 			),
 		onSuccess: () => {
-			edit();
+			resetForm();
+			setOpen(false);
 			queryClient.invalidateQueries({ queryKey: ["tags", workplaceId] });
 			toast.success("Shift Tag saved.");
 		},
@@ -353,6 +415,17 @@ export function TagsCard({
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
+
+	const startAdd = () => {
+		resetForm();
+		setOpen(true);
+	};
+	const startEdit = (tag: Tag) => {
+		setEditingId(tag.id);
+		setTagName(tag.name);
+		setOpen(true);
+	};
+
 	const columns = useMemo(
 		() =>
 			tagHelper.columns([
@@ -362,84 +435,69 @@ export function TagsCard({
 						<span className="font-medium">{getValue()}</span>
 					),
 				}),
-				tagHelper.display({
-					id: "actions",
-					header: "Actions",
-					enableSorting: false,
-					cell: ({ row }) => (
-						<div className="flex flex-wrap items-center justify-end gap-2">
-							<Button
-								size="sm"
-								variant="outline"
-								onClick={() => edit(row.original)}
-							>
-								Edit
-							</Button>
-							<ConfirmAction
-								trigger="Delete"
-								triggerVariant="ghost"
-								destructive
-								title="Delete this tag?"
-								description="Shifts using this tag will lose the label."
-								confirmLabel="Delete"
-								disabled={remove.isPending}
-								onConfirm={() => remove.mutate(row.original.id)}
-							/>
-						</div>
-					),
-				}),
 			]),
-		[edit, remove],
+		[],
 	);
 
 	return (
-		<div className="flex flex-col gap-6">
-			<SettingsSection
+		<>
+			<SettingsCrudCard
 				title="All tags"
 				description="Labels that can appear on a shift tile."
 				count={tags.length}
-			>
-				<DataTable
-					bounded
-					columns={columns}
-					data={tags}
-					getRowId={(row) => row.id}
-					empty={
-						<Empty>
-							<EmptyHeader>
-								<EmptyTitle>No shift tags yet</EmptyTitle>
-								<EmptyDescription>
-									Add a short label below to use on shift tiles.
-								</EmptyDescription>
-							</EmptyHeader>
-						</Empty>
-					}
-				/>
-			</SettingsSection>
+				data={tags}
+				columns={columns}
+				getRowId={(row) => row.id}
+				getSearchText={(row) => row.name}
+				searchPlaceholder="Search tags"
+				entityLabel="tag"
+				emptyIcon={<TagsIcon />}
+				emptyTitle="No shift tags yet"
+				emptyDescription="Add a short label to use on shift tiles."
+				addLabel="Add tag"
+				onAdd={startAdd}
+				rowActions={{
+					onEdit: startEdit,
+					onDelete: (row) => remove.mutate(row.id),
+					deleteTitle: "Delete this tag?",
+					deleteDescription: "Shifts using this tag will lose the label.",
+					deleteDisabled: remove.isPending,
+				}}
+			/>
 
-			<SettingsSection
+			<SettingsFormSheet
+				open={open}
+				onOpenChange={(next) => {
+					setOpen(next);
+					if (!next) resetForm();
+				}}
 				title={editingId ? "Edit tag" : "Add tag"}
 				description="Keep names short — they show on shift tiles."
 				footer={
-					<div className="flex flex-wrap gap-2">
+					<div className={sheetFooterClassName}>
+						<Button
+							variant="outline"
+							onClick={() => {
+								setOpen(false);
+								resetForm();
+							}}
+						>
+							Cancel
+						</Button>
 						<Button
 							type="submit"
 							form="tag-form"
 							disabled={!tagName.trim() || save.isPending}
 						>
 							{save.isPending ? <Spinner data-icon="inline-start" /> : null}
-							{editingId ? "Update tag" : "Add tag"}
+							{editingId ? "Save tag" : "Add tag"}
 						</Button>
-						{editingId ? (
-							<Button type="button" variant="ghost" onClick={() => edit()}>
-								Cancel
-							</Button>
-						) : null}
 					</div>
 				}
 			>
 				<form
 					id="tag-form"
+					className="flex flex-col gap-4"
 					onSubmit={(event) => {
 						event.preventDefault();
 						save.mutate();
@@ -452,11 +510,13 @@ export function TagsCard({
 							value={tagName}
 							onChange={(event) => setTagName(event.target.value)}
 							placeholder="Training"
+							autoFocus
+							required
 						/>
 					</Field>
 				</form>
-			</SettingsSection>
-		</div>
+			</SettingsFormSheet>
+		</>
 	);
 }
 
@@ -468,14 +528,17 @@ export function LeaveTypesCard({
 	leaveTypes: LeaveType[];
 }) {
 	const queryClient = useQueryClient();
+	const [open, setOpen] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [leaveName, setLeaveName] = useState("");
 	const [paid, setPaid] = useState(false);
-	const edit = useCallback((leaveType?: LeaveType) => {
-		setEditingId(leaveType?.id ?? null);
-		setLeaveName(leaveType?.name ?? "");
-		setPaid(leaveType?.paid ?? false);
+
+	const resetForm = useCallback(() => {
+		setEditingId(null);
+		setLeaveName("");
+		setPaid(false);
 	}, []);
+
 	const save = useMutation({
 		mutationFn: () =>
 			api(
@@ -488,7 +551,8 @@ export function LeaveTypesCard({
 				},
 			),
 		onSuccess: () => {
-			edit();
+			resetForm();
+			setOpen(false);
 			queryClient.invalidateQueries({
 				queryKey: ["leave-types", workplaceId],
 			});
@@ -509,6 +573,18 @@ export function LeaveTypesCard({
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
+
+	const startAdd = () => {
+		resetForm();
+		setOpen(true);
+	};
+	const startEdit = (leaveType: LeaveType) => {
+		setEditingId(leaveType.id);
+		setLeaveName(leaveType.name);
+		setPaid(leaveType.paid);
+		setOpen(true);
+	};
+
 	const columns = useMemo(
 		() =>
 			leaveHelper.columns([
@@ -522,62 +598,43 @@ export function LeaveTypesCard({
 					header: "Pay",
 					cell: ({ getValue }) => (getValue() ? "Paid" : "Unpaid"),
 				}),
-				leaveHelper.display({
-					id: "actions",
-					header: "Actions",
-					enableSorting: false,
-					cell: ({ row }) => (
-						<div className="flex flex-wrap items-center justify-end gap-2">
-							<Button
-								size="sm"
-								variant="outline"
-								onClick={() => edit(row.original)}
-							>
-								Edit
-							</Button>
-							<ConfirmAction
-								trigger="Delete"
-								triggerVariant="ghost"
-								destructive
-								title="Delete this leave type?"
-								description="PTO balances for this type will be removed. Existing time-off requests keep their dates."
-								confirmLabel="Delete"
-								disabled={remove.isPending}
-								onConfirm={() => remove.mutate(row.original.id)}
-							/>
-						</div>
-					),
-				}),
 			]),
-		[edit, remove],
+		[],
 	);
 
 	return (
-		<div className="flex flex-col gap-6">
-			<SettingsSection
+		<>
+			<SettingsCrudCard
 				title="All leave types"
 				description="Request rules live under Time off. These are the categories people pick."
 				count={leaveTypes.length}
-			>
-				<DataTable
-					bounded
-					columns={columns}
-					data={leaveTypes}
-					getRowId={(row) => row.id}
-					empty={
-						<Empty>
-							<EmptyHeader>
-								<EmptyTitle>No leave types yet</EmptyTitle>
-								<EmptyDescription>
-									Add the reasons people can request time off.
-								</EmptyDescription>
-							</EmptyHeader>
-						</Empty>
-					}
-				/>
-			</SettingsSection>
+				data={leaveTypes}
+				columns={columns}
+				getRowId={(row) => row.id}
+				getSearchText={(row) => `${row.name} ${row.paid ? "paid" : "unpaid"}`}
+				searchPlaceholder="Search leave types"
+				entityLabel="leave type"
+				emptyIcon={<CalendarOffIcon />}
+				emptyTitle="No leave types yet"
+				emptyDescription="Add the reasons people can request time off."
+				addLabel="Add leave type"
+				onAdd={startAdd}
+				rowActions={{
+					onEdit: startEdit,
+					onDelete: (row) => remove.mutate(row.id),
+					deleteTitle: "Delete this leave type?",
+					deleteDescription:
+						"PTO balances for this type will be removed. Existing time-off requests keep their dates.",
+					deleteDisabled: remove.isPending,
+				}}
+			/>
 
-			<SettingsSection
+			<SettingsFormSheet
+				open={open}
+				onOpenChange={(next) => {
+					setOpen(next);
+					if (!next) resetForm();
+				}}
 				title={editingId ? "Edit leave type" : "Add leave type"}
 				description={
 					editingId
@@ -585,26 +642,30 @@ export function LeaveTypesCard({
 						: "Paid types deduct remaining hours when a request is approved."
 				}
 				footer={
-					<div className="flex flex-wrap gap-2">
+					<div className={sheetFooterClassName}>
+						<Button
+							variant="outline"
+							onClick={() => {
+								setOpen(false);
+								resetForm();
+							}}
+						>
+							Cancel
+						</Button>
 						<Button
 							type="submit"
 							form="leave-form"
 							disabled={!leaveName.trim() || save.isPending}
 						>
 							{save.isPending ? <Spinner data-icon="inline-start" /> : null}
-							{editingId ? "Update leave type" : "Add leave type"}
+							{editingId ? "Save leave type" : "Add leave type"}
 						</Button>
-						{editingId ? (
-							<Button type="button" variant="ghost" onClick={() => edit()}>
-								Cancel
-							</Button>
-						) : null}
 					</div>
 				}
 			>
 				<form
 					id="leave-form"
-					className="grid gap-4"
+					className="flex flex-col gap-4"
 					onSubmit={(event) => {
 						event.preventDefault();
 						save.mutate();
@@ -617,6 +678,8 @@ export function LeaveTypesCard({
 							value={leaveName}
 							onChange={(event) => setLeaveName(event.target.value)}
 							placeholder="Vacation"
+							autoFocus
+							required
 						/>
 					</Field>
 					<Field orientation="horizontal" className="items-center">
@@ -630,15 +693,17 @@ export function LeaveTypesCard({
 						</FieldLabel>
 					</Field>
 				</form>
-			</SettingsSection>
-		</div>
+			</SettingsFormSheet>
+		</>
 	);
 }
 
 function RangeSection({
 	kind,
 	label,
-	emptyLabel,
+	emptyTitle,
+	emptyDescription,
+	emptyIcon,
 	rows,
 	locationId,
 	locations,
@@ -647,7 +712,9 @@ function RangeSection({
 }: {
 	kind: "time-blocks" | "day-parts";
 	label: string;
-	emptyLabel: string;
+	emptyTitle: string;
+	emptyDescription: string;
+	emptyIcon: ReactNode;
 	rows: RangeRow[];
 	locationId: string | undefined;
 	locations: LocationDto[];
@@ -656,18 +723,23 @@ function RangeSection({
 }) {
 	const { formatMinute } = useDisplayPrefs();
 	const queryClient = useQueryClient();
+	const [open, setOpen] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [name, setName] = useState("");
 	const [startMinute, setStartMinute] = useState(9 * 60);
 	const [endMinute, setEndMinute] = useState(17 * 60);
-	const edit = useCallback((row?: RangeRow) => {
-		setEditingId(row?.id ?? null);
-		setName(row?.name ?? "");
-		setStartMinute(row?.startMinute ?? 9 * 60);
-		setEndMinute(row?.endMinute ?? 17 * 60);
+	const lower = label.toLowerCase();
+
+	const resetForm = useCallback(() => {
+		setEditingId(null);
+		setName("");
+		setStartMinute(9 * 60);
+		setEndMinute(17 * 60);
 	}, []);
+
 	const invalidate = () =>
 		queryClient.invalidateQueries({ queryKey: ["time-blocks", locationId] });
+
 	const save = useMutation({
 		mutationFn: () =>
 			api(
@@ -680,7 +752,8 @@ function RangeSection({
 				},
 			),
 		onSuccess: () => {
-			edit();
+			resetForm();
+			setOpen(false);
 			invalidate();
 			toast.success(`${label} saved.`);
 		},
@@ -697,6 +770,19 @@ function RangeSection({
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
+
+	const startAdd = () => {
+		resetForm();
+		setOpen(true);
+	};
+	const startEdit = (row: RangeRow) => {
+		setEditingId(row.id);
+		setName(row.name);
+		setStartMinute(row.startMinute);
+		setEndMinute(row.endMinute);
+		setOpen(true);
+	};
+
 	const columns = useMemo(
 		() =>
 			rangeHelper.columns([
@@ -719,39 +805,13 @@ function RangeSection({
 						),
 					},
 				),
-				rangeHelper.display({
-					id: "actions",
-					header: "Actions",
-					enableSorting: false,
-					cell: ({ row }) => (
-						<div className="flex flex-wrap items-center justify-end gap-2">
-							<Button
-								size="sm"
-								variant="outline"
-								onClick={() => edit(row.original)}
-							>
-								Edit
-							</Button>
-							<ConfirmAction
-								trigger="Delete"
-								triggerVariant="ghost"
-								destructive
-								title={`Delete this ${label.toLowerCase()}?`}
-								description={`This ${label.toLowerCase()} will be removed from the location.`}
-								confirmLabel="Delete"
-								disabled={remove.isPending}
-								onConfirm={() => remove.mutate(row.original.id)}
-							/>
-						</div>
-					),
-				}),
 			]),
-		[edit, formatMinute, label, remove],
+		[formatMinute],
 	);
 
 	return (
-		<div className="flex flex-col gap-6">
-			<SettingsSection
+		<>
+			<SettingsCrudCard
 				title={label === "Time Block" ? "All time blocks" : "All day parts"}
 				description={
 					label === "Time Block"
@@ -759,66 +819,75 @@ function RangeSection({
 						: "Parts of service for this location, such as breakfast or dinner."
 				}
 				count={rows.length}
-			>
-				<div className="flex flex-col gap-4">
+				data={rows}
+				columns={columns}
+				getRowId={(row) => row.id}
+				getSearchText={(row) => row.name}
+				searchPlaceholder={`Search ${lower}s`}
+				toolbar={
 					<SettingsLocationField
 						locations={locations}
 						locationId={locationId}
 						onLocationChange={(id) => {
-							edit();
+							resetForm();
 							onLocationChange(id);
 						}}
 					/>
-					{!locationId ? null : isLoading ? (
-						<p className="text-muted-foreground text-sm">Loading…</p>
-					) : (
-						<DataTable
-							bounded
-							columns={columns}
-							data={rows}
-							getRowId={(row) => row.id}
-							empty={
-								<p className="text-muted-foreground text-sm">{emptyLabel}</p>
-							}
-						/>
-					)}
-				</div>
-			</SettingsSection>
+				}
+				isLoading={Boolean(locationId) && isLoading}
+				entityLabel={lower}
+				emptyIcon={emptyIcon}
+				emptyTitle={emptyTitle}
+				emptyDescription={emptyDescription}
+				addLabel={`Add ${lower}`}
+				onAdd={locationId ? startAdd : undefined}
+				rowActions={{
+					onEdit: startEdit,
+					onDelete: (row) => remove.mutate(row.id),
+					deleteTitle: `Delete this ${lower}?`,
+					deleteDescription: `This ${lower} will be removed from the location.`,
+					deleteDisabled: remove.isPending,
+				}}
+			/>
 
 			{locationId ? (
-				<SettingsSection
-					title={
-						editingId
-							? `Edit ${label.toLowerCase()}`
-							: `Add ${label.toLowerCase()}`
-					}
+				<SettingsFormSheet
+					open={open}
+					onOpenChange={(next) => {
+						setOpen(next);
+						if (!next) resetForm();
+					}}
+					title={editingId ? `Edit ${lower}` : `Add ${lower}`}
 					description={
 						editingId
-							? `Update the name or hours for this ${label.toLowerCase()}.`
-							: `Give this ${label.toLowerCase()} a name and a start and end time.`
+							? `Update the name or hours for this ${lower}.`
+							: `Give this ${lower} a name and a start and end time.`
 					}
 					footer={
-						<div className="flex flex-wrap gap-2">
+						<div className={sheetFooterClassName}>
+							<Button
+								variant="outline"
+								onClick={() => {
+									setOpen(false);
+									resetForm();
+								}}
+							>
+								Cancel
+							</Button>
 							<Button
 								type="submit"
 								form={`${kind}-form`}
 								disabled={!name.trim() || save.isPending}
 							>
 								{save.isPending ? <Spinner data-icon="inline-start" /> : null}
-								{editingId
-									? `Update ${label.toLowerCase()}`
-									: `Add ${label.toLowerCase()}`}
+								{editingId ? `Save ${lower}` : `Add ${lower}`}
 							</Button>
-							{editingId ? (
-								<Button type="button" variant="ghost" onClick={() => edit()}>
-									Cancel
-								</Button>
-							) : null}
 						</div>
 					}
 				>
 					<form
 						id={`${kind}-form`}
+						className="flex flex-col gap-4"
 						onSubmit={(event) => {
 							event.preventDefault();
 							save.mutate();
@@ -832,6 +901,8 @@ function RangeSection({
 									value={name}
 									onChange={(event) => setName(event.target.value)}
 									placeholder={kind === "day-parts" ? "Evening" : "Mid shift"}
+									autoFocus
+									required
 								/>
 							</Field>
 							<Field>
@@ -848,13 +919,14 @@ function RangeSection({
 									id={`${kind}-end`}
 									value={endMinute}
 									onValueChange={setEndMinute}
+									overnightAfterMinute={startMinute}
 								/>
 							</Field>
 						</FieldGroup>
 					</form>
-				</SettingsSection>
+				</SettingsFormSheet>
 			) : null}
-		</div>
+		</>
 	);
 }
 
@@ -875,7 +947,9 @@ export function TimeBlocksCard({
 		<RangeSection
 			kind="time-blocks"
 			label="Time Block"
-			emptyLabel="No time blocks yet."
+			emptyIcon={<ClockIcon />}
+			emptyTitle="No time blocks yet"
+			emptyDescription="Named windows you can drop onto the week while building a schedule."
 			rows={data?.timeBlocks ?? []}
 			locationId={locationId}
 			locations={locations}
@@ -902,7 +976,9 @@ export function DayPartsCard({
 		<RangeSection
 			kind="day-parts"
 			label="Day Part"
-			emptyLabel="No day parts yet."
+			emptyIcon={<SunIcon />}
+			emptyTitle="No day parts yet"
+			emptyDescription="Parts of service for this location, such as breakfast or dinner."
 			rows={data?.dayParts ?? []}
 			locationId={locationId}
 			locations={locations}
@@ -929,22 +1005,32 @@ export function TemplatesCard({
 }) {
 	const { formatMinute } = useDisplayPrefs();
 	const queryClient = useQueryClient();
+	const [open, setOpen] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [templateName, setTemplateName] = useState("");
 	const [positionId, setPositionId] = useState("");
 	const [templateStart, setTemplateStart] = useState(9 * 60);
 	const [templateEnd, setTemplateEnd] = useState(17 * 60);
 	const [note, setNote] = useState("");
-	const edit = useCallback((template?: TemplateRow) => {
-		setEditingId(template?.id ?? null);
-		setTemplateName(template?.name ?? "");
-		setPositionId(template?.positionId ?? "");
-		setTemplateStart(template?.startMinute ?? 9 * 60);
-		setTemplateEnd(template?.endMinute ?? 17 * 60);
-		setNote(template?.note ?? "");
+
+	const positionName = useCallback(
+		(id: string) =>
+			positions.find((position) => position.id === id)?.name ?? "",
+		[positions],
+	);
+
+	const resetForm = useCallback(() => {
+		setEditingId(null);
+		setTemplateName("");
+		setPositionId("");
+		setTemplateStart(9 * 60);
+		setTemplateEnd(17 * 60);
+		setNote("");
 	}, []);
+
 	const invalidate = () =>
 		queryClient.invalidateQueries({ queryKey: ["time-blocks", locationId] });
+
 	const save = useMutation({
 		mutationFn: () =>
 			api(
@@ -964,7 +1050,8 @@ export function TemplatesCard({
 				},
 			),
 		onSuccess: () => {
-			edit();
+			resetForm();
+			setOpen(false);
 			invalidate();
 			toast.success("Shift Template saved.");
 		},
@@ -981,6 +1068,21 @@ export function TemplatesCard({
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
+
+	const startAdd = () => {
+		resetForm();
+		setOpen(true);
+	};
+	const startEdit = (template: TemplateRow) => {
+		setEditingId(template.id);
+		setTemplateName(template.name);
+		setPositionId(template.positionId);
+		setTemplateStart(template.startMinute);
+		setTemplateEnd(template.endMinute);
+		setNote(template.note ?? "");
+		setOpen(true);
+	};
+
 	const columns = useMemo(
 		() =>
 			templateHelper.columns([
@@ -989,6 +1091,11 @@ export function TemplatesCard({
 					cell: ({ getValue }) => (
 						<span className="font-medium">{getValue()}</span>
 					),
+				}),
+				templateHelper.accessor((row) => positionName(row.positionId), {
+					id: "position",
+					header: "Position",
+					cell: ({ getValue }) => getValue() || "—",
 				}),
 				templateHelper.accessor(
 					(row) =>
@@ -1003,74 +1110,58 @@ export function TemplatesCard({
 						),
 					},
 				),
-				templateHelper.display({
-					id: "actions",
-					header: "Actions",
-					enableSorting: false,
-					cell: ({ row }) => (
-						<div className="flex flex-wrap items-center justify-end gap-2">
-							<Button
-								size="sm"
-								variant="outline"
-								onClick={() => edit(row.original)}
-							>
-								Edit
-							</Button>
-							<ConfirmAction
-								trigger="Delete"
-								triggerVariant="ghost"
-								destructive
-								title="Delete this template?"
-								description="This template will be removed from the location."
-								confirmLabel="Delete"
-								disabled={remove.isPending}
-								onConfirm={() => remove.mutate(row.original.id)}
-							/>
-						</div>
-					),
-				}),
 			]),
-		[edit, formatMinute, remove],
+		[formatMinute, positionName],
 	);
 
 	const templates = data?.shiftTemplates ?? [];
 
 	return (
-		<div className="flex flex-col gap-6">
-			<SettingsSection
+		<>
+			<SettingsCrudCard
 				title="All templates"
-				count={templates.length}
 				description="Reusable shift shapes for a position at this location."
-			>
-				<div className="flex flex-col gap-4">
+				count={templates.length}
+				data={templates}
+				columns={columns}
+				getRowId={(row) => row.id}
+				getSearchText={(row) =>
+					`${row.name} ${positionName(row.positionId)} ${row.note ?? ""}`
+				}
+				searchPlaceholder="Search templates"
+				toolbar={
 					<SettingsLocationField
 						locations={locations}
 						locationId={locationId}
 						onLocationChange={(id) => {
-							edit();
+							resetForm();
 							onLocationChange(id);
 						}}
 					/>
-					{!locationId ? null : isLoading ? (
-						<p className="text-muted-foreground text-sm">Loading…</p>
-					) : (
-						<DataTable
-							bounded
-							columns={columns}
-							data={templates}
-							getRowId={(row) => row.id}
-							empty={
-								<p className="text-muted-foreground text-sm">
-									No shift templates yet.
-								</p>
-							}
-						/>
-					)}
-				</div>
-			</SettingsSection>
+				}
+				isLoading={Boolean(locationId) && isLoading}
+				entityLabel="template"
+				emptyIcon={<LayoutTemplateIcon />}
+				emptyTitle="No shift templates yet"
+				emptyDescription="Save a position and time window you reuse often."
+				addLabel="Add template"
+				onAdd={locationId ? startAdd : undefined}
+				rowActions={{
+					onEdit: startEdit,
+					onDelete: (row) => remove.mutate(row.id),
+					deleteTitle: "Delete this template?",
+					deleteDescription: "This template will be removed from the location.",
+					deleteDisabled: remove.isPending,
+				}}
+			/>
 
 			{locationId ? (
-				<SettingsSection
+				<SettingsFormSheet
+					open={open}
+					onOpenChange={(next) => {
+						setOpen(next);
+						if (!next) resetForm();
+					}}
 					title={editingId ? "Edit template" : "Add template"}
 					description={
 						editingId
@@ -1078,25 +1169,30 @@ export function TemplatesCard({
 							: "Save a position and time window you reuse often."
 					}
 					footer={
-						<div className="flex flex-wrap gap-2">
+						<div className={sheetFooterClassName}>
+							<Button
+								variant="outline"
+								onClick={() => {
+									setOpen(false);
+									resetForm();
+								}}
+							>
+								Cancel
+							</Button>
 							<Button
 								type="submit"
 								form="template-form"
 								disabled={!templateName.trim() || !positionId || save.isPending}
 							>
 								{save.isPending ? <Spinner data-icon="inline-start" /> : null}
-								{editingId ? "Update template" : "Add template"}
+								{editingId ? "Save template" : "Add template"}
 							</Button>
-							{editingId ? (
-								<Button type="button" variant="ghost" onClick={() => edit()}>
-									Cancel
-								</Button>
-							) : null}
 						</div>
 					}
 				>
 					<form
 						id="template-form"
+						className="flex flex-col gap-4"
 						onSubmit={(event) => {
 							event.preventDefault();
 							save.mutate();
@@ -1110,6 +1206,8 @@ export function TemplatesCard({
 									value={templateName}
 									onChange={(event) => setTemplateName(event.target.value)}
 									placeholder="Opening associate"
+									autoFocus
+									required
 								/>
 							</Field>
 							<Field>
@@ -1150,6 +1248,7 @@ export function TemplatesCard({
 									id="template-end"
 									value={templateEnd}
 									onValueChange={setTemplateEnd}
+									overnightAfterMinute={templateStart}
 								/>
 							</Field>
 							<Field className="sm:col-span-2">
@@ -1162,8 +1261,8 @@ export function TemplatesCard({
 							</Field>
 						</FieldGroup>
 					</form>
-				</SettingsSection>
+				</SettingsFormSheet>
 			) : null}
-		</div>
+		</>
 	);
 }

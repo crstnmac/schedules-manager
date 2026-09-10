@@ -57,6 +57,13 @@ import {
 	leaveChargeMinutes,
 } from "@/components/leave-window-fields";
 import { LeaveTypesCard } from "@/components/settings-surface-cards";
+import {
+	TableFilter,
+	TablePagination,
+	TableSearch,
+	TableToolbar,
+	useTablePagination,
+} from "@/components/table-toolbar";
 import { api } from "@/lib/api";
 import {
 	formatLeaveHours,
@@ -111,6 +118,9 @@ function TimeOffPage() {
 	const [selectedRequestIds, setSelectedRequestIds] = useState<
 		ReadonlySet<string>
 	>(new Set());
+	const [decisionSearch, setDecisionSearch] = useState("");
+	const [historySearch, setHistorySearch] = useState("");
+	const [historyStatus, setHistoryStatus] = useState("all");
 
 	const approveBatch = useMutation({
 		mutationFn: async (requests: { id: string }[]) => {
@@ -144,6 +154,35 @@ function TimeOffPage() {
 		selectedRequestIds.has(request.id),
 	);
 	const decided = requests.filter((request) => request.status !== "pending");
+	const decisionRows = useMemo(() => {
+		const term = decisionSearch.trim().toLowerCase();
+		if (!term) return pending;
+		return pending.filter((request) =>
+			formatPerson(request.worker.fullName, request.worker.email)
+				.toLowerCase()
+				.includes(term),
+		);
+	}, [decisionSearch, formatPerson, pending]);
+	const decisionPagination = useTablePagination(decisionRows, {
+		resetKey: decisionSearch,
+	});
+	const historyRows = useMemo(() => {
+		const term = historySearch.trim().toLowerCase();
+		return decided.filter((request) => {
+			if (historyStatus !== "all" && request.status !== historyStatus) {
+				return false;
+			}
+			if (!term) return true;
+			return `${formatPerson(request.worker.fullName, request.worker.email)} ${
+				request.leaveTypeName ?? ""
+			}`
+				.toLowerCase()
+				.includes(term);
+		});
+	}, [decided, formatPerson, historySearch, historyStatus]);
+	const historyPagination = useTablePagination(historyRows, {
+		resetKey: `${historySearch}|${historyStatus}`,
+	});
 	const types = leaveTypes.data?.leaveTypes ?? [];
 	const team: TeamMember[] =
 		workers.data?.workers
@@ -361,7 +400,10 @@ function TimeOffPage() {
 						</TabsList>
 					</div>
 
-					<TabsContent value="decision" className="min-h-0 overflow-y-auto">
+					<TabsContent
+						value="decision"
+						className="flex min-h-0 flex-1 flex-col"
+					>
 						{timeOff.isLoading ? (
 							<div className="flex flex-col gap-3 p-4">
 								<Skeleton className="h-20" />
@@ -382,6 +424,16 @@ function TimeOffPage() {
 							</Empty>
 						) : (
 							<>
+								<TableToolbar
+									left={
+										<TableSearch
+											value={decisionSearch}
+											onValueChange={setDecisionSearch}
+											placeholder="Search person"
+										/>
+									}
+									right={<TablePagination {...decisionPagination} />}
+								/>
 								{selectedPending.length > 0 ? (
 									<div className="flex items-center justify-between gap-2 border-b bg-muted/40 px-4 py-2">
 										<p className="text-muted-foreground text-xs">
@@ -417,8 +469,8 @@ function TimeOffPage() {
 										</div>
 									</div>
 								) : null}
-								<ul className="divide-y">
-									{pending.map((request) => (
+								<ul className="min-h-0 flex-1 divide-y overflow-y-auto">
+									{decisionPagination.pageRows.map((request) => (
 										<PendingRequestRow
 											key={request.id}
 											request={request}
@@ -464,22 +516,56 @@ function TimeOffPage() {
 						/>
 					</TabsContent>
 
-					<TabsContent value="history" className="min-h-0 overflow-hidden">
-						<DataTable
-							columns={historyColumns}
-							data={decided}
-							getRowId={(row) => row.id}
-							empty={
-								<Empty>
-									<EmptyHeader>
-										<EmptyTitle>No decisions yet</EmptyTitle>
-										<EmptyDescription>
-											Approved and declined requests will stay here.
-										</EmptyDescription>
-									</EmptyHeader>
-								</Empty>
+					<TabsContent value="history" className="flex min-h-0 flex-1 flex-col">
+						<TableToolbar
+							left={
+								<>
+									<TableSearch
+										value={historySearch}
+										onValueChange={setHistorySearch}
+										placeholder="Search person or type"
+									/>
+									<TableFilter
+										value={historyStatus}
+										onValueChange={setHistoryStatus}
+										items={[
+											{ label: "All statuses", value: "all" },
+											{ label: "Approved", value: "approved" },
+											{ label: "Declined", value: "declined" },
+										]}
+										ariaLabel="Filter history by status"
+									/>
+								</>
 							}
+							right={<TablePagination {...historyPagination} />}
 						/>
+						<div className="min-h-0 flex-1 overflow-auto">
+							<DataTable
+								fill={false}
+								stacked
+								columns={historyColumns}
+								data={historyPagination.pageRows}
+								getRowId={(row) => row.id}
+								empty={
+									<div className="p-4">
+										<Empty className="border border-dashed">
+											<EmptyHeader>
+												<EmptyTitle>
+													{decided.length === 0
+														? "No decisions yet"
+														: "No matches"}
+												</EmptyTitle>
+												<EmptyDescription>
+													{decided.length === 0
+														? "Approved and declined requests will stay here."
+														: "Try a different search or status."}
+												</EmptyDescription>
+											</EmptyHeader>
+										</Empty>
+									</div>
+								}
+							/>
+						</div>
 					</TabsContent>
 
 					<TabsContent value="balances" className="min-h-0 overflow-y-auto p-4">

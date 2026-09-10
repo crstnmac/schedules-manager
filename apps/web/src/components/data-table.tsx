@@ -33,6 +33,12 @@ const features = tableFeatures({
 	sortFns,
 });
 
+export type DataTableColumn<TData extends RowData> = ColumnDef<
+	typeof features,
+	TData,
+	unknown
+>;
+
 export function createDataColumnHelper<TData extends RowData>() {
 	return createColumnHelper<typeof features, TData>();
 }
@@ -143,69 +149,69 @@ export function DataTable<TData extends RowData>({
 		>
 			<Table>
 				<TableHeader>
-				{dataTable.getHeaderGroups().map((headerGroup) => (
-					<TableRow key={headerGroup.id} className="hover:bg-transparent">
-						{headerGroup.headers.map((header) => {
-							const canSort = header.column.getCanSort();
-							const sorted = header.column.getIsSorted();
-							return (
-								<TableHead
-									key={header.id}
-									aria-sort={
-										sorted === "asc"
-											? "ascending"
-											: sorted === "desc"
-												? "descending"
-												: canSort
-													? "none"
-													: undefined
-									}
-								>
-									{header.isPlaceholder ? null : canSort ? (
-										<Button
-											type="button"
-											variant="ghost"
-											size="sm"
-											className="-ml-2 h-auto px-2 font-medium text-muted-foreground hover:text-foreground"
-											onClick={header.column.getToggleSortingHandler()}
-										>
-											{flexRender(
+					{dataTable.getHeaderGroups().map((headerGroup) => (
+						<TableRow key={headerGroup.id} className="hover:bg-transparent">
+							{headerGroup.headers.map((header) => {
+								const canSort = header.column.getCanSort();
+								const sorted = header.column.getIsSorted();
+								return (
+									<TableHead
+										key={header.id}
+										aria-sort={
+											sorted === "asc"
+												? "ascending"
+												: sorted === "desc"
+													? "descending"
+													: canSort
+														? "none"
+														: undefined
+										}
+									>
+										{header.isPlaceholder ? null : canSort ? (
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												className="-ml-2 h-auto px-2 font-medium text-muted-foreground hover:text-foreground"
+												onClick={header.column.getToggleSortingHandler()}
+											>
+												{flexRender(
+													header.column.columnDef.header,
+													header.getContext(),
+												)}
+												{sorted === "asc" ? (
+													<ArrowUpIcon data-icon="inline-end" />
+												) : sorted === "desc" ? (
+													<ArrowDownIcon data-icon="inline-end" />
+												) : (
+													<ChevronsUpDownIcon
+														data-icon="inline-end"
+														className="opacity-50"
+													/>
+												)}
+											</Button>
+										) : (
+											flexRender(
 												header.column.columnDef.header,
 												header.getContext(),
-											)}
-											{sorted === "asc" ? (
-												<ArrowUpIcon data-icon="inline-end" />
-											) : sorted === "desc" ? (
-												<ArrowDownIcon data-icon="inline-end" />
-											) : (
-												<ChevronsUpDownIcon
-													data-icon="inline-end"
-													className="opacity-50"
-												/>
-											)}
-										</Button>
-									) : (
-										flexRender(
-											header.column.columnDef.header,
-											header.getContext(),
-										)
-									)}
-								</TableHead>
-							);
-						})}
-					</TableRow>
-				))}
+											)
+										)}
+									</TableHead>
+								);
+							})}
+						</TableRow>
+					))}
 				</TableHeader>
 				<TableBody>
-				{dataTable.getRowModel().rows.map((row) => (
-					<TableRow key={row.id}>
-						{row.getAllCells().map((cell) => (
-							<TableCell key={cell.id}>
-								{flexRender(cell.column.columnDef.cell, cell.getContext())}
-							</TableCell>
-						))}
-					</TableRow>
-				))}
+					{dataTable.getRowModel().rows.map((row) => (
+						<TableRow key={row.id}>
+							{row.getAllCells().map((cell) => (
+								<TableCell key={cell.id}>
+									{flexRender(cell.column.columnDef.cell, cell.getContext())}
+								</TableCell>
+							))}
+						</TableRow>
+					))}
 				</TableBody>
 			</Table>
 		</div>

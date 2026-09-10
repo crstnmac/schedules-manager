@@ -33,9 +33,7 @@ export function SettingsPage({
 		(query) => query.data === undefined && (query.isLoading || query.isError),
 	);
 	return (
-		<div
-			className={cn("mx-auto flex w-full max-w-3xl flex-col gap-6", className)}
-		>
+		<div className={cn("flex w-full flex-col gap-6", className)}>
 			<header className="flex flex-col gap-1">
 				<h1 className="font-medium text-base tracking-tight">{title}</h1>
 				{description ? (
@@ -49,6 +47,29 @@ export function SettingsPage({
 			) : (
 				children
 			)}
+		</div>
+	);
+}
+
+/**
+ * Lays out independent settings cards. Single column by default, two columns
+ * once there is room, so pages use the full width without stretching content.
+ */
+export function SettingsColumns({
+	children,
+	className,
+}: {
+	children: ReactNode;
+	className?: string;
+}) {
+	return (
+		<div
+			className={cn(
+				"grid items-start gap-6 xl:grid-cols-2 [&>*]:min-w-0",
+				className,
+			)}
+		>
+			{children}
 		</div>
 	);
 }

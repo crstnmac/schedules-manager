@@ -119,7 +119,6 @@ function SubscriptionPage() {
 			title="Subscription"
 			description="One predictable price per active location. Workers and managers are always included."
 			queries={[billing]}
-			className="max-w-4xl"
 		>
 			{current ? (
 				<Alert>

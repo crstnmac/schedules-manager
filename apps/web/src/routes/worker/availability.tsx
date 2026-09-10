@@ -40,17 +40,18 @@ import {
 import { Textarea } from "@SchedulesManager/ui/components/textarea";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { PlusIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { AppDocument } from "@/components/app-page";
+import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { DatePicker } from "@/components/date-picker";
+import { FormSheet } from "@/components/form-sheet";
 import {
 	LeaveWindowFields,
 	leaveChargeMinutes,
 } from "@/components/leave-window-fields";
-import { PageHeader } from "@/components/page-header";
 import { TimePicker } from "@/components/time-picker";
 import { UnsavedChangesGuard } from "@/components/unsaved-changes";
 import { api } from "@/lib/api";
@@ -139,6 +140,7 @@ function AvailabilityPage() {
 	const [editing, setEditing] = useState<
 		WorkerConstraints["timeOff"][number] | null
 	>(null);
+	const [requestOpen, setRequestOpen] = useState(false);
 
 	const savedSnapshot = useRef<string | null>(null);
 
@@ -447,272 +449,295 @@ function AvailabilityPage() {
 	)?.minutes;
 
 	return (
-		<AppDocument>
+		<AppPage>
 			<UnsavedChangesGuard when={unavailabilityDirty} />
-			<PageHeader
+			<AppPageHeader
 				title="Time off & availability"
-				description="Request days off first. Recurring unavailability and preferences stay separate."
+				description="Request days off, set when you can't work, and add preferences."
+				actions={
+					canRequestTimeOff ? (
+						<Button size="sm" onClick={() => setRequestOpen(true)}>
+							<PlusIcon data-icon="inline-start" />
+							Request time off
+						</Button>
+					) : null
+				}
 			/>
+			<AppPageBody className="gap-4 p-4 md:p-6">
+				{constraints.isLoading ? (
+					<Skeleton className="h-40" />
+				) : (
+					<Tabs defaultValue="time-off">
+						<TabsList variant="line">
+							<TabsTrigger value="time-off">Time off</TabsTrigger>
+							<TabsTrigger value="unavailable">When I can't work</TabsTrigger>
+							<TabsTrigger value="preferences">Preferences</TabsTrigger>
+						</TabsList>
 
-			{constraints.isLoading ? (
-				<Skeleton className="h-40" />
-			) : (
-				<Tabs defaultValue="time-off">
-					<TabsList variant="line">
-						<TabsTrigger value="time-off">Time off</TabsTrigger>
-						<TabsTrigger value="unavailable">When I can't work</TabsTrigger>
-						<TabsTrigger value="preferences">Preferences</TabsTrigger>
-					</TabsList>
-
-					<TabsContent value="time-off" className="pt-4">
-						<Card>
-							<CardHeader>
-								<CardTitle>Request time off</CardTitle>
-								<CardDescription>
-									{canRequestTimeOff
-										? "All-day by default. Your manager reviews every request before it blocks the schedule."
-										: "This Workplace is not accepting Time-off Requests from workers. Ask a manager to record time off."}
-								</CardDescription>
-							</CardHeader>
-							<CardContent className="flex flex-col gap-4">
-								{(pto.data?.balances.length ?? 0) > 0 ? (
-									<div className="flex flex-wrap gap-2">
-										{pto.data?.balances.map((balance) => (
-											<Badge key={balance.leaveTypeId} variant="outline">
-												{balance.name}: {formatLeaveHours(balance.minutes)}
-											</Badge>
-										))}
-									</div>
-								) : null}
-								<DataTable
-									stacked
-									bounded
-									fill={false}
-									columns={timeOffColumns}
-									data={constraints.data?.timeOff ?? []}
-									getRowId={(row) => row.id}
-									empty={
-										<p className="text-muted-foreground text-sm">
-											No time-off requests yet.
-										</p>
-									}
-								/>
-								{canRequestTimeOff ? (
-									<LeaveWindowFields
-										idPrefix="off"
-										leaveTypes={leaveTypes.data?.leaveTypes ?? []}
-										leaveTypeId={leaveTypeId}
-										onLeaveTypeIdChange={setLeaveTypeId}
-										startDate={offStartDate}
-										endDate={offEndDate}
-										onStartDateChange={setOffStartDate}
-										onEndDateChange={setOffEndDate}
-										allDay={offAllDay}
-										onAllDayChange={setOffAllDay}
-										startMinute={offStart}
-										endMinute={offEnd}
-										onStartMinuteChange={setOffStart}
-										onEndMinuteChange={setOffEnd}
-										reason={offReason}
-										onReasonChange={setOffReason}
-										remainingMinutes={remainingForType}
-										timeZone={constraints.data?.timezone}
+						<TabsContent value="time-off" className="pt-4">
+							<Card>
+								<CardHeader>
+									<CardTitle>Your requests</CardTitle>
+									<CardDescription>
+										{canRequestTimeOff
+											? "All-day by default. Your manager reviews every request before it blocks the schedule."
+											: "This Workplace is not accepting Time-off Requests from workers. Ask a manager to record time off."}
+									</CardDescription>
+								</CardHeader>
+								<CardContent className="flex flex-col gap-4">
+									{(pto.data?.balances.length ?? 0) > 0 ? (
+										<div className="flex flex-wrap gap-2">
+											{pto.data?.balances.map((balance) => (
+												<Badge key={balance.leaveTypeId} variant="outline">
+													{balance.name}: {formatLeaveHours(balance.minutes)}
+												</Badge>
+											))}
+										</div>
+									) : null}
+									<DataTable
+										stacked
+										bounded
+										fill={false}
+										columns={timeOffColumns}
+										data={constraints.data?.timeOff ?? []}
+										getRowId={(row) => row.id}
+										empty={
+											<p className="text-muted-foreground text-sm">
+												No time-off requests yet.
+											</p>
+										}
 									/>
-								) : null}
-							</CardContent>
-							{canRequestTimeOff ? (
+								</CardContent>
+							</Card>
+						</TabsContent>
+
+						<TabsContent value="unavailable" className="pt-4">
+							<Card>
+								<CardHeader>
+									<CardTitle>When you can't work</CardTitle>
+									<CardDescription>
+										A hard constraint. Your manager should not schedule you
+										during these times unless they record an override.
+									</CardDescription>
+								</CardHeader>
+								<CardContent className="flex flex-col gap-4">
+									<DataTable
+										stacked
+										bounded
+										fill={false}
+										columns={unavailabilityColumns}
+										data={unavailabilityRows}
+										getRowId={(row) => `${row.kind}-${row.id}`}
+										empty={
+											<p className="text-muted-foreground text-sm">
+												No unavailability added.
+											</p>
+										}
+									/>
+									<FieldGroup className="grid gap-3 sm:grid-cols-4">
+										<Field>
+											<FieldLabel htmlFor="weekly-day">Every</FieldLabel>
+											<Select
+												items={WEEKDAY_ITEMS}
+												value={String(weekday)}
+												onValueChange={(value) => {
+													if (value == null) return;
+													setWeekday(Number(value));
+												}}
+											>
+												<SelectTrigger id="weekly-day" className="w-full">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent alignItemWithTrigger={false}>
+													<SelectGroup>
+														{WEEKDAY_ITEMS.map((item) => (
+															<SelectItem key={item.value} value={item.value}>
+																{item.label}
+															</SelectItem>
+														))}
+													</SelectGroup>
+												</SelectContent>
+											</Select>
+										</Field>
+										<Field>
+											<FieldLabel htmlFor="weekly-start">From</FieldLabel>
+											<TimePicker
+												id="weekly-start"
+												value={recurringStart}
+												onValueChange={setRecurringStart}
+											/>
+										</Field>
+										<Field>
+											<FieldLabel htmlFor="weekly-end">Until</FieldLabel>
+											<TimePicker
+												id="weekly-end"
+												value={recurringEnd}
+												onValueChange={setRecurringEnd}
+											/>
+										</Field>
+										<Button
+											type="button"
+											variant="outline"
+											onClick={addRecurring}
+										>
+											Add weekly window
+										</Button>
+									</FieldGroup>
+									<FieldGroup className="grid gap-3 sm:grid-cols-4">
+										<Field>
+											<FieldLabel htmlFor="date-exception">Date</FieldLabel>
+											<DatePicker
+												id="date-exception"
+												value={date}
+												onValueChange={setDate}
+											/>
+										</Field>
+										<Field>
+											<FieldLabel htmlFor="date-start">From</FieldLabel>
+											<TimePicker
+												id="date-start"
+												value={dateStart}
+												onValueChange={setDateStart}
+											/>
+										</Field>
+										<Field>
+											<FieldLabel htmlFor="date-end">Until</FieldLabel>
+											<TimePicker
+												id="date-end"
+												value={dateEnd}
+												onValueChange={setDateEnd}
+											/>
+										</Field>
+										<Button type="button" variant="outline" onClick={addDate}>
+											Add date exception
+										</Button>
+									</FieldGroup>
+								</CardContent>
+								<CardFooter>
+									<div className="flex items-center gap-2">
+										<Button
+											disabled={
+												saveUnavailability.isPending || !unavailabilityDirty
+											}
+											onClick={() => saveUnavailability.mutate()}
+										>
+											{saveUnavailability.isPending ? (
+												<Spinner data-icon="inline-start" />
+											) : null}
+											Save unavailability
+										</Button>
+										{unavailabilityDirty ? (
+											<Badge variant="secondary">Unsaved changes</Badge>
+										) : null}
+									</div>
+								</CardFooter>
+							</Card>
+						</TabsContent>
+
+						<TabsContent value="preferences" className="pt-4">
+							<Card>
+								<CardHeader>
+									<CardTitle>Preferences</CardTitle>
+									<CardDescription>
+										A note for your manager. Preferences never block scheduling.
+									</CardDescription>
+								</CardHeader>
+								<CardContent>
+									<Field>
+										<FieldLabel htmlFor="preference">
+											What you prefer
+										</FieldLabel>
+										<Textarea
+											id="preference"
+											value={preference}
+											onChange={(event) => setPreference(event.target.value)}
+											placeholder="I prefer mornings and Sundays."
+										/>
+									</Field>
+								</CardContent>
 								<CardFooter>
 									<Button
-										disabled={
-											requestTimeOff.isPending || !offStartDate || !leaveTypeId
-										}
-										onClick={() => requestTimeOff.mutate()}
+										disabled={savePreference.isPending}
+										onClick={() => savePreference.mutate()}
 									>
-										{requestTimeOff.isPending ? (
+										{savePreference.isPending ? (
 											<Spinner data-icon="inline-start" />
 										) : null}
-										Request time off
+										Save preference
 									</Button>
 								</CardFooter>
-							) : null}
-						</Card>
-					</TabsContent>
-
-					<TabsContent value="unavailable" className="pt-4">
-						<Card>
-							<CardHeader>
-								<CardTitle>When you can't work</CardTitle>
-								<CardDescription>
-									A hard constraint. Your manager should not schedule you during
-									these times unless they record an override.
-								</CardDescription>
-							</CardHeader>
-							<CardContent className="flex flex-col gap-4">
-								<DataTable
-									stacked
-									bounded
-									fill={false}
-									columns={unavailabilityColumns}
-									data={unavailabilityRows}
-									getRowId={(row) => `${row.kind}-${row.id}`}
-									empty={
-										<p className="text-muted-foreground text-sm">
-											No unavailability added.
-										</p>
-									}
-								/>
-								<FieldGroup className="grid gap-3 sm:grid-cols-4">
-									<Field>
-										<FieldLabel htmlFor="weekly-day">Every</FieldLabel>
-										<Select
-											items={WEEKDAY_ITEMS}
-											value={String(weekday)}
-											onValueChange={(value) => {
-												if (value == null) return;
-												setWeekday(Number(value));
-											}}
-										>
-											<SelectTrigger id="weekly-day" className="w-full">
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent alignItemWithTrigger={false}>
-												<SelectGroup>
-													{WEEKDAY_ITEMS.map((item) => (
-														<SelectItem key={item.value} value={item.value}>
-															{item.label}
-														</SelectItem>
-													))}
-												</SelectGroup>
-											</SelectContent>
-										</Select>
-									</Field>
-									<Field>
-										<FieldLabel htmlFor="weekly-start">From</FieldLabel>
-										<TimePicker
-											id="weekly-start"
-											value={recurringStart}
-											onValueChange={setRecurringStart}
-										/>
-									</Field>
-									<Field>
-										<FieldLabel htmlFor="weekly-end">Until</FieldLabel>
-										<TimePicker
-											id="weekly-end"
-											value={recurringEnd}
-											onValueChange={setRecurringEnd}
-										/>
-									</Field>
-									<Button
-										type="button"
-										variant="outline"
-										onClick={addRecurring}
-									>
-										Add weekly window
-									</Button>
-								</FieldGroup>
-								<FieldGroup className="grid gap-3 sm:grid-cols-4">
-									<Field>
-										<FieldLabel htmlFor="date-exception">Date</FieldLabel>
-										<DatePicker
-											id="date-exception"
-											value={date}
-											onValueChange={setDate}
-										/>
-									</Field>
-									<Field>
-										<FieldLabel htmlFor="date-start">From</FieldLabel>
-										<TimePicker
-											id="date-start"
-											value={dateStart}
-											onValueChange={setDateStart}
-										/>
-									</Field>
-									<Field>
-										<FieldLabel htmlFor="date-end">Until</FieldLabel>
-										<TimePicker
-											id="date-end"
-											value={dateEnd}
-											onValueChange={setDateEnd}
-										/>
-									</Field>
-									<Button type="button" variant="outline" onClick={addDate}>
-										Add date exception
-									</Button>
-								</FieldGroup>
-							</CardContent>
-							<CardFooter>
-								<div className="flex items-center gap-2">
-									<Button
-										disabled={
-											saveUnavailability.isPending || !unavailabilityDirty
-										}
-										onClick={() => saveUnavailability.mutate()}
-									>
-										{saveUnavailability.isPending ? (
-											<Spinner data-icon="inline-start" />
-										) : null}
-										Save unavailability
-									</Button>
-									{unavailabilityDirty ? (
-										<Badge variant="secondary">Unsaved changes</Badge>
-									) : null}
-								</div>
-							</CardFooter>
-						</Card>
-					</TabsContent>
-
-					<TabsContent value="preferences" className="pt-4">
-						<Card>
-							<CardHeader>
-								<CardTitle>Preferences</CardTitle>
-								<CardDescription>
-									A note for your manager. Preferences never block scheduling.
-								</CardDescription>
-							</CardHeader>
-							<CardContent>
-								<Field>
-									<FieldLabel htmlFor="preference">What you prefer</FieldLabel>
-									<Textarea
-										id="preference"
-										value={preference}
-										onChange={(event) => setPreference(event.target.value)}
-										placeholder="I prefer mornings and Sundays."
-									/>
-								</Field>
-							</CardContent>
-							<CardFooter>
-								<Button
-									disabled={savePreference.isPending}
-									onClick={() => savePreference.mutate()}
-								>
-									{savePreference.isPending ? (
-										<Spinner data-icon="inline-start" />
-									) : null}
-									Save preference
-								</Button>
-							</CardFooter>
-						</Card>
-					</TabsContent>
-				</Tabs>
-			)}
-			{editing ? (
-				<WorkerEditLeaveSheet
-					key={editing.id}
-					request={editing}
-					workplaceId={workplace?.id}
-					timeZone={constraints.data?.timezone}
-					leaveTypes={leaveTypes.data?.leaveTypes ?? []}
-					balances={pto.data?.balances ?? []}
-					onOpenChange={(open) => {
-						if (!open) setEditing(null);
-					}}
-					onSaved={() => {
-						setEditing(null);
-						invalidate();
-					}}
-				/>
-			) : null}
-		</AppDocument>
+							</Card>
+						</TabsContent>
+					</Tabs>
+				)}
+				<FormSheet
+					open={requestOpen}
+					onOpenChange={setRequestOpen}
+					title="Request time off"
+					description="All-day by default. Your manager reviews every request before it blocks the schedule."
+					footer={
+						<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+							<Button variant="outline" onClick={() => setRequestOpen(false)}>
+								Cancel
+							</Button>
+							<Button
+								disabled={
+									requestTimeOff.isPending || !offStartDate || !leaveTypeId
+								}
+								onClick={() =>
+									requestTimeOff.mutate(undefined, {
+										onSuccess: () => setRequestOpen(false),
+									})
+								}
+							>
+								{requestTimeOff.isPending ? (
+									<Spinner data-icon="inline-start" />
+								) : null}
+								Request time off
+							</Button>
+						</div>
+					}
+				>
+					<LeaveWindowFields
+						idPrefix="off"
+						leaveTypes={leaveTypes.data?.leaveTypes ?? []}
+						leaveTypeId={leaveTypeId}
+						onLeaveTypeIdChange={setLeaveTypeId}
+						startDate={offStartDate}
+						endDate={offEndDate}
+						onStartDateChange={setOffStartDate}
+						onEndDateChange={setOffEndDate}
+						allDay={offAllDay}
+						onAllDayChange={setOffAllDay}
+						startMinute={offStart}
+						endMinute={offEnd}
+						onStartMinuteChange={setOffStart}
+						onEndMinuteChange={setOffEnd}
+						reason={offReason}
+						onReasonChange={setOffReason}
+						remainingMinutes={remainingForType}
+						timeZone={constraints.data?.timezone}
+					/>
+				</FormSheet>
+				{editing ? (
+					<WorkerEditLeaveSheet
+						key={editing.id}
+						request={editing}
+						workplaceId={workplace?.id}
+						timeZone={constraints.data?.timezone}
+						leaveTypes={leaveTypes.data?.leaveTypes ?? []}
+						balances={pto.data?.balances ?? []}
+						onOpenChange={(open) => {
+							if (!open) setEditing(null);
+						}}
+						onSaved={() => {
+							setEditing(null);
+							invalidate();
+						}}
+					/>
+				) : null}
+			</AppPageBody>
+		</AppPage>
 	);
 }
 

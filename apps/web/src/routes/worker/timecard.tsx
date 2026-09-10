@@ -1,12 +1,10 @@
+import {
+	Alert,
+	AlertDescription,
+	AlertTitle,
+} from "@SchedulesManager/ui/components/alert";
 import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from "@SchedulesManager/ui/components/card";
 import {
 	Empty,
 	EmptyDescription,
@@ -21,8 +19,15 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronLeftIcon, TimerIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AppDocument } from "@/components/app-page";
+import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import {
+	TableFilter,
+	TablePagination,
+	TableSearch,
+	TableToolbar,
+	useTablePagination,
+} from "@/components/table-toolbar";
 import { api } from "@/lib/api";
 import {
 	type TimecardEntry,
@@ -47,6 +52,8 @@ function TimecardPage() {
 	const schedule = useMySchedule(workplace?.id);
 	const weekStartDay = schedule.data?.weekStartDay ?? 1;
 	const [nowMs, setNowMs] = useState(() => Date.now());
+	const [search, setSearch] = useState("");
+	const [statusFilter, setStatusFilter] = useState("all");
 	const queryClient = useQueryClient();
 	const updateBreak = useMutation({
 		mutationFn: (input: { timeEntryId: string; action: "start" | "end" }) =>
@@ -71,6 +78,20 @@ function TimecardPage() {
 	}, [hasOpen]);
 
 	const week = currentWeekTotals(entries, nowMs, weekStartDay);
+	const filteredEntries = useMemo(() => {
+		const term = search.trim().toLowerCase();
+		return entries.filter((entry) => {
+			if (statusFilter === "open" && entry.clockedOutAt !== null) return false;
+			if (statusFilter === "closed" && entry.clockedOutAt === null) {
+				return false;
+			}
+			if (!term) return true;
+			return entry.positionName.toLowerCase().includes(term);
+		});
+	}, [entries, search, statusFilter]);
+	const pagination = useTablePagination(filteredEntries, {
+		resetKey: `${search}|${statusFilter}`,
+	});
 	const columns = useMemo(
 		() =>
 			punchHelper.columns([
@@ -194,97 +215,115 @@ function TimecardPage() {
 	);
 
 	return (
-		<AppDocument>
-			<Button
-				variant="ghost"
-				size="sm"
-				className="self-start"
-				nativeButton={false}
-				render={<Link to="/worker" />}
-			>
-				<ChevronLeftIcon data-icon="inline-start" />
-				My schedule
-			</Button>
+		<AppPage>
+			<AppPageHeader
+				title="Timecard"
+				badge={
+					<Badge variant="secondary">
+						{formatDurationMs(week.totalMs)} this week
+					</Badge>
+				}
+				description={`Week of ${formatDayLabel(week.startsAt)} · every Time Entry you started and finished.`}
+				actions={
+					<Button
+						size="sm"
+						variant="outline"
+						nativeButton={false}
+						render={<Link to="/worker" />}
+					>
+						<ChevronLeftIcon data-icon="inline-start" />
+						My schedule
+					</Button>
+				}
+			/>
+			<AppPageBody scroll={false}>
+				{timecard.isLoading ? (
+					<div className="flex flex-col gap-3 p-4 md:p-6">
+						<Skeleton className="h-12" />
+						<Skeleton className="h-40" />
+					</div>
+				) : null}
 
-			{timecard.isLoading ? (
-				<div className="flex flex-col gap-3">
-					<Skeleton className="h-28" />
-					<Skeleton className="h-40" />
-				</div>
-			) : null}
+				{timecard.isError ? (
+					<div className="p-4 md:p-6">
+						<Alert variant="destructive">
+							<AlertTitle>We couldn’t load your timecard</AlertTitle>
+							<AlertDescription className="flex flex-wrap items-center gap-2">
+								<span>{(timecard.error as Error).message}</span>
+								<Button
+									size="sm"
+									variant="outline"
+									onClick={() => void timecard.refetch()}
+								>
+									{timecard.isFetching ? (
+										<Spinner data-icon="inline-start" />
+									) : null}
+									Try again
+								</Button>
+							</AlertDescription>
+						</Alert>
+					</div>
+				) : null}
 
-			{timecard.isError ? (
-				<Card>
-					<CardHeader>
-						<CardTitle>We couldn’t load your timecard</CardTitle>
-						<CardDescription>
-							{(timecard.error as Error).message}
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<Button
-							size="sm"
-							variant="outline"
-							onClick={() => void timecard.refetch()}
-						>
-							{timecard.isFetching ? (
-								<Spinner data-icon="inline-start" />
-							) : null}
-							Try again
-						</Button>
-					</CardContent>
-				</Card>
-			) : null}
-
-			{!timecard.isLoading && !timecard.isError ? (
-				<>
-					<Card>
-						<CardHeader>
-							<CardDescription>
-								Week of {formatDayLabel(week.startsAt)}
-							</CardDescription>
-							<CardTitle className="font-bold text-4xl tabular-nums tracking-[-0.025em]">
-								{formatDurationMs(week.totalMs)}
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<p className="text-muted-foreground text-sm">
-								Your Time Entries record when you started and finished work.
-							</p>
-						</CardContent>
-					</Card>
-
-					{entries.length === 0 ? (
-						<Empty className="border border-dashed">
-							<EmptyHeader>
-								<EmptyMedia variant="icon">
-									<TimerIcon />
-								</EmptyMedia>
-								<EmptyTitle>No Time Entries yet</EmptyTitle>
-								<EmptyDescription>
-									Clock in from your schedule when your shift starts — your
-									entries will show up here.
-								</EmptyDescription>
-							</EmptyHeader>
-						</Empty>
+				{!timecard.isLoading && !timecard.isError ? (
+					entries.length === 0 ? (
+						<div className="p-4 md:p-6">
+							<Empty className="border border-dashed">
+								<EmptyHeader>
+									<EmptyMedia variant="icon">
+										<TimerIcon />
+									</EmptyMedia>
+									<EmptyTitle>No Time Entries yet</EmptyTitle>
+									<EmptyDescription>
+										Clock in from your schedule when your shift starts — your
+										entries will show up here.
+									</EmptyDescription>
+								</EmptyHeader>
+							</Empty>
+						</div>
 					) : (
-						<DataTable
-							stacked
-							columns={columns}
-							data={entries}
-							getRowId={(row) => row.id}
-							fill={false}
-						/>
-					)}
-
-					{entries.length > 0 ? (
-						<p className="text-center text-muted-foreground text-xs">
-							Showing your last {entries.length} Time Entries.
-						</p>
-					) : null}
-				</>
-			) : null}
-		</AppDocument>
+						<div className="flex min-h-0 flex-1 flex-col">
+							<TableToolbar
+								left={
+									<>
+										<TableSearch
+											value={search}
+											onValueChange={setSearch}
+											placeholder="Search position"
+										/>
+										<TableFilter
+											value={statusFilter}
+											onValueChange={setStatusFilter}
+											items={[
+												{ label: "All entries", value: "all" },
+												{ label: "On the clock", value: "open" },
+												{ label: "Completed", value: "closed" },
+											]}
+											ariaLabel="Filter by entry status"
+										/>
+									</>
+								}
+								right={<TablePagination {...pagination} />}
+							/>
+							<div className="min-h-0 flex-1 overflow-auto">
+								<DataTable
+									stacked
+									fill={false}
+									columns={columns}
+									data={pagination.pageRows}
+									getRowId={(row) => row.id}
+									empty={
+										<p className="p-4 text-muted-foreground text-sm">
+											No entries match your search.
+										</p>
+									}
+								/>
+							</div>
+						</div>
+					)
+				) : null}
+			</AppPageBody>
+		</AppPage>
 	);
 }
 

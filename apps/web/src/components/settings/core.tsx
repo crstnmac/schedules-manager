@@ -2,13 +2,6 @@ import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
 import {
-	Empty,
-	EmptyDescription,
-	EmptyHeader,
-	EmptyMedia,
-	EmptyTitle,
-} from "@SchedulesManager/ui/components/empty";
-import {
 	Field,
 	FieldContent,
 	FieldDescription,
@@ -29,23 +22,26 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@SchedulesManager/ui/components/select";
-import { Separator } from "@SchedulesManager/ui/components/separator";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { MapPinIcon, TagsIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { ConfirmAction } from "@/components/confirm-action";
-import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import { createDataColumnHelper } from "@/components/data-table";
 import { DatePicker } from "@/components/date-picker";
 import {
 	LocationGeoFields,
 	type LocationGeoValue,
 } from "@/components/location-geo-fields";
 import {
+	SettingsCrudCard,
+	SettingsFormSheet,
+} from "@/components/settings/crud";
+import {
+	SettingsColumns,
 	SettingsSaveSection,
 	SettingsSection,
 } from "@/components/settings/page";
@@ -87,6 +83,9 @@ const WEEK_START_ITEMS = [
 	{ label: "Friday", value: "5" },
 	{ label: "Saturday", value: "6" },
 ] as const;
+
+const sheetFooterClassName =
+	"flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between";
 
 export function SettingsField({
 	id,
@@ -267,220 +266,222 @@ export function WorkplaceCard({
 
 	return (
 		<div className="flex flex-col gap-6">
-			<SettingsSection
-				title="Identity"
-				description="The name people see for this workplace."
-			>
-				<FieldGroup>
-					<SettingsField id="workplace-name" label="Workplace name">
-						<Input
-							id="workplace-name"
-							defaultValue={settings.name}
-							onChange={(event) => setName(event.target.value)}
-						/>
-					</SettingsField>
-				</FieldGroup>
-			</SettingsSection>
-
-			<SettingsSection
-				title="Week & pay"
-				description="Schedule grids, week lists, and timecard totals follow these dates."
-			>
-				<FieldGroup>
-					<SettingsField
-						id="week-start-day"
-						label="Week starts on"
-						description="The first column on the schedule and the start of weekly totals."
-					>
-						<Select
-							items={WEEK_START_ITEMS}
-							value={String(weekStartDay ?? settings.weekStartDay)}
-							onValueChange={(value) => {
-								if (!value) return;
-								setWeekStartDay(value);
-							}}
-						>
-							<SelectTrigger id="week-start-day" className="w-full">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent alignItemWithTrigger={false}>
-								<SelectGroup>
-									{WEEK_START_ITEMS.map((item) => (
-										<SelectItem key={item.value} value={item.value}>
-											{item.label}
-										</SelectItem>
-									))}
-								</SelectGroup>
-							</SelectContent>
-						</Select>
-					</SettingsField>
-					<SettingsField
-						id="pay-period-type"
-						label="Pay period"
-						description="How often the timecard resets for your team."
-					>
-						<Select
-							items={PAY_PERIOD_ITEMS}
-							value={payPeriodType ?? settings.payPeriodType}
-							onValueChange={(value) => {
-								if (!value) return;
-								setPayPeriodType(value);
-							}}
-						>
-							<SelectTrigger id="pay-period-type" className="w-full">
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent alignItemWithTrigger={false}>
-								<SelectGroup>
-									{PAY_PERIOD_ITEMS.map((item) => (
-										<SelectItem key={item.value} value={item.value}>
-											{item.label}
-										</SelectItem>
-									))}
-								</SelectGroup>
-							</SelectContent>
-						</Select>
-					</SettingsField>
-					{((payPeriodType ?? settings.payPeriodType) === "weekly" ||
-						(payPeriodType ?? settings.payPeriodType) === "biweekly") && (
-						<SettingsField
-							id="pay-period-anchor"
-							label="Period start date"
-							description="A known start of a pay period — periods repeat from this date."
-						>
-							<DatePicker
-								id="pay-period-anchor"
-								value={anchor ?? settings.payPeriodAnchor ?? ""}
-								onValueChange={(value) => setAnchor(value || null)}
+			<SettingsColumns>
+				<SettingsSection
+					title="Identity"
+					description="The name people see for this workplace."
+				>
+					<FieldGroup>
+						<SettingsField id="workplace-name" label="Workplace name">
+							<Input
+								id="workplace-name"
+								defaultValue={settings.name}
+								onChange={(event) => setName(event.target.value)}
 							/>
 						</SettingsField>
-					)}
-				</FieldGroup>
-			</SettingsSection>
+					</FieldGroup>
+				</SettingsSection>
 
-			<SettingsSection
-				title="Labor"
-				description="Overtime thresholds and labor-cost targets used in reports and warnings."
-			>
-				<FieldGroup>
-					<SettingsField
-						id="weekly-overtime"
-						label="Weekly overtime after"
-						description={`Overtime pay starts after ${minutesAsHoursLabel(overtimeMinutes)} in a workweek.`}
-					>
-						<InputGroup>
-							<InputGroupInput
-								id="weekly-overtime"
-								type="number"
-								min={0}
-								step={0.5}
-								defaultValue={(settings.overtimeWeeklyMinutes ?? 0) / 60}
-								onChange={(event) => {
-									const hours = Number(event.target.value);
-									setOvertimeWeeklyMinutes(
-										Number.isFinite(hours) ? Math.round(hours * 60) : 0,
-									);
-								}}
-							/>
-							<InputGroupAddon align="inline-end">hr</InputGroupAddon>
-						</InputGroup>
-					</SettingsField>
-					<SettingsField
-						id="daily-overtime"
-						label="Daily overtime after"
-						description={`Overtime pay starts after ${minutesAsHoursLabel(dailyOvertimeMinutes)} in a day.`}
-					>
-						<InputGroup>
-							<InputGroupInput
-								id="daily-overtime"
-								type="number"
-								min={0}
-								step={0.5}
-								defaultValue={(settings.overtimeDailyMinutes ?? 0) / 60}
-								onChange={(event) => {
-									const hours = Number(event.target.value);
-									setOvertimeDailyMinutes(
-										Number.isFinite(hours) ? Math.round(hours * 60) : 0,
-									);
-								}}
-							/>
-							<InputGroupAddon align="inline-end">hr</InputGroupAddon>
-						</InputGroup>
-					</SettingsField>
-					<SettingsField
-						id="labor-cost-goal"
-						label="Labor cost goal"
-						description="Target labor spend as a percent of sales. Leave empty to hide the goal."
-					>
-						<InputGroup>
-							<InputGroupInput
-								id="labor-cost-goal"
-								type="number"
-								min={0}
-								max={100}
-								step={1}
-								value={laborGoal == null ? "" : String(laborGoal)}
-								onChange={(event) => {
-									const raw = event.target.value.trim();
-									if (raw === "") {
-										setLaborCostPercentGoal(null);
-										return;
-									}
-									const next = Math.round(Number(raw));
-									if (!Number.isFinite(next)) return;
-									setLaborCostPercentGoal(Math.min(100, Math.max(0, next)));
-								}}
-								placeholder="e.g. 25"
-							/>
-							<InputGroupAddon align="inline-end">%</InputGroupAddon>
-						</InputGroup>
-					</SettingsField>
-					<SettingsToggleField
-						id="managers-labor-cost"
-						label="Managers can view labor cost"
-						description="When off, only owners see labor-cost figures on reports."
-						checked={
-							managersCanViewLaborCost ?? settings.managersCanViewLaborCost
-						}
-						onCheckedChange={setManagersCanViewLaborCost}
-					/>
-				</FieldGroup>
-			</SettingsSection>
-
-			<SettingsSection
-				title="Late changes"
-				description="Material edits inside this window before a shift need explicit acceptance."
-			>
-				<FieldGroup>
-					<SettingsField
-						id="notice-window"
-						label="Notice window"
-						description={`${noticeHours} hour${noticeHours === 1 ? "" : "s"} before a shift. Clock-in rules live under Time clock.`}
-					>
-						<InputGroup>
-							<InputGroupInput
-								id="notice-window"
-								type="number"
-								min={0}
-								max={336}
-								defaultValue={settings.noticeWindowHours}
-								onChange={(event) => setHours(Number(event.target.value))}
-							/>
-							<InputGroupAddon align="inline-end">hours</InputGroupAddon>
-						</InputGroup>
-					</SettingsField>
-					<p className="text-muted-foreground text-sm">
-						Clock-in, rounding, and geofence live under{" "}
-						<Link
-							to="/dashboard/settings/time-clock"
-							className="underline underline-offset-4"
+				<SettingsSection
+					title="Week & pay"
+					description="Schedule grids, week lists, and timecard totals follow these dates."
+				>
+					<FieldGroup>
+						<SettingsField
+							id="week-start-day"
+							label="Week starts on"
+							description="The first column on the schedule and the start of weekly totals."
 						>
-							Time clock
-						</Link>
-						.
-					</p>
-				</FieldGroup>
-			</SettingsSection>
+							<Select
+								items={WEEK_START_ITEMS}
+								value={String(weekStartDay ?? settings.weekStartDay)}
+								onValueChange={(value) => {
+									if (!value) return;
+									setWeekStartDay(value);
+								}}
+							>
+								<SelectTrigger id="week-start-day" className="w-full">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent alignItemWithTrigger={false}>
+									<SelectGroup>
+										{WEEK_START_ITEMS.map((item) => (
+											<SelectItem key={item.value} value={item.value}>
+												{item.label}
+											</SelectItem>
+										))}
+									</SelectGroup>
+								</SelectContent>
+							</Select>
+						</SettingsField>
+						<SettingsField
+							id="pay-period-type"
+							label="Pay period"
+							description="How often the timecard resets for your team."
+						>
+							<Select
+								items={PAY_PERIOD_ITEMS}
+								value={payPeriodType ?? settings.payPeriodType}
+								onValueChange={(value) => {
+									if (!value) return;
+									setPayPeriodType(value);
+								}}
+							>
+								<SelectTrigger id="pay-period-type" className="w-full">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent alignItemWithTrigger={false}>
+									<SelectGroup>
+										{PAY_PERIOD_ITEMS.map((item) => (
+											<SelectItem key={item.value} value={item.value}>
+												{item.label}
+											</SelectItem>
+										))}
+									</SelectGroup>
+								</SelectContent>
+							</Select>
+						</SettingsField>
+						{((payPeriodType ?? settings.payPeriodType) === "weekly" ||
+							(payPeriodType ?? settings.payPeriodType) === "biweekly") && (
+							<SettingsField
+								id="pay-period-anchor"
+								label="Period start date"
+								description="A known start of a pay period — periods repeat from this date."
+							>
+								<DatePicker
+									id="pay-period-anchor"
+									value={anchor ?? settings.payPeriodAnchor ?? ""}
+									onValueChange={(value) => setAnchor(value || null)}
+								/>
+							</SettingsField>
+						)}
+					</FieldGroup>
+				</SettingsSection>
+
+				<SettingsSection
+					title="Labor"
+					description="Overtime thresholds and labor-cost targets used in reports and warnings."
+				>
+					<FieldGroup>
+						<SettingsField
+							id="weekly-overtime"
+							label="Weekly overtime after"
+							description={`Overtime pay starts after ${minutesAsHoursLabel(overtimeMinutes)} in a workweek.`}
+						>
+							<InputGroup>
+								<InputGroupInput
+									id="weekly-overtime"
+									type="number"
+									min={0}
+									step={0.5}
+									defaultValue={(settings.overtimeWeeklyMinutes ?? 0) / 60}
+									onChange={(event) => {
+										const hours = Number(event.target.value);
+										setOvertimeWeeklyMinutes(
+											Number.isFinite(hours) ? Math.round(hours * 60) : 0,
+										);
+									}}
+								/>
+								<InputGroupAddon align="inline-end">hr</InputGroupAddon>
+							</InputGroup>
+						</SettingsField>
+						<SettingsField
+							id="daily-overtime"
+							label="Daily overtime after"
+							description={`Overtime pay starts after ${minutesAsHoursLabel(dailyOvertimeMinutes)} in a day.`}
+						>
+							<InputGroup>
+								<InputGroupInput
+									id="daily-overtime"
+									type="number"
+									min={0}
+									step={0.5}
+									defaultValue={(settings.overtimeDailyMinutes ?? 0) / 60}
+									onChange={(event) => {
+										const hours = Number(event.target.value);
+										setOvertimeDailyMinutes(
+											Number.isFinite(hours) ? Math.round(hours * 60) : 0,
+										);
+									}}
+								/>
+								<InputGroupAddon align="inline-end">hr</InputGroupAddon>
+							</InputGroup>
+						</SettingsField>
+						<SettingsField
+							id="labor-cost-goal"
+							label="Labor cost goal"
+							description="Target labor spend as a percent of sales. Leave empty to hide the goal."
+						>
+							<InputGroup>
+								<InputGroupInput
+									id="labor-cost-goal"
+									type="number"
+									min={0}
+									max={100}
+									step={1}
+									value={laborGoal == null ? "" : String(laborGoal)}
+									onChange={(event) => {
+										const raw = event.target.value.trim();
+										if (raw === "") {
+											setLaborCostPercentGoal(null);
+											return;
+										}
+										const next = Math.round(Number(raw));
+										if (!Number.isFinite(next)) return;
+										setLaborCostPercentGoal(Math.min(100, Math.max(0, next)));
+									}}
+									placeholder="e.g. 25"
+								/>
+								<InputGroupAddon align="inline-end">%</InputGroupAddon>
+							</InputGroup>
+						</SettingsField>
+						<SettingsToggleField
+							id="managers-labor-cost"
+							label="Managers can view labor cost"
+							description="When off, only owners see labor-cost figures on reports."
+							checked={
+								managersCanViewLaborCost ?? settings.managersCanViewLaborCost
+							}
+							onCheckedChange={setManagersCanViewLaborCost}
+						/>
+					</FieldGroup>
+				</SettingsSection>
+
+				<SettingsSection
+					title="Late changes"
+					description="Material edits inside this window before a shift need explicit acceptance."
+				>
+					<FieldGroup>
+						<SettingsField
+							id="notice-window"
+							label="Notice window"
+							description={`${noticeHours} hour${noticeHours === 1 ? "" : "s"} before a shift. Clock-in rules live under Time clock.`}
+						>
+							<InputGroup>
+								<InputGroupInput
+									id="notice-window"
+									type="number"
+									min={0}
+									max={336}
+									defaultValue={settings.noticeWindowHours}
+									onChange={(event) => setHours(Number(event.target.value))}
+								/>
+								<InputGroupAddon align="inline-end">hours</InputGroupAddon>
+							</InputGroup>
+						</SettingsField>
+						<p className="text-muted-foreground text-sm">
+							Clock-in, rounding, and geofence live under{" "}
+							<Link
+								to="/dashboard/settings/time-clock"
+								className="underline underline-offset-4"
+							>
+								Time clock
+							</Link>
+							.
+						</p>
+					</FieldGroup>
+				</SettingsSection>
+			</SettingsColumns>
 
 			<SettingsSaveSection
 				message={
@@ -505,6 +506,8 @@ export function LocationsCard({
 }) {
 	const { formatMinute } = useDisplayPrefs();
 	const { workplace } = useWorkplace();
+	const [open, setOpen] = useState(false);
+	const [editingId, setEditingId] = useState<string | null>(null);
 	const [name, setName] = useState("");
 	const [timezone, setTimezone] = useState(
 		() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
@@ -513,16 +516,22 @@ export function LocationsCard({
 	const [hoursEnabled, setHoursEnabled] = useState(false);
 	const [openMinute, setOpenMinute] = useState(9 * 60);
 	const [closeMinute, setCloseMinute] = useState(17 * 60);
-	const [editingId, setEditingId] = useState<string | null>(null);
-	const [editName, setEditName] = useState("");
-	const [editTimezone, setEditTimezone] = useState(
-		() => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+	const [kioskPin, setKioskPin] = useState("");
+
+	const editingLocation = locations.find(
+		(location) => location.id === editingId,
 	);
-	const [editGeo, setEditGeo] = useState<LocationGeoValue>(EMPTY_GEO);
-	const [editKioskPin, setEditKioskPin] = useState("");
-	const [editHoursEnabled, setEditHoursEnabled] = useState(false);
-	const [editOpenMinute, setEditOpenMinute] = useState(9 * 60);
-	const [editCloseMinute, setEditCloseMinute] = useState(17 * 60);
+
+	const resetForm = useCallback(() => {
+		setEditingId(null);
+		setName("");
+		setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
+		setGeo(EMPTY_GEO);
+		setHoursEnabled(false);
+		setOpenMinute(9 * 60);
+		setCloseMinute(17 * 60);
+		setKioskPin("");
+	}, []);
 
 	const create = useMutation({
 		mutationFn: () =>
@@ -542,11 +551,8 @@ export function LocationsCard({
 				},
 			}),
 		onSuccess: () => {
-			setName("");
-			setGeo(EMPTY_GEO);
-			setHoursEnabled(false);
-			setOpenMinute(9 * 60);
-			setCloseMinute(17 * 60);
+			resetForm();
+			setOpen(false);
 			onChange();
 			toast.success("Location added.");
 		},
@@ -582,7 +588,8 @@ export function LocationsCard({
 				},
 			}),
 		onSuccess: () => {
-			setEditingId(null);
+			resetForm();
+			setOpen(false);
 			onChange();
 			toast.success("Location updated.");
 		},
@@ -594,13 +601,60 @@ export function LocationsCard({
 			api(`/v1/locations/${id}`, {
 				method: "DELETE",
 			}),
-		onSuccess: (_data, id) => {
-			if (editingId === id) setEditingId(null);
+		onSuccess: () => {
 			onChange();
 			toast.success("Location deleted.");
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
+
+	const startAdd = () => {
+		resetForm();
+		setOpen(true);
+	};
+	const startEdit = (location: LocationDto) => {
+		setEditingId(location.id);
+		setName(location.name);
+		setTimezone(location.timezone);
+		setGeo({
+			addressLine: location.addressLine ?? "",
+			latitude: location.latitude ?? "",
+			longitude: location.longitude ?? "",
+			geofenceRadiusMeters:
+				location.geofenceRadiusMeters == null
+					? ""
+					: String(location.geofenceRadiusMeters),
+		});
+		const hasHours =
+			location.openMinute != null && location.closeMinute != null;
+		setHoursEnabled(hasHours);
+		setOpenMinute(location.openMinute ?? 9 * 60);
+		setCloseMinute(location.closeMinute ?? 17 * 60);
+		setKioskPin("");
+		setOpen(true);
+	};
+
+	const submitEdit = (kioskOverride?: string | null) => {
+		if (!editingLocation) return;
+		update.mutate({
+			id: editingLocation.id,
+			name: name.trim() || editingLocation.name,
+			timezone,
+			addressLine: geo.addressLine,
+			latitude: geo.latitude,
+			longitude: geo.longitude,
+			geofenceRadiusMeters: geo.geofenceRadiusMeters
+				? Number(geo.geofenceRadiusMeters)
+				: null,
+			...(kioskOverride !== undefined
+				? { kioskPin: kioskOverride }
+				: kioskPin.trim()
+					? { kioskPin: kioskPin.trim() }
+					: {}),
+			openMinute: hoursEnabled ? openMinute : null,
+			closeMinute: hoursEnabled ? closeMinute : null,
+		});
+	};
 
 	const columns = useMemo(
 		() =>
@@ -645,70 +699,33 @@ export function LocationsCard({
 					cell: ({ getValue }) =>
 						getValue() ? <Badge variant="secondary">Enabled</Badge> : "—",
 				}),
-				locationHelper.display({
-					id: "actions",
-					header: "Actions",
-					enableSorting: false,
-					cell: ({ row }) => {
-						const location = row.original;
-						return (
-							<div className="flex flex-wrap items-center justify-end gap-2">
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => {
-										setEditingId(location.id);
-										setEditName(location.name);
-										setEditTimezone(location.timezone);
-										setEditGeo({
-											addressLine: location.addressLine ?? "",
-											latitude: location.latitude ?? "",
-											longitude: location.longitude ?? "",
-											geofenceRadiusMeters:
-												location.geofenceRadiusMeters == null
-													? ""
-													: String(location.geofenceRadiusMeters),
-										});
-										setEditKioskPin("");
-										const hasHours =
-											location.openMinute != null &&
-											location.closeMinute != null;
-										setEditHoursEnabled(hasHours);
-										setEditOpenMinute(location.openMinute ?? 9 * 60);
-										setEditCloseMinute(location.closeMinute ?? 17 * 60);
-									}}
-								>
-									Edit
-								</Button>
-								<ConfirmAction
-									trigger="Delete"
-									triggerVariant="ghost"
-									destructive
-									title="Delete this location?"
-									description="Locations with schedules cannot be deleted. This cannot be undone."
-									confirmLabel="Delete"
-									disabled={remove.isPending}
-									onConfirm={() => remove.mutate(location.id)}
-								/>
-							</div>
-						);
-					},
-				}),
 			]),
-		[formatMinute, remove],
+		[formatMinute],
 	);
 
-	const editingLocation = locations.find(
-		(location) => location.id === editingId,
-	);
+	const saving = create.isPending || update.isPending;
 
 	return (
-		<div className="flex flex-col gap-6">
-			<SettingsSection
+		<>
+			<SettingsCrudCard
 				title="All locations"
 				description="Every site on this workplace. Kiosk PIN is set when you edit a location."
 				count={locations.length}
-				action={
+				data={locations}
+				columns={columns}
+				getRowId={(row) => row.id}
+				getSearchText={(row) =>
+					`${row.name} ${row.timezone} ${row.addressLine ?? ""}`
+				}
+				searchPlaceholder="Search locations"
+				isLoading={isLoading}
+				entityLabel="location"
+				emptyIcon={<MapPinIcon />}
+				emptyTitle="No locations yet"
+				emptyDescription="Add the first site where shifts can be scheduled."
+				addLabel="Add location"
+				onAdd={startAdd}
+				headerAction={
 					<Button
 						variant="outline"
 						size="sm"
@@ -718,245 +735,71 @@ export function LocationsCard({
 						Open kiosk
 					</Button>
 				}
-			>
-				{isLoading ? (
-					<div className="grid gap-2">
-						<Skeleton className="h-10" />
-						<Skeleton className="h-10" />
-					</div>
-				) : (
-					<div className="flex flex-col gap-4">
-						<DataTable
-							bounded
-							columns={columns}
-							data={locations}
-							getRowId={(row) => row.id}
-							empty={
-								<Empty className="border border-dashed">
-									<EmptyHeader>
-										<EmptyMedia variant="icon">
-											<MapPinIcon />
-										</EmptyMedia>
-										<EmptyTitle>No locations yet</EmptyTitle>
-										<EmptyDescription>
-											Add the first location below.
-										</EmptyDescription>
-									</EmptyHeader>
-								</Empty>
-							}
-						/>
-						{editingLocation ? (
-							<>
-								<Separator />
-								<FieldGroup>
-									<div className="flex items-center justify-between gap-2">
-										<p className="font-medium text-sm">
-											Edit {editingLocation.name}
-										</p>
-										<Button
-											size="sm"
-											variant="ghost"
-											onClick={() => setEditingId(null)}
-										>
-											Cancel
-										</Button>
-									</div>
-									<div className="grid gap-4 sm:grid-cols-2">
-										<Field>
-											<FieldLabel
-												htmlFor={`edit-location-${editingLocation.id}`}
-											>
-												Location name
-											</FieldLabel>
-											<Input
-												id={`edit-location-${editingLocation.id}`}
-												value={editName}
-												onChange={(event) => setEditName(event.target.value)}
-											/>
-										</Field>
-										<Field>
-											<FieldLabel
-												htmlFor={`edit-timezone-${editingLocation.id}`}
-											>
-												Time zone
-											</FieldLabel>
-											<TimezoneSelect
-												id={`edit-timezone-${editingLocation.id}`}
-												value={editTimezone}
-												onValueChange={setEditTimezone}
-											/>
-										</Field>
-										<LocationGeoFields
-											idPrefix={`edit-location-geo-${editingLocation.id}`}
-											value={editGeo}
-											onChange={setEditGeo}
-											onTimezone={setEditTimezone}
-										/>
-										<Field className="sm:col-span-2">
-											<div className="flex items-start gap-3">
-												<Checkbox
-													id={`edit-hours-${editingLocation.id}`}
-													checked={editHoursEnabled}
-													onCheckedChange={(value) =>
-														setEditHoursEnabled(value === true)
-													}
-												/>
-												<div className="grid gap-1">
-													<FieldLabel
-														htmlFor={`edit-hours-${editingLocation.id}`}
-													>
-														Hours of operation
-													</FieldLabel>
-													<FieldDescription>
-														Optional open and close times for this location.
-													</FieldDescription>
-												</div>
-											</div>
-										</Field>
-										{editHoursEnabled ? (
-											<>
-												<Field>
-													<FieldLabel
-														htmlFor={`edit-open-${editingLocation.id}`}
-													>
-														Opens
-													</FieldLabel>
-													<TimePicker
-														id={`edit-open-${editingLocation.id}`}
-														value={editOpenMinute}
-														onValueChange={setEditOpenMinute}
-													/>
-												</Field>
-												<Field>
-													<FieldLabel
-														htmlFor={`edit-close-${editingLocation.id}`}
-													>
-														Closes
-													</FieldLabel>
-													<TimePicker
-														id={`edit-close-${editingLocation.id}`}
-														value={editCloseMinute}
-														onValueChange={setEditCloseMinute}
-														overnightAfterMinute={editOpenMinute}
-													/>
-												</Field>
-											</>
-										) : null}
-										<Field>
-											<FieldLabel
-												htmlFor={`edit-kiosk-pin-${editingLocation.id}`}
-											>
-												Kiosk PIN
-											</FieldLabel>
-											<Input
-												id={`edit-kiosk-pin-${editingLocation.id}`}
-												inputMode="numeric"
-												pattern="\d{4,8}"
-												minLength={4}
-												maxLength={8}
-												value={editKioskPin}
-												onChange={(event) =>
-													setEditKioskPin(event.target.value.replace(/\D/g, ""))
-												}
-												placeholder={
-													editingLocation.kioskEnabled
-														? "Enter a new PIN"
-														: "4–8 digits"
-												}
-											/>
-											<FieldDescription>
-												{editingLocation.kioskEnabled
-													? "Leave blank to keep the current PIN. Enter a new PIN to change it."
-													: "Set a 4–8 digit PIN to enable kiosk clock-in."}
-											</FieldDescription>
-										</Field>
-									</div>
-									<div className="flex flex-wrap items-center gap-2">
-										<Button
-											size="sm"
-											disabled={update.isPending}
-											onClick={() =>
-												update.mutate({
-													id: editingLocation.id,
-													name: editName.trim() || editingLocation.name,
-													timezone: editTimezone,
-													addressLine: editGeo.addressLine,
-													latitude: editGeo.latitude,
-													longitude: editGeo.longitude,
-													geofenceRadiusMeters: editGeo.geofenceRadiusMeters
-														? Number(editGeo.geofenceRadiusMeters)
-														: null,
-													...(editKioskPin.trim()
-														? { kioskPin: editKioskPin.trim() }
-														: {}),
-													openMinute: editHoursEnabled ? editOpenMinute : null,
-													closeMinute: editHoursEnabled
-														? editCloseMinute
-														: null,
-												})
-											}
-										>
-											{update.isPending ? (
-												<Spinner data-icon="inline-start" />
-											) : null}
-											Save location
-										</Button>
-										{editingLocation.kioskEnabled ? (
-											<Button
-												size="sm"
-												variant="ghost"
-												disabled={update.isPending}
-												onClick={() =>
-													update.mutate({
-														id: editingLocation.id,
-														name: editName.trim() || editingLocation.name,
-														timezone: editTimezone,
-														addressLine: editGeo.addressLine,
-														latitude: editGeo.latitude,
-														longitude: editGeo.longitude,
-														geofenceRadiusMeters: editGeo.geofenceRadiusMeters
-															? Number(editGeo.geofenceRadiusMeters)
-															: null,
-														kioskPin: null,
-														openMinute: editHoursEnabled
-															? editOpenMinute
-															: null,
-														closeMinute: editHoursEnabled
-															? editCloseMinute
-															: null,
-													})
-												}
-											>
-												Disable kiosk
-											</Button>
-										) : null}
-									</div>
-								</FieldGroup>
-							</>
-						) : null}
-					</div>
-				)}
-			</SettingsSection>
+				rowActions={{
+					onEdit: startEdit,
+					onDelete: (row) => remove.mutate(row.id),
+					deleteTitle: "Delete this location?",
+					deleteDescription:
+						"Locations with schedules cannot be deleted. This cannot be undone.",
+					deleteDisabled: remove.isPending,
+				}}
+			/>
 
-			<SettingsSection
-				title="Add location"
-				description="Create another place where shifts can be scheduled."
+			<SettingsFormSheet
+				open={open}
+				onOpenChange={(next) => {
+					setOpen(next);
+					if (!next) resetForm();
+				}}
+				title={editingId ? "Edit location" : "Add location"}
+				description={
+					editingId
+						? "Update this site's address, hours, and kiosk PIN."
+						: "Create another place where shifts can be scheduled."
+				}
 				footer={
-					<Button
-						type="submit"
-						form="add-location-form"
-						disabled={create.isPending || !name.trim()}
-					>
-						{create.isPending ? <Spinner data-icon="inline-start" /> : null}
-						{create.isPending ? "Adding…" : "Add location"}
-					</Button>
+					<div className={sheetFooterClassName}>
+						<div>
+							{editingLocation?.kioskEnabled ? (
+								<Button
+									type="button"
+									variant="outline"
+									disabled={saving}
+									onClick={() => submitEdit(null)}
+								>
+									Disable kiosk
+								</Button>
+							) : null}
+						</div>
+						<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+							<Button
+								variant="outline"
+								onClick={() => {
+									setOpen(false);
+									resetForm();
+								}}
+							>
+								Cancel
+							</Button>
+							<Button
+								type="submit"
+								form="location-form"
+								disabled={saving || !name.trim()}
+							>
+								{saving ? <Spinner data-icon="inline-start" /> : null}
+								{editingId ? "Save location" : "Add location"}
+							</Button>
+						</div>
+					</div>
 				}
 			>
 				<form
-					id="add-location-form"
+					id="location-form"
+					className="flex flex-col gap-4"
 					onSubmit={(event) => {
 						event.preventDefault();
-						create.mutate();
+						if (editingId) submitEdit();
+						else create.mutate();
 					}}
 				>
 					<FieldGroup className="grid gap-4 sm:grid-cols-2">
@@ -967,6 +810,7 @@ export function LocationsCard({
 								value={name}
 								onChange={(event) => setName(event.target.value)}
 								placeholder="Location name"
+								autoFocus
 								required
 							/>
 						</Field>
@@ -979,7 +823,7 @@ export function LocationsCard({
 							/>
 						</Field>
 						<LocationGeoFields
-							idPrefix="add-location"
+							idPrefix="location-geo"
 							value={geo}
 							onChange={setGeo}
 							onTimezone={setTimezone}
@@ -987,12 +831,12 @@ export function LocationsCard({
 						<Field className="sm:col-span-2">
 							<div className="flex items-start gap-3">
 								<Checkbox
-									id="add-location-hours"
+									id="location-hours"
 									checked={hoursEnabled}
 									onCheckedChange={(value) => setHoursEnabled(value === true)}
 								/>
 								<div className="grid gap-1">
-									<FieldLabel htmlFor="add-location-hours">
+									<FieldLabel htmlFor="location-hours">
 										Hours of operation
 									</FieldLabel>
 									<FieldDescription>
@@ -1004,17 +848,17 @@ export function LocationsCard({
 						{hoursEnabled ? (
 							<>
 								<Field>
-									<FieldLabel htmlFor="add-location-open">Opens</FieldLabel>
+									<FieldLabel htmlFor="location-open">Opens</FieldLabel>
 									<TimePicker
-										id="add-location-open"
+										id="location-open"
 										value={openMinute}
 										onValueChange={setOpenMinute}
 									/>
 								</Field>
 								<Field>
-									<FieldLabel htmlFor="add-location-close">Closes</FieldLabel>
+									<FieldLabel htmlFor="location-close">Closes</FieldLabel>
 									<TimePicker
-										id="add-location-close"
+										id="location-close"
 										value={closeMinute}
 										onValueChange={setCloseMinute}
 										overnightAfterMinute={openMinute}
@@ -1022,10 +866,36 @@ export function LocationsCard({
 								</Field>
 							</>
 						) : null}
+						{editingLocation ? (
+							<Field className="sm:col-span-2">
+								<FieldLabel htmlFor="location-kiosk-pin">Kiosk PIN</FieldLabel>
+								<Input
+									id="location-kiosk-pin"
+									inputMode="numeric"
+									pattern="\d{4,8}"
+									minLength={4}
+									maxLength={8}
+									value={kioskPin}
+									onChange={(event) =>
+										setKioskPin(event.target.value.replace(/\D/g, ""))
+									}
+									placeholder={
+										editingLocation.kioskEnabled
+											? "Enter a new PIN"
+											: "4–8 digits"
+									}
+								/>
+								<FieldDescription>
+									{editingLocation.kioskEnabled
+										? "Leave blank to keep the current PIN. Enter a new PIN to change it."
+										: "Set a 4–8 digit PIN to enable kiosk clock-in."}
+								</FieldDescription>
+							</Field>
+						) : null}
 					</FieldGroup>
 				</form>
-			</SettingsSection>
-		</div>
+			</SettingsFormSheet>
+		</>
 	);
 }
 
@@ -1039,9 +909,14 @@ export function PositionsCard({
 	onChange: () => void;
 }) {
 	const { workplace } = useWorkplace();
-	const [name, setName] = useState("");
+	const [open, setOpen] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
-	const [editName, setEditName] = useState("");
+	const [name, setName] = useState("");
+
+	const resetForm = useCallback(() => {
+		setEditingId(null);
+		setName("");
+	}, []);
 
 	const create = useMutation({
 		mutationFn: () =>
@@ -1052,7 +927,8 @@ export function PositionsCard({
 				},
 			}),
 		onSuccess: () => {
-			setName("");
+			resetForm();
+			setOpen(false);
 			onChange();
 			toast.success("Position added.");
 		},
@@ -1066,7 +942,8 @@ export function PositionsCard({
 				body: { name: input.name },
 			}),
 		onSuccess: () => {
-			setEditingId(null);
+			resetForm();
+			setOpen(false);
 			onChange();
 			toast.success("Position updated.");
 		},
@@ -1078,13 +955,22 @@ export function PositionsCard({
 			api(`/v1/positions/${id}`, {
 				method: "DELETE",
 			}),
-		onSuccess: (_data, id) => {
-			if (editingId === id) setEditingId(null);
+		onSuccess: () => {
 			onChange();
 			toast.success("Position deleted.");
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
+
+	const startAdd = () => {
+		resetForm();
+		setOpen(true);
+	};
+	const startEdit = (position: PositionDto) => {
+		setEditingId(position.id);
+		setName(position.name);
+		setOpen(true);
+	};
 
 	const columns = useMemo(
 		() =>
@@ -1095,148 +981,81 @@ export function PositionsCard({
 						<span className="font-medium">{getValue()}</span>
 					),
 				}),
-				positionHelper.display({
-					id: "actions",
-					header: "Actions",
-					enableSorting: false,
-					cell: ({ row }) => {
-						const position = row.original;
-						return (
-							<div className="flex flex-wrap items-center justify-end gap-2">
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => {
-										setEditingId(position.id);
-										setEditName(position.name);
-									}}
-								>
-									Edit
-								</Button>
-								<ConfirmAction
-									trigger="Delete"
-									triggerVariant="ghost"
-									destructive
-									title="Delete this position?"
-									description="Positions used by shifts, templates, or workers cannot be deleted. This cannot be undone."
-									confirmLabel="Delete"
-									disabled={remove.isPending}
-									onConfirm={() => remove.mutate(position.id)}
-								/>
-							</div>
-						);
-					},
-				}),
 			]),
-		[remove],
+		[],
 	);
 
-	const editingPosition = positions.find(
-		(position) => position.id === editingId,
-	);
+	const saving = create.isPending || update.isPending;
 
 	return (
-		<div className="flex flex-col gap-6">
-			<SettingsSection
+		<>
+			<SettingsCrudCard
 				title="All positions"
 				description="Roles that can be assigned to a shift."
 				count={positions.length}
-			>
-				{isLoading ? (
-					<div className="grid gap-2">
-						<Skeleton className="h-10" />
-						<Skeleton className="h-10" />
-					</div>
-				) : (
-					<div className="flex flex-col gap-4">
-						<DataTable
-							bounded
-							columns={columns}
-							data={positions}
-							getRowId={(row) => row.id}
-							empty={
-								<Empty className="border border-dashed">
-									<EmptyHeader>
-										<EmptyMedia variant="icon">
-											<TagsIcon />
-										</EmptyMedia>
-										<EmptyTitle>No positions yet</EmptyTitle>
-										<EmptyDescription>
-											Add the first role below.
-										</EmptyDescription>
-									</EmptyHeader>
-								</Empty>
-							}
-						/>
-						{editingPosition ? (
-							<>
-								<Separator />
-								<FieldGroup>
-									<div className="flex items-center justify-between gap-2">
-										<p className="font-medium text-sm">
-											Edit {editingPosition.name}
-										</p>
-										<Button
-											size="sm"
-											variant="ghost"
-											onClick={() => setEditingId(null)}
-										>
-											Cancel
-										</Button>
-									</div>
-									<Field>
-										<FieldLabel htmlFor={`edit-position-${editingPosition.id}`}>
-											Position name
-										</FieldLabel>
-										<Input
-											id={`edit-position-${editingPosition.id}`}
-											value={editName}
-											onChange={(event) => setEditName(event.target.value)}
-										/>
-									</Field>
-									<div>
-										<Button
-											size="sm"
-											disabled={update.isPending}
-											onClick={() =>
-												update.mutate({
-													id: editingPosition.id,
-													name: editName.trim() || editingPosition.name,
-												})
-											}
-										>
-											{update.isPending ? (
-												<Spinner data-icon="inline-start" />
-											) : null}
-											Save position
-										</Button>
-									</div>
-								</FieldGroup>
-							</>
-						) : null}
-					</div>
-				)}
-			</SettingsSection>
+				data={positions}
+				columns={columns}
+				getRowId={(row) => row.id}
+				getSearchText={(row) => row.name}
+				searchPlaceholder="Search positions"
+				isLoading={isLoading}
+				entityLabel="position"
+				emptyIcon={<TagsIcon />}
+				emptyTitle="No positions yet"
+				emptyDescription="Roles people can be scheduled into. Add your first one."
+				addLabel="Add position"
+				onAdd={startAdd}
+				rowActions={{
+					onEdit: startEdit,
+					onDelete: (row) => remove.mutate(row.id),
+					deleteTitle: "Delete this position?",
+					deleteDescription:
+						"Positions used by shifts, templates, or workers cannot be deleted. This cannot be undone.",
+					deleteDisabled: remove.isPending,
+				}}
+			/>
 
-			<SettingsSection
-				title="Add position"
-				description="Create a role that can be assigned to a shift. Use Groups to filter who appears on the schedule."
+			<SettingsFormSheet
+				open={open}
+				onOpenChange={(next) => {
+					setOpen(next);
+					if (!next) resetForm();
+				}}
+				title={editingId ? "Edit position" : "Add position"}
+				description={
+					editingId
+						? "Update this role's name."
+						: "Create a role that can be assigned to a shift. Use Groups to filter who appears on the schedule."
+				}
 				footer={
-					<Button
-						type="submit"
-						form="add-position-form"
-						disabled={create.isPending || !name.trim()}
-					>
-						{create.isPending ? <Spinner data-icon="inline-start" /> : null}
-						{create.isPending ? "Adding…" : "Add position"}
-					</Button>
+					<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+						<Button
+							variant="outline"
+							onClick={() => {
+								setOpen(false);
+								resetForm();
+							}}
+						>
+							Cancel
+						</Button>
+						<Button
+							type="submit"
+							form="position-form"
+							disabled={saving || !name.trim()}
+						>
+							{saving ? <Spinner data-icon="inline-start" /> : null}
+							{editingId ? "Save position" : "Add position"}
+						</Button>
+					</div>
 				}
 			>
 				<form
-					id="add-position-form"
+					id="position-form"
+					className="flex flex-col gap-4"
 					onSubmit={(event) => {
 						event.preventDefault();
-						create.mutate();
+						if (editingId) update.mutate({ id: editingId, name: name.trim() });
+						else create.mutate();
 					}}
 				>
 					<FieldGroup>
@@ -1247,12 +1066,13 @@ export function PositionsCard({
 								value={name}
 								onChange={(event) => setName(event.target.value)}
 								placeholder="Associate"
+								autoFocus
 								required
 							/>
 						</Field>
 					</FieldGroup>
 				</form>
-			</SettingsSection>
-		</div>
+			</SettingsFormSheet>
+		</>
 	);
 }

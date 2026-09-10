@@ -22,6 +22,7 @@ import { toast } from "sonner";
 
 import { SettingsField, SettingsToggleField } from "@/components/settings/core";
 import {
+	SettingsColumns,
 	SettingsSaveSection,
 	SettingsSection,
 } from "@/components/settings/page";
@@ -125,7 +126,7 @@ function PolicyCard({
 
 	return (
 		<div className="flex flex-col gap-6">
-			{children(form)}
+			<SettingsColumns>{children(form)}</SettingsColumns>
 			<SettingsSaveSection
 				message={form.dirty ? "You have unsaved policy changes." : idleMessage}
 				footer={

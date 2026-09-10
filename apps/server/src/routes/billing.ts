@@ -6,10 +6,12 @@ import {
 	workplaces,
 } from "@SchedulesManager/db";
 import { env } from "@SchedulesManager/env/server";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import {
 	validateEvent,
 	WebhookVerificationError,
 } from "@polar-sh/sdk/webhooks";
+
 import { count, eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
@@ -31,6 +33,43 @@ function clientIp(request: Request) {
 		?.split(",")[0]
 		?.trim();
 	return request.headers.get("cf-connecting-ip") ?? forwarded ?? undefined;
+}
+
+/**
+ * Polar secrets created on/after 2026-09-08 use the Standard Webhooks
+ * signature (HMAC over `id.timestamp.body` with the base64-decoded `whsec_`
+ * secret). The pinned `@polar-sh/sdk@0.49.0` only verifies the legacy Polar
+ * HMAC key, so we verify Standard Webhooks here as a fallback.
+ */
+function verifyStandardWebhook(
+	rawBody: string,
+	headers: Record<string, string>,
+	secret: string,
+): boolean {
+	const id = headers["webhook-id"];
+	const timestamp = headers["webhook-timestamp"];
+	const signatureHeader = headers["webhook-signature"];
+	if (!id || !timestamp || !signatureHeader) return false;
+	const base64Key = secret.startsWith("whsec_")
+		? secret.slice("whsec_".length)
+		: secret;
+	const key = Buffer.from(base64Key, "base64");
+	const expected = createHmac("sha256", key)
+		.update(`${id}.${timestamp}.${rawBody}`)
+		.digest("base64");
+	for (const versioned of signatureHeader.split(" ")) {
+		const [version, signature] = versioned.split(",");
+		if (version !== "v1" || !signature) continue;
+		const provided = Buffer.from(signature);
+		const computed = Buffer.from(expected);
+		if (
+			provided.length === computed.length &&
+			timingSafeEqual(provided, computed)
+		) {
+			return true;
+		}
+	}
+	return false;
 }
 
 function subscriptionPayload(
@@ -213,11 +252,18 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 					env.POLAR_WEBHOOK_SECRET,
 				);
 			} catch (error) {
-				if (error instanceof WebhookVerificationError) {
+				if (!(error instanceof WebhookVerificationError)) throw error;
+				if (
+					!verifyStandardWebhook(
+						rawBody,
+						webhookHeaders,
+						env.POLAR_WEBHOOK_SECRET,
+					)
+				) {
 					set.status = 403;
 					return { accepted: false };
 				}
-				throw error;
+				event = JSON.parse(rawBody) as ReturnType<typeof validateEvent>;
 			}
 
 			switch (event.type) {
@@ -237,10 +283,18 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 			if (!workplaceId || !subscription.productId) return { accepted: true };
 			const product = billingProduct(subscription.productId);
 			if (!product) return { accepted: true };
+			const rawTimestamp = event.timestamp as unknown;
+			const eventTimestamp =
+				rawTimestamp instanceof Date
+					? rawTimestamp
+					: new Date(String(rawTimestamp));
 			const eventId =
 				request.headers.get("webhook-id") ??
-				`${event.type}:${subscription.id}:${event.timestamp.toISOString()}`;
+				`${event.type}:${subscription.id}:${eventTimestamp.toISOString()}`;
 			const locationCount = Number(subscription.metadata.location_count ?? 1);
+			const currentPeriodEnd = subscription.currentPeriodEnd
+				? new Date(subscription.currentPeriodEnd)
+				: null;
 
 			await db.transaction(async (tx) => {
 				const inserted = await tx
@@ -263,7 +317,7 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 							Number.isInteger(locationCount) && locationCount > 0
 								? locationCount
 								: 1,
-						currentPeriodEnd: subscription.currentPeriodEnd,
+						currentPeriodEnd,
 						cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
 					})
 					.onConflictDoUpdate({
@@ -279,7 +333,7 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 								Number.isInteger(locationCount) && locationCount > 0
 									? locationCount
 									: 1,
-							currentPeriodEnd: subscription.currentPeriodEnd,
+							currentPeriodEnd,
 							cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
 							updatedAt: new Date(),
 						},

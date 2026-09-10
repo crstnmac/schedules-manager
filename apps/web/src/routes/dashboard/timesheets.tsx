@@ -16,6 +16,13 @@ import { toast } from "sonner";
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import {
+	TableFilter,
+	TablePagination,
+	TableSearch,
+	TableToolbar,
+	useTablePagination,
+} from "@/components/table-toolbar";
 import { api } from "@/lib/api";
 import { useTimesheets } from "@/lib/queries";
 import { formatClockTime, formatDay, formatDurationMs } from "@/lib/time";
@@ -47,11 +54,20 @@ type TimesheetRow = {
 
 const columnHelper = createDataColumnHelper<TimesheetRow>();
 
+const STATUS_FILTERS = [
+	{ label: "All statuses", value: "all" },
+	{ label: "Pending", value: "pending" },
+	{ label: "Approved", value: "approved" },
+	{ label: "Declined", value: "declined" },
+];
+
 function TimesheetsPage() {
 	const { workplace } = useWorkplace();
 	const sheets = useTimesheets(workplace?.id);
 	const posthog = usePostHog();
 	const queryClient = useQueryClient();
+	const [search, setSearch] = useState("");
+	const [statusFilter, setStatusFilter] = useState("all");
 	const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
 		new Set(),
 	);
@@ -106,6 +122,19 @@ function TimesheetsPage() {
 		(row) => row.approvalStatus === "pending" && row.clockedOutAt,
 	);
 	const selectedRows = eligibleRows.filter((row) => selectedIds.has(row.id));
+	const filteredRows = useMemo(() => {
+		const term = search.trim().toLowerCase();
+		return rows.filter((row) => {
+			if (statusFilter !== "all" && row.approvalStatus !== statusFilter) {
+				return false;
+			}
+			if (!term) return true;
+			return row.worker.toLowerCase().includes(term);
+		});
+	}, [rows, search, statusFilter]);
+	const pagination = useTablePagination(filteredRows, {
+		resetKey: `${search}|${statusFilter}`,
+	});
 	const columns = useMemo(
 		() =>
 			columnHelper.columns([
@@ -271,22 +300,50 @@ function TimesheetsPage() {
 				}
 			/>
 			<AppPageBody scroll={false}>
-				<DataTable
-					query={sheets}
-					columns={columns}
-					data={rows}
-					getRowId={(row) => row.id}
-					empty={
-						<Empty>
-							<EmptyHeader>
-								<EmptyTitle>No timesheets yet</EmptyTitle>
-								<EmptyDescription>
-									Completed time entries awaiting approval will appear here.
-								</EmptyDescription>
-							</EmptyHeader>
-						</Empty>
+				<TableToolbar
+					left={
+						<>
+							<TableSearch
+								value={search}
+								onValueChange={setSearch}
+								placeholder="Search worker"
+							/>
+							<TableFilter
+								value={statusFilter}
+								onValueChange={setStatusFilter}
+								items={STATUS_FILTERS}
+								ariaLabel="Filter by approval status"
+							/>
+						</>
 					}
+					right={<TablePagination {...pagination} />}
 				/>
+				<div className="min-h-0 flex-1 overflow-auto">
+					<DataTable
+						fill={false}
+						stacked
+						query={sheets}
+						columns={columns}
+						data={pagination.pageRows}
+						getRowId={(row) => row.id}
+						empty={
+							<div className="p-4">
+								<Empty className="border border-dashed">
+									<EmptyHeader>
+										<EmptyTitle>
+											{rows.length === 0 ? "No timesheets yet" : "No matches"}
+										</EmptyTitle>
+										<EmptyDescription>
+											{rows.length === 0
+												? "Completed time entries awaiting approval will appear here."
+												: "Try a different search or status."}
+										</EmptyDescription>
+									</EmptyHeader>
+								</Empty>
+							</div>
+						}
+					/>
+				</div>
 			</AppPageBody>
 		</AppPage>
 	);

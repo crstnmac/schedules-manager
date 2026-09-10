@@ -7,16 +7,29 @@ import {
 	EmptyTitle,
 } from "@SchedulesManager/ui/components/empty";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
+import {
+	Tabs,
+	TabsContent,
+	TabsList,
+	TabsTrigger,
+} from "@SchedulesManager/ui/components/tabs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { InboxIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { QueryFeedback } from "@/components/query-feedback";
+import {
+	TableFilter,
+	TablePagination,
+	TableSearch,
+	TableToolbar,
+	useTablePagination,
+} from "@/components/table-toolbar";
 import { api } from "@/lib/api";
 import { hasCoverageItems } from "@/lib/coverage-logic";
 import {
@@ -55,6 +68,13 @@ export const Route = createFileRoute("/dashboard/coverage")({
 
 type ReleaseRow = CoverageResponse["releases"][number];
 type PickupRow = CoverageResponse["pickups"][number];
+
+const STATUS_FILTERS = [
+	{ label: "All statuses", value: "all" },
+	{ label: "Pending", value: "pending" },
+	{ label: "Approved", value: "approved" },
+	{ label: "Declined", value: "declined" },
+];
 
 function formatShiftWindow(startsAt: string, endsAt?: string | null) {
 	if (!endsAt || new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
@@ -131,19 +151,35 @@ function CoveragePage() {
 	});
 
 	const swaps = useCoverageSwaps(workplace?.id);
+	const decideSwap = useSwapDecision(workplace?.id);
 	const data = coverage.data;
 	const hasItems = hasCoverageItems(data, swaps);
+
+	const [tab, setTab] = useState<"releases" | "swaps" | "pickups">("releases");
+	const [releaseSearch, setReleaseSearch] = useState("");
+	const [releaseStatus, setReleaseStatus] = useState("all");
+	const [pickupSearch, setPickupSearch] = useState("");
+	const [pickupStatus, setPickupStatus] = useState("all");
+	const [swapSearch, setSwapSearch] = useState("");
+
+	const releases = data?.releases ?? [];
+	const pickups = data?.pickups ?? [];
+	const swapItems = swaps.data ?? [];
 
 	const releaseColumns = useMemo(
 		() =>
 			releaseHelper.columns([
 				releaseHelper.accessor("workerName", {
 					header: "Worker",
-					cell: ({ getValue }) => (
-						<span className="font-medium">{getValue()}</span>
+					cell: ({ row }) => (
+						<div className="flex flex-col">
+							<span className="font-medium">{row.original.workerName}</span>
+							<span className="text-muted-foreground text-xs">
+								{row.original.positionName}
+							</span>
+						</div>
 					),
 				}),
-				releaseHelper.accessor("positionName", { header: "Position" }),
 				releaseHelper.accessor(
 					(row) => formatShiftWindow(row.startsAt, row.endsAt),
 					{
@@ -171,7 +207,7 @@ function CoveragePage() {
 				}),
 				releaseHelper.display({
 					id: "actions",
-					header: "Actions",
+					header: () => <span className="block text-right">Actions</span>,
 					enableSorting: false,
 					cell: ({ row }) => {
 						const release = row.original;
@@ -218,11 +254,15 @@ function CoveragePage() {
 			pickupHelper.columns([
 				pickupHelper.accessor("workerName", {
 					header: "Worker",
-					cell: ({ getValue }) => (
-						<span className="font-medium">{getValue()}</span>
+					cell: ({ row }) => (
+						<div className="flex flex-col">
+							<span className="font-medium">{row.original.workerName}</span>
+							<span className="text-muted-foreground text-xs">
+								{row.original.positionName}
+							</span>
+						</div>
 					),
 				}),
-				pickupHelper.accessor("positionName", { header: "Position" }),
 				pickupHelper.accessor(
 					(row) =>
 						row.startsAt ? formatShiftWindow(row.startsAt, row.endsAt) : "",
@@ -249,7 +289,7 @@ function CoveragePage() {
 				}),
 				pickupHelper.display({
 					id: "actions",
-					header: "Actions",
+					header: () => <span className="block text-right">Actions</span>,
 					enableSorting: false,
 					cell: ({ row }) => {
 						const pickup = row.original;
@@ -291,84 +331,7 @@ function CoveragePage() {
 		[decidePickup],
 	);
 
-	if (coverage.isError)
-		return <QueryFeedback query={coverage} label="coverage requests" />;
-
-	return (
-		<AppPage>
-			{coverage.isLoading ? (
-				<div className="flex flex-col gap-3 p-4">
-					<Skeleton className="h-24" />
-					<Skeleton className="h-24" />
-				</div>
-			) : null}
-
-			{!coverage.isLoading && data && !hasItems ? (
-				<div className="p-6">
-					<Empty className="border border-dashed">
-						<EmptyHeader>
-							<EmptyMedia variant="icon">
-								<InboxIcon />
-							</EmptyMedia>
-							<EmptyTitle>No coverage requests</EmptyTitle>
-							<EmptyDescription>
-								Release and pickup requests from workers will show up here.
-							</EmptyDescription>
-						</EmptyHeader>
-					</Empty>
-				</div>
-			) : null}
-
-			{!coverage.isLoading ? (
-				<AppPageBody>
-					{data && data.releases.length > 0 ? (
-						<section className="border-b">
-							<AppPageHeader
-								title="Release requests"
-								description="Workers asking to give up an assigned shift."
-								badge={
-									<Badge variant="secondary">{data.releases.length}</Badge>
-								}
-							/>
-							<DataTable
-								fill={false}
-								columns={releaseColumns}
-								data={data.releases}
-								getRowId={(row) => row.id}
-							/>
-						</section>
-					) : null}
-
-					<SwapsQueueCard />
-
-					{data && data.pickups.length > 0 ? (
-						<section>
-							<AppPageHeader
-								title="Pickup requests"
-								description="Workers asking to take an open shift."
-								badge={<Badge variant="secondary">{data.pickups.length}</Badge>}
-							/>
-							<DataTable
-								fill={false}
-								columns={pickupColumns}
-								data={data.pickups}
-								getRowId={(row) => row.id}
-							/>
-						</section>
-					) : null}
-				</AppPageBody>
-			) : null}
-		</AppPage>
-	);
-}
-
-function SwapsQueueCard() {
-	const { workplace } = useWorkplace();
-	const swaps = useCoverageSwaps(workplace?.id);
-	const decide = useSwapDecision(workplace?.id);
-	const items = swaps.data ?? [];
-
-	const columns = useMemo(
+	const swapColumns = useMemo(
 		() =>
 			swapHelper.columns([
 				swapHelper.accessor(
@@ -394,7 +357,7 @@ function SwapsQueueCard() {
 				),
 				swapHelper.display({
 					id: "actions",
-					header: "Actions",
+					header: () => <span className="block text-right">Actions</span>,
 					enableSorting: false,
 					cell: ({ row }) => {
 						const swap = row.original;
@@ -402,12 +365,12 @@ function SwapsQueueCard() {
 							<div className="flex flex-wrap items-center justify-end gap-2">
 								<ConfirmAction
 									trigger="Approve & publish"
-									disabled={decide.isPending}
+									disabled={decideSwap.isPending}
 									title="Approve swap and publish?"
 									description="This exchanges both assignments and may publish a new schedule version immediately."
 									confirmLabel="Approve & publish"
 									onConfirm={() =>
-										decide.mutate(
+										decideSwap.mutate(
 											{ swapId: swap.id, decision: "approved" },
 											{
 												onSuccess: (result) => {
@@ -426,13 +389,13 @@ function SwapsQueueCard() {
 								/>
 								<ConfirmAction
 									trigger="Decline"
-									disabled={decide.isPending}
+									disabled={decideSwap.isPending}
 									title="Decline this swap?"
 									description="Both workers will keep their current assignments."
 									confirmLabel="Decline swap"
 									destructive
 									onConfirm={() =>
-										decide.mutate(
+										decideSwap.mutate(
 											{ swapId: swap.id, decision: "declined" },
 											{
 												onSuccess: () => toast.success("Swap declined."),
@@ -445,33 +408,257 @@ function SwapsQueueCard() {
 					},
 				}),
 			]),
-		[decide],
+		[decideSwap],
 	);
 
-	if (swaps.isError) {
-		return (
-			<section className="border-b">
-				<QueryFeedback query={swaps} label="shift swap requests" />
-			</section>
-		);
-	}
+	const releaseRows = useMemo(() => {
+		const term = releaseSearch.trim().toLowerCase();
+		return releases.filter((row) => {
+			if (releaseStatus !== "all" && row.status !== releaseStatus) return false;
+			if (!term) return true;
+			return `${row.workerName} ${row.positionName}`
+				.toLowerCase()
+				.includes(term);
+		});
+	}, [releases, releaseSearch, releaseStatus]);
 
-	if (swaps.isLoading || items.length === 0) return null;
+	const pickupRows = useMemo(() => {
+		const term = pickupSearch.trim().toLowerCase();
+		return pickups.filter((row) => {
+			if (pickupStatus !== "all" && row.status !== pickupStatus) return false;
+			if (!term) return true;
+			return `${row.workerName} ${row.positionName}`
+				.toLowerCase()
+				.includes(term);
+		});
+	}, [pickups, pickupSearch, pickupStatus]);
+
+	const swapRows = useMemo(() => {
+		const term = swapSearch.trim().toLowerCase();
+		if (!term) return swapItems;
+		return swapItems.filter((row) =>
+			`${row.requester.name} ${row.counterpart.name}`
+				.toLowerCase()
+				.includes(term),
+		);
+	}, [swapItems, swapSearch]);
+
+	const releasePagination = useTablePagination(releaseRows, {
+		resetKey: `${releaseSearch}|${releaseStatus}`,
+	});
+	const pickupPagination = useTablePagination(pickupRows, {
+		resetKey: `${pickupSearch}|${pickupStatus}`,
+	});
+	const swapPagination = useTablePagination(swapRows, { resetKey: swapSearch });
+
+	const pendingCount =
+		releases.filter((row) => row.status === "pending").length +
+		pickups.filter((row) => row.status === "pending").length +
+		swapItems.length;
+
+	if (coverage.isError)
+		return <QueryFeedback query={coverage} label="coverage requests" />;
 
 	return (
-		<section className="border-b">
+		<AppPage>
 			<AppPageHeader
-				title="Shift swap requests"
-				description="Both workers agreed to exchange shifts. Approving exchanges the assignments and republishes the schedule."
-				badge={<Badge variant="secondary">{items.length}</Badge>}
+				title="Coverage"
+				badge={
+					pendingCount > 0 ? (
+						<Badge variant="secondary">{pendingCount} pending</Badge>
+					) : null
+				}
+				description="Release, swap, and pickup requests from workers."
 			/>
-			<DataTable
-				fill={false}
-				columns={columns}
-				data={items}
-				getRowId={(row) => row.id}
-			/>
-		</section>
+			<AppPageBody scroll={false}>
+				{coverage.isLoading ? (
+					<div className="flex flex-col gap-3 p-4">
+						<Skeleton className="h-24" />
+						<Skeleton className="h-24" />
+					</div>
+				) : null}
+
+				{!coverage.isLoading && data && !hasItems ? (
+					<div className="p-6">
+						<Empty className="border border-dashed">
+							<EmptyHeader>
+								<EmptyMedia variant="icon">
+									<InboxIcon />
+								</EmptyMedia>
+								<EmptyTitle>No coverage requests</EmptyTitle>
+								<EmptyDescription>
+									Release, swap, and pickup requests from workers will show up
+									here.
+								</EmptyDescription>
+							</EmptyHeader>
+						</Empty>
+					</div>
+				) : null}
+
+				{!coverage.isLoading && hasItems ? (
+					<Tabs
+						value={tab}
+						onValueChange={(value) =>
+							setTab(value as "releases" | "swaps" | "pickups")
+						}
+						className="min-h-0 flex-1 gap-0"
+					>
+						<div className="shrink-0 border-b px-4 py-2">
+							<TabsList variant="line">
+								<TabsTrigger value="releases">
+									Releases
+									<Badge variant="secondary">{releases.length}</Badge>
+								</TabsTrigger>
+								<TabsTrigger value="swaps">
+									Swaps
+									<Badge variant="secondary">{swapItems.length}</Badge>
+								</TabsTrigger>
+								<TabsTrigger value="pickups">
+									Pickups
+									<Badge variant="secondary">{pickups.length}</Badge>
+								</TabsTrigger>
+							</TabsList>
+						</div>
+
+						<TabsContent
+							value="releases"
+							className="flex min-h-0 flex-1 flex-col"
+						>
+							<TableToolbar
+								left={
+									<>
+										<TableSearch
+											value={releaseSearch}
+											onValueChange={setReleaseSearch}
+											placeholder="Search worker or position"
+										/>
+										<TableFilter
+											value={releaseStatus}
+											onValueChange={setReleaseStatus}
+											items={STATUS_FILTERS}
+											ariaLabel="Filter releases by status"
+										/>
+									</>
+								}
+								right={<TablePagination {...releasePagination} />}
+							/>
+							<div className="min-h-0 flex-1 overflow-auto">
+								<DataTable
+									fill={false}
+									stacked
+									columns={releaseColumns}
+									data={releasePagination.pageRows}
+									getRowId={(row) => row.id}
+									empty={
+										<div className="p-4">
+											<Empty className="border border-dashed">
+												<EmptyHeader>
+													<EmptyTitle>
+														{releases.length === 0
+															? "No release requests"
+															: "No matches"}
+													</EmptyTitle>
+													<EmptyDescription>
+														{releases.length === 0
+															? "Workers asking to give up a shift will appear here."
+															: "Try a different search or status."}
+													</EmptyDescription>
+												</EmptyHeader>
+											</Empty>
+										</div>
+									}
+								/>
+							</div>
+						</TabsContent>
+
+						<TabsContent value="swaps" className="flex min-h-0 flex-1 flex-col">
+							<TableToolbar
+								left={
+									<TableSearch
+										value={swapSearch}
+										onValueChange={setSwapSearch}
+										placeholder="Search workers"
+									/>
+								}
+								right={<TablePagination {...swapPagination} />}
+							/>
+							<div className="min-h-0 flex-1 overflow-auto">
+								<DataTable
+									fill={false}
+									stacked
+									columns={swapColumns}
+									data={swapPagination.pageRows}
+									getRowId={(row) => row.id}
+									empty={
+										<div className="p-4">
+											<Empty className="border border-dashed">
+												<EmptyHeader>
+													<EmptyTitle>No swap requests</EmptyTitle>
+													<EmptyDescription>
+														Worker-to-worker swaps appear here once both agree.
+													</EmptyDescription>
+												</EmptyHeader>
+											</Empty>
+										</div>
+									}
+								/>
+							</div>
+						</TabsContent>
+
+						<TabsContent
+							value="pickups"
+							className="flex min-h-0 flex-1 flex-col"
+						>
+							<TableToolbar
+								left={
+									<>
+										<TableSearch
+											value={pickupSearch}
+											onValueChange={setPickupSearch}
+											placeholder="Search worker or position"
+										/>
+										<TableFilter
+											value={pickupStatus}
+											onValueChange={setPickupStatus}
+											items={STATUS_FILTERS}
+											ariaLabel="Filter pickups by status"
+										/>
+									</>
+								}
+								right={<TablePagination {...pickupPagination} />}
+							/>
+							<div className="min-h-0 flex-1 overflow-auto">
+								<DataTable
+									fill={false}
+									stacked
+									columns={pickupColumns}
+									data={pickupPagination.pageRows}
+									getRowId={(row) => row.id}
+									empty={
+										<div className="p-4">
+											<Empty className="border border-dashed">
+												<EmptyHeader>
+													<EmptyTitle>
+														{pickups.length === 0
+															? "No pickup requests"
+															: "No matches"}
+													</EmptyTitle>
+													<EmptyDescription>
+														{pickups.length === 0
+															? "Workers asking to take an open shift will appear here."
+															: "Try a different search or status."}
+													</EmptyDescription>
+												</EmptyHeader>
+											</Empty>
+										</div>
+									}
+								/>
+							</div>
+						</TabsContent>
+					</Tabs>
+				) : null}
+			</AppPageBody>
+		</AppPage>
 	);
 }
 
