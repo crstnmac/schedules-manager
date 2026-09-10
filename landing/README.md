@@ -1,6 +1,6 @@
 # jooling landing page
 
-Standalone Vite + React + TypeScript marketing site. Independent of the existing web and native applications.
+Vite + React + TypeScript marketing site. It shares UI primitives with the web app through the `@SchedulesManager/ui` workspace package.
 
 ## Run
 
@@ -17,11 +17,11 @@ The landing page packages high-resolution WebP captures of the seeded web and mo
 
 ## Docker
 
-Build from the repository root using `landing` as the Docker context:
+Build from the repository root:
 
     docker build -f landing/Dockerfile \
       --build-arg VITE_APP_URL=https://app.example.com \
-      -t jooling-landing landing
+      -t jooling-landing .
 
 Run the non-root image on port 8080:
 
