@@ -138,10 +138,11 @@ function WorkerLayout() {
 		select: (state) => state.location.pathname,
 	});
 	const showTimecard = capabilities.operations;
-	const activePage =
-		navigation.find((item) =>
-			item.exact ? pathname === item.to : pathname.startsWith(item.to),
-		)?.label ?? "My schedule";
+	const activePage = pathname.startsWith("/worker/history")
+		? "Published version"
+		: (navigation.find((item) =>
+				item.exact ? pathname === item.to : pathname.startsWith(item.to),
+			)?.label ?? "My schedule");
 
 	useEffect(() => {
 		document.title = `${activePage} · jooling`;
