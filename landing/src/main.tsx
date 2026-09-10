@@ -1,3 +1,17 @@
+import { Badge } from "@SchedulesManager/ui/components/badge";
+import {
+	Button,
+	buttonVariants,
+} from "@SchedulesManager/ui/components/button";
+import {
+	ScrollArea,
+	ScrollBar,
+} from "@SchedulesManager/ui/components/scroll-area";
+import {
+	ToggleGroup,
+	ToggleGroupItem,
+} from "@SchedulesManager/ui/components/toggle-group";
+import { cn } from "@SchedulesManager/ui/lib/utils";
 import {
 	ArrowRight,
 	ArrowUpRight,
@@ -29,12 +43,22 @@ import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
-function Badge({
+function LandingLink({
 	className,
-	variant: _variant,
+	variant = "link",
+	size = "default",
 	...props
-}: React.ComponentProps<"span"> & { variant?: string }) {
-	return <span className={className} {...props} />;
+}: React.ComponentProps<"a"> & {
+	variant?: "default" | "outline" | "secondary" | "ghost" | "link";
+	size?: "default" | "xs" | "sm" | "lg";
+}) {
+	return (
+		<a
+			data-slot="button"
+			className={cn(buttonVariants({ variant, size }), className)}
+			{...props}
+		/>
+	);
 }
 const appUrl = import.meta.env.VITE_APP_URL || "http://localhost:3001";
 const signUpUrl = new URL(appUrl);
@@ -126,18 +150,23 @@ const faqs = [
 ];
 function Brand() {
 	return (
-		<a className="brand" href="#" aria-label="jooling home">
+		<LandingLink className="brand" href="#" aria-label="jooling home">
 			<img src="/logo-mark.svg" alt="" />
 			jooling<span className="brand-dot">.</span>
-		</a>
+		</LandingLink>
 	);
 }
 function CTA({ children = "Get started" }: { children?: React.ReactNode }) {
 	return (
-		<a className="button button-primary" href={signUpUrl.toString()}>
+		<LandingLink
+			className="button button-primary"
+			href={signUpUrl.toString()}
+			variant="default"
+			size="lg"
+		>
 			{children}
 			<ArrowUpRight data-icon="inline-end" />
-		</a>
+		</LandingLink>
 	);
 }
 
@@ -172,26 +201,23 @@ function Pricing() {
 							<span>Everyone included.</span>
 						</h2>
 					</div>
-					<div
+					<ToggleGroup
 						className="billing-toggle"
-						role="group"
 						aria-label="Billing interval"
+						value={[annual ? "annual" : "monthly"]}
+						onValueChange={(value) => {
+							const interval = value.at(-1);
+							if (interval) setAnnual(interval === "annual");
+						}}
+						spacing={0}
 					>
-						<button
-							type="button"
-							aria-pressed={!annual}
-							onClick={() => setAnnual(false)}
-						>
+						<ToggleGroupItem value="monthly">
 							Monthly
-						</button>
-						<button
-							type="button"
-							aria-pressed={annual}
-							onClick={() => setAnnual(true)}
-						>
+						</ToggleGroupItem>
+						<ToggleGroupItem value="annual">
 							Annual <small>Save 20%</small>
-						</button>
-					</div>
+						</ToggleGroupItem>
+					</ToggleGroup>
 				</div>
 				<div className="pricing-grid">
 					{(["schedule", "operations"] as const).map((plan) => {
@@ -234,12 +260,14 @@ function Pricing() {
 										</li>
 									))}
 								</ul>
-								<a
+								<LandingLink
 									className={`button ${plan === "operations" ? "button-primary" : "button-secondary"}`}
 									href={signUpUrl.toString()}
+									variant={plan === "operations" ? "default" : "outline"}
+									size="lg"
 								>
 									Start 30 days free <ArrowUpRight data-icon="inline-end" />
-								</a>
+								</LandingLink>
 							</article>
 						);
 					})}
@@ -309,25 +337,33 @@ function SchedulePreview() {
 								<MapPin size={12} /> Downtown location <ChevronDown size={12} />
 							</p>
 						</div>
-						<button
+						<Button
+							type="button"
 							className={`publish-button${published ? " is-published" : ""}`}
 							onClick={() => setPublished(!published)}
 						>
-							{published ? <CheckCheck size={14} /> : <Send size={14} />}{" "}
+							{published ? (
+								<CheckCheck data-icon="inline-start" />
+							) : (
+								<Send data-icon="inline-start" />
+							)}{" "}
 							{published ? "Published" : "Publish schedule"}
-						</button>
+						</Button>
 					</div>
 					<div className="schedule-controls">
 						<div>
-							<button
+							<Button
+								type="button"
+								variant="outline"
+								size="icon"
 								aria-label="Previous week"
 								onClick={() => {
 									setWeek(week - 1);
 									setPublished(false);
 								}}
 							>
-								<ChevronLeft size={15} />
-							</button>
+								<ChevronLeft />
+							</Button>
 							<strong>
 								{start.toLocaleDateString("en", {
 									month: "short",
@@ -340,15 +376,18 @@ function SchedulePreview() {
 								})}
 								, {end.getFullYear()}
 							</strong>
-							<button
+							<Button
+								type="button"
+								variant="outline"
+								size="icon"
 								aria-label="Next week"
 								onClick={() => {
 									setWeek(week + 1);
 									setPublished(false);
 								}}
 							>
-								<ChevronRight size={15} />
-							</button>
+								<ChevronRight />
+							</Button>
 							<Badge
 								variant={published ? "secondary" : "outline"}
 								className="draft-label"
@@ -360,10 +399,8 @@ function SchedulePreview() {
 							<CalendarDays size={13} /> Week view
 						</span>
 					</div>
-					<div
+					<ScrollArea
 						className="grid-overflow"
-						tabIndex={0}
-						role="region"
 						aria-label="Example weekly schedule, scroll to see all days"
 					>
 						<div className="week-grid">
@@ -423,7 +460,8 @@ function SchedulePreview() {
 								</div>
 							))}
 						</div>
-					</div>
+						<ScrollBar orientation="horizontal" />
+					</ScrollArea>
 					<div className="schedule-bottom">
 						<span>
 							<span className="live-dot" /> All changes saved
@@ -476,9 +514,9 @@ function App() {
 
 	return (
 		<div className="site">
-			<a className="skip-link" href="#main-content">
+			<LandingLink className="skip-link" href="#main-content">
 				Skip to content
-			</a>
+			</LandingLink>
 			<header className={`header${scrolled ? " is-scrolled" : ""}`}>
 				<div className="nav-container">
 					<Brand />
@@ -487,25 +525,28 @@ function App() {
 						aria-label="Main navigation"
 						className={`nav-links${menuOpen ? " open" : ""}`}
 					>
-						<a href="#how-it-works" onClick={() => setMenuOpen(false)}>
+						<LandingLink href="#how-it-works" onClick={() => setMenuOpen(false)}>
 							How it works
-						</a>
-						<a href="#for-your-team" onClick={() => setMenuOpen(false)}>
+						</LandingLink>
+						<LandingLink href="#for-your-team" onClick={() => setMenuOpen(false)}>
 							For your team
-						</a>
-						<a href="#pricing" onClick={() => setMenuOpen(false)}>
+						</LandingLink>
+						<LandingLink href="#pricing" onClick={() => setMenuOpen(false)}>
 							Pricing
-						</a>
-						<a href="#faq" onClick={() => setMenuOpen(false)}>
+						</LandingLink>
+						<LandingLink href="#faq" onClick={() => setMenuOpen(false)}>
 							FAQs
-						</a>
+						</LandingLink>
 					</nav>
 					<div className="nav-actions">
-						<a className="login-link" href={appUrl}>
+						<LandingLink className="login-link" href={appUrl}>
 							Log in <ArrowUpRight size={14} />
-						</a>
+						</LandingLink>
 						<CTA />
-						<button
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon"
 							className="menu-toggle"
 							aria-label={menuOpen ? "Close navigation" : "Open navigation"}
 							aria-expanded={menuOpen}
@@ -513,7 +554,7 @@ function App() {
 							onClick={() => setMenuOpen(!menuOpen)}
 						>
 							{menuOpen ? <X /> : <Menu />}
-						</button>
+						</Button>
 					</div>
 				</div>
 			</header>
@@ -545,9 +586,14 @@ function App() {
 					</p>
 					<div className="hero-actions">
 						<CTA>Get started</CTA>
-						<a className="button button-secondary" href="#product-demo">
+						<LandingLink
+							className="button button-secondary"
+							href="#product-demo"
+							variant="outline"
+							size="lg"
+						>
 							See it in action <ArrowRight size={16} />
-						</a>
+						</LandingLink>
 					</div>
 					<SchedulePreview />
 				</section>
@@ -792,15 +838,15 @@ function App() {
 					</div>
 					<div className="footer-column">
 						<strong>Product</strong>
-						<a href="#how-it-works">How it works</a>
-						<a href="#pricing">Pricing</a>
-						<a href="#faq">FAQs</a>
+						<LandingLink href="#how-it-works">How it works</LandingLink>
+						<LandingLink href="#pricing">Pricing</LandingLink>
+						<LandingLink href="#faq">FAQs</LandingLink>
 					</div>
 					<div className="footer-column">
 						<strong>For teams</strong>
-						<a href="#for-your-team">Team experience</a>
-						<a href={appUrl}>Log in</a>
-						<a href={signUpUrl.toString()}>Get started</a>
+						<LandingLink href="#for-your-team">Team experience</LandingLink>
+						<LandingLink href={appUrl}>Log in</LandingLink>
+						<LandingLink href={signUpUrl.toString()}>Get started</LandingLink>
 					</div>
 				</div>
 				<div className="footer-bottom section-container">

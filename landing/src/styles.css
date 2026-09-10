@@ -1,17 +1,19 @@
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/geist";
+@import "@SchedulesManager/ui/globals.css";
+@source "./**/*.{ts,tsx}";
+
 :root {
 	font-family: var(--font-ui);
-	color: #111b28;
-	background: #ffffff;
+	color: var(--foreground);
+	background: var(--background);
 	font-synthesis: none;
 	font-weight: 400;
-	--ink: #111b28;
-	--muted: #526176;
-	--line: #dfe6ee;
-	--blue: #006edc;
-	--teal: #006edc;
-	--surface: #ffffff;
+	--font-ui: var(--font-sans);
+	--ink: var(--foreground);
+	--muted: var(--muted-foreground);
+	--line: var(--border);
+	--blue: var(--primary);
+	--teal: var(--primary);
+	--surface: var(--background);
 }
 * {
 	box-sizing: border-box;
@@ -502,7 +504,7 @@ h2 span {
 	padding: 6px 9px;
 }
 .grid-overflow {
-	overflow: auto;
+	overflow: hidden;
 	margin: 0 22px;
 	border: 1px solid #e5eae3;
 	border-radius: 5px;
@@ -1828,16 +1830,16 @@ h2 span {
 /* Product design system alignment */
 :root {
 	font-family: "Inter Variable", sans-serif;
-	--ink: oklch(0.145 0 0);
-	--muted: oklch(0.556 0 0);
-	--line: oklch(0.922 0 0);
-	--blue: #006edc;
-	--teal: #006edc;
-	--surface: #ffffff;
+	--ink: var(--foreground);
+	--muted: var(--muted-foreground);
+	--line: var(--border);
+	--blue: var(--primary);
+	--teal: var(--primary);
+	--surface: var(--background);
 }
 
 body {
-	background: #ffffff;
+	background: var(--background);
 	color: var(--ink);
 }
 h1,
@@ -2689,8 +2691,8 @@ h2 span {
 
 /* Editorial typography system shared by the landing page and footer. */
 :root {
-	--font-display: Georgia, "Times New Roman", serif;
-	--font-ui: "Geist Variable", "Inter Variable", sans-serif;
+	--font-display: var(--font-heading);
+	--font-ui: var(--font-sans);
 }
 body {
 	font-family: var(--font-ui);
@@ -4563,7 +4565,7 @@ body {
 .billing-toggle button:active {
 	scale: 0.96;
 }
-.billing-toggle button[aria-pressed="true"] {
+.billing-toggle button[data-pressed] {
 	background: white;
 	color: var(--ink);
 	box-shadow:

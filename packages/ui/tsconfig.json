@@ -2,6 +2,7 @@
 	"extends": "@SchedulesManager/config/tsconfig.base.json",
 	"compilerOptions": {
 		"noEmit": true,
+		"noUnusedLocals": false,
 		"jsx": "react-jsx",
 		"lib": ["ESNext", "DOM", "DOM.Iterable"],
 		"types": [],

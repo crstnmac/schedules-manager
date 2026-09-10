@@ -134,14 +134,15 @@ export function DataTable<TData extends RowData>({
 	) : null;
 
 	const tableNode = (
-		<Table
-			containerClassName={cn(
+		<div
+			className={cn(
 				"schedule-grid-scroll min-h-0 print:max-h-none print:overflow-visible",
 				fill && "flex-1",
 				bounded && "max-h-[min(28rem,calc(100dvh-12rem))]",
 			)}
 		>
-			<TableHeader>
+			<Table>
+				<TableHeader>
 				{dataTable.getHeaderGroups().map((headerGroup) => (
 					<TableRow key={headerGroup.id} className="hover:bg-transparent">
 						{headerGroup.headers.map((header) => {
@@ -194,8 +195,8 @@ export function DataTable<TData extends RowData>({
 						})}
 					</TableRow>
 				))}
-			</TableHeader>
-			<TableBody>
+				</TableHeader>
+				<TableBody>
 				{dataTable.getRowModel().rows.map((row) => (
 					<TableRow key={row.id}>
 						{row.getAllCells().map((cell) => (
@@ -205,8 +206,9 @@ export function DataTable<TData extends RowData>({
 						))}
 					</TableRow>
 				))}
-			</TableBody>
-		</Table>
+				</TableBody>
+			</Table>
+		</div>
 	);
 
 	return (
