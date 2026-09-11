@@ -133,7 +133,7 @@ bun run check        # Format and lint with Biome
 bun test             # Run fast unit and invariant tests
 bun run test:integration # Run isolated PostgreSQL tests (Docker required)
 bun run db:generate  # Generate database migrations
-bun run db:migrate   # Run database migrations
+bun run db:migrate   # Run database migrations (works in the server container)
 bun run db:studio    # Open Drizzle Studio
 ```
 

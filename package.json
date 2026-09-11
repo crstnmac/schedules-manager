@@ -29,7 +29,7 @@
 		"db:push": "turbo run db:push -F @SchedulesManager/db --",
 		"db:studio": "turbo run db:studio -F @SchedulesManager/db --",
 		"db:generate": "turbo run db:generate -F @SchedulesManager/db --",
-		"db:migrate": "turbo run db:migrate -F @SchedulesManager/db --",
+		"db:migrate": "bun --cwd packages/db db:migrate:deploy",
 		"check": "biome check --write ."
 	},
 	"dependencies": {
