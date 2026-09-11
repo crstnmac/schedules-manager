@@ -113,6 +113,9 @@ function SubscriptionPage() {
 
 	const current = billing.data?.subscription;
 	const locationCount = billing.data?.locationCount ?? 1;
+	const paidLocationCount =
+		billing.data?.paidLocationCount ?? current?.locationCount ?? null;
+	const locationWord = locationCount === 1 ? "location" : "locations";
 
 	return (
 		<SettingsPage
@@ -134,6 +137,13 @@ function SubscriptionPage() {
 								}).format(new Date(current.currentPeriodEnd))
 							: "after the current billing period"}
 						.
+						{paidLocationCount ? (
+							<>
+								{" "}
+								{locationCount} of {paidLocationCount} paid{" "}
+								{paidLocationCount === 1 ? "location" : "locations"} in use.
+							</>
+						) : null}
 					</AlertDescription>
 				</Alert>
 			) : null}
@@ -199,8 +209,7 @@ function SubscriptionPage() {
 									<p className="mt-1 text-muted-foreground">
 										{money(unit * locationCount)} billed{" "}
 										{interval === "year" ? "annually" : "monthly"} for{" "}
-										{locationCount}{" "}
-										{locationCount === 1 ? "location" : "locations"}.
+										{locationCount} {locationWord}.
 									</p>
 								</div>
 								<ul className="grid gap-2">
@@ -238,8 +247,9 @@ function SubscriptionPage() {
 				})}
 			</div>
 			<p className="text-center text-muted-foreground text-xs">
-				No credit card charge during the 30-day trial. Cancel any time in the
-				billing portal.
+				Adding a location adds a prorated seat automatically; removing one
+				credits it. No credit card charge during the 30-day trial. Cancel any
+				time in the billing portal.
 			</p>
 		</SettingsPage>
 	);

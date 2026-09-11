@@ -23,6 +23,7 @@ import {
 	hasActiveSubscription,
 	planAllows,
 	polarClient,
+	requireSeatBasedProduct,
 } from "../billing";
 import { requirePrivilege, requireSession } from "../context";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../errors";
@@ -118,6 +119,7 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 					),
 				},
 				locationCount: Math.max(1, locationTotal?.value ?? 1),
+				paidLocationCount: subscription?.locationCount ?? null,
 				catalog: {
 					schedule: { month: 3900, year: 37200 },
 					operations: { month: 7900, year: 75600 },
@@ -168,17 +170,10 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 				.where(eq(locations.workplaceId, params.workplaceId));
 			const locationCount = Math.max(1, locationTotal?.value ?? 1);
 			const selected = billingCatalog[body.plan][body.billingInterval];
+			await requireSeatBasedProduct(selected.productId);
 			const checkout = await polarClient().checkouts.create({
 				products: [selected.productId],
-				prices: {
-					[selected.productId]: [
-						{
-							amountType: "fixed",
-							priceAmount: selected.unitAmount * locationCount,
-							priceCurrency: "usd",
-						},
-					],
-				},
+				seats: locationCount,
 				externalCustomerId: params.workplaceId,
 				customerEmail: profile.email,
 				customerName: workplace.name,
@@ -300,7 +295,13 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 			const eventId =
 				request.headers.get("webhook-id") ??
 				`${event.type}:${subscription.id}:${eventTimestamp.toISOString()}`;
-			const locationCount = Number(subscription.metadata.location_count ?? 1);
+			const metadataLocationCount = Number(
+				subscription.metadata.location_count ?? 1,
+			);
+			const locationCount =
+				typeof subscription.seats === "number" && subscription.seats > 0
+					? subscription.seats
+					: metadataLocationCount;
 			const currentPeriodEnd = subscription.currentPeriodEnd
 				? new Date(subscription.currentPeriodEnd)
 				: null;

@@ -5,6 +5,7 @@ import {
 	billingProduct,
 	hasActiveSubscription,
 	planAllows,
+	seatsForLocationChange,
 } from "../src/billing";
 
 describe("billing catalog", () => {
@@ -43,5 +44,19 @@ describe("billing catalog", () => {
 		expect(planAllows("operations", "attendance")).toBe(true);
 		expect(planAllows("operations", "labor_reports")).toBe(true);
 		expect(planAllows("operations", "auto_assign")).toBe(true);
+	});
+
+	test("adding a Location raises seats only once paid capacity is exceeded", () => {
+		expect(seatsForLocationChange("add", 1, 1)).toBe(1);
+		expect(seatsForLocationChange("add", 1, 2)).toBe(2);
+		expect(seatsForLocationChange("add", 3, 2)).toBe(3);
+		expect(seatsForLocationChange("add", 3, 5)).toBe(5);
+	});
+
+	test("removing a Location lowers seats but never below one", () => {
+		expect(seatsForLocationChange("remove", 3, 2)).toBe(2);
+		expect(seatsForLocationChange("remove", 3, 5)).toBe(3);
+		expect(seatsForLocationChange("remove", 2, 1)).toBe(1);
+		expect(seatsForLocationChange("remove", 1, 0)).toBe(1);
 	});
 });

@@ -1,7 +1,14 @@
 import { db, locations, schedules } from "@SchedulesManager/db";
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
-import { requireSubscriptionCapability } from "../billing";
+import {
+	hasActiveSubscription,
+	loadWorkplaceSubscription,
+	requireActiveSubscription,
+	requireSubscriptionCapability,
+	seatsForLocationChange,
+	setSubscriptionSeats,
+} from "../billing";
 import { requirePrivilege, requireSession } from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { fillPlaceFromAddress } from "../geocode";
@@ -103,6 +110,12 @@ export const locationsRoutes = new Elysia({
 				null,
 				null,
 			);
+			const subscription = await requireActiveSubscription(params.workplaceId);
+			const [locationTotal] = await db
+				.select({ value: count() })
+				.from(locations)
+				.where(eq(locations.workplaceId, params.workplaceId));
+			const nextCount = (locationTotal?.value ?? 0) + 1;
 			const location = firstRow(
 				await db
 					.insert(locations)
@@ -119,6 +132,16 @@ export const locationsRoutes = new Elysia({
 					})
 					.returning(),
 			);
+
+			try {
+				await setSubscriptionSeats(
+					subscription,
+					seatsForLocationChange("add", subscription.locationCount, nextCount),
+				);
+			} catch (error) {
+				await db.delete(locations).where(eq(locations.id, location.id));
+				throw error;
+			}
 
 			return {
 				location: toLocationDto(location),
@@ -294,7 +317,33 @@ export const locationsRoutes = new Elysia({
 				);
 			}
 
+			const subscription = await loadWorkplaceSubscription(
+				existing.workplaceId,
+			);
 			await db.delete(locations).where(eq(locations.id, existing.id));
+
+			if (subscription && hasActiveSubscription(subscription.status)) {
+				const [locationTotal] = await db
+					.select({ value: count() })
+					.from(locations)
+					.where(eq(locations.workplaceId, existing.workplaceId));
+				try {
+					await setSubscriptionSeats(
+						subscription,
+						seatsForLocationChange(
+							"remove",
+							subscription.locationCount,
+							locationTotal?.value ?? 1,
+						),
+					);
+				} catch (error) {
+					console.error(
+						"Failed to reduce Polar seats after Location deletion",
+						error,
+					);
+				}
+			}
+
 			return { ok: true as const };
 		},
 		{

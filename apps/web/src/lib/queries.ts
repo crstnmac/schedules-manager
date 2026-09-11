@@ -726,6 +726,7 @@ export interface BillingSummary {
 		canManage: boolean;
 	} | null;
 	locationCount: number;
+	paidLocationCount: number | null;
 	capabilities: {
 		scheduling: boolean;
 		operations: boolean;
