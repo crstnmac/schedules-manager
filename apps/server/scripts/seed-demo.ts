@@ -52,6 +52,8 @@ import { hashPin } from "../src/pin";
 import { publishScheduleNow } from "../src/routes/publication";
 import { shiftDays, wallToInstant, zonedDayInfo } from "../src/time";
 
+const WORKPLACE_NAME = process.argv[2] ?? "Pilot Restaurant";
+
 const WEEK_STARTS = [
 	"2026-08-17",
 	"2026-08-24",
@@ -230,11 +232,11 @@ async function main() {
 	const [workplace] = await db
 		.select()
 		.from(workplaces)
-		.where(eq(workplaces.name, "Pilot Restaurant"))
+		.where(eq(workplaces.name, WORKPLACE_NAME))
 		.limit(1);
 	if (!workplace) {
 		throw new Error(
-			"Pilot Restaurant is missing. Sign in as the manager first.",
+			`${WORKPLACE_NAME} is missing. Sign in as the manager first.`,
 		);
 	}
 
@@ -243,7 +245,7 @@ async function main() {
 		.from(locations)
 		.where(eq(locations.workplaceId, workplace.id))
 		.limit(1);
-	if (!location) throw new Error("Pilot Restaurant has no location");
+	if (!location) throw new Error(`${WORKPLACE_NAME} has no location`);
 
 	const workplaceId = workplace.id;
 	const locationId = location.id;
@@ -259,7 +261,7 @@ async function main() {
 		)
 		.limit(1);
 	if (!manager) {
-		throw new Error("Pilot Restaurant has no manager employment");
+		throw new Error(`${WORKPLACE_NAME} has no manager employment`);
 	}
 
 	const authUsers = await db.execute<{ id: string; email: string }>(

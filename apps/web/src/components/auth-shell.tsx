@@ -59,7 +59,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
 		<main
 			id="main-content"
 			tabIndex={-1}
-			className="light relative min-h-svh overflow-hidden lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+			className="light relative flex min-h-svh flex-col overflow-hidden text-foreground lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
 		>
 			<div
 				aria-hidden="true"
@@ -149,7 +149,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
 				</p>
 			</section>
 
-			<section className="relative z-10 flex flex-col items-center justify-center px-4 py-10">
+			<section className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-10">
 				<div className="mb-8 flex items-center gap-3 lg:hidden">
 					<LogoMark size={40} />
 					<div className="flex flex-col gap-0.5">
