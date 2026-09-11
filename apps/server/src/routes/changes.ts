@@ -306,7 +306,7 @@ export const changesRoutes = new Elysia({
 	.get(
 		"/schedules/:scheduleId/change-preview",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const { location, workplace } = await scheduleContext(params.scheduleId);
 			await requireManager(profile.id, location.workplaceId);
 
@@ -357,7 +357,7 @@ export const changesRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ scheduleId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -369,7 +369,7 @@ export const changesRoutes = new Elysia({
 	.get(
 		"/schedules/:scheduleId/acceptances",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const { location } = await scheduleContext(params.scheduleId);
 			await requireManager(profile.id, location.workplaceId);
 
@@ -427,7 +427,7 @@ export const changesRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ scheduleId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -439,7 +439,7 @@ export const changesRoutes = new Elysia({
 	.post(
 		"/my/shift-acceptances/:acceptanceId/accept",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `shift-acceptance.respond:${params.acceptanceId}`,
@@ -451,7 +451,7 @@ export const changesRoutes = new Elysia({
 		},
 		{
 			headers: t.Object({
-				authorization: t.String(),
+				authorization: t.Optional(t.String()),
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
@@ -466,7 +466,7 @@ export const changesRoutes = new Elysia({
 	.post(
 		"/my/shift-acceptances/:acceptanceId/decline",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `shift-acceptance.respond:${params.acceptanceId}`,
@@ -478,7 +478,7 @@ export const changesRoutes = new Elysia({
 		},
 		{
 			headers: t.Object({
-				authorization: t.String(),
+				authorization: t.Optional(t.String()),
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),

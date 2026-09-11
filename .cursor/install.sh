@@ -4,7 +4,7 @@
 # long-lived processes (those belong in start.sh).
 #
 # This script is self-bootstrapping: it installs the toolchain (Bun, Docker,
-# Supabase CLI) when it is missing, so the environment works from a plain
+# PostgreSQL tooling) when it is missing, so the environment works from a plain
 # base image as well as from a snapshot that already contains these tools.
 set -euo pipefail
 
@@ -39,16 +39,7 @@ sudo update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy >/dev/null 2
 # Let the current user talk to the Docker socket without sudo.
 sudo usermod -aG docker "$(id -un)" 2>/dev/null || true
 
-# --- Supabase CLI ---
-if ! command -v supabase >/dev/null 2>&1; then
-  log "installing supabase CLI"
-  arch="$(dpkg --print-architecture)"
-  curl -fsSL "https://github.com/supabase/cli/releases/latest/download/supabase_linux_${arch}.tar.gz" -o /tmp/supabase.tar.gz
-  tar -xzf /tmp/supabase.tar.gz -C /tmp supabase
-  sudo mv /tmp/supabase /usr/local/bin/supabase
-fi
-
-log "bun $(bun --version) | docker $(docker --version | awk '{print $3}' | tr -d ,) | supabase $(supabase --version)"
+log "bun $(bun --version) | docker $(docker --version | awk '{print $3}' | tr -d ,)"
 
 # --- Workspace dependencies ---
 bun install --frozen-lockfile

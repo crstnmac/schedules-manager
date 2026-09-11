@@ -47,7 +47,7 @@ export const rosterRoutes = new Elysia({
 	.get(
 		"/workplaces/:workplaceId/my/day-roster",
 		async ({ headers, params, query }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -209,7 +209,7 @@ export const rosterRoutes = new Elysia({
 			return { roster, timeOff };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			query: t.Object({
 				date: t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
@@ -223,7 +223,7 @@ export const rosterRoutes = new Elysia({
 	.get(
 		"/workplaces/:workplaceId/my/pay-period",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -272,7 +272,7 @@ export const rosterRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "The pay period containing today",
@@ -283,7 +283,7 @@ export const rosterRoutes = new Elysia({
 	.post(
 		"/workplaces/:workplaceId/version-shifts/:versionShiftId/attendance",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			await requireSubscriptionCapability(params.workplaceId, "attendance");
 			return withIdempotency({
@@ -368,7 +368,7 @@ export const rosterRoutes = new Elysia({
 		},
 		{
 			headers: t.Object({
-				authorization: t.String(),
+				authorization: t.Optional(t.String()),
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),

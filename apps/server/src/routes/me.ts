@@ -15,7 +15,7 @@ export const meRoutes = new Elysia({ prefix: "/v1", tags: ["Identity"] })
 	.get(
 		"/me",
 		async ({ headers }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const memberships = await listActiveEmployments(profile.id);
 
 			return {
@@ -44,7 +44,7 @@ export const meRoutes = new Elysia({ prefix: "/v1", tags: ["Identity"] })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			detail: {
 				summary: "Return the current profile and active Employments",
 				security: [{ bearerAuth: [] }],
@@ -54,7 +54,7 @@ export const meRoutes = new Elysia({ prefix: "/v1", tags: ["Identity"] })
 	.patch(
 		"/me",
 		async ({ headers, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const updated = firstRow(
 				await db
 					.update(profiles)
@@ -74,7 +74,7 @@ export const meRoutes = new Elysia({ prefix: "/v1", tags: ["Identity"] })
 			return { profile: profilePreferencesPayload(updated) };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			body: t.Object({
 				timeFormat: t.Optional(t.Union([t.Literal("12h"), t.Literal("24h")])),
 				nameFormat: t.Optional(

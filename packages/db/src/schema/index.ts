@@ -1,3 +1,13 @@
+export type { AuthSession, AuthUser } from "./auth";
+export {
+	account,
+	accountRelations,
+	session,
+	sessionRelations,
+	user,
+	userRelations,
+	verification,
+} from "./auth";
 export type {
 	NewShiftAcceptance,
 	ShiftAcceptance,

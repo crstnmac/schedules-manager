@@ -94,7 +94,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.get(
 		"/workplaces/:workplaceId/groups",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireWorkplaceMember(profile.id, params.workplaceId);
 			const groups = await db
 				.select()
@@ -123,14 +123,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid }),
 		},
 	)
 	.post(
 		"/workplaces/:workplaceId/groups",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const group = firstRow(
 				await db
@@ -152,7 +152,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { group: { id: group.id, name: group.name } };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 80 }),
@@ -163,7 +163,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.put(
 		"/workplaces/:workplaceId/groups/:groupId",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const [group] = await db
 				.update(workerGroups)
@@ -190,7 +190,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { group: { id: group.id, name: group.name } };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid, groupId: uuid }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 80 }),
@@ -201,7 +201,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.delete(
 		"/workplaces/:workplaceId/groups/:groupId",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			await db
 				.delete(workerGroups)
@@ -214,14 +214,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid, groupId: uuid }),
 		},
 	)
 	.get(
 		"/workplaces/:workplaceId/tags",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireWorkplaceMember(profile.id, params.workplaceId);
 			const tags = await db
 				.select()
@@ -230,14 +230,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { tags: tags.map((tag) => ({ id: tag.id, name: tag.name })) };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid }),
 		},
 	)
 	.post(
 		"/workplaces/:workplaceId/tags",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const tag = firstRow(
 				await db
@@ -248,7 +248,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { tag: { id: tag.id, name: tag.name } };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid }),
 			body: t.Object({ name: t.String({ minLength: 1, maxLength: 40 }) }),
 		},
@@ -256,7 +256,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.patch(
 		"/workplaces/:workplaceId/tags/:tagId",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const [tag] = await db
 				.update(shiftTags)
@@ -272,7 +272,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { tag: { id: tag.id, name: tag.name } };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid, tagId: uuid }),
 			body: t.Object({ name: t.String({ minLength: 1, maxLength: 40 }) }),
 		},
@@ -280,7 +280,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.delete(
 		"/workplaces/:workplaceId/tags/:tagId",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			await db
 				.delete(shiftTags)
@@ -293,14 +293,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid, tagId: uuid }),
 		},
 	)
 	.get(
 		"/workplaces/:workplaceId/leave-types",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireWorkplaceMember(profile.id, params.workplaceId);
 			const types = await db
 				.select()
@@ -315,14 +315,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid }),
 		},
 	)
 	.post(
 		"/workplaces/:workplaceId/leave-types",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const created = firstRow(
 				await db
@@ -339,7 +339,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 80 }),
@@ -350,7 +350,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.patch(
 		"/workplaces/:workplaceId/leave-types/:leaveTypeId",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const [existing] = await db
 				.select()
@@ -382,7 +382,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid, leaveTypeId: uuid }),
 			body: t.Object({
 				name: t.Optional(t.String({ minLength: 1, maxLength: 80 })),
@@ -393,7 +393,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.delete(
 		"/workplaces/:workplaceId/leave-types/:leaveTypeId",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const [deleted] = await db
 				.delete(leaveTypes)
@@ -408,14 +408,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid, leaveTypeId: uuid }),
 		},
 	)
 	.put(
 		"/workplaces/:workplaceId/employments/:employmentId/pto",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			// Both the employment and the leave type must belong to this
 			// workplace, or the upsert could mutate another workplace's balances.
@@ -456,7 +456,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid, employmentId: uuid }),
 			body: t.Object({
 				leaveTypeId: uuid,
@@ -467,7 +467,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.get(
 		"/workplaces/:workplaceId/pto",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const rows = await db
 				.select({
@@ -500,14 +500,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid }),
 		},
 	)
 	.get(
 		"/workplaces/:workplaceId/employments/:employmentId/pto",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -551,14 +551,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid, employmentId: uuid }),
 		},
 	)
 	.get(
 		"/locations/:locationId/time-blocks",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const location = await locationForManager(profile.id, params.locationId);
 			const [blocks, parts, templates] = await Promise.all([
 				db
@@ -595,14 +595,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ locationId: uuid }),
 		},
 	)
 	.post(
 		"/locations/:locationId/time-blocks",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await locationForManager(profile.id, params.locationId);
 			const created = firstRow(
 				await db
@@ -625,7 +625,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ locationId: uuid }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 40 }),
@@ -637,7 +637,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.patch(
 		"/locations/:locationId/time-blocks/:blockId",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const location = await locationForManager(profile.id, params.locationId);
 			const [existing] = await db
 				.select()
@@ -671,7 +671,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ locationId: uuid, blockId: uuid }),
 			body: t.Object({
 				name: t.Optional(t.String({ minLength: 1, maxLength: 40 })),
@@ -683,7 +683,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.delete(
 		"/locations/:locationId/time-blocks/:blockId",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const location = await locationForManager(profile.id, params.locationId);
 			const [deleted] = await db
 				.delete(timeBlocks)
@@ -698,14 +698,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ locationId: uuid, blockId: uuid }),
 		},
 	)
 	.post(
 		"/locations/:locationId/day-parts",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await locationForManager(profile.id, params.locationId);
 			const created = firstRow(
 				await db
@@ -728,7 +728,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ locationId: uuid }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 40 }),
@@ -740,7 +740,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.patch(
 		"/locations/:locationId/day-parts/:dayPartId",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const location = await locationForManager(profile.id, params.locationId);
 			const [existing] = await db
 				.select()
@@ -774,7 +774,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ locationId: uuid, dayPartId: uuid }),
 			body: t.Object({
 				name: t.Optional(t.String({ minLength: 1, maxLength: 40 })),
@@ -786,7 +786,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.delete(
 		"/locations/:locationId/day-parts/:dayPartId",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const location = await locationForManager(profile.id, params.locationId);
 			const [deleted] = await db
 				.delete(dayParts)
@@ -801,14 +801,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ locationId: uuid, dayPartId: uuid }),
 		},
 	)
 	.post(
 		"/locations/:locationId/shift-templates",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await locationForManager(profile.id, params.locationId);
 			const created = firstRow(
 				await db
@@ -835,7 +835,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ locationId: uuid }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 80 }),
@@ -849,7 +849,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.patch(
 		"/locations/:locationId/shift-templates/:templateId",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const location = await locationForManager(profile.id, params.locationId);
 			const [existing] = await db
 				.select()
@@ -903,7 +903,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ locationId: uuid, templateId: uuid }),
 			body: t.Object({
 				name: t.Optional(t.String({ minLength: 1, maxLength: 80 })),
@@ -917,7 +917,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.delete(
 		"/locations/:locationId/shift-templates/:templateId",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const location = await locationForManager(profile.id, params.locationId);
 			await db
 				.delete(shiftTemplates)
@@ -930,14 +930,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ locationId: uuid, templateId: uuid }),
 		},
 	)
 	.put(
 		"/locations/:locationId/sales/:saleDate",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await locationForManager(profile.id, params.locationId);
 			await db
 				.insert(locationSales)
@@ -954,7 +954,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({
 				locationId: uuid,
 				saleDate: t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
@@ -965,7 +965,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.get(
 		"/workplaces/:workplaceId/announcements",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireWorkplaceMember(profile.id, params.workplaceId);
 			const rows = await db
 				.select({
@@ -989,14 +989,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid }),
 		},
 	)
 	.post(
 		"/workplaces/:workplaceId/announcements",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			await assertWorkplaceEnabled(
 				params.workplaceId,
@@ -1045,7 +1045,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { announcement: { id: created.id } };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid }),
 			body: t.Object({
 				title: t.String({ minLength: 1, maxLength: 120 }),
@@ -1056,7 +1056,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.get(
 		"/workplaces/:workplaceId/conversations",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -1218,14 +1218,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid }),
 		},
 	)
 	.post(
 		"/workplaces/:workplaceId/conversations",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -1303,7 +1303,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { conversation: { id: created.id } };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid }),
 			body: t.Object({ counterpartEmploymentId: uuid }),
 		},
@@ -1311,7 +1311,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.get(
 		"/conversations/:conversationId/messages",
 		async ({ headers, params, query }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const [conversation] = await db
 				.select()
 				.from(conversations)
@@ -1400,7 +1400,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ conversationId: uuid }),
 			query: t.Object({
 				limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
@@ -1412,7 +1412,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.post(
 		"/conversations/:conversationId/messages",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const [conversation] = await db
 				.select()
 				.from(conversations)
@@ -1469,7 +1469,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ conversationId: uuid }),
 			body: t.Object({ body: t.String({ minLength: 1, maxLength: 2000 }) }),
 		},
@@ -1477,7 +1477,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.get(
 		"/workplaces/:workplaceId/employments/:employmentId/documents",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const [employment] = await db
 				.select({ id: employments.id })
@@ -1505,14 +1505,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid, employmentId: uuid }),
 		},
 	)
 	.post(
 		"/workplaces/:workplaceId/employments/:employmentId/documents",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const [employment] = await db
 				.select({ id: employments.id })
@@ -1539,7 +1539,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { document: { id: created.id } };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid, employmentId: uuid }),
 			body: t.Object({
 				title: t.String({ minLength: 1, maxLength: 120 }),
@@ -1551,7 +1551,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.patch(
 		"/workplaces/:workplaceId/employments/:employmentId/profile",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const values: {
 				hourlyWageCents?: number | null;
@@ -1610,7 +1610,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid, employmentId: uuid }),
 			body: t.Object({
 				hourlyWageCents: t.Optional(
@@ -1629,7 +1629,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.post(
 		"/shifts/:shiftId/tags",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, await workplaceForShift(params.shiftId));
 			await db
 				.delete(shiftTagAssignments)
@@ -1645,7 +1645,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ shiftId: uuid }),
 			body: t.Object({ tagIds: t.Array(uuid) }),
 		},
@@ -1653,7 +1653,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.post(
 		"/shifts/:shiftId/tasks",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const workplaceId = await workplaceForShift(params.shiftId);
 			await requireManager(profile.id, workplaceId);
 			await assertWorkplaceEnabled(
@@ -1674,7 +1674,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ shiftId: uuid }),
 			body: t.Object({
 				titles: t.Array(t.String({ minLength: 1, maxLength: 120 })),
@@ -1684,7 +1684,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.get(
 		"/my/shifts/:versionShiftId/tasks",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const row = await myVersionShiftRow(profile.id, params.versionShiftId);
 			await assertWorkplaceEnabled(
 				row.workplaceId,
@@ -1722,14 +1722,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ versionShiftId: uuid }),
 		},
 	)
 	.post(
 		"/my/version-shifts/:versionShiftId/tasks/:taskId/complete",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const row = await myVersionShiftRow(profile.id, params.versionShiftId);
 			await assertWorkplaceEnabled(
 				row.workplaceId,
@@ -1759,14 +1759,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ versionShiftId: uuid, taskId: uuid }),
 		},
 	)
 	.post(
 		"/my/time-entries/:timeEntryId/breaks/start",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const [row] = await db
 				.select({
 					entry: timeEntries,
@@ -1815,14 +1815,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ timeEntryId: uuid }),
 		},
 	)
 	.post(
 		"/my/time-entries/:timeEntryId/breaks/end",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const [row] = await db
 				.select({ entry: timeEntries, workplaceId: employments.workplaceId })
 				.from(timeEntries)
@@ -1862,14 +1862,14 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ timeEntryId: uuid }),
 		},
 	)
 	.post(
 		"/workplaces/:workplaceId/time-entries/:timeEntryId/approval",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			await requireSubscriptionCapability(params.workplaceId, "timesheets");
 			// The entry must belong to an employment of the caller's workplace.
@@ -1911,7 +1911,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid, timeEntryId: uuid }),
 			body: t.Object({
 				decision: t.Union([t.Literal("approved"), t.Literal("declined")]),
@@ -1921,7 +1921,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 	.get(
 		"/workplaces/:workplaceId/timesheets",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			await requireSubscriptionCapability(params.workplaceId, "timesheets");
 			const rows = await db
@@ -1948,7 +1948,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: uuid }),
 		},
 	);

@@ -40,7 +40,7 @@ export const workplacesRoutes = new Elysia({
 	.get(
 		"/workplaces",
 		async ({ headers }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const memberships = await listActiveEmployments(profile.id);
 
 			return {
@@ -52,7 +52,7 @@ export const workplacesRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			detail: {
 				summary: "List workplaces connected through active Employments",
 				security: [{ bearerAuth: [] }],
@@ -62,7 +62,7 @@ export const workplacesRoutes = new Elysia({
 	.post(
 		"/workplaces",
 		async ({ headers, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const filled = await fillPlaceFromAddress({
 				addressLine: body.location.addressLine,
 				latitude: body.location.latitude,
@@ -157,7 +157,7 @@ export const workplacesRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 120 }),
 				location: t.Object({
@@ -181,14 +181,14 @@ export const workplacesRoutes = new Elysia({
 	.get(
 		"/workplaces/:workplaceId",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 
 			const workplace = await loadWorkplace(params.workplaceId);
 			return { workplace: workplaceSettingsPayload(workplace) };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Return Workplace settings (Manager)",
@@ -199,7 +199,7 @@ export const workplacesRoutes = new Elysia({
 	.patch(
 		"/workplaces/:workplaceId",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			if (
 				body.earlyClockInMinutes !== undefined ||
@@ -309,7 +309,7 @@ export const workplacesRoutes = new Elysia({
 			return { workplace: workplaceSettingsPayload(updated) };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),

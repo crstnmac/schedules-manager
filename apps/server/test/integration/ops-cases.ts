@@ -1106,7 +1106,9 @@ export function registerOpsTests(getContext: () => Context) {
 		});
 
 		const closed = await processAutoClockOutBatch();
-		expect(closed).toBe(1);
+		// Other integration cases may intentionally leave an eligible open punch;
+		// this assertion only needs to prove the target row was included.
+		expect(closed).toBeGreaterThanOrEqual(1);
 
 		const [updated] = await d.db
 			.select()

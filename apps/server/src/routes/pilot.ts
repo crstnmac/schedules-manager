@@ -50,7 +50,7 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 	.get(
 		"/workplaces/:workplaceId/pilot-status",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 
 			const [
@@ -154,14 +154,14 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 		},
 	)
 	.post(
 		"/workplaces/:workplaceId/feedback",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireWorkplaceMember(profile.id, params.workplaceId);
 			const [feedback] = await db
 				.insert(pilotFeedback)
@@ -176,7 +176,7 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 			return { feedback: { id: feedback?.id } };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				category: t.Union([
@@ -192,7 +192,7 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 	.post(
 		"/workplaces/:workplaceId/reminders/unacknowledged",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			return withIdempotency({
 				actorProfileId: profile.id,
@@ -246,7 +246,7 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 		},
 		{
 			headers: t.Object({
-				authorization: t.String(),
+				authorization: t.Optional(t.String()),
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
@@ -257,7 +257,7 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 	.post(
 		"/workplaces/:workplaceId/invitations/import",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const normalized = body.rows.map((row) => ({
 				...row,
@@ -350,7 +350,7 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 		},
 		{
 			headers: t.Object({
-				authorization: t.String(),
+				authorization: t.Optional(t.String()),
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),

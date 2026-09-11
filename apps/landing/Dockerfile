@@ -6,7 +6,7 @@
 #     --build-arg VITE_APP_URL=https://app.example.com \
 #     -t jooling-landing .
 
-FROM oven/bun:1.4.2-alpine AS dependencies
+FROM oven/bun:1.3.11-alpine AS dependencies
 WORKDIR /app
 
 # ---- Install dependencies (landing workspace + its workspace deps only) ----

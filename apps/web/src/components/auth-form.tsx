@@ -39,12 +39,13 @@ import {
 	EyeIcon,
 	EyeOffIcon,
 	MailIcon,
+	UserIcon,
 	UserPlusIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { AuthShell } from "@/components/auth-shell";
-import { supabase } from "@/lib/supabase";
+import { authClient } from "@/lib/auth-client";
 
 type Mode = "sign-in" | "sign-up";
 
@@ -85,6 +86,7 @@ export function AuthForm({
 	const [mode, setMode] = useState<Mode>(defaultMode);
 	const lockedEmail = invite?.email ?? defaultEmail;
 	const [email, setEmail] = useState(lockedEmail ?? "");
+	const [name, setName] = useState("");
 	const [password, setPassword] = useState("");
 	const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 	const [isSubmitting, setIsSubmitting] = useState(false);
@@ -119,9 +121,10 @@ export function AuthForm({
 		setResetSending(true);
 		setError(null);
 		try {
-			const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-				target.toLowerCase(),
-			);
+			const { error: resetError } = await authClient.requestPasswordReset({
+				email: target.toLowerCase(),
+				redirectTo: `${window.location.origin}/reset-password`,
+			});
 			if (resetError) {
 				setError(
 					"Couldn't send the reset email right now. Check the address and try again.",
@@ -143,11 +146,11 @@ export function AuthForm({
 		try {
 			if (mode === "sign-in") {
 				const { data: authData, error: authError } =
-					await supabase.auth.signInWithPassword({
+					await authClient.signIn.email({
 						email: submitEmail,
 						password,
 					});
-				if (authError) throw authError;
+				if (authError) throw new Error(authError.message ?? "Sign in failed.");
 				if (authData.user) {
 					posthog?.identify(authData.user.id, { email: authData.user.email });
 					posthog?.capture("user_signed_in", {
@@ -155,15 +158,20 @@ export function AuthForm({
 					});
 				}
 			} else {
-				const data = await signUpWithEmail(supabase, submitEmail, password);
+				const data = await signUpWithEmail(
+					authClient,
+					submitEmail,
+					password,
+					name,
+				);
 				if (data.user) {
 					posthog?.identify(data.user.id, { email: data.user.email });
 					posthog?.capture("user_signed_up", {
 						invite_flow: isInvite,
-						email_confirmation_required: !data.session,
+						email_confirmation_required: !data.token,
 					});
 				}
-				if (!data.session) {
+				if (!data.token) {
 					setMessage("Check your email to confirm your account, then sign in.");
 				}
 			}
@@ -241,6 +249,23 @@ export function AuthForm({
 
 					<form id="auth-form" onSubmit={submit}>
 						<FieldGroup>
+							{mode === "sign-up" ? (
+								<Field>
+									<FieldLabel htmlFor="name">Name</FieldLabel>
+									<InputGroup>
+										<InputGroupAddon align="inline-start">
+											<UserIcon />
+										</InputGroupAddon>
+										<InputGroupInput
+											id="name"
+											autoComplete="name"
+											value={name}
+											onChange={(event) => setName(event.target.value)}
+											required
+										/>
+									</InputGroup>
+								</Field>
+							) : null}
 							<Field data-invalid={Boolean(error)}>
 								<FieldLabel htmlFor="email">Email</FieldLabel>
 								<InputGroup>
@@ -287,9 +312,9 @@ export function AuthForm({
 											mode === "sign-in" ? "current-password" : "new-password"
 										}
 										placeholder={
-											mode === "sign-up" ? "At least 6 characters" : undefined
+											mode === "sign-up" ? "At least 8 characters" : undefined
 										}
-										minLength={mode === "sign-up" ? 6 : undefined}
+										minLength={mode === "sign-up" ? 8 : undefined}
 										value={password}
 										onChange={(event) => setPassword(event.target.value)}
 										required
@@ -312,7 +337,7 @@ export function AuthForm({
 								</InputGroup>
 								{mode === "sign-up" ? (
 									<FieldDescription>
-										Use at least 6 characters.
+										Use at least 8 characters.
 									</FieldDescription>
 								) : null}
 							</Field>

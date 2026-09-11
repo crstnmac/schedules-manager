@@ -13,8 +13,10 @@ describe("sendInvitationEmail", () => {
 			"postgresql://postgres:postgres@127.0.0.1:54322/postgres";
 		process.env.DATABASE_POOL_MAX ??= "5";
 		process.env.CORS_ORIGIN ??= "http://localhost:3001";
-		process.env.SUPABASE_URL ??= "http://127.0.0.1:54321";
 		process.env.APP_URL ??= "http://localhost:3001";
+		process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
+		process.env.BETTER_AUTH_SECRET ??=
+			"unit-test-secret-that-is-at-least-32-characters";
 		process.env.ZEPTOMAIL_TOKEN ??= "Zoho-enczapikey test-token";
 		process.env.ZEPTOMAIL_FROM_ADDRESS ??= "noreply@example.com";
 		process.env.ZEPTOMAIL_FROM_NAME ??= "jooling";

@@ -1,4 +1,3 @@
-import { signUpWithEmail } from "@SchedulesManager/auth";
 import { useState } from "react";
 import {
 	ActivityIndicator,
@@ -14,8 +13,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { LogoMark } from "@/components/logo-mark";
+import { authClient } from "@/lib/auth-client";
 import { NAV_THEME } from "@/lib/constants";
-import { supabase } from "@/lib/supabase";
 import { useColorScheme } from "@/lib/use-color-scheme";
 
 type Mode = "sign-in" | "sign-up";
@@ -36,16 +35,21 @@ export function AuthScreen() {
 		setMessage(null);
 		setIsSubmitting(true);
 		try {
+			const normalizedEmail = email.trim().toLowerCase();
 			if (mode === "sign-in") {
-				const { error: authError } = await supabase.auth.signInWithPassword({
-					email: email.trim(),
+				const { error: authError } = await authClient.signIn.email({
+					email: normalizedEmail,
 					password,
 				});
 				if (authError) throw authError;
 			} else {
-				const data = await signUpWithEmail(supabase, email, password);
-				if (!data.session)
-					setMessage("Check your email to confirm your account, then sign in.");
+				const { error: authError } = await authClient.signUp.email({
+					name: normalizedEmail.split("@")[0] || "jooling user",
+					email: normalizedEmail,
+					password,
+				});
+				if (authError) throw authError;
+				setMessage("Your account is ready.");
 			}
 		} catch (caughtError) {
 			setError(

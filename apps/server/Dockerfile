@@ -20,7 +20,10 @@ COPY packages/db/package.json packages/db/
 COPY packages/env/package.json packages/env/
 COPY packages/ui/package.json packages/ui/
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-	bun install --frozen-lockfile --filter server --filter '@SchedulesManager/config' --filter '@SchedulesManager/db'
+	bun install --frozen-lockfile --filter server \
+		--filter '@SchedulesManager/config' \
+		--filter '@SchedulesManager/db' \
+		--filter '@SchedulesManager/env'
 
 # ---- Compile the server into a self-contained executable ----
 FROM deps AS build
@@ -33,6 +36,10 @@ COPY --from=build --chown=bun:bun /app /app
 RUN bash --version > /dev/null \
 	&& test -x /app/packages/db/node_modules/.bin/drizzle-kit \
 	&& test -f /app/packages/db/src/migrations/meta/_journal.json
+ENV NODE_ENV=production \
+	PORT=3000
 EXPOSE 3000
 USER bun:bun
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+	CMD ["bun", "-e", "const r=await fetch('http://127.0.0.1:3000/health');if(!r.ok)process.exit(1)"]
 ENTRYPOINT ["/app/apps/server/server"]

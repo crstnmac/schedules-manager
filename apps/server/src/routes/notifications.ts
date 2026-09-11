@@ -21,7 +21,7 @@ export const notificationsRoutes = new Elysia({
 	.get(
 		"/workplaces/:workplaceId/my/notifications",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -60,7 +60,7 @@ export const notificationsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "In-app notification inbox for the signed-in employment",
@@ -71,7 +71,7 @@ export const notificationsRoutes = new Elysia({
 	.post(
 		"/workplaces/:workplaceId/my/notifications/:notificationId/read",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -99,7 +99,7 @@ export const notificationsRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				notificationId: t.String({ format: "uuid" }),
@@ -113,7 +113,7 @@ export const notificationsRoutes = new Elysia({
 	.post(
 		"/workplaces/:workplaceId/my/notifications/read-all",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -132,7 +132,7 @@ export const notificationsRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Mark every unread notification as read",
@@ -143,7 +143,7 @@ export const notificationsRoutes = new Elysia({
 	.post(
 		"/workplaces/:workplaceId/my/push-token",
 		async ({ body, headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -164,7 +164,7 @@ export const notificationsRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				token: t.String({ minLength: 10, maxLength: 256 }),
@@ -179,7 +179,7 @@ export const notificationsRoutes = new Elysia({
 	.delete(
 		"/workplaces/:workplaceId/my/push-token",
 		async ({ body, headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -197,7 +197,7 @@ export const notificationsRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({ token: t.String({ minLength: 10, maxLength: 256 }) }),
 			detail: {
@@ -209,7 +209,7 @@ export const notificationsRoutes = new Elysia({
 	.get(
 		"/workplaces/:workplaceId/audit",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 
 			const rows = await db
@@ -237,7 +237,7 @@ export const notificationsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Manager audit trail for Workplace actions",

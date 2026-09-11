@@ -3,7 +3,7 @@
  *
  * Covers G1, G2, G3, G4, G5, G9, G10 by actually rendering `MessagesPage`
  * inside a fresh `QueryClientProvider`, mocking only `@/lib/api` (so no env /
- * supabase / fetch chain loads) and `sonner.toast`. The real React Query hooks
+ * authentication / fetch chain loads) and `sonner.toast`. The real React Query hooks
  * (`useConversations`, `useMessages`, `useWorkers`, `useMe`), the real
  * `useMutation` from `@tanstack/react-query@5.102.8`, and the real
  * `ConversationWorkspace` UI are exercised.

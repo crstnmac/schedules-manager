@@ -12,8 +12,8 @@ import { and, eq } from "drizzle-orm";
 
 import {
 	type AuthenticatedUser,
+	auth,
 	AuthenticationError,
-	verifyAccessToken,
 } from "./auth";
 import { ForbiddenError, NotFoundError } from "./errors";
 
@@ -23,9 +23,19 @@ export interface SessionContext {
 }
 
 export async function requireSession(
-	authorization: string | undefined,
+	headers: Headers | Record<string, string | undefined>,
 ): Promise<SessionContext> {
-	const user = await verifyAccessToken(authorization);
+	const requestHeaders =
+		headers instanceof Headers
+			? headers
+			: new Headers(
+					Object.entries(headers).filter(
+						(entry): entry is [string, string] => entry[1] !== undefined,
+					),
+				);
+	const session = await auth.api.getSession({ headers: requestHeaders });
+	if (!session) throw new AuthenticationError();
+	const user = session.user;
 	const profile = await ensureProfile(user);
 	return { user, profile };
 }
@@ -34,7 +44,7 @@ async function ensureProfile(user: AuthenticatedUser): Promise<Profile> {
 	const [existing] = await db
 		.select()
 		.from(profiles)
-		.where(eq(profiles.id, user.sub))
+		.where(eq(profiles.id, user.id))
 		.limit(1);
 
 	if (existing) return existing;
@@ -42,7 +52,7 @@ async function ensureProfile(user: AuthenticatedUser): Promise<Profile> {
 	const [created] = await db
 		.insert(profiles)
 		.values({
-			id: user.sub,
+			id: user.id,
 			email: user.email.toLowerCase(),
 			fullName: extractFullName(user),
 		})
@@ -54,7 +64,7 @@ async function ensureProfile(user: AuthenticatedUser): Promise<Profile> {
 	const [fallback] = await db
 		.select()
 		.from(profiles)
-		.where(eq(profiles.id, user.sub))
+		.where(eq(profiles.id, user.id))
 		.limit(1);
 
 	if (!fallback) throw new AuthenticationError("Profile could not be resolved");
@@ -62,10 +72,7 @@ async function ensureProfile(user: AuthenticatedUser): Promise<Profile> {
 }
 
 function extractFullName(user: AuthenticatedUser): string | null {
-	const metadata = user.user_metadata as
-		| { full_name?: string; name?: string }
-		| undefined;
-	return metadata?.full_name ?? metadata?.name ?? null;
+	return user.name || null;
 }
 
 export async function listActiveEmployments(profileId: string) {

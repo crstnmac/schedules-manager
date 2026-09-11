@@ -61,7 +61,7 @@ export const invitationsRoutes = new Elysia({
 	.get(
 		"/invitations/pending",
 		async ({ headers }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 
 			const rows = await db
 				.select({
@@ -90,7 +90,7 @@ export const invitationsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			detail: {
 				summary: "List unexpired pending invitations for the signed-in person",
 				security: [{ bearerAuth: [] }],
@@ -134,7 +134,7 @@ export const invitationsRoutes = new Elysia({
 	.post(
 		"/invitations/accept",
 		async ({ headers, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 
 			return withIdempotency({
 				actorProfileId: profile.id,
@@ -266,7 +266,7 @@ export const invitationsRoutes = new Elysia({
 		},
 		{
 			headers: t.Object({
-				authorization: t.String(),
+				authorization: t.Optional(t.String()),
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),

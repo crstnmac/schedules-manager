@@ -29,7 +29,7 @@ export const reportRoutes = new Elysia({
 }).get(
 	"/workplaces/:workplaceId/reports/hours.csv",
 	async ({ headers, params, query, set }) => {
-		const { profile } = await requireSession(headers.authorization);
+		const { profile } = await requireSession(headers);
 		await requireManager(profile.id, params.workplaceId);
 		await requireSubscriptionCapability(params.workplaceId, "labor_reports");
 		const from = new Date(`${query.from}T00:00:00Z`);
@@ -147,7 +147,7 @@ export const reportRoutes = new Elysia({
 		return lines.join("\n");
 	},
 	{
-		headers: t.Object({ authorization: t.String() }),
+		headers: t.Object({ authorization: t.Optional(t.String()) }),
 		params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 		query: t.Object({
 			from: t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),

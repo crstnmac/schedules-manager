@@ -20,41 +20,14 @@ async function getMailEnv() {
 	return cachedEnv;
 }
 
-export async function sendInvitationEmail(input: {
-	email: string;
-	token: string;
-	workplaceName: string;
-	kind: string;
-	deliveryId: string;
-}) {
+async function sendZeptoMail(payload: Record<string, unknown>) {
 	const env = await getMailEnv();
-	const inviteUrl = new URL(
-		`/invite/${encodeURIComponent(input.token)}`,
-		env.APP_URL,
-	);
-	const workplaceName = escapeHtml(input.workplaceName);
-	const role = input.kind === "manager" ? "manager" : "worker";
-
-	const payload = {
-		from: {
-			address: env.ZEPTOMAIL_FROM_ADDRESS,
-			name: env.ZEPTOMAIL_FROM_NAME,
-		},
-		to: [{ email_address: { address: input.email, name: input.email } }],
-		subject: `You're invited to join ${input.workplaceName}`,
-		textbody: `You've been invited to join ${input.workplaceName} as a ${role}. Accept your invitation: ${inviteUrl.toString()}`,
-		htmlbody: `<p>You've been invited to join <strong>${workplaceName}</strong> as a ${role}.</p><p><a href="${escapeHtml(inviteUrl.toString())}">Accept invitation</a></p>`,
-		track_clicks: true,
-		track_opens: true,
-		client_reference: `email-delivery:${input.deliveryId}`,
-	};
 	const endpoint = new URL(
 		/^[a-z][a-z\d+.-]*:\/\//i.test(env.ZEPTOMAIL_API_URL)
 			? env.ZEPTOMAIL_API_URL
 			: `https://${env.ZEPTOMAIL_API_URL}`,
 	);
-	if (endpoint.protocol !== "https:")
-		throw new Error("ZeptoMail requires HTTPS");
+	if (endpoint.protocol !== "https:") throw new Error("ZeptoMail requires HTTPS");
 	if (!endpoint.pathname.includes("/v1.1/")) endpoint.pathname = "/v1.1/email";
 	const response = await fetch(endpoint, {
 		method: "POST",
@@ -87,11 +60,58 @@ export async function sendInvitationEmail(input: {
 			(typeof result.error?.message === "string" && result.error.message) ||
 			(typeof result.message === "string" && result.message) ||
 			"request failed";
-		// Provider codes only — never persist recipient or invite URL material.
 		throw new Error(`ZeptoMail ${code}: ${message}`);
 	}
 	if (typeof result.request_id !== "string") {
 		throw new Error("ZeptoMail returned no request ID");
 	}
 	return { providerMessageId: result.request_id };
+}
+
+export async function sendPasswordResetEmail(input: {
+	email: string;
+	name: string;
+	url: string;
+}) {
+	const env = await getMailEnv();
+	return sendZeptoMail({
+		from: { address: env.ZEPTOMAIL_FROM_ADDRESS, name: env.ZEPTOMAIL_FROM_NAME },
+		to: [{ email_address: { address: input.email, name: input.name || input.email } }],
+		subject: "Reset your jooling password",
+		textbody: `Reset your jooling password: ${input.url}`,
+		htmlbody: `<p>We received a request to reset your jooling password.</p><p><a href="${escapeHtml(input.url)}">Reset password</a></p><p>If you did not request this, you can ignore this email.</p>`,
+		track_clicks: true,
+		track_opens: false,
+	});
+}
+
+export async function sendInvitationEmail(input: {
+	email: string;
+	token: string;
+	workplaceName: string;
+	kind: string;
+	deliveryId: string;
+}) {
+	const env = await getMailEnv();
+	const inviteUrl = new URL(
+		`/invite/${encodeURIComponent(input.token)}`,
+		env.APP_URL,
+	);
+	const workplaceName = escapeHtml(input.workplaceName);
+	const role = input.kind === "manager" ? "manager" : "worker";
+
+	const payload = {
+		from: {
+			address: env.ZEPTOMAIL_FROM_ADDRESS,
+			name: env.ZEPTOMAIL_FROM_NAME,
+		},
+		to: [{ email_address: { address: input.email, name: input.email } }],
+		subject: `You're invited to join ${input.workplaceName}`,
+		textbody: `You've been invited to join ${input.workplaceName} as a ${role}. Accept your invitation: ${inviteUrl.toString()}`,
+		htmlbody: `<p>You've been invited to join <strong>${workplaceName}</strong> as a ${role}.</p><p><a href="${escapeHtml(inviteUrl.toString())}">Accept invitation</a></p>`,
+		track_clicks: true,
+		track_opens: true,
+		client_reference: `email-delivery:${input.deliveryId}`,
+	};
+	return sendZeptoMail(payload);
 }

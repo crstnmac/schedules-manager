@@ -10,7 +10,7 @@ type Context = {
 };
 
 export function registerEnsureProfileCollisionTests(getContext: () => Context) {
-	test("an email-less JWT is rejected before a profile is created (no empty-email collision)", async () => {
+	test("an invalid session is rejected before a profile is created", async () => {
 		const { database, app, emaillessToken } = getContext();
 		const userA = crypto.randomUUID();
 		const userB = crypto.randomUUID();
@@ -21,7 +21,7 @@ export function registerEnsureProfileCollisionTests(getContext: () => Context) {
 			}),
 		);
 		expect(responseA.status).toBe(401);
-		expect((await responseA.json()).message).toContain("email");
+		expect((await responseA.json()).message).toContain("Authentication");
 
 		const responseB = await app.handle(
 			new Request("http://localhost/v1/me", {
@@ -41,7 +41,7 @@ export function registerEnsureProfileCollisionTests(getContext: () => Context) {
 		expect(insertedRows.rows.length).toBe(0);
 	});
 
-	test("an explicit empty-string email claim is rejected like a missing one", async () => {
+	test("another invalid bearer session is rejected without creating a profile", async () => {
 		const { database, app, emptyEmailToken } = getContext();
 		const userA = crypto.randomUUID();
 
@@ -51,7 +51,7 @@ export function registerEnsureProfileCollisionTests(getContext: () => Context) {
 			}),
 		);
 		expect(responseA.status).toBe(401);
-		expect((await responseA.json()).message).toContain("email");
+		expect((await responseA.json()).message).toContain("Authentication");
 
 		const rows = await database.db.execute(
 			sql`select id from ${database.profiles} where id in (${userA})`,
@@ -117,7 +117,7 @@ export function registerEnsureProfileCollisionTests(getContext: () => Context) {
 		expect(responseB.status).toBe(401);
 		const body = await responseB.json();
 		expect(body.error).toBe("unauthorized");
-		expect(body.message).toBe("Profile could not be resolved");
+		expect(body.message).toBe("Authentication required");
 		expect(JSON.stringify(body)).not.toContain("Failed query");
 		expect(JSON.stringify(body)).not.toContain("insert into");
 

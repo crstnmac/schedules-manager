@@ -3,7 +3,7 @@ import { cors } from "@elysiajs/cors";
 import { openapi } from "@elysiajs/openapi";
 import { Elysia, t } from "elysia";
 
-import { AuthenticationError } from "./auth";
+import { auth, AuthenticationError } from "./auth";
 import {
 	BadRequestError,
 	ConflictError,
@@ -70,8 +70,8 @@ export function createApp(options: CreateAppOptions = {}) {
 							bearerAuth: {
 								type: "http",
 								scheme: "bearer",
-								bearerFormat: "JWT",
-								description: "A Supabase Auth access token.",
+								bearerFormat: "Better Auth session token",
+								description: "A Better Auth bearer session token.",
 							},
 						},
 					},
@@ -82,8 +82,11 @@ export function createApp(options: CreateAppOptions = {}) {
 			cors({
 				origin: env.CORS_ORIGIN,
 				methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+				credentials: true,
+				allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
 			}),
 		)
+		.mount(auth.handler)
 		.onRequest(({ request, set }) => {
 			startedAtByRequest.set(request, Date.now());
 			set.headers["cache-control"] = "no-store";

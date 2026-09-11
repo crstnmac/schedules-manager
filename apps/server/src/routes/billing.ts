@@ -93,7 +93,7 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 	.get(
 		"/workplaces/:workplaceId/billing",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const [subscription] = await db
 				.select()
@@ -125,7 +125,7 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Get Workplace subscription",
@@ -136,7 +136,7 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 	.post(
 		"/workplaces/:workplaceId/billing/checkout",
 		async ({ headers, params, body, request }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const [existing] = await db
 				.select()
@@ -198,7 +198,7 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 			return { url: checkout.url };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				plan: t.Union([t.Literal("schedule"), t.Literal("operations")]),
@@ -213,7 +213,7 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 	.post(
 		"/workplaces/:workplaceId/billing/portal",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const [subscription] = await db
 				.select({ id: workplaceSubscriptions.id })
@@ -229,7 +229,7 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 			return { url: session.customerPortalUrl };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Open the Polar customer portal",

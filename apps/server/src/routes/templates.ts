@@ -90,7 +90,7 @@ export const templateRoutes = new Elysia({
 	.get(
 		"/locations/:locationId/schedule-templates",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await locationForManager(profile.id, params.locationId);
 
 			const templates = await db
@@ -120,7 +120,7 @@ export const templateRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ locationId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "List named Schedule Templates for a Location (Manager)",
@@ -131,7 +131,7 @@ export const templateRoutes = new Elysia({
 	.post(
 		"/locations/:locationId/schedules/:weekStart/templates",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const location = await locationForManager(profile.id, params.locationId);
 			assertWeekStartDay(
 				params.weekStart,
@@ -230,7 +230,7 @@ export const templateRoutes = new Elysia({
 		},
 		{
 			headers: t.Object({
-				authorization: t.String(),
+				authorization: t.Optional(t.String()),
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
@@ -252,7 +252,7 @@ export const templateRoutes = new Elysia({
 	.post(
 		"/locations/:locationId/schedules/:weekStart/templates/:templateId/apply",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const location = await locationForManager(profile.id, params.locationId);
 			assertWeekStartDay(
 				params.weekStart,
@@ -350,7 +350,7 @@ export const templateRoutes = new Elysia({
 		},
 		{
 			headers: t.Object({
-				authorization: t.String(),
+				authorization: t.Optional(t.String()),
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),

@@ -40,10 +40,10 @@ async function queryDraftShifts(shiftIds: string[]) {
 }
 
 async function ownedVersionShift(
-	authorization: string,
+	headers: Record<string, string | undefined>,
 	versionShiftId: string,
 ) {
-	const { profile } = await requireSession(authorization);
+	const { profile } = await requireSession(headers);
 	const employmentRows = await activeEmploymentsOf(profile.id);
 
 	const [shift] = await db
@@ -201,7 +201,7 @@ export const coverageRoutes = new Elysia({
 		"/my/releases",
 		async ({ headers, body }) => {
 			const { profile, shift } = await ownedVersionShift(
-				headers.authorization,
+				headers,
 				body.versionShiftId,
 			);
 			return withIdempotency({
@@ -260,7 +260,7 @@ export const coverageRoutes = new Elysia({
 		},
 		{
 			headers: t.Object({
-				authorization: t.String(),
+				authorization: t.Optional(t.String()),
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
@@ -279,7 +279,7 @@ export const coverageRoutes = new Elysia({
 	.get(
 		"/workplaces/:workplaceId/open-shifts",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -360,7 +360,7 @@ export const coverageRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "List open shifts the caller could pick up (Worker)",
@@ -371,7 +371,7 @@ export const coverageRoutes = new Elysia({
 	.post(
 		"/open-shifts/:openShiftId/pickups",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `pickup.request:${params.openShiftId}`,
@@ -444,7 +444,7 @@ export const coverageRoutes = new Elysia({
 		},
 		{
 			headers: t.Object({
-				authorization: t.String(),
+				authorization: t.Optional(t.String()),
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
@@ -460,7 +460,7 @@ export const coverageRoutes = new Elysia({
 	.get(
 		"/workplaces/:workplaceId/coverage",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 
 			const releaseRows = await db
@@ -538,7 +538,7 @@ export const coverageRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Coverage queue: releases and pickups (Manager)",
@@ -549,7 +549,7 @@ export const coverageRoutes = new Elysia({
 	.post(
 		"/workplaces/:workplaceId/releases/:releaseId/decision",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			return withIdempotency({
 				actorProfileId: profile.id,
@@ -730,7 +730,7 @@ export const coverageRoutes = new Elysia({
 		},
 		{
 			headers: t.Object({
-				authorization: t.String(),
+				authorization: t.Optional(t.String()),
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
@@ -752,7 +752,7 @@ export const coverageRoutes = new Elysia({
 	.post(
 		"/workplaces/:workplaceId/pickups/:pickupId/decision",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			return withIdempotency({
 				actorProfileId: profile.id,
@@ -765,7 +765,7 @@ export const coverageRoutes = new Elysia({
 		},
 		{
 			headers: t.Object({
-				authorization: t.String(),
+				authorization: t.Optional(t.String()),
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),

@@ -30,8 +30,8 @@ The product treats a published schedule as an immutable operational record. Late
 | Manager web | React 19, Vite, TanStack Router, Tailwind CSS |
 | Mobile | Expo 57, React Native, Expo Router, native tabs, Expo UI |
 | API | Bun, Elysia, OpenAPI |
-| Data | PostgreSQL, Drizzle ORM |
-| Authentication | Supabase Auth with server-side JWKS verification |
+| Data | PostgreSQL 18, Drizzle ORM |
+| Authentication | Better Auth |
 | Tooling | Bun workspaces, Turborepo, TypeScript, Biome |
 
 ## Repository layout
@@ -57,7 +57,7 @@ SchedulesManager/
 ### Prerequisites
 
 - [Bun](https://bun.sh/) 1.3 or newer
-- A [Supabase](https://supabase.com/) project
+- PostgreSQL 18 (Docker is sufficient for local development)
 - [Expo Go](https://expo.dev/go) or a compatible native development environment
 
 ### 1. Install dependencies
@@ -74,21 +74,24 @@ cp apps/web/.env.example apps/web/.env
 cp apps/native/.env.example apps/native/.env
 ```
 
-Fill the copied files with your Supabase project values:
+Fill the copied files with your database, Better Auth, and provider values:
 
-- `apps/server/.env`: set `DATABASE_URL` and `SUPABASE_URL`. `DATABASE_POOL_MAX`
-  defaults to `5` per server process. Keep the total across running processes below
-  your Supabase session-pool limit. The server uses `--watch` to restart on edits
+- `apps/server/.env`: set `DATABASE_URL`, `BETTER_AUTH_URL`, and a strong
+  `BETTER_AUTH_SECRET`. `DATABASE_POOL_MAX` defaults to `5` per server process.
+  Keep the total across running processes below the database connection limit.
+  The server uses `--watch` to restart on edits
   and release database connections and background timers; `--hot` preserves process
   state and can accumulate pools and dispatchers across reloads.
-- `apps/web/.env`: set the public Supabase URL and publishable/anon key.
-- `apps/native/.env`: set the same public URL and key, plus an API URL reachable from the device.
+- `apps/web/.env`: set the API URL used by the browser.
+- `apps/native/.env`: set an API URL reachable from the device.
 
-Never place a Supabase service-role key in either client application. The clients authenticate directly with Supabase, and the API validates access tokens through the project's JWKS endpoint.
+Authentication is served by the API. Never place `BETTER_AUTH_SECRET`, database
+credentials, or Polar access tokens in either client application.
 
 For a physical phone, `localhost` points to the phone itself. Set the mobile API URL to your computer's LAN address, such as `http://192.168.1.20:3000`, and ensure both devices are on the same network.
 
-For hosted Supabase, use the Session pooler URI from **Connect → ORMs**. Keep `sslmode=require&uselibpqcompat=true`, and percent-encode reserved characters in the database password.
+For hosted PostgreSQL, use the connection URI supplied by the provider, enable its
+required TLS mode, and percent-encode reserved characters in the database password.
 
 ### 3. Apply the database schema
 
@@ -118,7 +121,8 @@ bun run dev:native
 | API | `http://localhost:3000` |
 | OpenAPI reference | `http://localhost:3000/openapi` |
 
-The protected `GET /v1/me` endpoint is an authentication smoke test. Send `Authorization: Bearer <supabase-access-token>` to verify a session.
+The protected `GET /v1/me` endpoint is an authentication smoke test. Sign in through
+Better Auth and call it with the resulting session cookie to verify a session.
 
 ## Useful commands
 
@@ -183,7 +187,7 @@ Open registration of *accounts* is acceptable for the pilot because it does not 
 ## Security notes
 
 - Environment files and credentials are ignored by Git.
-- Only public Supabase credentials belong in web and mobile builds.
+- Server-only database, Better Auth, and Polar secrets must not be included in web or mobile builds.
 - Authorization must be enforced by the API and database policies, not only by client navigation.
 - Review generated database migrations before applying them to production.
 

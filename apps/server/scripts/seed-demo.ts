@@ -263,7 +263,7 @@ async function main() {
 	}
 
 	const authUsers = await db.execute<{ id: string; email: string }>(
-		sql`select id::text as id, lower(email) as email from auth.users`,
+		sql`select id::text as id, lower(email) as email from public."user"`,
 	);
 	const authByEmail = new Map(
 		authUsers.rows.map((row) => [row.email, row.id] as const),

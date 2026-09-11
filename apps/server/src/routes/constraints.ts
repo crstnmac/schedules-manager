@@ -215,7 +215,7 @@ export const constraintsRoutes = new Elysia({
 	.get(
 		"/workplaces/:workplaceId/my/constraints",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -270,7 +270,7 @@ export const constraintsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -282,7 +282,7 @@ export const constraintsRoutes = new Elysia({
 	.put(
 		"/workplaces/:workplaceId/my/unavailability",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -415,7 +415,7 @@ export const constraintsRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				recurring: t.Array(
@@ -447,7 +447,7 @@ export const constraintsRoutes = new Elysia({
 	.post(
 		"/workplaces/:workplaceId/unavailability/:unavailabilityId/decision",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 
 			const [row] = await db
@@ -480,7 +480,7 @@ export const constraintsRoutes = new Elysia({
 			return { ok: true as const, status: "approved" as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				unavailabilityId: t.String({ format: "uuid" }),
@@ -497,7 +497,7 @@ export const constraintsRoutes = new Elysia({
 	.put(
 		"/workplaces/:workplaceId/my/preference",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -531,7 +531,7 @@ export const constraintsRoutes = new Elysia({
 			return { preference: body.note.trim() };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				note: t.Union([t.String({ maxLength: 500 }), t.Null()]),
@@ -545,7 +545,7 @@ export const constraintsRoutes = new Elysia({
 	.post(
 		"/workplaces/:workplaceId/my/time-off",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -591,7 +591,7 @@ export const constraintsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: leaveWindowBody,
 			detail: {
@@ -603,7 +603,7 @@ export const constraintsRoutes = new Elysia({
 	.delete(
 		"/workplaces/:workplaceId/my/time-off/:requestId",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -632,7 +632,7 @@ export const constraintsRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				requestId: t.String({ format: "uuid" }),
@@ -646,7 +646,7 @@ export const constraintsRoutes = new Elysia({
 	.get(
 		"/workplaces/:workplaceId/time-off",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const timeZone = await workplaceTimeZone(params.workplaceId);
 
@@ -759,7 +759,7 @@ export const constraintsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "List Time-off Requests for the Workplace (Manager)",
@@ -770,7 +770,7 @@ export const constraintsRoutes = new Elysia({
 	.post(
 		"/workplaces/:workplaceId/time-off",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 
 			const [member] = await db
@@ -848,7 +848,7 @@ export const constraintsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				employmentId: t.String({ format: "uuid" }),
@@ -871,7 +871,7 @@ export const constraintsRoutes = new Elysia({
 	.post(
 		"/workplaces/:workplaceId/time-off/:requestId/decision",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 
 			const [request] = await db
@@ -971,7 +971,7 @@ export const constraintsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				requestId: t.String({ format: "uuid" }),
@@ -989,7 +989,7 @@ export const constraintsRoutes = new Elysia({
 	.patch(
 		"/workplaces/:workplaceId/time-off/:requestId",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const existing = await loadWorkplaceTimeOff(
 				params.workplaceId,
@@ -1095,7 +1095,7 @@ export const constraintsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				requestId: t.String({ format: "uuid" }),
@@ -1110,7 +1110,7 @@ export const constraintsRoutes = new Elysia({
 	.delete(
 		"/workplaces/:workplaceId/time-off/:requestId",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			const existing = await loadWorkplaceTimeOff(
 				params.workplaceId,
@@ -1157,7 +1157,7 @@ export const constraintsRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				requestId: t.String({ format: "uuid" }),
@@ -1171,7 +1171,7 @@ export const constraintsRoutes = new Elysia({
 	.patch(
 		"/workplaces/:workplaceId/my/time-off/:requestId",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -1226,7 +1226,7 @@ export const constraintsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				requestId: t.String({ format: "uuid" }),

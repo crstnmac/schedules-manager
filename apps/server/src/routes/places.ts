@@ -23,7 +23,7 @@ export const placesRoutes = new Elysia({
 	.get(
 		"/places",
 		async ({ headers, query }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			consumeRateLimitOrThrow(`places.search:${profile.id}`, "placeSearch");
 			const biasLat = query.lat ?? AUSTIN_BIAS.latitude;
 			const biasLon = query.lon ?? AUSTIN_BIAS.longitude;
@@ -34,7 +34,7 @@ export const placesRoutes = new Elysia({
 			return { places };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			query: t.Object({
 				q: t.String({ minLength: 1, maxLength: 200 }),
 				lat: t.Optional(t.Number()),
@@ -50,7 +50,7 @@ export const placesRoutes = new Elysia({
 	.get(
 		"/places/reverse",
 		async ({ headers, query }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			consumeRateLimitOrThrow(`places.search:${profile.id}`, "placeSearch");
 			if (
 				query.lat < -90 ||
@@ -64,7 +64,7 @@ export const placesRoutes = new Elysia({
 			return { place };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			query: t.Object({
 				lat: t.Number(),
 				lon: t.Number(),

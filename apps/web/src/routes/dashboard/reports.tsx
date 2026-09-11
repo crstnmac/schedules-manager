@@ -6,7 +6,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { AppDocument } from "@/components/app-page";
 import { DatePicker } from "@/components/date-picker";
-import { supabase } from "@/lib/supabase";
 import { useWorkplace } from "@/lib/use-workplace";
 
 export const Route = createFileRoute("/dashboard/reports")({
@@ -29,13 +28,9 @@ function ReportsPage() {
 		if (invalidRange || isDownloading || !workplace) return;
 		setIsDownloading(true);
 		try {
-			const { data } = await supabase.auth.getSession();
-			const token = data.session?.access_token;
-			if (!token)
-				throw new Error("Please sign in again to download your report.");
 			const response = await fetch(
 				`${env.VITE_SERVER_URL}/v1/workplaces/${workplace?.id}/reports/hours.csv?from=${from}&to=${to}`,
-				{ headers: { authorization: `Bearer ${token}` } },
+				{ credentials: "include" },
 			);
 			if (!response.ok) {
 				const payload = (await response.json().catch(() => null)) as {

@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, isNull, sql } from "drizzle-orm";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { registerAcceptanceRaceTests } from "./acceptance-race-cases";
 import { registerAutoClockOutBreaksTests } from "./auto-clock-out-breaks-cases";
 import { registerCoverageTests } from "./coverage-cases";
@@ -33,30 +32,9 @@ integrationDescribe("Schedule publication", () => {
 	let reserveShiftSwap: typeof import("../../src/routes/swaps").reserveShiftSwap;
 	let processNotificationOutboxBatch: typeof import("../../src/notify").processNotificationOutboxBatch;
 	let app: ReturnType<typeof import("../../src/app").createApp>;
-	let jwksServer: ReturnType<typeof Bun.serve>;
-	let privateKey: CryptoKey;
-	let issuer: string;
 
 	beforeAll(async () => {
 		process.env.ZEPTOMAIL_WEBHOOK_SECRET = emailWebhookTestSecret;
-		const keys = await generateKeyPair("RS256", { extractable: true });
-		privateKey = keys.privateKey;
-		const publicJwk = await exportJWK(keys.publicKey);
-		publicJwk.kid = "integration-test-key";
-		publicJwk.use = "sig";
-		jwksServer = Bun.serve({
-			port: 0,
-			fetch(request) {
-				if (
-					new URL(request.url).pathname === "/auth/v1/.well-known/jwks.json"
-				) {
-					return Response.json({ keys: [publicJwk] });
-				}
-				return new Response("Not found", { status: 404 });
-			},
-		});
-		process.env.SUPABASE_URL = jwksServer.url.origin;
-		issuer = `${jwksServer.url.origin}/auth/v1`;
 		await resetAndMigrateDatabase();
 		database = await import("@SchedulesManager/db");
 		await database.db.execute(
@@ -65,6 +43,27 @@ integrationDescribe("Schedule publication", () => {
 		await database.db.execute(
 			sql`create trigger reject_published_shift_mutation before update or delete on version_shifts for each row execute function reject_published_shift_mutation()`,
 		);
+		// Domain integration cases exercise paid capabilities. Give each fixture
+		// workplace an Operations subscription while keeping billing tests free to
+		// create explicit subscription states in their own isolated setup.
+		await database.db.execute(sql`
+			create function provision_test_subscription() returns trigger as $$
+			begin
+				insert into workplace_subscriptions (
+					workplace_id, polar_subscription_id, polar_customer_id,
+					polar_product_id, plan, billing_interval, status
+				) values (
+					new.id, 'test-sub-' || new.id::text, 'test-customer-' || new.id::text,
+					'test-product-operations', 'operations', 'month', 'active'
+				);
+				return new;
+			end;
+			$$ language plpgsql
+		`);
+		await database.db.execute(sql`
+			create trigger provision_test_subscription
+			after insert on workplaces for each row execute function provision_test_subscription()
+		`);
 		({ publishScheduleNow } = await import("../../src/routes/publication"));
 		({ reserveShiftSwap } = await import("../../src/routes/swaps"));
 		({ processNotificationOutboxBatch } = await import("../../src/notify"));
@@ -73,41 +72,37 @@ integrationDescribe("Schedule publication", () => {
 	});
 
 	afterAll(async () => {
-		jwksServer?.stop(true);
 		await database?.db.$client.end();
 	});
 
 	async function managerToken(profileId: string, email: string) {
-		return new SignJWT({ email, role: "authenticated" })
-			.setProtectedHeader({ alg: "RS256", kid: "integration-test-key" })
-			.setSubject(profileId)
-			.setIssuer(issuer)
-			.setAudience("authenticated")
-			.setIssuedAt()
-			.setExpirationTime("5m")
-			.sign(privateKey);
+		const [authUser] = await database.db
+			.insert(database.user)
+			.values({ id: profileId, name: email.split("@")[0] ?? "Test user", email })
+			.onConflictDoNothing()
+			.returning({ id: database.user.id });
+		if (!authUser) {
+			const [existing] = await database.db
+				.select({ id: database.user.id })
+				.from(database.user)
+				.where(eq(database.user.id, profileId));
+			if (!existing) return `invalid-${crypto.randomUUID()}`;
+		}
+		const token = `integration-${crypto.randomUUID()}`;
+		await database.db.insert(database.session).values({
+			token,
+			userId: profileId,
+			expiresAt: new Date(Date.now() + 5 * 60_000),
+		});
+		return token;
 	}
 
-	async function emaillessToken(profileId: string) {
-		return new SignJWT({ role: "authenticated" })
-			.setProtectedHeader({ alg: "RS256", kid: "integration-test-key" })
-			.setSubject(profileId)
-			.setIssuer(issuer)
-			.setAudience("authenticated")
-			.setIssuedAt()
-			.setExpirationTime("5m")
-			.sign(privateKey);
+	async function emaillessToken(_profileId: string) {
+		return `invalid-${crypto.randomUUID()}`;
 	}
 
-	async function emptyEmailToken(profileId: string) {
-		return new SignJWT({ email: "", role: "authenticated" })
-			.setProtectedHeader({ alg: "RS256", kid: "integration-test-key" })
-			.setSubject(profileId)
-			.setIssuer(issuer)
-			.setAudience("authenticated")
-			.setIssuedAt()
-			.setExpirationTime("5m")
-			.sign(privateKey);
+	async function emptyEmailToken(_profileId: string) {
+		return `invalid-${crypto.randomUUID()}`;
 	}
 
 	registerEmailDeliveryTests(() => ({ database, app, token: managerToken }));
@@ -142,6 +137,47 @@ integrationDescribe("Schedule publication", () => {
 		emaillessToken,
 		emptyEmailToken,
 	}));
+
+	test("Better Auth sign-up creates a cookie session, profile, and revocable API access", async () => {
+		const email = `auth-${crypto.randomUUID()}@example.test`;
+		const signUp = await app.handle(
+			new Request("http://localhost/api/auth/sign-up/email", {
+				method: "POST",
+				headers: { "content-type": "application/json", origin: "http://localhost:3001" },
+				body: JSON.stringify({ name: "Auth Test", email, password: "correct-horse-battery-staple" }),
+			}),
+		);
+		expect(signUp.status).toBe(200);
+		const cookie = signUp.headers.get("set-cookie");
+		expect(cookie).toContain("better-auth.session_token");
+		const sessionToken = signUp.headers.get("set-auth-token");
+		expect(sessionToken).toBeTruthy();
+
+		const me = await app.handle(
+			new Request("http://localhost/v1/me", {
+				headers: { authorization: `Bearer ${sessionToken}` },
+			}),
+		);
+		expect(me.status).toBe(200);
+		expect((await me.json()).profile).toMatchObject({ email, fullName: "Auth Test" });
+
+		const signOut = await app.handle(
+			new Request("http://localhost/api/auth/sign-out", {
+				method: "POST",
+				headers: {
+					authorization: `Bearer ${sessionToken}`,
+					origin: "http://localhost:3001",
+				},
+			}),
+		);
+		expect(signOut.status).toBe(200);
+		const afterSignOut = await app.handle(
+			new Request("http://localhost/v1/me", {
+				headers: { authorization: `Bearer ${sessionToken}` },
+			}),
+		);
+		expect(afterSignOut.status).toBe(401);
+	});
 
 	test("republishing never changes the previous published Shift snapshot", async () => {
 		const managerProfileId = crypto.randomUUID();

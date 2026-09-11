@@ -38,7 +38,7 @@ export function registerReportsTests(getContext: () => Context) {
 		};
 		expect(body).toEqual({
 			error: "unauthorized",
-			message: "Invalid or expired access token",
+			message: "Authentication required",
 		});
 	});
 

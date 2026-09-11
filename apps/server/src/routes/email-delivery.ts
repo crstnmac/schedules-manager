@@ -15,7 +15,7 @@ export const emailDeliveryRoutes = new Elysia({ prefix: "/v1" })
 	.get(
 		"/workplaces/:workplaceId/email-deliveries",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 			// Explicit projection prevents invitation tokens and email bodies leaking into delivery reports.
 			const deliveries = await db
@@ -40,7 +40,7 @@ export const emailDeliveryRoutes = new Elysia({ prefix: "/v1" })
 			return { deliveries };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 		},
 	)

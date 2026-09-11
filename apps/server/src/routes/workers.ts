@@ -53,7 +53,7 @@ export const workersRoutes = new Elysia({
 	.get(
 		"/workplaces/:workplaceId/workers",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 
 			const employmentRows = await db
@@ -123,7 +123,7 @@ export const workersRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -135,7 +135,7 @@ export const workersRoutes = new Elysia({
 	.post(
 		"/workplaces/:workplaceId/invitations",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 
 			const email = normalizeEmail(body.email);
@@ -280,7 +280,7 @@ export const workersRoutes = new Elysia({
 		},
 		{
 			headers: t.Object({
-				authorization: t.String(),
+				authorization: t.Optional(t.String()),
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
@@ -303,7 +303,7 @@ export const workersRoutes = new Elysia({
 	.post(
 		"/workplaces/:workplaceId/invitations/:invitationId/resend",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 
 			return withIdempotency({
@@ -370,7 +370,7 @@ export const workersRoutes = new Elysia({
 		},
 		{
 			headers: t.Object({
-				authorization: t.String(),
+				authorization: t.Optional(t.String()),
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
@@ -388,7 +388,7 @@ export const workersRoutes = new Elysia({
 	.delete(
 		"/workplaces/:workplaceId/invitations/:invitationId",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 
 			const [invitation] = await db
@@ -412,7 +412,7 @@ export const workersRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				invitationId: t.String({ format: "uuid" }),
@@ -426,7 +426,7 @@ export const workersRoutes = new Elysia({
 	.post(
 		"/workplaces/:workplaceId/employments/:employmentId/deactivate",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 
 			if (params.employmentId === params.workplaceId) {
@@ -463,7 +463,7 @@ export const workersRoutes = new Elysia({
 			return { employmentId: updated.id, status: updated.status };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				employmentId: t.String({ format: "uuid" }),

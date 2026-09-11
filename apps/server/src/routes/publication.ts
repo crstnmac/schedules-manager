@@ -537,7 +537,7 @@ export const publicationRoutes = new Elysia({
 	.post(
 		"/schedules/:scheduleId/publish",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const { schedule, location } = await scheduleContext(params.scheduleId);
 			await requireManager(profile.id, location.workplaceId);
 
@@ -551,7 +551,7 @@ export const publicationRoutes = new Elysia({
 		},
 		{
 			headers: t.Object({
-				authorization: t.String(),
+				authorization: t.Optional(t.String()),
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
@@ -567,14 +567,14 @@ export const publicationRoutes = new Elysia({
 	.get(
 		"/schedules/:scheduleId/publication",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const { schedule, location } = await scheduleContext(params.scheduleId);
 			await requireManager(profile.id, location.workplaceId);
 
 			return { versions: await loadPublicationVersions(schedule.id) };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ scheduleId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -586,7 +586,7 @@ export const publicationRoutes = new Elysia({
 	.get(
 		"/workplaces/:workplaceId/my/schedule",
 		async ({ headers, params, query }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const employment = await requireWorkplaceMember(
 				profile.id,
 				params.workplaceId,
@@ -955,7 +955,7 @@ export const publicationRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			query: t.Object({
 				scope: t.Optional(t.Union([t.Literal("home"), t.Literal("full")])),
@@ -970,7 +970,7 @@ export const publicationRoutes = new Elysia({
 	.get(
 		"/my/versions/:versionId",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			const membership = await listActiveEmployments(profile.id);
 
 			const [row] = await db
@@ -1084,7 +1084,7 @@ export const publicationRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ versionId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -1096,7 +1096,7 @@ export const publicationRoutes = new Elysia({
 	.post(
 		"/my/deliveries/:versionId/acknowledge",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `delivery.acknowledge:${params.versionId}`,
@@ -1107,7 +1107,7 @@ export const publicationRoutes = new Elysia({
 		},
 		{
 			headers: t.Object({
-				authorization: t.String(),
+				authorization: t.Optional(t.String()),
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),

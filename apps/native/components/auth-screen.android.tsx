@@ -1,4 +1,3 @@
-import { signUpWithEmail } from "@SchedulesManager/auth";
 import type { TextFieldRef } from "@expo/ui/jetpack-compose";
 import { useRef, useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
@@ -10,7 +9,7 @@ import {
 	PrimaryButton,
 	useAppTheme,
 } from "@/components/ui.android";
-import { supabase } from "@/lib/supabase";
+import { authClient } from "@/lib/auth-client";
 
 type Mode = "sign-in" | "sign-up";
 
@@ -34,16 +33,21 @@ export function AuthScreen() {
 		setError(null);
 		setMessage(null);
 		try {
+			const normalizedEmail = email.trim().toLowerCase();
 			if (mode === "sign-in") {
-				const { error: authError } = await supabase.auth.signInWithPassword({
-					email: email.trim(),
+				const { error: authError } = await authClient.signIn.email({
+					email: normalizedEmail,
 					password,
 				});
 				if (authError) throw authError;
 			} else {
-				const data = await signUpWithEmail(supabase, email, password);
-				if (!data.session)
-					setMessage("Check your email to confirm your account, then sign in.");
+				const { error: authError } = await authClient.signUp.email({
+					name: normalizedEmail.split("@")[0] || "jooling user",
+					email: normalizedEmail,
+					password,
+				});
+				if (authError) throw authError;
+				setMessage("Your account is ready.");
 			}
 		} catch (caught) {
 			setError(

@@ -26,7 +26,7 @@ export const positionsRoutes = new Elysia({
 	.get(
 		"/workplaces/:workplaceId/positions",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 
 			const rows = await db
@@ -39,7 +39,7 @@ export const positionsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "List Positions for a Workplace (Manager)",
@@ -50,7 +50,7 @@ export const positionsRoutes = new Elysia({
 	.post(
 		"/workplaces/:workplaceId/positions",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 			await requireManager(profile.id, params.workplaceId);
 
 			const [position] = await db
@@ -70,7 +70,7 @@ export const positionsRoutes = new Elysia({
 			return { position: serializePosition(position) };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 120 }),
@@ -84,7 +84,7 @@ export const positionsRoutes = new Elysia({
 	.patch(
 		"/positions/:positionId",
 		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 
 			const [existing] = await db
 				.select()
@@ -126,7 +126,7 @@ export const positionsRoutes = new Elysia({
 			return { position: serializePosition(position) };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ positionId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
@@ -140,7 +140,7 @@ export const positionsRoutes = new Elysia({
 	.delete(
 		"/positions/:positionId",
 		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers.authorization);
+			const { profile } = await requireSession(headers);
 
 			const [existing] = await db
 				.select()
@@ -184,7 +184,7 @@ export const positionsRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.String() }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }),
 			params: t.Object({ positionId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Delete a Position (Manager)",
