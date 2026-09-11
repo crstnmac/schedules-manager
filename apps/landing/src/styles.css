@@ -4529,10 +4529,10 @@ body {
 	}
 }
 
-/* Pricing — editorial plan comparison on the landing canvas. */
+/* Pricing — editorial plan comparison on the shared page canvas. */
 .pricing-section {
 	padding: 124px 0;
-	background: #fbfbfa;
+	background: var(--background);
 	color: var(--ink);
 }
 .pricing-heading {
@@ -4574,16 +4574,13 @@ body {
 	justify-content: space-between;
 	gap: 28px 64px;
 	padding: 22px 0;
-	border-top: 1px solid var(--line);
-	border-bottom: 1px solid var(--line);
 }
 .pricing-interval-control {
 	display: inline-flex;
 	gap: 0;
 	padding: 3px;
-	border: 1px solid var(--line);
 	border-radius: 6px;
-	background: var(--surface);
+	background: color-mix(in srgb, var(--ink) 4%, transparent);
 }
 .pricing-interval-option {
 	display: inline-flex;
@@ -4646,11 +4643,11 @@ body {
 	background: var(--blue);
 }
 .pricing-slider [data-slot="slider-thumb"] {
-	width: 16px;
-	height: 16px;
-	border: 2px solid var(--blue);
-	background: white;
-	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+	width: 14px;
+	height: 14px;
+	border: 0;
+	background: var(--blue);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 .pricing-locations-scale {
 	display: flex;
@@ -4660,21 +4657,18 @@ body {
 	font-variant-numeric: tabular-nums;
 }
 
-/* Plans — two open columns divided by hairlines, not a card stack. */
+/* Plans — two open columns with no dividers, separated by space alone. */
 .pricing-plans {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 0 72px;
-	margin-top: 56px;
+	max-width: 1024px;
+	margin: 56px auto 0;
 }
 .pricing-plan {
 	display: flex;
 	flex-direction: column;
-	padding: 32px 0 8px;
-	border-top: 1px solid var(--line);
-}
-.pricing-plan.is-recommended {
-	border-top-color: var(--blue);
+	padding: 0 0 8px;
 }
 .pricing-plan-head {
 	display: flex;
@@ -4690,8 +4684,8 @@ body {
 }
 .pricing-plan-flag {
 	padding: 3px 8px;
-	border: 1px solid color-mix(in srgb, var(--blue) 35%, transparent);
 	border-radius: 3px;
+	background: color-mix(in srgb, var(--blue) 10%, transparent);
 	color: var(--blue);
 	font-size: 11px;
 	font-weight: 600;
@@ -4733,9 +4727,8 @@ body {
 	display: grid;
 	gap: 12px;
 	margin: 28px 0 0;
-	padding: 28px 0 0;
+	padding: 0;
 	list-style: none;
-	border-top: 1px solid var(--line);
 }
 .pricing-plan-features li {
 	display: flex;
@@ -4763,11 +4756,12 @@ body {
 	filter: brightness(0.92);
 }
 .pricing-plan .button-secondary {
-	border-color: color-mix(in srgb, var(--ink) 18%, transparent);
+	border: 0;
+	background: color-mix(in srgb, var(--ink) 5%, transparent);
 	color: var(--ink);
 }
 .pricing-plan .button-secondary:hover {
-	background: color-mix(in srgb, var(--blue) 6%, transparent);
+	background: color-mix(in srgb, var(--ink) 9%, transparent);
 }
 
 .pricing-note {
