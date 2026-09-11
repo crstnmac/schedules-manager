@@ -4232,6 +4232,7 @@ function SchedulePage() {
 							columns={changeColumns}
 							data={publishPreview.changes}
 							getRowId={(row, index) => `${row.kind}-${row.summary}-${index}`}
+							className="[&_tbody_tr:last-child]:border-b-0"
 						/>
 					) : null}
 					{publishPreview && publishPreview.wouldRequireAcceptance > 0 ? (

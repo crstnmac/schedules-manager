@@ -545,6 +545,7 @@ function WorkerHome() {
 										columns={weekShiftColumns}
 										data={currentWeek.shifts}
 										getRowId={(row) => row.id}
+										className="[&_tbody_tr:last-child]:border-b-0"
 									/>
 								</CardContent>
 								<CardFooter>
@@ -890,6 +891,7 @@ function SwapSheet({
 							columns={coworkerColumns}
 							data={coworkers}
 							getRowId={(row) => row.versionShiftId}
+							className="[&_tbody_tr:last-child]:border-b-0"
 							empty={
 								<p className="text-muted-foreground text-sm">
 									No coworkers have an eligible shift on this day.
