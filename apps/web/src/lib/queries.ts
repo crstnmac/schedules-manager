@@ -1447,3 +1447,48 @@ export function useShiftTasks(versionShiftId: string | undefined) {
 		enabled: Boolean(versionShiftId),
 	});
 }
+
+export interface ReportSummary {
+	range: { from: string; to: string };
+	totals: {
+		workedMinutes: number;
+		laborCents: number;
+		salesCents: number;
+		laborPercent: number | null;
+		timeEntryCount: number;
+	};
+	byDate: {
+		date: string;
+		workedMinutes: number;
+		laborCents: number;
+		salesCents: number;
+		laborPercent: number | null;
+	}[];
+	byWorker: {
+		employmentId: string;
+		name: string;
+		workedMinutes: number;
+		laborCents: number;
+	}[];
+	byPosition: {
+		positionId: string;
+		name: string;
+		workedMinutes: number;
+	}[];
+}
+
+export function useReportSummary(
+	workplaceId: string | undefined,
+	from: string,
+	to: string,
+	enabled = true,
+) {
+	return useQuery({
+		queryKey: ["report-summary", workplaceId, from, to] as const,
+		queryFn: () =>
+			api<ReportSummary>(
+				`/v1/workplaces/${workplaceId}/reports/summary?from=${from}&to=${to}`,
+			),
+		enabled: Boolean(workplaceId) && enabled && from <= to,
+	});
+}
