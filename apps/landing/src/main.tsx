@@ -1,8 +1,5 @@
 import { Badge } from "@SchedulesManager/ui/components/badge";
-import {
-	Button,
-	buttonVariants,
-} from "@SchedulesManager/ui/components/button";
+import { Button, buttonVariants } from "@SchedulesManager/ui/components/button";
 import {
 	ScrollArea,
 	ScrollBar,
@@ -211,9 +208,7 @@ function Pricing() {
 						}}
 						spacing={0}
 					>
-						<ToggleGroupItem value="monthly">
-							Monthly
-						</ToggleGroupItem>
+						<ToggleGroupItem value="monthly">Monthly</ToggleGroupItem>
 						<ToggleGroupItem value="annual">
 							Annual <small>Save 20%</small>
 						</ToggleGroupItem>
@@ -309,7 +304,7 @@ function SchedulePreview() {
 						{ icon: Bell, name: "Activity" },
 					].map(({ icon: Icon, name }) => (
 						<div
-							className={`sidebar-item${name === "Schedule" ? " selected" : ""}`}
+							className={`sidebar-item${name === "Schedule" ? "selected" : ""}`}
 							key={name}
 						>
 							<Icon size={15} />
@@ -339,7 +334,7 @@ function SchedulePreview() {
 						</div>
 						<Button
 							type="button"
-							className={`publish-button${published ? " is-published" : ""}`}
+							className={`publish-button${published ? "is-published" : ""}`}
 							onClick={() => setPublished(!published)}
 						>
 							{published ? (
@@ -411,7 +406,7 @@ function SchedulePreview() {
 								(day, i) => (
 									<div
 										key={day}
-										className={`grid-head${i === 1 ? " today" : ""}`}
+										className={`grid-head${i === 1 ? "today" : ""}`}
 									>
 										{day} <b>{new Date(2026, 8, 7 + week * 7 + i).getDate()}</b>
 									</div>
@@ -428,7 +423,7 @@ function SchedulePreview() {
 									</div>
 									{p.shifts.map((s, i) => (
 										<div
-											className={`shift-cell${i === 1 ? " today" : ""}`}
+											className={`shift-cell${i === 1 ? "today" : ""}`}
 											key={p.initials + i}
 										>
 											{s ? (
@@ -474,7 +469,7 @@ function SchedulePreview() {
 				</div>
 			</div>
 			<div
-				className={`publish-toast${published ? " toast-active" : ""}`}
+				className={`publish-toast${published ? "toast-active" : ""}`}
 				role="status"
 			>
 				<span className="toast-icon">
@@ -517,18 +512,24 @@ function App() {
 			<LandingLink className="skip-link" href="#main-content">
 				Skip to content
 			</LandingLink>
-			<header className={`header${scrolled ? " is-scrolled" : ""}`}>
+			<header className={`header${scrolled ? "is-scrolled" : ""}`}>
 				<div className="nav-container">
 					<Brand />
 					<nav
 						id="main-navigation"
 						aria-label="Main navigation"
-						className={`nav-links${menuOpen ? " open" : ""}`}
+						className={`nav-links${menuOpen ? "open" : ""}`}
 					>
-						<LandingLink href="#how-it-works" onClick={() => setMenuOpen(false)}>
+						<LandingLink
+							href="#how-it-works"
+							onClick={() => setMenuOpen(false)}
+						>
 							How it works
 						</LandingLink>
-						<LandingLink href="#for-your-team" onClick={() => setMenuOpen(false)}>
+						<LandingLink
+							href="#for-your-team"
+							onClick={() => setMenuOpen(false)}
+						>
 							For your team
 						</LandingLink>
 						<LandingLink href="#pricing" onClick={() => setMenuOpen(false)}>

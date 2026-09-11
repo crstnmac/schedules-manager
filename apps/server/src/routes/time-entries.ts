@@ -283,12 +283,15 @@ export const timeEntryRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({ versionShiftId: t.String({ format: "uuid" }) }),
 			body: t.Optional(
 				t.Object({
@@ -318,12 +321,15 @@ export const timeEntryRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({ versionShiftId: t.String({ format: "uuid" }) }),
 			body: t.Optional(
 				t.Object({
@@ -408,7 +414,10 @@ export const timeEntryRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Recent Time Entries for the signed-in employment",
@@ -420,7 +429,11 @@ export const timeEntryRoutes = new Elysia({
 		"/workplaces/:workplaceId/version-shifts/:versionShiftId/time-entry",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"approvals.review",
+			);
 			await requireSubscriptionCapability(params.workplaceId, "timesheets");
 			return withIdempotency({
 				actorProfileId: profile.id,
@@ -524,12 +537,15 @@ export const timeEntryRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				versionShiftId: t.String({ format: "uuid" }),

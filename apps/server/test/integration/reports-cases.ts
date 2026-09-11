@@ -58,7 +58,7 @@ export function registerReportsTests(getContext: () => Context) {
 		expect(response.status).toBe(403);
 		expect(await response.json()).toEqual({
 			error: "forbidden",
-			message: "Manager access required",
+			message: "Not a member of this workplace",
 		});
 	});
 

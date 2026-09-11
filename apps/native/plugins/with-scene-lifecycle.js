@@ -56,15 +56,21 @@ function patchAppDelegate(contents) {
 
 	// The factory must outlive didFinishLaunching so the scene delegate can use it.
 	next = next.replace(
-		/(\n)  var reactNativeDelegate: ExpoReactNativeFactoryDelegate\?/,
+		/(\n) {2}var reactNativeDelegate: ExpoReactNativeFactoryDelegate\?/,
 		"$1  static var reactNativeDelegate: ExpoReactNativeFactoryDelegate?",
 	);
 	next = next.replace(
-		/(\n)  var reactNativeFactory: RCTReactNativeFactory\?/,
+		/(\n) {2}var reactNativeFactory: RCTReactNativeFactory\?/,
 		"$1  static var reactNativeFactory: RCTReactNativeFactory?",
 	);
-	next = next.replace(/\n    reactNativeDelegate = delegate/, "\n    Self.reactNativeDelegate = delegate");
-	next = next.replace(/\n    reactNativeFactory = factory/, "\n    Self.reactNativeFactory = factory");
+	next = next.replace(
+		/\n {4}reactNativeDelegate = delegate/,
+		"\n    Self.reactNativeDelegate = delegate",
+	);
+	next = next.replace(
+		/\n {4}reactNativeFactory = factory/,
+		"\n    Self.reactNativeFactory = factory",
+	);
 
 	// Remove the legacy window + RN startup; the scene delegate owns the window now.
 	const legacyStartup =
@@ -84,24 +90,32 @@ function patchAppDelegate(contents) {
 		);
 		return next;
 	}
-	next = next.replace("  // Linking API", `${SCENE_CONFIGURATION_METHOD}\n  // Linking API`);
+	next = next.replace(
+		"  // Linking API",
+		`${SCENE_CONFIGURATION_METHOD}\n  // Linking API`,
+	);
 
 	// Add the scene delegate before the ReactNativeDelegate class.
-	next = next.replace("class ReactNativeDelegate:", `${SCENE_DELEGATE_CLASS}\nclass ReactNativeDelegate:`);
+	next = next.replace(
+		"class ReactNativeDelegate:",
+		`${SCENE_DELEGATE_CLASS}\nclass ReactNativeDelegate:`,
+	);
 
 	return next;
 }
 
 module.exports = function withSceneLifecycle(config) {
-	config = withInfoPlist(config, (config) => {
-		config.modResults.UIApplicationSceneManifest = {
+	const withManifest = withInfoPlist(config, (nextConfig) => {
+		nextConfig.modResults.UIApplicationSceneManifest = {
 			UIApplicationSupportsMultipleScenes: false,
 		};
-		return config;
+		return nextConfig;
 	});
 
-	return withAppDelegate(config, (config) => {
-		config.modResults.contents = patchAppDelegate(config.modResults.contents);
-		return config;
+	return withAppDelegate(withManifest, (nextConfig) => {
+		nextConfig.modResults.contents = patchAppDelegate(
+			nextConfig.modResults.contents,
+		);
+		return nextConfig;
 	});
 };

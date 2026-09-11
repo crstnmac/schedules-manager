@@ -34,6 +34,7 @@ import {
 } from "../notify";
 import { firstRow } from "../rows";
 import { wallToInstant, zonedDayInfo } from "../time";
+import { loadWorkplace } from "../workplace-policy";
 import { publishScheduleNow } from "./publication";
 
 async function queryDraftShifts(shiftIds: string[]) {
@@ -252,7 +253,8 @@ export const coverageRoutes = new Elysia({
 							(await scheduleIdForVersionShift(shift.id)) ??
 								"00000000-0000-0000-0000-000000000000",
 						);
-						if (!rules.shift_release) {
+						const workplace = await loadWorkplace(employment.workplaceId);
+						if (workplace.autoAcceptShiftReleases || !rules.shift_release) {
 							await decideRelease(
 								profile.id,
 								employment.workplaceId,
@@ -459,7 +461,8 @@ export const coverageRoutes = new Elysia({
 					// the manager decision path so assignment, notifications, audit, and
 					// the successor Schedule Version publication all still happen.
 					const rules = await resolveScheduleApprovalPolicy(shift.scheduleId);
-					if (!rules.shift_pickup) {
+					const workplace = await loadWorkplace(openShift.workplaceId);
+					if (workplace.autoAcceptShiftPickups || !rules.shift_pickup) {
 						const decided = await decidePickup(
 							profile.id,
 							openShift.workplaceId,
@@ -508,7 +511,11 @@ export const coverageRoutes = new Elysia({
 		"/workplaces/:workplaceId/coverage",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"approvals.review",
+			);
 
 			const releaseRows = await db
 				.select({
@@ -600,7 +607,11 @@ export const coverageRoutes = new Elysia({
 		"/workplaces/:workplaceId/releases/:releaseId/decision",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"approvals.review",
+			);
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `release.decision:${params.releaseId}`,
@@ -638,7 +649,11 @@ export const coverageRoutes = new Elysia({
 		"/workplaces/:workplaceId/pickups/:pickupId/decision",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"approvals.review",
+			);
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `pickup.decision:${params.pickupId}`,

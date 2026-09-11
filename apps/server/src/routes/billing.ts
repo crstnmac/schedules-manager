@@ -125,7 +125,10 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Get Workplace subscription",
@@ -198,7 +201,10 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 			return { url: checkout.url };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				plan: t.Union([t.Literal("schedule"), t.Literal("operations")]),
@@ -229,7 +235,10 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 			return { url: session.customerPortalUrl };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Open the Polar customer portal",

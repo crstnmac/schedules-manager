@@ -25,10 +25,7 @@
 			},
 			"predictiveBackGestureEnabled": false,
 			"package": "com.jooling.schedulesmanager",
-			"permissions": [
-				"ACCESS_COARSE_LOCATION",
-				"ACCESS_FINE_LOCATION"
-			]
+			"permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
 		},
 		"web": {
 			"output": "static",

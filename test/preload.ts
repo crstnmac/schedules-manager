@@ -11,3 +11,6 @@ process.env.ZEPTOMAIL_TOKEN ??= "Zoho-enczapikey test-token";
 process.env.ZEPTOMAIL_FROM_ADDRESS ??= "noreply@example.com";
 process.env.ZEPTOMAIL_FROM_NAME ??= "jooling";
 process.env.ZEPTOMAIL_API_URL ??= "https://api.zeptomail.in/v1.1/email";
+process.env.VITE_SERVER_URL ??= "http://localhost:3000";
+process.env.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN ??= "phc_test_token";
+process.env.VITE_PUBLIC_POSTHOG_HOST ??= "https://eu.i.posthog.com";

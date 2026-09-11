@@ -20,12 +20,16 @@ export const Route = createFileRoute("/reset-password")({
 function ResetPasswordPage() {
 	const navigate = useNavigate();
 	const token = new URLSearchParams(window.location.search).get("token");
-	const providerError = new URLSearchParams(window.location.search).get("error");
+	const providerError = new URLSearchParams(window.location.search).get(
+		"error",
+	);
 	const [password, setPassword] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const [complete, setComplete] = useState(false);
 	const [error, setError] = useState<string | null>(
-		providerError || !token ? "This password reset link is invalid or expired." : null,
+		providerError || !token
+			? "This password reset link is invalid or expired."
+			: null,
 	);
 
 	async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -33,7 +37,10 @@ function ResetPasswordPage() {
 		if (!token || submitting) return;
 		setSubmitting(true);
 		setError(null);
-		const result = await authClient.resetPassword({ newPassword: password, token });
+		const result = await authClient.resetPassword({
+			newPassword: password,
+			token,
+		});
 		setSubmitting(false);
 		if (result.error) {
 			setError(result.error.message ?? "Could not reset your password.");
@@ -48,12 +55,19 @@ function ResetPasswordPage() {
 				<CardHeader>
 					<CardTitle>Reset your password</CardTitle>
 					<CardDescription>
-						{complete ? "Your password has been changed." : "Choose a new password with at least 8 characters."}
+						{complete
+							? "Your password has been changed."
+							: "Choose a new password with at least 8 characters."}
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
 					{complete ? (
-						<Button className="w-full" onClick={() => void navigate({ to: "/" })}>Return to sign in</Button>
+						<Button
+							className="w-full"
+							onClick={() => void navigate({ to: "/" })}
+						>
+							Return to sign in
+						</Button>
 					) : (
 						<form className="space-y-4" onSubmit={submit}>
 							<Input
@@ -66,8 +80,15 @@ function ResetPasswordPage() {
 								required
 								disabled={!token || submitting}
 							/>
-							{error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
-							<Button className="w-full" disabled={!token || password.length < 8 || submitting}>
+							{error ? (
+								<p className="text-destructive text-sm" role="alert">
+									{error}
+								</p>
+							) : null}
+							<Button
+								className="w-full"
+								disabled={!token || password.length < 8 || submitting}
+							>
 								{submitting ? "Updating…" : "Update password"}
 							</Button>
 						</form>

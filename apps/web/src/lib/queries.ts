@@ -236,6 +236,28 @@ export function usePositions(workplaceId: string | undefined) {
 	});
 }
 
+export interface LeaveRequestApprovalDto {
+	id: string;
+	stepOrder: number;
+	approverKind: "workplace_managers" | "specific_employment" | "privilege";
+	approverEmploymentId: string | null;
+	approverPrivilege?: string | null;
+	status: "pending" | "approved" | "declined" | "skipped" | "escalated";
+	decisionReason: string | null;
+	decidedAt: string | null;
+	dueAt: string | null;
+	escalatedAt: string | null;
+}
+
+export interface LeaveDocumentDto {
+	id: string;
+	fileName: string;
+	mimeType: string;
+	sizeBytes: number;
+	createdAt: string;
+	uploadedByProfileId: string | null;
+}
+
 export interface TimeOffRequestDto {
 	id: string;
 	employmentId: string;
@@ -250,14 +272,22 @@ export interface TimeOffRequestDto {
 	endMinute: number | null;
 	chargeMinutes: number;
 	reason: string | null;
-	status: "pending" | "approved" | "declined";
+	status: "pending" | "approved" | "declined" | "cancelled";
 	decisionReason: string | null;
 	decidedAt: string | null;
+	cancelledAt?: string | null;
 	createdAt: string;
 	leaveTypeId: string | null;
 	leaveTypeName: string | null;
 	leaveTypePaid: boolean | null;
 	remainingMinutes: number;
+	deductedMinutes?: number | null;
+	batchId?: string | null;
+	isEmergency?: boolean;
+	currentStep?: number;
+	approvals?: LeaveRequestApprovalDto[];
+	documents?: LeaveDocumentDto[];
+	canDecide?: boolean;
 }
 
 export function useTimeOff(workplaceId: string | undefined) {
@@ -650,6 +680,10 @@ export interface WorkplaceSettings {
 	breaksEnabled: boolean;
 	shiftExchangesEnabled: boolean;
 	unavailabilityRequiresApproval: boolean;
+	autoAcceptShiftPickups: boolean;
+	autoAcceptShiftSwaps: boolean;
+	autoAcceptShiftReleases: boolean;
+	autoAcceptLateChanges: boolean;
 	clopeningMinutes: number;
 	maxConsecutiveWorkDays: number;
 	geofenceRequired: boolean;
@@ -657,8 +691,15 @@ export interface WorkplaceSettings {
 	timesheetNotesEnabled: boolean;
 	leaveCapReset: "none" | "calendar_year" | "hire_date" | "custom_date";
 	leaveCapResetMonthDay: string | null;
+	weekendDays: number[];
 	workersCanRequestTimeOff: boolean;
 }
+
+/**
+ * Weekdays that do not count as working days, 0 = Sunday, matching the
+ * server-side default. Used when a cached response predates the field.
+ */
+export const DEFAULT_WEEKEND_DAYS = [0, 6];
 
 export function useWorkplaceSettings(workplaceId: string | undefined) {
 	return useQuery({
@@ -666,7 +707,10 @@ export function useWorkplaceSettings(workplaceId: string | undefined) {
 		queryFn: () =>
 			api<{ workplace: WorkplaceSettings }>(
 				`/v1/workplaces/${workplaceId}`,
-			).then((data) => data.workplace),
+			).then((data) => ({
+				...data.workplace,
+				weekendDays: data.workplace.weekendDays ?? DEFAULT_WEEKEND_DAYS,
+			})),
 		enabled: Boolean(workplaceId),
 	});
 }
@@ -1092,9 +1136,16 @@ export interface WorkerConstraints {
 		endMinute: number | null;
 		chargeMinutes: number;
 		reason: string | null;
-		status: "pending" | "approved" | "declined";
+		status: "pending" | "approved" | "declined" | "cancelled";
 		decisionReason: string | null;
 		leaveTypeId: string | null;
+		batchId?: string | null;
+		isEmergency?: boolean;
+		currentStep?: number;
+		createdAt?: string;
+		cancelledAt?: string | null;
+		approvals?: LeaveRequestApprovalDto[];
+		documents?: LeaveDocumentDto[];
 	}[];
 }
 
@@ -1356,13 +1407,454 @@ export function useTags(workplaceId: string | undefined) {
 	});
 }
 
+export interface LeavePolicyDto {
+	leaveTypeId: string;
+	workplaceId: string;
+	accrualMethod:
+		| "none"
+		| "weekly"
+		| "biweekly"
+		| "semimonthly"
+		| "monthly"
+		| "annual"
+		| "per_hour_worked";
+	accrualMinutes: number;
+	accrualDay: number;
+	accrualWeekday: number;
+	annualAccrualMonthDay: string | null;
+	accrualPerHoursWorked: number;
+	prorateOnJoin: boolean;
+	maxBalanceMinutes: number | null;
+	carryForwardEnabled: boolean;
+	maxCarryForwardMinutes: number | null;
+	carryForwardExpiryMonths: number | null;
+	allowNegative: boolean;
+	maxNegativeMinutes: number;
+	chargeWorkingDaysOnly: boolean;
+	minServiceDays: number;
+	noticeDays: number;
+	maxConsecutiveDays: number | null;
+	documentRequiredAfterDays: number | null;
+	encashmentEnabled: boolean;
+	maxEncashmentMinutesPerYear: number | null;
+	allowPartialDays: boolean;
+	leaveYearStartMonthDay: string;
+	leaveTypeName?: string;
+}
+
+export interface LeaveTypeDto {
+	id: string;
+	name: string;
+	paid: boolean;
+	code: string | null;
+	description: string | null;
+	classification: "standard" | "floating_holiday" | "working_away" | "special";
+	active: boolean;
+	approvalChainId: string | null;
+	policy: LeavePolicyDto | null;
+}
+
 export function useLeaveTypes(workplaceId: string | undefined) {
 	return useQuery({
 		queryKey: ["leave-types", workplaceId],
 		queryFn: () =>
-			api<{ leaveTypes: { id: string; name: string; paid: boolean }[] }>(
+			api<{ leaveTypes: LeaveTypeDto[] }>(
 				`/v1/workplaces/${workplaceId}/leave-types`,
 			),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useLeavePolicies(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["leave-policies", workplaceId],
+		queryFn: () =>
+			api<{ policies: LeavePolicyDto[] }>(
+				`/v1/workplaces/${workplaceId}/leave-policies`,
+			).then((data) => data.policies),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useUpsertLeavePolicy(workplaceId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: { leaveTypeId: string } & Partial<LeavePolicyDto>) => {
+			const { leaveTypeId, ...body } = input;
+			return api<{ policy: LeavePolicyDto }>(
+				`/v1/workplaces/${workplaceId}/leave-types/${leaveTypeId}/policy`,
+				{ method: "PUT", body },
+			);
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["leave-policies", workplaceId],
+			});
+			queryClient.invalidateQueries({ queryKey: ["leave-types", workplaceId] });
+		},
+	});
+}
+
+export interface ApprovalChainStepDto {
+	id?: string;
+	stepOrder?: number;
+	approverKind: "workplace_managers" | "specific_employment" | "privilege";
+	approverEmploymentId: string | null;
+	approverPrivilege: string | null;
+	escalateAfterHours: number | null;
+	escalationKind:
+		| "workplace_managers"
+		| "specific_employment"
+		| "privilege"
+		| null;
+	escalationEmploymentId: string | null;
+}
+
+export interface ApprovalChainDto {
+	id: string;
+	workplaceId: string;
+	name: string;
+	description: string | null;
+	isDefault: boolean;
+	steps: ApprovalChainStepDto[];
+}
+
+export function useApprovalChains(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["leave-approval-chains", workplaceId],
+		queryFn: () =>
+			api<{ chains: ApprovalChainDto[] }>(
+				`/v1/workplaces/${workplaceId}/leave-approval-chains`,
+			).then((data) => data.chains),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useSaveApprovalChain(workplaceId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			id?: string;
+			name: string;
+			description?: string | null;
+			isDefault?: boolean;
+			steps: ApprovalChainStepDto[];
+		}) => {
+			const { id, ...body } = input;
+			return api(
+				id
+					? `/v1/workplaces/${workplaceId}/leave-approval-chains/${id}`
+					: `/v1/workplaces/${workplaceId}/leave-approval-chains`,
+				{ method: id ? "PUT" : "POST", body },
+			);
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["leave-approval-chains", workplaceId],
+			});
+		},
+	});
+}
+
+export function useDeleteApprovalChain(workplaceId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (chainId: string) =>
+			api(`/v1/workplaces/${workplaceId}/leave-approval-chains/${chainId}`, {
+				method: "DELETE",
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["leave-approval-chains", workplaceId],
+			});
+		},
+	});
+}
+
+export interface LeaveLedgerEntryDto {
+	id: string;
+	employmentId: string;
+	leaveTypeId: string;
+	leaveTypeName: string;
+	kind:
+		| "initial"
+		| "accrual"
+		| "usage"
+		| "adjustment"
+		| "carry_forward"
+		| "expiry"
+		| "encashment"
+		| "transfer_in"
+		| "transfer_out"
+		| "restoration";
+	minutes: number;
+	metaMinutes: number | null;
+	balanceAfter: number;
+	effectiveDate: string;
+	leaveYear: number;
+	requestId: string | null;
+	note: string | null;
+	createdAt: string;
+}
+
+export function useLeaveLedger(
+	workplaceId: string | undefined,
+	employmentId: string | undefined,
+	leaveTypeId?: string | undefined,
+) {
+	return useQuery({
+		queryKey: ["leave-ledger", workplaceId, employmentId, leaveTypeId ?? "all"],
+		queryFn: () => {
+			const params = new URLSearchParams();
+			if (employmentId) params.set("employmentId", employmentId);
+			if (leaveTypeId) params.set("leaveTypeId", leaveTypeId);
+			params.set("limit", "200");
+			return api<{ entries: LeaveLedgerEntryDto[] }>(
+				`/v1/workplaces/${workplaceId}/leave-ledger?${params.toString()}`,
+			).then((data) => data.entries);
+		},
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export interface LeaveBalanceDto {
+	employmentId: string;
+	employmentName: string | null;
+	employmentEmail: string;
+	employmentKind: "manager" | "worker" | "viewer";
+	leaveTypeId: string;
+	leaveTypeName: string;
+	leaveTypePaid: boolean;
+	balanceMinutes: number;
+	accruedMinutes: number;
+	usedMinutes: number;
+	carriedMinutes: number;
+	encashedMinutes: number;
+	adjustedMinutes: number;
+	expiredMinutes: number;
+	pendingMinutes: number;
+}
+
+export function useLeaveBalances(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["leave-balances", workplaceId],
+		queryFn: () =>
+			api<{ balances: LeaveBalanceDto[] }>(
+				`/v1/workplaces/${workplaceId}/leave-balances`,
+			).then((data) => data.balances),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export interface LeaveEncashmentDto {
+	id: string;
+	workplaceId: string;
+	employmentId: string;
+	leaveTypeId: string;
+	minutes: number;
+	hourlyWageCentsSnapshot: number | null;
+	amountCents: number;
+	status: "requested" | "approved" | "declined" | "paid" | "cancelled";
+	requestedByProfileId: string | null;
+	decidedByProfileId: string | null;
+	decisionReason: string | null;
+	decidedAt: string | null;
+	paidAt: string | null;
+	note: string | null;
+	createdAt: string;
+	updatedAt: string;
+	employmentName?: string | null;
+	employmentEmail?: string;
+	leaveTypeName?: string;
+}
+
+export function useLeaveEncashments(
+	workplaceId: string | undefined,
+	status?: string,
+) {
+	return useQuery({
+		queryKey: ["leave-encashments", workplaceId, status ?? "all"],
+		queryFn: () =>
+			api<{ encashments: LeaveEncashmentDto[] }>(
+				`/v1/workplaces/${workplaceId}/leave-encashments${
+					status ? `?status=${status}` : ""
+				}`,
+			).then((data) => data.encashments),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export interface LeaveForecastPointDto {
+	month: string;
+	accruedMinutes: number;
+	plannedUsageMinutes: number;
+	balanceMinutes: number;
+}
+
+export interface LeaveForecastDto {
+	leaveTypeId: string;
+	leaveTypeName: string;
+	startingMinutes: number;
+	points: LeaveForecastPointDto[];
+	pendingMinutes: number;
+}
+
+export function useLeaveForecast(
+	workplaceId: string | undefined,
+	employmentId: string | undefined,
+	months = 12,
+) {
+	return useQuery({
+		queryKey: ["leave-forecast", workplaceId, employmentId, months],
+		queryFn: () =>
+			api<{ forecast: LeaveForecastDto[] }>(
+				`/v1/workplaces/${workplaceId}/employments/${employmentId}/leave-forecast?months=${months}`,
+			).then((data) => data.forecast),
+		enabled: Boolean(workplaceId && employmentId),
+	});
+}
+
+export interface CalendarTokenDto {
+	id: string;
+	employmentId: string | null;
+	label: string | null;
+	revokedAt: string | null;
+	lastUsedAt: string | null;
+	createdAt: string;
+	url?: string;
+}
+
+export function useCalendarTokens(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["calendar-tokens", workplaceId],
+		queryFn: () =>
+			api<{ tokens: CalendarTokenDto[] }>(
+				`/v1/workplaces/${workplaceId}/calendar-tokens`,
+			).then((data) => data.tokens),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useCreateMyCalendarToken(workplaceId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: () =>
+			api<{ token: CalendarTokenDto }>(
+				`/v1/workplaces/${workplaceId}/my/calendar-token`,
+				{ method: "POST" },
+			),
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["calendar-tokens", workplaceId],
+			});
+		},
+	});
+}
+
+export function useRevokeCalendarToken(workplaceId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (tokenId: string) =>
+			api(`/v1/workplaces/${workplaceId}/calendar-tokens/${tokenId}`, {
+				method: "DELETE",
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["calendar-tokens", workplaceId],
+			});
+		},
+	});
+}
+
+export interface LeaveDelegationDto {
+	id: string;
+	delegatorEmploymentId: string;
+	delegateEmploymentId: string;
+	delegatorName: string | null;
+	delegatorEmail: string;
+	startsAt: string;
+	endsAt: string;
+	reason: string | null;
+	revokedAt: string | null;
+}
+
+export function useLeaveDelegations(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["leave-delegations", workplaceId],
+		queryFn: () =>
+			api<{ delegations: LeaveDelegationDto[] }>(
+				`/v1/workplaces/${workplaceId}/leave-delegations`,
+			).then((data) => data.delegations),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useCreateLeaveDelegation(workplaceId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			delegatorEmploymentId?: string;
+			delegateEmploymentId: string;
+			startsAt: string;
+			endsAt: string;
+			reason?: string;
+		}) =>
+			api(`/v1/workplaces/${workplaceId}/leave-delegations`, {
+				method: "POST",
+				body: input,
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["leave-delegations", workplaceId],
+			});
+		},
+	});
+}
+
+export function useRevokeLeaveDelegation(workplaceId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (delegationId: string) =>
+			api(`/v1/workplaces/${workplaceId}/leave-delegations/${delegationId}`, {
+				method: "DELETE",
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["leave-delegations", workplaceId],
+			});
+		},
+	});
+}
+
+export interface PendingApprovalDto {
+	requestId: string;
+	approvalId: string;
+	stepOrder: number;
+	dueAt: string | null;
+	escalatedAt: string | null;
+	via: "direct" | "delegation";
+	worker: { email: string; fullName: string | null };
+	leaveTypeName: string | null;
+	remainingMinutes: number;
+	chargeMinutes: number;
+	isEmergency: boolean;
+	reason: string | null;
+	startsAt: string;
+	endsAt: string;
+	startDate: string;
+	endDate: string;
+	allDay: boolean;
+	startMinute: number | null;
+	endMinute: number | null;
+}
+
+export function useMyPendingApprovals(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["my-pending-approvals", workplaceId],
+		queryFn: () =>
+			api<{ pending: PendingApprovalDto[] }>(
+				`/v1/workplaces/${workplaceId}/my/pending-approvals`,
+			).then((data) => data.pending),
 		enabled: Boolean(workplaceId),
 	});
 }

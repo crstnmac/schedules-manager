@@ -1,8 +1,8 @@
-import { db, profiles } from "@SchedulesManager/db";
 import * as authSchema from "@SchedulesManager/db";
+import { db, profiles } from "@SchedulesManager/db";
 import { env } from "@SchedulesManager/env/server";
 import { expo } from "@better-auth/expo";
-import { betterAuth, type BetterAuthOptions } from "better-auth";
+import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { bearer } from "better-auth/plugins/bearer";
 import { sendPasswordResetEmail } from "./mail";

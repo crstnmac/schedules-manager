@@ -29,6 +29,7 @@ import {
 	TabsList,
 	TabsTrigger,
 } from "@SchedulesManager/ui/components/tabs";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
@@ -46,6 +47,9 @@ import {
 import { toast } from "sonner";
 import { AppDocument } from "@/components/app-page";
 import { DatePicker } from "@/components/date-picker";
+import { api } from "@/lib/api";
+import { formatLeaveHours } from "@/lib/leave";
+import { hasCapability } from "@/lib/privileges";
 import {
 	type RequestType,
 	useCoverageReport,
@@ -101,8 +105,39 @@ function shortDate(key: string) {
 	});
 }
 
+interface LeaveReportRow {
+	employmentId: string;
+	employmentName: string | null;
+	employmentEmail: string;
+	leaveTypeName: string;
+	leaveTypePaid: boolean;
+	approvedMinutes: number;
+	unpaidMinutes: number;
+	overdrawnMinutes: number;
+	encashmentMinutes: number;
+	encashmentCents: number;
+	encashmentStatus: string | null;
+}
+
+interface LeaveReportResponse {
+	from: string;
+	to: string;
+	rows: LeaveReportRow[];
+	totals: {
+		approvedMinutes: number;
+		unpaidMinutes: number;
+		overdrawnMinutes: number;
+		encashmentMinutes: number;
+		encashmentCents: number;
+	};
+}
+
 function ReportsPage() {
-	const { workplace } = useWorkplace();
+	const { workplace, kind, privileges } = useWorkplace();
+	const canViewReports = hasCapability(
+		{ kind: kind ?? "viewer", privileges },
+		"reports.view",
+	);
 	const [from, setFrom] = useState(() => {
 		const date = new Date();
 		date.setDate(date.getDate() - 14);
@@ -110,12 +145,27 @@ function ReportsPage() {
 	});
 	const [to, setTo] = useState(() => new Date().toLocaleDateString("sv-SE"));
 	const [isDownloading, setIsDownloading] = useState(false);
-	const [tab, setTab] = useState<"hours" | "coverage" | "requests">("hours");
+	const [isDownloadingLeave, setIsDownloadingLeave] = useState(false);
+	const [tab, setTab] = useState<"hours" | "coverage" | "requests" | "leave">(
+		"hours",
+	);
 	const invalidRange = !from || !to || from > to;
 
 	const summary = useReportSummary(workplace?.id, from, to, !invalidRange);
 	const coverage = useCoverageReport(workplace?.id, from, to, !invalidRange);
 	const requests = useRequestAnalytics(workplace?.id, from, to, !invalidRange);
+	const leave = useQuery({
+		queryKey: ["report-leave", workplace?.id, from, to] as const,
+		queryFn: () =>
+			api<LeaveReportResponse>(
+				`/v1/workplaces/${workplace?.id}/reports/leave?from=${from}&to=${to}`,
+			),
+		enabled:
+			Boolean(workplace?.id) &&
+			canViewReports &&
+			tab === "leave" &&
+			!invalidRange,
+	});
 
 	const days = useMemo(() => {
 		return (summary.data?.byDate ?? []).map((day) => ({
@@ -226,6 +276,41 @@ function ReportsPage() {
 		}
 	}
 
+	async function downloadLeavePayroll() {
+		if (invalidRange || isDownloadingLeave || !workplace) return;
+		setIsDownloadingLeave(true);
+		try {
+			const response = await fetch(
+				`${env.VITE_SERVER_URL}/v1/workplaces/${workplace.id}/reports/leave-payroll.csv?from=${from}&to=${to}`,
+				{ credentials: "include" },
+			);
+			if (!response.ok) {
+				const payload = (await response.json().catch(() => null)) as {
+					message?: string;
+				} | null;
+				throw new Error(
+					payload?.message ?? "Couldn’t download the report. Please try again.",
+				);
+			}
+			const blob = await response.blob();
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = `leave-payroll-${from}-${to}.csv`;
+			link.click();
+			URL.revokeObjectURL(url);
+			toast.success("Leave payroll downloaded");
+		} catch (error) {
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Couldn’t download the report. Please try again.",
+			);
+		} finally {
+			setIsDownloadingLeave(false);
+		}
+	}
+
 	return (
 		<AppDocument widthClassName="max-w-5xl">
 			<div className="flex flex-col gap-4">
@@ -273,7 +358,7 @@ function ReportsPage() {
 			<Tabs
 				value={tab}
 				onValueChange={(value) =>
-					setTab(value as "hours" | "coverage" | "requests")
+					setTab(value as "hours" | "coverage" | "requests" | "leave")
 				}
 				className="gap-4"
 			>
@@ -281,6 +366,9 @@ function ReportsPage() {
 					<TabsTrigger value="hours">Hours & labor</TabsTrigger>
 					<TabsTrigger value="coverage">Coverage</TabsTrigger>
 					<TabsTrigger value="requests">Requests</TabsTrigger>
+					{canViewReports ? (
+						<TabsTrigger value="leave">Leave</TabsTrigger>
+					) : null}
 				</TabsList>
 
 				<TabsContent value="hours" className="space-y-4">
@@ -914,6 +1002,193 @@ function ReportsPage() {
 						</>
 					)}
 				</TabsContent>
+
+				{canViewReports ? (
+					<TabsContent value="leave" className="space-y-4">
+						{leave.isLoading ? (
+							<div className="grid place-items-center py-24">
+								<Spinner />
+								<span className="sr-only">Loading leave report</span>
+							</div>
+						) : leave.isError ? (
+							<Card>
+								<CardHeader>
+									<CardTitle>Couldn’t load the leave report</CardTitle>
+									<CardDescription>
+										Check your connection and try again.
+									</CardDescription>
+								</CardHeader>
+								<CardContent>
+									<Button
+										variant="outline"
+										onClick={() => void leave.refetch()}
+									>
+										Try again
+									</Button>
+								</CardContent>
+							</Card>
+						) : !leave.data || leave.data.rows.length === 0 ? (
+							<Empty>
+								<EmptyHeader>
+									<EmptyTitle>No leave in this range</EmptyTitle>
+									<EmptyDescription>
+										Approved leave and encashments appear here.
+									</EmptyDescription>
+								</EmptyHeader>
+							</Empty>
+						) : (
+							<>
+								<div className="flex flex-wrap items-end justify-between gap-3">
+									<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+										<Card>
+											<CardHeader>
+												<CardDescription>Approved leave</CardDescription>
+												<CardTitle className="text-2xl tabular-nums">
+													{formatLeaveHours(leave.data.totals.approvedMinutes)}
+												</CardTitle>
+											</CardHeader>
+										</Card>
+										<Card>
+											<CardHeader>
+												<CardDescription>Unpaid leave</CardDescription>
+												<CardTitle className="text-2xl tabular-nums">
+													{formatLeaveHours(leave.data.totals.unpaidMinutes)}
+												</CardTitle>
+											</CardHeader>
+										</Card>
+										<Card>
+											<CardHeader>
+												<CardDescription>Overdrawn</CardDescription>
+												<CardTitle className="text-2xl tabular-nums">
+													{formatLeaveHours(leave.data.totals.overdrawnMinutes)}
+												</CardTitle>
+											</CardHeader>
+										</Card>
+										<Card>
+											<CardHeader>
+												<CardDescription>Encashment value</CardDescription>
+												<CardTitle className="text-2xl tabular-nums">
+													{formatCurrency(leave.data.totals.encashmentCents)}
+												</CardTitle>
+											</CardHeader>
+										</Card>
+									</div>
+									<Button
+										variant="outline"
+										disabled={isDownloadingLeave}
+										onClick={() => void downloadLeavePayroll()}
+									>
+										{isDownloadingLeave ? "Downloading…" : "Leave payroll CSV"}
+									</Button>
+								</div>
+
+								<Card>
+									<CardHeader>
+										<CardTitle>Leave by worker</CardTitle>
+										<CardDescription>
+											Approved leave and encashments in the selected range
+										</CardDescription>
+									</CardHeader>
+									<CardContent>
+										<div className="overflow-x-auto">
+											<table className="w-full text-sm">
+												<thead>
+													<tr className="border-b text-left text-muted-foreground text-xs">
+														<th className="py-2 pr-4 font-medium">Worker</th>
+														<th className="py-2 pr-4 font-medium">
+															Leave type
+														</th>
+														<th className="py-2 pr-4 font-medium">Approved</th>
+														<th className="py-2 pr-4 font-medium">Unpaid</th>
+														<th className="py-2 pr-4 font-medium">Overdrawn</th>
+														<th className="py-2 pr-4 font-medium">Encashed</th>
+														<th className="py-2 font-medium">Value</th>
+													</tr>
+												</thead>
+												<tbody>
+													{leave.data.rows.map((row) => (
+														<tr
+															key={`${row.employmentId}:${row.leaveTypeName}`}
+															className="border-b last:border-0"
+														>
+															<td className="py-2 pr-4">
+																<div className="flex flex-col">
+																	<span>
+																		{row.employmentName ?? row.employmentEmail}
+																	</span>
+																	{row.employmentName ? (
+																		<span className="text-muted-foreground text-xs">
+																			{row.employmentEmail}
+																		</span>
+																	) : null}
+																</div>
+															</td>
+															<td className="py-2 pr-4">
+																{row.leaveTypeName}
+																{row.leaveTypePaid ? null : (
+																	<span className="text-muted-foreground">
+																		{" "}
+																		· unpaid
+																	</span>
+																)}
+															</td>
+															<td className="py-2 pr-4 tabular-nums">
+																{formatLeaveHours(row.approvedMinutes)}
+															</td>
+															<td className="py-2 pr-4 tabular-nums">
+																{formatLeaveHours(row.unpaidMinutes)}
+															</td>
+															<td className="py-2 pr-4 tabular-nums">
+																{formatLeaveHours(row.overdrawnMinutes)}
+															</td>
+															<td className="py-2 pr-4 tabular-nums">
+																{formatLeaveHours(row.encashmentMinutes)}
+															</td>
+															<td className="py-2 tabular-nums">
+																{formatCurrency(row.encashmentCents)}
+															</td>
+														</tr>
+													))}
+												</tbody>
+												<tfoot>
+													<tr className="border-t font-medium">
+														<td className="py-2 pr-4">Total</td>
+														<td className="py-2 pr-4" />
+														<td className="py-2 pr-4 tabular-nums">
+															{formatLeaveHours(
+																leave.data.totals.approvedMinutes,
+															)}
+														</td>
+														<td className="py-2 pr-4 tabular-nums">
+															{formatLeaveHours(
+																leave.data.totals.unpaidMinutes,
+															)}
+														</td>
+														<td className="py-2 pr-4 tabular-nums">
+															{formatLeaveHours(
+																leave.data.totals.overdrawnMinutes,
+															)}
+														</td>
+														<td className="py-2 pr-4 tabular-nums">
+															{formatLeaveHours(
+																leave.data.totals.encashmentMinutes,
+															)}
+														</td>
+														<td className="py-2 tabular-nums">
+															{formatCurrency(
+																leave.data.totals.encashmentCents,
+															)}
+														</td>
+													</tr>
+												</tfoot>
+											</table>
+										</div>
+									</CardContent>
+								</Card>
+							</>
+						)}
+					</TabsContent>
+				) : null}
 			</Tabs>
 		</AppDocument>
 	);

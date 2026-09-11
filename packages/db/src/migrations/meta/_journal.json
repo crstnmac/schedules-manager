@@ -197,6 +197,20 @@
       "when": 1789109963623,
       "tag": "0027_early_lockjaw",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1789118005533,
+      "tag": "0028_talented_turbo",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1789127114743,
+      "tag": "0029_rare_titania",
+      "breakpoints": true
     }
   ]
 }

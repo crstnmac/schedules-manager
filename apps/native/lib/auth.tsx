@@ -7,7 +7,9 @@ import {
 
 import { authClient } from "./auth-client";
 
-type AuthUser = NonNullable<ReturnType<typeof authClient.useSession>["data"]>["user"];
+type AuthUser = NonNullable<
+	ReturnType<typeof authClient.useSession>["data"]
+>["user"];
 
 type AuthContextValue = {
 	isLoading: boolean;

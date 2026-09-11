@@ -68,7 +68,10 @@ export const locationsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "List Locations for a Workplace (Manager)",
@@ -122,7 +125,10 @@ export const locationsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 120 }),
@@ -158,7 +164,11 @@ export const locationsRoutes = new Elysia({
 				.limit(1);
 
 			if (!existing) throw new NotFoundError("Location not found");
-			await requirePrivilege(profile.id, existing.workplaceId, "settings.manage");
+			await requirePrivilege(
+				profile.id,
+				existing.workplaceId,
+				"settings.manage",
+			);
 			if (
 				body.geofenceRadiusMeters !== undefined ||
 				body.kioskPin !== undefined
@@ -223,7 +233,10 @@ export const locationsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ locationId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
@@ -264,7 +277,11 @@ export const locationsRoutes = new Elysia({
 				.limit(1);
 
 			if (!existing) throw new NotFoundError("Location not found");
-			await requirePrivilege(profile.id, existing.workplaceId, "settings.manage");
+			await requirePrivilege(
+				profile.id,
+				existing.workplaceId,
+				"settings.manage",
+			);
 
 			const [schedule] = await db
 				.select({ id: schedules.id })
@@ -281,7 +298,10 @@ export const locationsRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ locationId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Delete a Location (Manager)",

@@ -371,11 +371,7 @@ export function registerEmailDeliveryTests(getContext: () => Context) {
 							"content-type": "application/json",
 						},
 						body: JSON.stringify({
-							rows: [
-								{
-									email: `import-${suffix}@integration.schedulesmanager.dev`,
-								},
-							],
+							csv: `email\nimport-${suffix}@integration.schedulesmanager.dev`,
 						}),
 					},
 				),
@@ -399,7 +395,7 @@ export function registerEmailDeliveryTests(getContext: () => Context) {
 							"content-type": "application/json",
 							"idempotency-key": key,
 						},
-						body: JSON.stringify({ rows: [{ email }] }),
+						body: JSON.stringify({ csv: `email\n${email}` }),
 					},
 				),
 			);
@@ -416,21 +412,23 @@ export function registerEmailDeliveryTests(getContext: () => Context) {
 		expect(imported.map((response) => response.status)).toEqual([200, 200]);
 		const importedBody = await imported[0]?.json();
 		expect(await imported[1]?.json()).toEqual(importedBody);
-		expect(importedBody.invitations).toHaveLength(1);
-		const importedInvitationId = importedBody.invitations[0]?.token
+		expect(importedBody.import.entries).toHaveLength(1);
+		const importedToken = importedBody.import.entries[0]?.token;
+		const importedInvitationId = importedToken
 			? (
 					await db
 						.select()
 						.from(invitations)
-						.where(eq(invitations.token, importedBody.invitations[0].token))
+						.where(eq(invitations.token, importedToken))
 				)[0]?.id
 			: undefined;
+		// Imports create links only; no email is queued.
 		expect(
 			await db
 				.select()
 				.from(emailDeliveries)
 				.where(eq(emailDeliveries.invitationId, importedInvitationId ?? "")),
-		).toHaveLength(1);
+		).toHaveLength(0);
 		expect(
 			(
 				await importWithKey(

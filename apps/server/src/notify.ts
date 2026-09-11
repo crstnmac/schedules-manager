@@ -25,7 +25,11 @@ type NotificationWriter = Pick<typeof db, "insert">;
 export function notificationTopicForKind(
 	kind: string,
 ): keyof NotificationPreferences | null {
-	if (kind.startsWith("time_off") || kind === "unavailability_requested") {
+	if (
+		kind.startsWith("time_off") ||
+		kind.startsWith("leave_") ||
+		kind === "unavailability_requested"
+	) {
 		return "timeOff";
 	}
 	if (

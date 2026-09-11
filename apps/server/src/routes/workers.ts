@@ -514,6 +514,9 @@ export const workersRoutes = new Elysia({
 				.limit(1);
 
 			if (!employment) throw new NotFoundError("Employment not found");
+			if (employment.profileId === profile.id) {
+				throw new ConflictError("You cannot change your own role");
+			}
 
 			const requestedPrivileges = body.privileges ?? [];
 			const invalid = requestedPrivileges.filter(

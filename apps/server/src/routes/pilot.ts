@@ -1,8 +1,6 @@
 import {
 	db,
 	employments,
-	invitationLocations,
-	invitationPositions,
 	invitations,
 	locations,
 	pilotFeedback,
@@ -21,13 +19,14 @@ import {
 	requireSession,
 	requireWorkplaceMember,
 } from "../context";
-import { enqueueInvitationEmail } from "../email-outbox";
-import { BadRequestError } from "../errors";
+import { csvAttachment } from "../csv-import";
 import { withIdempotency } from "../idempotency";
 import { notifyEmployments, writeAudit } from "../notify";
 import { consumeRateLimitOrThrow } from "../rate-limit";
-
-const INVITATION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+import {
+	importWorkerInvitations,
+	WORKER_IMPORT_TEMPLATE,
+} from "../worker-import";
 
 async function latestVersionIds(scheduleIds: string[]) {
 	if (scheduleIds.length === 0) return [];
@@ -154,7 +153,10 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 		},
 	)
@@ -176,7 +178,10 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 			return { feedback: { id: feedback?.id } };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				category: t.Union([
@@ -193,7 +198,11 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 		"/workplaces/:workplaceId/reminders/unacknowledged",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "schedule.publish");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"schedule.publish",
+			);
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `schedule.reminder:${params.workplaceId}`,
@@ -245,12 +254,15 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 		},
 	)
@@ -259,114 +271,76 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
 			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
-			const normalized = body.rows.map((row) => ({
-				...row,
-				email: row.email.trim().toLowerCase(),
-				position: row.position?.trim(),
-				location: row.location?.trim(),
-			}));
-			if (
-				new Set(normalized.map((row) => row.email)).size !== normalized.length
-			)
-				throw new BadRequestError(
-					"The import contains duplicate email addresses",
-				);
-
+			const dryRun = body.dryRun ?? false;
+			if (dryRun) {
+				return {
+					import: await importWorkerInvitations({
+						workplaceId: params.workplaceId,
+						profileId: profile.id,
+						csv: body.csv,
+						dryRun: true,
+					}),
+				};
+			}
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `invitation.import:${params.workplaceId}`,
 				key: headers["idempotency-key"],
-				request: { rows: normalized },
+				request: { csv: body.csv },
 				execute: async () => {
 					consumeRateLimitOrThrow(
 						`invitation.import:${profile.id}`,
 						"invitationImport",
 					);
-					const [locationRows, positionRows] = await Promise.all([
-						db
-							.select()
-							.from(locations)
-							.where(eq(locations.workplaceId, params.workplaceId)),
-						db
-							.select()
-							.from(positions)
-							.where(eq(positions.workplaceId, params.workplaceId)),
-					]);
-					const locationByName = new Map(
-						locationRows.map((row) => [row.name.toLowerCase(), row.id]),
-					);
-					const positionByName = new Map(
-						positionRows.map((row) => [row.name.toLowerCase(), row.id]),
-					);
-					for (const row of normalized) {
-						if (row.location && !locationByName.has(row.location.toLowerCase()))
-							throw new BadRequestError(`Unknown location: ${row.location}`);
-						if (row.position && !positionByName.has(row.position.toLowerCase()))
-							throw new BadRequestError(`Unknown position: ${row.position}`);
-					}
-					const result = [];
-					for (const row of normalized) {
-						await db
-							.update(invitations)
-							.set({ status: "revoked" })
-							.where(
-								and(
-									eq(invitations.workplaceId, params.workplaceId),
-									eq(invitations.email, row.email),
-									eq(invitations.status, "pending"),
-								),
-							);
-						const [invitation] = await db
-							.insert(invitations)
-							.values({
-								workplaceId: params.workplaceId,
-								email: row.email,
-								kind: "worker",
-								invitedBy: profile.id,
-								expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
-							})
-							.returning();
-						if (!invitation) continue;
-						const locationId = row.location
-							? locationByName.get(row.location.toLowerCase())
-							: undefined;
-						const positionId = row.position
-							? positionByName.get(row.position.toLowerCase())
-							: undefined;
-						if (locationId)
-							await db
-								.insert(invitationLocations)
-								.values({ invitationId: invitation.id, locationId });
-						if (positionId)
-							await db
-								.insert(invitationPositions)
-								.values({ invitationId: invitation.id, positionId });
-						await enqueueInvitationEmail(db, invitation);
-						result.push({ email: row.email, token: invitation.token });
-					}
-					return { invitations: result };
+					return {
+						import: await importWorkerInvitations({
+							workplaceId: params.workplaceId,
+							profileId: profile.id,
+							csv: body.csv,
+							dryRun: false,
+						}),
+					};
 				},
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
-				rows: t.Array(
-					t.Object({
-						name: t.Optional(t.String({ maxLength: 160 })),
-						email: t.String({ format: "email", maxLength: 200 }),
-						phone: t.Optional(t.String({ maxLength: 40 })),
-						position: t.Optional(t.String({ maxLength: 120 })),
-						location: t.Optional(t.String({ maxLength: 160 })),
-					}),
-					{ minItems: 1, maxItems: 200 },
-				),
+				csv: t.String({ minLength: 1, maxLength: 2_000_000 }),
+				dryRun: t.Optional(t.Boolean()),
 			}),
+			detail: {
+				summary: "Import worker invitations from CSV (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/invitations/import/template.csv",
+		async ({ headers, params, set }) => {
+			const { profile } = await requireSession(headers);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			csvAttachment(set, "worker-import-template.csv");
+			return WORKER_IMPORT_TEMPLATE;
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			detail: {
+				summary: "Download the worker import CSV template (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
 		},
 	);

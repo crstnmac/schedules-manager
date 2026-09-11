@@ -39,7 +39,10 @@ export const positionsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "List Positions for a Workplace (Manager)",
@@ -70,7 +73,10 @@ export const positionsRoutes = new Elysia({
 			return { position: serializePosition(position) };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 120 }),
@@ -93,7 +99,11 @@ export const positionsRoutes = new Elysia({
 				.limit(1);
 
 			if (!existing) throw new NotFoundError("Position not found");
-			await requirePrivilege(profile.id, existing.workplaceId, "settings.manage");
+			await requirePrivilege(
+				profile.id,
+				existing.workplaceId,
+				"settings.manage",
+			);
 
 			if (body.name !== undefined && body.name !== existing.name) {
 				const [sibling] = await db
@@ -126,7 +136,10 @@ export const positionsRoutes = new Elysia({
 			return { position: serializePosition(position) };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ positionId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
@@ -149,7 +162,11 @@ export const positionsRoutes = new Elysia({
 				.limit(1);
 
 			if (!existing) throw new NotFoundError("Position not found");
-			await requirePrivilege(profile.id, existing.workplaceId, "settings.manage");
+			await requirePrivilege(
+				profile.id,
+				existing.workplaceId,
+				"settings.manage",
+			);
 
 			const [[shift], [template], [templateShift], [assignment]] =
 				await Promise.all([
@@ -184,7 +201,10 @@ export const positionsRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ positionId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Delete a Position (Manager)",

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
 	boolean,
 	date,
@@ -89,6 +90,22 @@ export const workplaces = pgTable("workplaces", {
 	unavailabilityRequiresApproval: boolean("unavailability_requires_approval")
 		.notNull()
 		.default(false),
+	/** Skips manager approval for Open Shift pickups when on. */
+	autoAcceptShiftPickups: boolean("auto_accept_shift_pickups")
+		.notNull()
+		.default(false),
+	/** Skips manager approval for agreed Worker-to-Worker shift swaps when on. */
+	autoAcceptShiftSwaps: boolean("auto_accept_shift_swaps")
+		.notNull()
+		.default(false),
+	/** Skips manager approval for Shift Release requests when on. */
+	autoAcceptShiftReleases: boolean("auto_accept_shift_releases")
+		.notNull()
+		.default(false),
+	/** Auto-accepts material Schedule Changes instead of requiring Shift Acceptance. */
+	autoAcceptLateChanges: boolean("auto_accept_late_changes")
+		.notNull()
+		.default(false),
 	/** Minimum rest between shifts, in minutes. 0 disables. */
 	clopeningMinutes: integer("clopening_minutes").notNull().default(0),
 	/** Maximum consecutive scheduled workdays. 0 disables. */
@@ -105,6 +122,8 @@ export const workplaces = pgTable("workplaces", {
 	leaveCapReset: leaveCapResetEnum("leave_cap_reset").notNull().default("none"),
 	/** MM-DD used when leaveCapReset is custom_date. */
 	leaveCapResetMonthDay: text("leave_cap_reset_month_day"),
+	/** Weekdays that are not working days, 0 = Sunday. Defaults to Sat/Sun. */
+	weekendDays: integer("weekend_days").array().notNull().default(sql`'{0,6}'`),
 	workersCanRequestTimeOff: boolean("workers_can_request_time_off")
 		.notNull()
 		.default(true),

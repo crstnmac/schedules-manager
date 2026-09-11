@@ -227,6 +227,14 @@ export const workplacesRoutes = new Elysia({
 			}
 
 			const existing = await loadWorkplace(params.workplaceId);
+			if (body.weekendDays !== undefined) {
+				const unique = [...new Set(body.weekendDays)];
+				if (unique.length !== body.weekendDays.length || unique.length > 6) {
+					throw new BadRequestError(
+						"Weekend days must be unique and cannot cover the whole week",
+					);
+				}
+			}
 			const leaveCapReset = body.leaveCapReset ?? existing.leaveCapReset;
 			const leaveCapResetMonthDay =
 				body.leaveCapResetMonthDay === undefined
@@ -300,6 +308,14 @@ export const workplacesRoutes = new Elysia({
 						unavailabilityRequiresApproval:
 							body.unavailabilityRequiresApproval ??
 							existing.unavailabilityRequiresApproval,
+						autoAcceptShiftPickups:
+							body.autoAcceptShiftPickups ?? existing.autoAcceptShiftPickups,
+						autoAcceptShiftSwaps:
+							body.autoAcceptShiftSwaps ?? existing.autoAcceptShiftSwaps,
+						autoAcceptShiftReleases:
+							body.autoAcceptShiftReleases ?? existing.autoAcceptShiftReleases,
+						autoAcceptLateChanges:
+							body.autoAcceptLateChanges ?? existing.autoAcceptLateChanges,
 						clopeningMinutes:
 							body.clopeningMinutes ?? existing.clopeningMinutes,
 						maxConsecutiveWorkDays:
@@ -312,6 +328,7 @@ export const workplacesRoutes = new Elysia({
 							body.timesheetNotesEnabled ?? existing.timesheetNotesEnabled,
 						leaveCapReset,
 						leaveCapResetMonthDay,
+						weekendDays: body.weekendDays ?? existing.weekendDays,
 						workersCanRequestTimeOff:
 							body.workersCanRequestTimeOff ??
 							existing.workersCanRequestTimeOff,
@@ -382,6 +399,10 @@ export const workplacesRoutes = new Elysia({
 				breaksEnabled: t.Optional(t.Boolean()),
 				shiftExchangesEnabled: t.Optional(t.Boolean()),
 				unavailabilityRequiresApproval: t.Optional(t.Boolean()),
+				autoAcceptShiftPickups: t.Optional(t.Boolean()),
+				autoAcceptShiftSwaps: t.Optional(t.Boolean()),
+				autoAcceptShiftReleases: t.Optional(t.Boolean()),
+				autoAcceptLateChanges: t.Optional(t.Boolean()),
 				clopeningMinutes: t.Optional(t.Integer({ minimum: 0, maximum: 2880 })),
 				maxConsecutiveWorkDays: t.Optional(
 					t.Integer({ minimum: 0, maximum: 31 }),
@@ -398,6 +419,9 @@ export const workplacesRoutes = new Elysia({
 						t.Literal("hire_date"),
 						t.Literal("custom_date"),
 					]),
+				),
+				weekendDays: t.Optional(
+					t.Array(t.Integer({ minimum: 0, maximum: 6 }), { maxItems: 6 }),
 				),
 				leaveCapResetMonthDay: t.Optional(
 					t.Union([t.String({ maxLength: 5 }), t.Null()]),

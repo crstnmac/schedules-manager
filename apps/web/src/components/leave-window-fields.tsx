@@ -17,11 +17,45 @@ import { Textarea } from "@SchedulesManager/ui/components/textarea";
 
 import { DatePicker } from "@/components/date-picker";
 import { TimePicker } from "@/components/time-picker";
-import { formatLeaveHours, leaveChargeMinutes } from "@/lib/leave";
+import {
+	formatLeaveHours,
+	leaveChargeMinutes,
+	PAID_DAY_MINUTES,
+} from "@/lib/leave";
 
 export { leaveChargeMinutes };
 
 export type LeaveTypeOption = { id: string; name: string; paid: boolean };
+
+const DEFAULT_WEEKEND_DAYS = [0, 6];
+
+/**
+ * Client estimate for all-day requests that charge working days only. Falls
+ * back to the shared helper for partial days, where per-day policy rules are
+ * not applied here.
+ */
+function workingDayCharge(input: {
+	startDate: string;
+	endDate: string;
+	allDay: boolean;
+	startMinute: number;
+	endMinute: number;
+	timeZone?: string;
+	weekendDays?: number[];
+}): number {
+	if (!input.allDay) return leaveChargeMinutes(input);
+	const start = Date.parse(`${input.startDate}T00:00:00Z`);
+	const end = Date.parse(`${input.endDate}T00:00:00Z`);
+	if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 0;
+	const weekend = new Set(
+		input.weekendDays?.length ? input.weekendDays : DEFAULT_WEEKEND_DAYS,
+	);
+	let days = 0;
+	for (let time = start; time <= end; time += 86_400_000) {
+		if (!weekend.has(new Date(time).getUTCDay())) days += 1;
+	}
+	return days * PAID_DAY_MINUTES;
+}
 
 export function LeaveWindowFields({
 	leaveTypes,
@@ -42,6 +76,11 @@ export function LeaveWindowFields({
 	remainingMinutes,
 	idPrefix,
 	timeZone,
+	isEmergency,
+	onIsEmergencyChange,
+	documentsRequired,
+	weekendDays,
+	chargeWorkingDaysOnly,
 }: {
 	leaveTypes: LeaveTypeOption[];
 	leaveTypeId: string;
@@ -61,15 +100,30 @@ export function LeaveWindowFields({
 	remainingMinutes?: number;
 	idPrefix: string;
 	timeZone?: string;
+	isEmergency?: boolean;
+	onIsEmergencyChange?: (value: boolean) => void;
+	documentsRequired?: boolean;
+	weekendDays?: number[];
+	chargeWorkingDaysOnly?: boolean;
 }) {
-	const charge = leaveChargeMinutes({
-		startDate,
-		endDate,
-		allDay,
-		startMinute,
-		endMinute,
-		timeZone,
-	});
+	const charge = chargeWorkingDaysOnly
+		? workingDayCharge({
+				startDate,
+				endDate,
+				allDay,
+				startMinute,
+				endMinute,
+				timeZone,
+				weekendDays,
+			})
+		: leaveChargeMinutes({
+				startDate,
+				endDate,
+				allDay,
+				startMinute,
+				endMinute,
+				timeZone,
+			});
 	const selected = leaveTypes.find((type) => type.id === leaveTypeId);
 
 	return (
@@ -163,18 +217,49 @@ export function LeaveWindowFields({
 					placeholder="Doctor appointment, family travel…"
 				/>
 			</Field>
+			{onIsEmergencyChange ? (
+				<Field orientation="horizontal" className="items-start">
+					<Checkbox
+						id={`${idPrefix}-emergency`}
+						checked={isEmergency === true}
+						onCheckedChange={(checked) => onIsEmergencyChange(checked === true)}
+					/>
+					<div className="grid gap-1">
+						<FieldLabel
+							htmlFor={`${idPrefix}-emergency`}
+							className="font-normal"
+						>
+							Emergency — request immediate review
+						</FieldLabel>
+						<FieldDescription>
+							Flags this request for immediate manager review. Use only when
+							waiting would cause serious harm.
+						</FieldDescription>
+					</div>
+				</Field>
+			) : null}
 			{charge > 0 ? (
 				<FieldDescription>
 					Time off:{" "}
 					{selected
 						? `${formatLeaveHours(charge)} of ${selected.name}`
 						: formatLeaveHours(charge)}
-					{allDay ? " (8 hours per day)" : ""}
+					{allDay
+						? chargeWorkingDaysOnly
+							? " (8 hours per working day)"
+							: " (8 hours per day)"
+						: ""}
 					{remainingMinutes == null
 						? "."
 						: remainingMinutes >= charge
 							? ` · ${formatLeaveHours(remainingMinutes)} remaining.`
 							: ` · only ${formatLeaveHours(remainingMinutes)} remaining.`}
+				</FieldDescription>
+			) : null}
+			{documentsRequired ? (
+				<FieldDescription>
+					A supporting document (PDF or image) will be required to approve this
+					request.
 				</FieldDescription>
 			) : null}
 		</FieldGroup>

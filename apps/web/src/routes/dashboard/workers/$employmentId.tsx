@@ -18,8 +18,26 @@ import {
 	FieldLabel,
 } from "@SchedulesManager/ui/components/field";
 import { Input } from "@SchedulesManager/ui/components/input";
+import {
+	Select,
+	SelectContent,
+	SelectGroup,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@SchedulesManager/ui/components/select";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import {
+	Tabs,
+	TabsContent,
+	TabsList,
+	TabsTrigger,
+} from "@SchedulesManager/ui/components/tabs";
 import { Textarea } from "@SchedulesManager/ui/components/textarea";
+import {
+	ToggleGroup,
+	ToggleGroupItem,
+} from "@SchedulesManager/ui/components/toggle-group";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeftIcon } from "lucide-react";
@@ -27,6 +45,9 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppDocument } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import { DatePicker } from "@/components/date-picker";
+import { LeaveForecastTable } from "@/components/leave-forecast-table";
+import { LeaveLedgerList } from "@/components/leave-ledger-list";
 import {
 	TablePagination,
 	TableSearch,
@@ -34,7 +55,16 @@ import {
 	useTablePagination,
 } from "@/components/table-toolbar";
 import { api } from "@/lib/api";
-import { useLeaveTypes, usePtoBalances, useWorkers } from "@/lib/queries";
+import { todayIsoDate } from "@/lib/leave";
+import { hasCapability } from "@/lib/privileges";
+import {
+	type LeaveTypeDto,
+	useLeaveForecast,
+	useLeaveLedger,
+	useLeaveTypes,
+	usePtoBalances,
+	useWorkers,
+} from "@/lib/queries";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -54,11 +84,443 @@ type DocumentRow = {
 const ptoHelper = createDataColumnHelper<LeaveTypeRow>();
 const documentHelper = createDataColumnHelper<DocumentRow>();
 
+function signedHoursToMinutes(value: string) {
+	const hours = Number(value);
+	if (!Number.isFinite(hours)) return 0;
+	return Math.round(hours * 60);
+}
+
+function WorkerLeaveSection({
+	workplaceId,
+	employmentId,
+	leaveTypes,
+}: {
+	workplaceId: string;
+	employmentId: string;
+	leaveTypes: LeaveTypeDto[];
+}) {
+	const queryClient = useQueryClient();
+	const [ledgerTypeId, setLedgerTypeId] = useState("all");
+	const [forecastMonths, setForecastMonths] = useState(6);
+	const [adjustTypeId, setAdjustTypeId] = useState("");
+	const [adjustHours, setAdjustHours] = useState("");
+	const [adjustDate, setAdjustDate] = useState(todayIsoDate);
+	const [adjustNote, setAdjustNote] = useState("");
+	const [transferFromId, setTransferFromId] = useState("");
+	const [transferToId, setTransferToId] = useState("");
+	const [transferHours, setTransferHours] = useState("");
+	const [transferReason, setTransferReason] = useState("");
+	const [encashTypeId, setEncashTypeId] = useState("");
+	const [encashHours, setEncashHours] = useState("");
+	const [encashNote, setEncashNote] = useState("");
+
+	const ledger = useLeaveLedger(
+		workplaceId,
+		employmentId,
+		ledgerTypeId === "all" ? undefined : ledgerTypeId,
+	);
+	const forecast = useLeaveForecast(workplaceId, employmentId, forecastMonths);
+
+	const leaveTypeItems = leaveTypes.map((type) => ({
+		label: type.name,
+		value: type.id,
+	}));
+	const encashableTypes = leaveTypes.filter(
+		(type) => type.policy?.encashmentEnabled,
+	);
+
+	function invalidateLeave() {
+		queryClient.invalidateQueries({
+			queryKey: ["pto", workplaceId, employmentId],
+		});
+		queryClient.invalidateQueries({ queryKey: ["leave-ledger"] });
+		queryClient.invalidateQueries({
+			queryKey: ["leave-balances", workplaceId],
+		});
+		queryClient.invalidateQueries({
+			queryKey: ["leave-forecast", workplaceId, employmentId],
+		});
+	}
+
+	const adjust = useMutation({
+		mutationFn: () =>
+			api(`/v1/workplaces/${workplaceId}/leave-adjustments`, {
+				method: "POST",
+				body: {
+					employmentId,
+					leaveTypeId: adjustTypeId,
+					minutes: signedHoursToMinutes(adjustHours),
+					effectiveDate: adjustDate || undefined,
+					note: adjustNote.trim() || undefined,
+				},
+			}),
+		onSuccess: () => {
+			invalidateLeave();
+			setAdjustHours("");
+			setAdjustNote("");
+			toast.success("Adjustment applied.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	const transfer = useMutation({
+		mutationFn: () =>
+			api(`/v1/workplaces/${workplaceId}/leave-transfers`, {
+				method: "POST",
+				body: {
+					employmentId,
+					fromLeaveTypeId: transferFromId,
+					toLeaveTypeId: transferToId,
+					minutes: signedHoursToMinutes(transferHours),
+					reason: transferReason.trim() || undefined,
+				},
+			}),
+		onSuccess: () => {
+			invalidateLeave();
+			setTransferHours("");
+			setTransferReason("");
+			toast.success("Balance transferred.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	const encash = useMutation({
+		mutationFn: () =>
+			api(`/v1/workplaces/${workplaceId}/leave-encashments`, {
+				method: "POST",
+				body: {
+					employmentId,
+					leaveTypeId: encashTypeId,
+					minutes: signedHoursToMinutes(encashHours),
+					note: encashNote.trim() || undefined,
+				},
+			}),
+		onSuccess: () => {
+			invalidateLeave();
+			setEncashHours("");
+			setEncashNote("");
+			toast.success("Encashment requested.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle>Leave</CardTitle>
+				<CardDescription>
+					Ledger, forecast, and balance actions for this employment.
+				</CardDescription>
+			</CardHeader>
+			<CardContent>
+				<Tabs defaultValue="ledger" className="gap-4">
+					<TabsList variant="line">
+						<TabsTrigger value="ledger">Ledger</TabsTrigger>
+						<TabsTrigger value="forecast">Forecast</TabsTrigger>
+						<TabsTrigger value="adjustments">Adjustments</TabsTrigger>
+						<TabsTrigger value="transfer">Transfer</TabsTrigger>
+						<TabsTrigger value="encash">Encash</TabsTrigger>
+					</TabsList>
+
+					<TabsContent value="ledger" className="flex flex-col gap-3">
+						<div className="max-w-60">
+							<Select
+								items={[
+									{ label: "All leave types", value: "all" },
+									...leaveTypeItems,
+								]}
+								value={ledgerTypeId}
+								onValueChange={(value) => value && setLedgerTypeId(value)}
+							>
+								<SelectTrigger
+									className="w-full"
+									aria-label="Filter ledger by leave type"
+								>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectGroup>
+										<SelectItem value="all">All leave types</SelectItem>
+										{leaveTypes.map((type) => (
+											<SelectItem key={type.id} value={type.id}>
+												{type.name}
+											</SelectItem>
+										))}
+									</SelectGroup>
+								</SelectContent>
+							</Select>
+						</div>
+						<LeaveLedgerList
+							entries={ledger.data}
+							isLoading={ledger.isLoading}
+						/>
+					</TabsContent>
+
+					<TabsContent value="forecast" className="flex flex-col gap-3">
+						<ToggleGroup
+							aria-label="Forecast horizon"
+							value={[String(forecastMonths)]}
+							variant="outline"
+							size="sm"
+							spacing={0}
+							onValueChange={(value) => {
+								const next = value[0];
+								if (next === "6" || next === "12") {
+									setForecastMonths(Number(next));
+								}
+							}}
+						>
+							<ToggleGroupItem value="6">6 months</ToggleGroupItem>
+							<ToggleGroupItem value="12">12 months</ToggleGroupItem>
+						</ToggleGroup>
+						<LeaveForecastTable
+							forecast={forecast.data}
+							isLoading={forecast.isLoading}
+						/>
+					</TabsContent>
+
+					<TabsContent value="adjustments">
+						<FieldGroup className="grid gap-3 sm:grid-cols-2">
+							<Field>
+								<FieldLabel htmlFor="leave-adjust-type">Leave type</FieldLabel>
+								<Select
+									items={leaveTypeItems}
+									value={adjustTypeId}
+									onValueChange={(value) => value && setAdjustTypeId(value)}
+								>
+									<SelectTrigger id="leave-adjust-type" className="w-full">
+										<SelectValue placeholder="Choose a leave type" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectGroup>
+											{leaveTypes.map((type) => (
+												<SelectItem key={type.id} value={type.id}>
+													{type.name}
+												</SelectItem>
+											))}
+										</SelectGroup>
+									</SelectContent>
+								</Select>
+							</Field>
+							<Field>
+								<FieldLabel htmlFor="leave-adjust-hours">
+									Signed hours
+								</FieldLabel>
+								<Input
+									id="leave-adjust-hours"
+									type="number"
+									step="0.5"
+									value={adjustHours}
+									onChange={(event) => setAdjustHours(event.target.value)}
+									placeholder="4 or -4"
+								/>
+							</Field>
+							<Field>
+								<FieldLabel htmlFor="leave-adjust-date">
+									Effective date
+								</FieldLabel>
+								<DatePicker
+									id="leave-adjust-date"
+									value={adjustDate}
+									onValueChange={setAdjustDate}
+								/>
+							</Field>
+							<Field>
+								<FieldLabel htmlFor="leave-adjust-note">Note</FieldLabel>
+								<Input
+									id="leave-adjust-note"
+									value={adjustNote}
+									onChange={(event) => setAdjustNote(event.target.value)}
+									placeholder="Optional"
+								/>
+							</Field>
+							<Button
+								className="self-start sm:col-span-2"
+								disabled={
+									adjust.isPending ||
+									!adjustTypeId ||
+									signedHoursToMinutes(adjustHours) === 0
+								}
+								onClick={() => adjust.mutate()}
+							>
+								{adjust.isPending ? <Spinner data-icon="inline-start" /> : null}
+								Apply adjustment
+							</Button>
+						</FieldGroup>
+					</TabsContent>
+
+					<TabsContent value="transfer">
+						<FieldGroup className="grid gap-3 sm:grid-cols-2">
+							<Field>
+								<FieldLabel htmlFor="leave-transfer-from">From</FieldLabel>
+								<Select
+									items={leaveTypeItems}
+									value={transferFromId}
+									onValueChange={(value) => value && setTransferFromId(value)}
+								>
+									<SelectTrigger id="leave-transfer-from" className="w-full">
+										<SelectValue placeholder="Source leave type" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectGroup>
+											{leaveTypes.map((type) => (
+												<SelectItem key={type.id} value={type.id}>
+													{type.name}
+												</SelectItem>
+											))}
+										</SelectGroup>
+									</SelectContent>
+								</Select>
+							</Field>
+							<Field>
+								<FieldLabel htmlFor="leave-transfer-to">To</FieldLabel>
+								<Select
+									items={leaveTypeItems}
+									value={transferToId}
+									onValueChange={(value) => value && setTransferToId(value)}
+								>
+									<SelectTrigger id="leave-transfer-to" className="w-full">
+										<SelectValue placeholder="Destination leave type" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectGroup>
+											{leaveTypes.map((type) => (
+												<SelectItem key={type.id} value={type.id}>
+													{type.name}
+												</SelectItem>
+											))}
+										</SelectGroup>
+									</SelectContent>
+								</Select>
+							</Field>
+							<Field>
+								<FieldLabel htmlFor="leave-transfer-hours">Hours</FieldLabel>
+								<Input
+									id="leave-transfer-hours"
+									type="number"
+									min={0.5}
+									step="0.5"
+									value={transferHours}
+									onChange={(event) => setTransferHours(event.target.value)}
+									placeholder="4"
+								/>
+							</Field>
+							<Field>
+								<FieldLabel htmlFor="leave-transfer-reason">
+									Reason (optional)
+								</FieldLabel>
+								<Input
+									id="leave-transfer-reason"
+									value={transferReason}
+									onChange={(event) => setTransferReason(event.target.value)}
+								/>
+							</Field>
+							<Button
+								className="self-start sm:col-span-2"
+								disabled={
+									transfer.isPending ||
+									!transferFromId ||
+									!transferToId ||
+									transferFromId === transferToId ||
+									signedHoursToMinutes(transferHours) <= 0
+								}
+								onClick={() => transfer.mutate()}
+							>
+								{transfer.isPending ? (
+									<Spinner data-icon="inline-start" />
+								) : null}
+								Transfer balance
+							</Button>
+						</FieldGroup>
+					</TabsContent>
+
+					<TabsContent value="encash">
+						{encashableTypes.length === 0 ? (
+							<p className="text-muted-foreground text-sm">
+								No leave types have encashment enabled.
+							</p>
+						) : (
+							<FieldGroup className="grid gap-3 sm:grid-cols-2">
+								<Field>
+									<FieldLabel htmlFor="leave-encash-type">
+										Leave type
+									</FieldLabel>
+									<Select
+										items={encashableTypes.map((type) => ({
+											label: type.name,
+											value: type.id,
+										}))}
+										value={encashTypeId}
+										onValueChange={(value) => value && setEncashTypeId(value)}
+									>
+										<SelectTrigger id="leave-encash-type" className="w-full">
+											<SelectValue placeholder="Choose a leave type" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectGroup>
+												{encashableTypes.map((type) => (
+													<SelectItem key={type.id} value={type.id}>
+														{type.name}
+													</SelectItem>
+												))}
+											</SelectGroup>
+										</SelectContent>
+									</Select>
+								</Field>
+								<Field>
+									<FieldLabel htmlFor="leave-encash-hours">Hours</FieldLabel>
+									<Input
+										id="leave-encash-hours"
+										type="number"
+										min={0.5}
+										step="0.5"
+										value={encashHours}
+										onChange={(event) => setEncashHours(event.target.value)}
+										placeholder="8"
+									/>
+								</Field>
+								<Field className="sm:col-span-2">
+									<FieldLabel htmlFor="leave-encash-note">
+										Note (optional)
+									</FieldLabel>
+									<Input
+										id="leave-encash-note"
+										value={encashNote}
+										onChange={(event) => setEncashNote(event.target.value)}
+									/>
+								</Field>
+								<Button
+									className="self-start sm:col-span-2"
+									disabled={
+										encash.isPending ||
+										!encashTypeId ||
+										signedHoursToMinutes(encashHours) <= 0
+									}
+									onClick={() => encash.mutate()}
+								>
+									{encash.isPending ? (
+										<Spinner data-icon="inline-start" />
+									) : null}
+									Request encashment
+								</Button>
+							</FieldGroup>
+						)}
+					</TabsContent>
+				</Tabs>
+			</CardContent>
+		</Card>
+	);
+}
+
 function EmploymentPage() {
 	const { employmentId } = Route.useParams();
-	const { workplace } = useWorkplace();
+	const { workplace, kind, privileges } = useWorkplace();
 	const { formatPerson } = useDisplayPrefs();
 	const workplaceId = workplace?.id;
+	const canManageLeave = hasCapability(
+		{ kind: kind ?? "viewer", privileges },
+		"workers.manage",
+	);
 	const workers = useWorkers(workplaceId);
 	const worker = useMemo(
 		() =>
@@ -469,6 +931,14 @@ function EmploymentPage() {
 							/>
 						</CardContent>
 					</Card>
+
+					{canManageLeave && workplaceId ? (
+						<WorkerLeaveSection
+							workplaceId={workplaceId}
+							employmentId={employmentId}
+							leaveTypes={leaveTypeRows}
+						/>
+					) : null}
 
 					<Card>
 						<CardHeader>

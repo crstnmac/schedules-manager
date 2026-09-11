@@ -1,3 +1,4 @@
+import { env } from "@SchedulesManager/env/web";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -18,6 +19,11 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@SchedulesManager/ui/components/empty";
+import {
+	Field,
+	FieldDescription,
+	FieldLabel,
+} from "@SchedulesManager/ui/components/field";
 import { Input } from "@SchedulesManager/ui/components/input";
 import {
 	Select,
@@ -46,12 +52,15 @@ import {
 import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CalendarOffIcon } from "lucide-react";
+import { CalendarOffIcon, PaperclipIcon, Trash2Icon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import { LeaveForecastTable } from "@/components/leave-forecast-table";
+import { LeaveImportSheet } from "@/components/leave-import-sheet";
+import { LeaveLedgerList } from "@/components/leave-ledger-list";
 import {
 	LeaveWindowFields,
 	leaveChargeMinutes,
@@ -72,11 +81,26 @@ import {
 	minutesToHoursInput,
 	todayIsoDate,
 } from "@/lib/leave";
+import { hasCapability } from "@/lib/privileges";
 import {
+	type LeaveBalanceDto,
+	type LeaveDelegationDto,
+	type LeaveDocumentDto,
+	type LeaveEncashmentDto,
+	type LeaveTypeDto,
+	type PendingApprovalDto,
 	type PendingUnavailabilityDto,
 	type TimeOffRequestDto,
+	useCreateLeaveDelegation,
+	useLeaveBalances,
+	useLeaveDelegations,
+	useLeaveEncashments,
+	useLeaveForecast,
+	useLeaveLedger,
 	useLeaveTypes,
 	useLocations,
+	useMyPendingApprovals,
+	useRevokeLeaveDelegation,
 	useTimeOffBoard,
 	useWorkers,
 	useWorkplacePto,
@@ -92,10 +116,13 @@ export const Route = createFileRoute("/dashboard/timeoff")({
 type Decision = "approved" | "declined";
 type LeaveTab =
 	| "decision"
+	| "approvals"
 	| "availability"
 	| "out"
 	| "history"
 	| "balances"
+	| "encashments"
+	| "forecast"
 	| "types";
 
 const historyHelper = createDataColumnHelper<TimeOffRequestDto>();
@@ -106,8 +133,85 @@ type TeamMember = {
 	kind: "manager" | "worker" | "viewer";
 };
 
+type LeaveTypeOption = { id: string; name: string; paid: boolean };
+
+const APPROVAL_STATUS_CLASS: Record<string, string> = {
+	approved:
+		"border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+	declined: "border-transparent bg-destructive/15 text-destructive",
+	pending: "border-transparent bg-blue-500/15 text-blue-700 dark:text-blue-400",
+	skipped: "border-transparent bg-muted text-muted-foreground",
+	escalated:
+		"border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-400",
+};
+
+function formatDateTime(value: string): string {
+	return new Date(value).toLocaleString(undefined, {
+		month: "short",
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+	});
+}
+
+function formatCents(cents: number): string {
+	return (cents / 100).toLocaleString("en-US", {
+		style: "currency",
+		currency: "USD",
+	});
+}
+
+function signedHoursToMinutes(value: string): number {
+	const hours = Number(value);
+	if (!Number.isFinite(hours)) return 0;
+	return Math.round(hours * 60);
+}
+
+function ApprovalStepChips({
+	approvals,
+	currentStep,
+}: {
+	approvals?: TimeOffRequestDto["approvals"];
+	currentStep?: number;
+}) {
+	if (!approvals || approvals.length === 0) return null;
+	return (
+		<div className="flex flex-wrap items-center gap-1.5">
+			{approvals.map((approval) => (
+				<Badge
+					key={approval.id}
+					variant="outline"
+					title={`Step ${approval.stepOrder + 1}: ${approval.status}`}
+					className={APPROVAL_STATUS_CLASS[approval.status]}
+				>
+					{approval.stepOrder + 1}. {approval.status}
+				</Badge>
+			))}
+			{typeof currentStep === "number" ? (
+				<span className="text-muted-foreground text-xs">
+					Step {Math.min(currentStep + 1, approvals.length)} of{" "}
+					{approvals.length}
+				</span>
+			) : null}
+		</div>
+	);
+}
+
+function EmergencyBadge() {
+	return (
+		<Badge variant="destructive" className="uppercase">
+			Emergency
+		</Badge>
+	);
+}
+
 function TimeOffPage() {
-	const { workplace, employmentId: myEmploymentId } = useWorkplace();
+	const {
+		workplace,
+		employmentId: myEmploymentId,
+		kind,
+		privileges,
+	} = useWorkplace();
 	const { formatLeaveRange, formatPerson } = useDisplayPrefs();
 	const posthog = usePostHog();
 	const workplaceId = workplace?.id;
@@ -115,13 +219,28 @@ function TimeOffPage() {
 	const leaveTypes = useLeaveTypes(workplaceId);
 	const workers = useWorkers(workplaceId);
 	const pto = useWorkplacePto(workplaceId);
+	const myApprovals = useMyPendingApprovals(workplaceId);
+	const leaveBalances = useLeaveBalances(workplaceId);
+	const leaveEncashments = useLeaveEncashments(workplaceId);
+	const leaveDelegations = useLeaveDelegations(workplaceId);
+	const createDelegation = useCreateLeaveDelegation(workplaceId);
+	const revokeDelegation = useRevokeLeaveDelegation(workplaceId);
 	const queryClient = useQueryClient();
 	const [tab, setTab] = useState<LeaveTab>("decision");
 	const [recordOpen, setRecordOpen] = useState(false);
 	const [requestMineOpen, setRequestMineOpen] = useState(false);
+	const [importOpen, setImportOpen] = useState(false);
 	const [editing, setEditing] = useState<TimeOffRequestDto | null>(null);
 	const [declineId, setDeclineId] = useState<string | null>(null);
 	const [declineReason, setDeclineReason] = useState("");
+	const [approvalDecline, setApprovalDecline] =
+		useState<PendingApprovalDto | null>(null);
+	const [approvalDeclineReason, setApprovalDeclineReason] = useState("");
+	const [bulkDeclineOpen, setBulkDeclineOpen] = useState(false);
+	const [bulkDeclineReason, setBulkDeclineReason] = useState("");
+	const [expediteId, setExpediteId] = useState<string | null>(null);
+	const [expediteReason, setExpediteReason] = useState("");
+	const [delegationOpen, setDelegationOpen] = useState(false);
 	const [selectedRequestIds, setSelectedRequestIds] = useState<
 		ReadonlySet<string>
 	>(new Set());
@@ -129,30 +248,65 @@ function TimeOffPage() {
 	const [historySearch, setHistorySearch] = useState("");
 	const [historyStatus, setHistoryStatus] = useState("all");
 
-	const approveBatch = useMutation({
-		mutationFn: async (requests: { id: string }[]) => {
-			let failed = 0;
-			for (const request of requests) {
-				try {
-					await api(
-						`/v1/workplaces/${workplaceId}/time-off/${request.id}/decision`,
-						{ method: "POST", body: { decision: "approved" } },
-					);
-				} catch {
-					failed += 1;
-				}
-			}
-			return { failed, total: requests.length };
-		},
-		onSuccess: ({ failed, total }) => {
+	const canManageSettings = hasCapability(
+		kind ? { kind, privileges } : null,
+		"settings.manage",
+	);
+
+	const bulkDecision = useMutation({
+		mutationFn: (input: {
+			requestIds: string[];
+			decision: Decision;
+			reason?: string;
+		}) =>
+			api<{
+				approved: number;
+				declined: number;
+				pending: number;
+				failed: { requestId: string; message: string }[];
+			}>(`/v1/workplaces/${workplaceId}/time-off/bulk-decision`, {
+				method: "POST",
+				body: {
+					requestIds: input.requestIds,
+					decision: input.decision,
+					...(input.decision === "declined" && input.reason
+						? { reason: input.reason }
+						: {}),
+				},
+			}),
+		onSuccess: (result, input) => {
 			invalidateLeave();
 			setSelectedRequestIds(new Set());
-			if (failed > 0) {
-				toast.error(`${failed} of ${total} requests couldn't be approved.`);
+			setBulkDeclineOpen(false);
+			setBulkDeclineReason("");
+			const applied = result.approved + result.declined;
+			if (input.decision === "approved") {
+				posthog?.capture("time_off_approved", {
+					batch: true,
+					count: result.approved,
+				});
 			} else {
-				toast.success(`Approved ${total} time-off requests.`);
+				posthog?.capture("time_off_declined", {
+					batch: true,
+					count: result.declined,
+					reason_provided: Boolean(input.reason),
+				});
+			}
+			if (result.failed.length > 0) {
+				toast.error(
+					`${result.failed.length} of ${input.requestIds.length} requests couldn’t be ${input.decision === "approved" ? "approved" : "declined"}.`,
+				);
+			} else if (result.pending > 0) {
+				toast.success(
+					`${input.decision === "approved" ? "Approved" : "Declined"} ${applied}. ${result.pending} still waiting on another approver.`,
+				);
+			} else {
+				toast.success(
+					`${input.decision === "approved" ? "Approved" : "Declined"} ${applied} time-off requests.`,
+				);
 			}
 		},
+		onError: (error) => toast.error((error as Error).message),
 	});
 
 	const requests = timeOff.data?.requests ?? [];
@@ -162,6 +316,7 @@ function TimeOffPage() {
 		selectedRequestIds.has(request.id),
 	);
 	const decided = requests.filter((request) => request.status !== "pending");
+	const myPendingApprovals = myApprovals.data ?? [];
 	const decisionRows = useMemo(() => {
 		const term = decisionSearch.trim().toLowerCase();
 		if (!term) return pending;
@@ -212,6 +367,19 @@ function TimeOffPage() {
 		queryClient.invalidateQueries({ queryKey: ["schedule"] });
 		queryClient.invalidateQueries({ queryKey: ["constraints"] });
 		queryClient.invalidateQueries({ queryKey: ["leave-types", workplaceId] });
+		queryClient.invalidateQueries({
+			queryKey: ["leave-balances", workplaceId],
+		});
+		queryClient.invalidateQueries({
+			queryKey: ["leave-encashments", workplaceId],
+		});
+		queryClient.invalidateQueries({ queryKey: ["leave-ledger"] });
+		queryClient.invalidateQueries({
+			queryKey: ["my-pending-approvals", workplaceId],
+		});
+		queryClient.invalidateQueries({
+			queryKey: ["leave-delegations", workplaceId],
+		});
 	}
 
 	const decideUnavailability = useMutation({
@@ -275,6 +443,63 @@ function TimeOffPage() {
 		onError: (error) => toast.error((error as Error).message),
 	});
 
+	const decideApproval = useMutation({
+		mutationFn: (input: {
+			requestId: string;
+			approvalId: string;
+			decision: Decision;
+			reason?: string;
+		}) =>
+			api(
+				`/v1/workplaces/${workplaceId}/time-off/${input.requestId}/approvals/${input.approvalId}/decision`,
+				{
+					method: "POST",
+					body: {
+						decision: input.decision,
+						...(input.reason ? { reason: input.reason } : {}),
+					},
+				},
+			),
+		onSuccess: (_, input) => {
+			invalidateLeave();
+			setApprovalDecline(null);
+			setApprovalDeclineReason("");
+			if (input.decision === "approved") {
+				posthog?.capture("time_off_approved", { step: true });
+			} else {
+				posthog?.capture("time_off_declined", {
+					step: true,
+					reason_provided: Boolean(input.reason),
+				});
+			}
+			toast.success(
+				input.decision === "approved"
+					? "Approval recorded."
+					: "Request declined.",
+			);
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	const expedite = useMutation({
+		mutationFn: (input: { requestId: string; reason: string }) =>
+			api(
+				`/v1/workplaces/${workplaceId}/time-off/${input.requestId}/expedite`,
+				{
+					method: "POST",
+					body: { reason: input.reason },
+				},
+			),
+		onSuccess: () => {
+			invalidateLeave();
+			setExpediteId(null);
+			setExpediteReason("");
+			posthog?.capture("time_off_expedited");
+			toast.success("Emergency override applied. The request is approved.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
 	const removeLeave = useMutation({
 		mutationFn: (requestId: string) =>
 			api(`/v1/workplaces/${workplaceId}/time-off/${requestId}`, {
@@ -287,7 +512,11 @@ function TimeOffPage() {
 		onError: (error) => toast.error((error as Error).message),
 	});
 
-	const busy = decide.isPending || removeLeave.isPending;
+	const busy =
+		decide.isPending ||
+		removeLeave.isPending ||
+		bulkDecision.isPending ||
+		decideApproval.isPending;
 
 	const historyColumns = useMemo(
 		() =>
@@ -328,6 +557,17 @@ function TimeOffPage() {
 						<span className="text-muted-foreground tabular-nums">
 							{getValue()}
 						</span>
+					),
+				}),
+				historyHelper.accessor((row) => row.approvals?.length ?? 0, {
+					id: "approval",
+					header: "Approval",
+					enableSorting: false,
+					cell: ({ row }) => (
+						<ApprovalStepChips
+							approvals={row.original.approvals}
+							currentStep={row.original.currentStep}
+						/>
 					),
 				}),
 				historyHelper.accessor("status", {
@@ -403,6 +643,13 @@ function TimeOffPage() {
 					<div className="flex flex-wrap items-center gap-2">
 						<Button
 							size="sm"
+							variant="ghost"
+							onClick={() => setImportOpen(true)}
+						>
+							Import
+						</Button>
+						<Button
+							size="sm"
 							variant="outline"
 							onClick={() => setRequestMineOpen(true)}
 						>
@@ -420,12 +667,21 @@ function TimeOffPage() {
 					onValueChange={(value) => setTab(value as LeaveTab)}
 					className="min-h-0 flex-1 gap-0"
 				>
-					<div className="shrink-0 border-b px-4 py-2">
-						<TabsList variant="line" className="w-full justify-start sm:w-auto">
+					<div className="shrink-0 overflow-x-auto border-b px-4 py-2">
+						<TabsList
+							variant="line"
+							className="w-max min-w-full justify-start sm:w-auto sm:min-w-0"
+						>
 							<TabsTrigger value="decision">
 								Needs a decision
 								{pending.length > 0 ? (
 									<Badge variant="secondary">{pending.length}</Badge>
+								) : null}
+							</TabsTrigger>
+							<TabsTrigger value="approvals">
+								My approvals
+								{myPendingApprovals.length > 0 ? (
+									<Badge variant="secondary">{myPendingApprovals.length}</Badge>
 								) : null}
 							</TabsTrigger>
 							<TabsTrigger value="availability">
@@ -439,6 +695,8 @@ function TimeOffPage() {
 							<TabsTrigger value="out">Who’s out</TabsTrigger>
 							<TabsTrigger value="history">History</TabsTrigger>
 							<TabsTrigger value="balances">Balances</TabsTrigger>
+							<TabsTrigger value="encashments">Encashments</TabsTrigger>
+							<TabsTrigger value="forecast">Forecast</TabsTrigger>
 							<TabsTrigger value="types">Leave types</TabsTrigger>
 						</TabsList>
 					</div>
@@ -478,11 +736,11 @@ function TimeOffPage() {
 									right={<TablePagination {...decisionPagination} />}
 								/>
 								{selectedPending.length > 0 ? (
-									<div className="flex items-center justify-between gap-2 border-b bg-muted/40 px-4 py-2">
+									<div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/40 px-4 py-2">
 										<p className="text-muted-foreground text-xs">
 											{selectedPending.length} selected
 										</p>
-										<div className="flex items-center gap-2">
+										<div className="flex flex-wrap items-center gap-2">
 											<ConfirmAction
 												trigger={`Approve selected (${selectedPending.length})`}
 												triggerVariant="default"
@@ -499,9 +757,27 @@ function TimeOffPage() {
 														", ",
 													)}${selectedPending.length > 3 ? ` and ${selectedPending.length - 3} more` : ""}. Each blocks the schedule.`}
 												confirmLabel="Approve all"
-												disabled={approveBatch.isPending}
-												onConfirm={() => approveBatch.mutate(selectedPending)}
+												disabled={bulkDecision.isPending}
+												onConfirm={() =>
+													bulkDecision.mutate({
+														requestIds: selectedPending.map(
+															(request) => request.id,
+														),
+														decision: "approved",
+													})
+												}
 											/>
+											<Button
+												variant="outline"
+												size="sm"
+												disabled={bulkDecision.isPending}
+												onClick={() => {
+													setBulkDeclineReason("");
+													setBulkDeclineOpen(true);
+												}}
+											>
+												Decline selected ({selectedPending.length})
+											</Button>
 											<Button
 												variant="ghost"
 												size="sm"
@@ -516,6 +792,7 @@ function TimeOffPage() {
 									{decisionPagination.pageRows.map((request) => (
 										<PendingRequestRow
 											key={request.id}
+											workplaceId={workplaceId}
 											request={request}
 											busy={busy}
 											selected={selectedRequestIds.has(request.id)}
@@ -532,6 +809,7 @@ function TimeOffPage() {
 											}}
 											onEdit={() => setEditing(request)}
 											onDelete={() => removeLeave.mutate(request.id)}
+											onChanged={invalidateLeave}
 											onApprove={() =>
 												decide.mutate({
 													requestId: request.id,
@@ -542,11 +820,53 @@ function TimeOffPage() {
 												setDeclineReason("");
 												setDeclineId(request.id);
 											}}
+											onExpedite={() => {
+												setExpediteReason("");
+												setExpediteId(request.id);
+											}}
 										/>
 									))}
 								</ul>
 							</>
 						)}
+					</TabsContent>
+
+					<TabsContent
+						value="approvals"
+						className="min-h-0 flex-1 overflow-y-auto"
+					>
+						<MyApprovalsPanel
+							items={myPendingApprovals}
+							loading={myApprovals.isLoading}
+							busy={decideApproval.isPending}
+							onApprove={(item) =>
+								decideApproval.mutate({
+									requestId: item.requestId,
+									approvalId: item.approvalId,
+									decision: "approved",
+								})
+							}
+							onDecline={(item) => {
+								setApprovalDeclineReason("");
+								setApprovalDecline(item);
+							}}
+						/>
+						<DelegationsSection
+							workplaceId={workplaceId}
+							people={team}
+							delegations={leaveDelegations.data ?? []}
+							loading={leaveDelegations.isLoading}
+							creating={createDelegation.isPending}
+							busy={revokeDelegation.isPending}
+							open={delegationOpen}
+							onOpenChange={setDelegationOpen}
+							onCreate={(input) =>
+								createDelegation.mutate(input, {
+									onSuccess: () => setDelegationOpen(false),
+								})
+							}
+							onRevoke={(delegationId) => revokeDelegation.mutate(delegationId)}
+						/>
 					</TabsContent>
 
 					<TabsContent value="availability" className="min-h-0 overflow-y-auto">
@@ -562,11 +882,13 @@ function TimeOffPage() {
 
 					<TabsContent value="out" className="min-h-0 overflow-y-auto">
 						<WhoIsOut
+							workplaceId={workplaceId}
 							requests={requests}
 							loading={timeOff.isLoading}
 							busy={busy}
 							onEdit={setEditing}
 							onDelete={(requestId) => removeLeave.mutate(requestId)}
+							onChanged={invalidateLeave}
 						/>
 					</TabsContent>
 
@@ -586,6 +908,7 @@ function TimeOffPage() {
 											{ label: "All statuses", value: "all" },
 											{ label: "Approved", value: "approved" },
 											{ label: "Declined", value: "declined" },
+											{ label: "Cancelled", value: "cancelled" },
 										]}
 										ariaLabel="Filter history by status"
 									/>
@@ -628,8 +951,29 @@ function TimeOffPage() {
 							people={team}
 							leaveTypes={types}
 							balances={pto.data?.balances ?? []}
+							overview={leaveBalances.data ?? []}
+							overviewLoading={leaveBalances.isLoading}
+							canRunAccruals={canManageSettings}
 							onSaved={invalidateLeave}
 						/>
+					</TabsContent>
+
+					<TabsContent
+						value="encashments"
+						className="min-h-0 overflow-y-auto p-4"
+					>
+						<EncashmentsPanel
+							workplaceId={workplaceId}
+							encashments={leaveEncashments.data ?? []}
+							loading={leaveEncashments.isLoading}
+							people={team}
+							leaveTypes={types}
+							onChanged={invalidateLeave}
+						/>
+					</TabsContent>
+
+					<TabsContent value="forecast" className="min-h-0 overflow-y-auto p-4">
+						<ForecastPanel workplaceId={workplaceId} people={team} />
 					</TabsContent>
 
 					<TabsContent value="types" className="min-h-0 overflow-y-auto p-4">
@@ -654,6 +998,12 @@ function TimeOffPage() {
 				</Tabs>
 			</AppPageBody>
 
+			<LeaveImportSheet
+				open={importOpen}
+				onOpenChange={setImportOpen}
+				workplaceId={workplaceId}
+				onImported={invalidateLeave}
+			/>
 			<RecordLeaveSheet
 				open={recordOpen}
 				onOpenChange={setRecordOpen}
@@ -675,7 +1025,9 @@ function TimeOffPage() {
 			{editing ? (
 				<EditLeaveSheet
 					key={editing.id}
-					request={editing}
+					request={
+						requests.find((request) => request.id === editing.id) ?? editing
+					}
 					onOpenChange={(open) => {
 						if (!open) setEditing(null);
 					}}
@@ -686,6 +1038,7 @@ function TimeOffPage() {
 						setEditing(null);
 						invalidateLeave();
 					}}
+					onChanged={invalidateLeave}
 				/>
 			) : null}
 
@@ -736,6 +1089,150 @@ function TimeOffPage() {
 						>
 							{decide.isPending ? <Spinner data-icon="inline-start" /> : null}
 							Decline
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+
+			<AlertDialog
+				open={approvalDecline !== null}
+				onOpenChange={(open) => {
+					if (!open) {
+						setApprovalDecline(null);
+						setApprovalDeclineReason("");
+					}
+				}}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Decline this approval step?</AlertDialogTitle>
+						<AlertDialogDescription>
+							{approvalDecline
+								? `Declining ${formatPerson(approvalDecline.worker.fullName, approvalDecline.worker.email)}’s request. This ends the approval flow and the worker will see the decision.`
+								: "The worker will see this decision. A reason is optional."}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<Input
+						id="approval-decline-reason"
+						value={approvalDeclineReason}
+						onChange={(event) => setApprovalDeclineReason(event.target.value)}
+						placeholder="Optional reason"
+						aria-label="Decline reason"
+					/>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							variant="destructive"
+							disabled={decideApproval.isPending}
+							onClick={() => {
+								if (!approvalDecline) return;
+								decideApproval.mutate({
+									requestId: approvalDecline.requestId,
+									approvalId: approvalDecline.approvalId,
+									decision: "declined",
+									reason: approvalDeclineReason.trim() || undefined,
+								});
+							}}
+						>
+							{decideApproval.isPending ? (
+								<Spinner data-icon="inline-start" />
+							) : null}
+							Decline
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+
+			<AlertDialog
+				open={bulkDeclineOpen}
+				onOpenChange={(open) => {
+					if (!open) {
+						setBulkDeclineOpen(false);
+						setBulkDeclineReason("");
+					}
+				}}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							Decline {selectedPending.length} requests?
+						</AlertDialogTitle>
+						<AlertDialogDescription>
+							Each affected worker will see the decision. A reason is optional
+							and is shared with everyone in this batch.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<Input
+						id="bulk-decline-reason"
+						value={bulkDeclineReason}
+						onChange={(event) => setBulkDeclineReason(event.target.value)}
+						placeholder="Optional reason"
+						aria-label="Decline reason"
+					/>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							variant="destructive"
+							disabled={bulkDecision.isPending}
+							onClick={() =>
+								bulkDecision.mutate({
+									requestIds: selectedPending.map((request) => request.id),
+									decision: "declined",
+									reason: bulkDeclineReason.trim() || undefined,
+								})
+							}
+						>
+							{bulkDecision.isPending ? (
+								<Spinner data-icon="inline-start" />
+							) : null}
+							Decline all
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+
+			<AlertDialog
+				open={expediteId !== null}
+				onOpenChange={(open) => {
+					if (!open) {
+						setExpediteId(null);
+						setExpediteReason("");
+					}
+				}}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							Expedite this emergency request?
+						</AlertDialogTitle>
+						<AlertDialogDescription>
+							This skips every remaining approval step, approves the request
+							immediately, and records your reason against each skipped step.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<Input
+						id="expedite-reason"
+						value={expediteReason}
+						onChange={(event) => setExpediteReason(event.target.value)}
+						placeholder="Reason for the emergency override"
+						aria-label="Expedite reason"
+					/>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							disabled={
+								expedite.isPending || expediteReason.trim().length === 0
+							}
+							onClick={() => {
+								if (!expediteId) return;
+								expedite.mutate({
+									requestId: expediteId,
+									reason: expediteReason.trim(),
+								});
+							}}
+						>
+							{expedite.isPending ? <Spinner data-icon="inline-start" /> : null}
+							Expedite
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>
@@ -834,28 +1331,484 @@ function PendingUnavailabilityPanel({
 	);
 }
 
+function MyApprovalsPanel({
+	items,
+	loading,
+	busy,
+	onApprove,
+	onDecline,
+}: {
+	items: PendingApprovalDto[];
+	loading: boolean;
+	busy: boolean;
+	onApprove: (item: PendingApprovalDto) => void;
+	onDecline: (item: PendingApprovalDto) => void;
+}) {
+	const { formatLeaveRange, formatPerson } = useDisplayPrefs();
+
+	if (loading) {
+		return (
+			<div className="flex flex-col gap-3 p-4">
+				<Skeleton className="h-20" />
+				<Skeleton className="h-20" />
+			</div>
+		);
+	}
+
+	if (items.length === 0) {
+		return (
+			<Empty className="border-0">
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<CalendarOffIcon />
+					</EmptyMedia>
+					<EmptyTitle>No approvals waiting on you</EmptyTitle>
+					<EmptyDescription>
+						Requests routed to you — directly or through a delegation — will
+						show here.
+					</EmptyDescription>
+				</EmptyHeader>
+			</Empty>
+		);
+	}
+
+	return (
+		<ul className="divide-y">
+			{items.map((item) => {
+				const remainingAfter = item.remainingMinutes - item.chargeMinutes;
+				const short = remainingAfter < 0;
+				return (
+					<li
+						key={item.approvalId}
+						className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+					>
+						<div className="min-w-0">
+							<p className="flex flex-wrap items-center gap-2 font-medium text-sm">
+								{formatPerson(item.worker.fullName, item.worker.email)}
+								{item.isEmergency ? <EmergencyBadge /> : null}
+								{item.via === "delegation" ? (
+									<Badge variant="outline">Delegated to you</Badge>
+								) : null}
+							</p>
+							<p className="text-sm tabular-nums">
+								{formatLeaveRange(item)}
+								{item.leaveTypeName ? ` · ${item.leaveTypeName}` : ""}
+								{` · ${formatLeaveHours(item.chargeMinutes)}`}
+							</p>
+							<p className="text-muted-foreground text-xs">
+								{short
+									? `Uses ${formatLeaveHours(Math.abs(remainingAfter))} more than the ${formatLeaveHours(item.remainingMinutes)} remaining.`
+									: `${formatLeaveHours(item.remainingMinutes)} remaining after this.`}
+								{item.reason ? ` ${item.reason}` : ""}
+							</p>
+							<p className="mt-1 flex flex-wrap items-center gap-2 text-muted-foreground text-xs">
+								<span>Step {item.stepOrder + 1}</span>
+								{item.escalatedAt ? (
+									<Badge
+										variant="outline"
+										className={APPROVAL_STATUS_CLASS.escalated}
+									>
+										Escalated
+									</Badge>
+								) : item.dueAt ? (
+									<span>Due {formatDateTime(item.dueAt)}</span>
+								) : null}
+							</p>
+						</div>
+						<div className="flex flex-wrap items-center gap-2">
+							<ConfirmAction
+								trigger="Approve"
+								triggerVariant="default"
+								title="Approve this step?"
+								description={`This approves ${formatLeaveHours(item.chargeMinutes)}${item.leaveTypeName ? ` of ${item.leaveTypeName}` : ""}. Later steps still need their approvers unless you expedite.`}
+								confirmLabel="Approve"
+								disabled={busy}
+								onConfirm={() => onApprove(item)}
+							/>
+							<Button
+								size="sm"
+								variant="outline"
+								disabled={busy}
+								onClick={() => onDecline(item)}
+							>
+								Decline
+							</Button>
+						</div>
+					</li>
+				);
+			})}
+		</ul>
+	);
+}
+
+function DelegationsSection({
+	workplaceId,
+	people,
+	delegations,
+	loading,
+	creating,
+	busy,
+	open,
+	onOpenChange,
+	onCreate,
+	onRevoke,
+}: {
+	workplaceId: string | undefined;
+	people: TeamMember[];
+	delegations: LeaveDelegationDto[];
+	loading: boolean;
+	creating: boolean;
+	busy: boolean;
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	onCreate: (input: {
+		delegateEmploymentId: string;
+		startsAt: string;
+		endsAt: string;
+		reason?: string;
+	}) => void;
+	onRevoke: (delegationId: string) => void;
+}) {
+	const [delegateEmploymentId, setDelegateEmploymentId] = useState("");
+	const [startsAt, setStartsAt] = useState("");
+	const [endsAt, setEndsAt] = useState("");
+	const [reason, setReason] = useState("");
+
+	function nameFor(employmentId: string) {
+		return (
+			people.find((person) => person.employmentId === employmentId)?.name ??
+			employmentId
+		);
+	}
+
+	function statusFor(delegation: LeaveDelegationDto) {
+		if (delegation.revokedAt) return "Revoked";
+		if (new Date(delegation.endsAt).getTime() < Date.now()) return "Expired";
+		return "Active";
+	}
+
+	function submit() {
+		if (!delegateEmploymentId || !startsAt || !endsAt) {
+			toast.error("Choose a delegate and both dates.");
+			return;
+		}
+		const startIso = new Date(startsAt).toISOString();
+		const endIso = new Date(endsAt).toISOString();
+		if (new Date(endIso).getTime() <= new Date(startIso).getTime()) {
+			toast.error("The delegation end must be after its start.");
+			return;
+		}
+		onCreate({
+			delegateEmploymentId,
+			startsAt: startIso,
+			endsAt: endIso,
+			reason: reason.trim() || undefined,
+		});
+	}
+
+	return (
+		<div className="border-t px-4 py-4">
+			<div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+				<div>
+					<h2 className="font-heading font-medium text-sm">Delegations</h2>
+					<p className="text-muted-foreground text-xs">
+						Ask someone to cover your approval steps for a window of time.
+					</p>
+				</div>
+				<Button size="sm" variant="outline" onClick={() => onOpenChange(true)}>
+					Delegate my approvals
+				</Button>
+			</div>
+			{loading ? (
+				<Skeleton className="h-12" />
+			) : delegations.length === 0 ? (
+				<p className="text-muted-foreground text-sm">
+					No delegations yet. You can delegate your approvals to another manager
+					or worker.
+				</p>
+			) : (
+				<ul className="divide-y rounded-lg border">
+					{delegations.map((delegation) => {
+						const active = statusFor(delegation) === "Active";
+						return (
+							<li
+								key={delegation.id}
+								className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+							>
+								<div className="min-w-0">
+									<p className="text-sm">
+										<span className="font-medium">
+											{nameFor(delegation.delegatorEmploymentId)}
+										</span>{" "}
+										<span className="text-muted-foreground">→</span>{" "}
+										{nameFor(delegation.delegateEmploymentId)}
+									</p>
+									<p className="text-muted-foreground text-xs tabular-nums">
+										{formatDateTime(delegation.startsAt)} –{" "}
+										{formatDateTime(delegation.endsAt)}
+									</p>
+									{delegation.reason ? (
+										<p className="text-muted-foreground text-xs">
+											{delegation.reason}
+										</p>
+									) : null}
+								</div>
+								<div className="flex flex-wrap items-center gap-2">
+									<Badge variant={active ? "secondary" : "outline"}>
+										{statusFor(delegation)}
+									</Badge>
+									{active ? (
+										<ConfirmAction
+											trigger="Revoke"
+											triggerVariant="ghost"
+											destructive
+											title="Revoke this delegation?"
+											description="Approvals stop routing to the delegate immediately."
+											confirmLabel="Revoke"
+											disabled={busy}
+											onConfirm={() => onRevoke(delegation.id)}
+										/>
+									) : null}
+								</div>
+							</li>
+						);
+					})}
+				</ul>
+			)}
+
+			<Sheet open={open} onOpenChange={onOpenChange}>
+				<SheetContent side="right" className="w-full sm:max-w-md">
+					<SheetHeader>
+						<SheetTitle>Delegate my approvals</SheetTitle>
+						<SheetDescription>
+							During this window, your pending approval steps are also available
+							to the delegate.
+						</SheetDescription>
+					</SheetHeader>
+					<div className="flex flex-col gap-4 overflow-y-auto px-6">
+						<Field>
+							<FieldLabel htmlFor="delegation-person">Delegate</FieldLabel>
+							<Select
+								items={people.map((person) => ({
+									label:
+										person.kind === "manager"
+											? `${person.name} · Manager`
+											: person.name,
+									value: person.employmentId,
+								}))}
+								value={delegateEmploymentId}
+								onValueChange={(value) =>
+									value && setDelegateEmploymentId(value)
+								}
+							>
+								<SelectTrigger id="delegation-person" className="w-full">
+									<SelectValue placeholder="Choose someone" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectGroup>
+										{people.map((person) => (
+											<SelectItem
+												key={person.employmentId}
+												value={person.employmentId}
+											>
+												{person.kind === "manager"
+													? `${person.name} · Manager`
+													: person.name}
+											</SelectItem>
+										))}
+									</SelectGroup>
+								</SelectContent>
+							</Select>
+						</Field>
+						<Field>
+							<FieldLabel htmlFor="delegation-start">Starts</FieldLabel>
+							<Input
+								id="delegation-start"
+								type="datetime-local"
+								value={startsAt}
+								onChange={(event) => setStartsAt(event.target.value)}
+							/>
+						</Field>
+						<Field>
+							<FieldLabel htmlFor="delegation-end">Ends</FieldLabel>
+							<Input
+								id="delegation-end"
+								type="datetime-local"
+								value={endsAt}
+								onChange={(event) => setEndsAt(event.target.value)}
+							/>
+						</Field>
+						<Field>
+							<FieldLabel htmlFor="delegation-reason">
+								Reason (optional)
+							</FieldLabel>
+							<Input
+								id="delegation-reason"
+								value={reason}
+								onChange={(event) => setReason(event.target.value)}
+								placeholder="Annual leave, off-site…"
+							/>
+						</Field>
+					</div>
+					<SheetFooter>
+						<Button disabled={creating || !workplaceId} onClick={submit}>
+							{creating ? <Spinner data-icon="inline-start" /> : null}
+							Delegate
+						</Button>
+					</SheetFooter>
+				</SheetContent>
+			</Sheet>
+		</div>
+	);
+}
+
+function RequestDocuments({
+	workplaceId,
+	request,
+	onChanged,
+}: {
+	workplaceId: string | undefined;
+	request: TimeOffRequestDto;
+	onChanged: () => void;
+}) {
+	const posthog = usePostHog();
+	const documents = request.documents ?? [];
+
+	const upload = useMutation({
+		mutationFn: async (file: File) => {
+			const form = new FormData();
+			form.append("file", file);
+			const response = await fetch(
+				`${env.VITE_SERVER_URL}/v1/workplaces/${workplaceId}/time-off/${request.id}/documents`,
+				{ method: "POST", credentials: "include", body: form },
+			);
+			if (!response.ok) {
+				let message = `Upload failed (${response.status}).`;
+				try {
+					const payload = (await response.json()) as { message?: string };
+					if (payload.message) message = payload.message;
+				} catch {
+					// keep default message
+				}
+				throw new Error(message);
+			}
+		},
+		onSuccess: () => {
+			posthog?.capture("leave_documents_uploaded");
+			onChanged();
+			toast.success("Document attached.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	const remove = useMutation({
+		mutationFn: (documentId: string) =>
+			api(`/v1/workplaces/${workplaceId}/leave-documents/${documentId}`, {
+				method: "DELETE",
+			}),
+		onSuccess: () => {
+			onChanged();
+			toast.success("Document removed.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	async function openDocument(document: LeaveDocumentDto) {
+		try {
+			const response = await fetch(
+				`${env.VITE_SERVER_URL}/v1/leave-documents/${document.id}`,
+				{ credentials: "include" },
+			);
+			if (!response.ok) throw new Error("Couldn’t open the document.");
+			const blob = await response.blob();
+			const url = URL.createObjectURL(blob);
+			window.open(url, "_blank", "noopener,noreferrer");
+			window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+		} catch (error) {
+			toast.error(
+				error instanceof Error ? error.message : "Couldn’t open the document.",
+			);
+		}
+	}
+
+	return (
+		<div className="flex flex-col gap-0.5">
+			{documents.map((document) => (
+				<div key={document.id} className="flex items-center gap-1">
+					<Button
+						size="xs"
+						variant="link"
+						className="h-auto max-w-[16rem] justify-start px-0 py-0"
+						onClick={() => void openDocument(document)}
+					>
+						<PaperclipIcon data-icon="inline-start" />
+						<span className="truncate">{document.fileName}</span>
+					</Button>
+					<Button
+						size="icon-xs"
+						variant="ghost"
+						aria-label={`Delete ${document.fileName}`}
+						disabled={remove.isPending}
+						onClick={() => remove.mutate(document.id)}
+					>
+						<Trash2Icon />
+					</Button>
+				</div>
+			))}
+			<label className="inline-flex w-fit cursor-pointer items-center gap-1.5 text-muted-foreground text-xs hover:text-foreground">
+				{upload.isPending ? (
+					<Spinner data-icon="inline-start" />
+				) : (
+					<PaperclipIcon className="size-3" />
+				)}
+				{documents.length > 0
+					? `Attach another document · ${documents.length} attached`
+					: "Attach document"}
+				<input
+					type="file"
+					className="sr-only"
+					accept=".pdf,image/*"
+					disabled={upload.isPending || !workplaceId}
+					onChange={(event) => {
+						const file = event.target.files?.[0];
+						if (file) upload.mutate(file);
+						event.target.value = "";
+					}}
+				/>
+			</label>
+		</div>
+	);
+}
+
 function PendingRequestRow({
+	workplaceId,
 	request,
 	busy,
 	selected,
 	onToggleSelect,
 	onEdit,
 	onDelete,
+	onChanged,
 	onApprove,
 	onDecline,
+	onExpedite,
 }: {
+	workplaceId: string | undefined;
 	request: TimeOffRequestDto;
 	busy: boolean;
 	selected: boolean;
 	onToggleSelect: (checked: boolean) => void;
 	onEdit: () => void;
 	onDelete: () => void;
+	onChanged: () => void;
 	onApprove: () => void;
 	onDecline: () => void;
+	onExpedite: () => void;
 }) {
 	const { formatLeaveRange, formatPerson } = useDisplayPrefs();
 	const remainingAfter = request.remainingMinutes - request.chargeMinutes;
 	const short = remainingAfter < 0;
+	const canDecide = request.canDecide !== false;
 	return (
 		<li className="flex items-start gap-3 px-4 py-3">
 			<Checkbox
@@ -866,7 +1819,7 @@ function PendingRequestRow({
 			/>
 			<div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<div className="min-w-0">
-					<p className="font-medium text-sm">
+					<p className="flex flex-wrap items-center gap-2 font-medium text-sm">
 						{formatPerson(request.worker.fullName, request.worker.email)}
 						{request.kind === "manager" ? (
 							<span className="font-normal text-muted-foreground">
@@ -874,6 +1827,7 @@ function PendingRequestRow({
 								· Manager
 							</span>
 						) : null}
+						{request.isEmergency ? <EmergencyBadge /> : null}
 					</p>
 					<p className="text-sm tabular-nums">
 						{formatLeaveRange(request)}
@@ -886,32 +1840,66 @@ function PendingRequestRow({
 							: `${formatLeaveHours(request.remainingMinutes)} remaining after this.`}
 						{request.reason ? ` ${request.reason}` : ""}
 					</p>
+					<div className="mt-1.5">
+						<ApprovalStepChips
+							approvals={request.approvals}
+							currentStep={request.currentStep}
+						/>
+					</div>
+					<div className="mt-1.5">
+						<RequestDocuments
+							workplaceId={workplaceId}
+							request={request}
+							onChanged={onChanged}
+						/>
+					</div>
 				</div>
 				<div className="flex flex-wrap items-center gap-2">
 					<Button size="sm" variant="outline" disabled={busy} onClick={onEdit}>
 						Edit
 					</Button>
-					<ConfirmAction
-						trigger="Approve"
-						triggerVariant="default"
-						title="Approve this time off?"
-						description={
-							short
-								? `This uses ${formatLeaveHours(request.chargeMinutes)} and they only have ${formatLeaveHours(request.remainingMinutes)} left. They will still be blocked on the schedule.`
-								: `This uses ${formatLeaveHours(request.chargeMinutes)}${request.leaveTypeName ? ` of ${request.leaveTypeName}` : ""} and blocks the schedule.`
-						}
-						confirmLabel="Approve"
-						disabled={busy}
-						onConfirm={onApprove}
-					/>
+					{canDecide ? (
+						<ConfirmAction
+							trigger="Approve"
+							triggerVariant="default"
+							title="Approve this time off?"
+							description={
+								short
+									? `This uses ${formatLeaveHours(request.chargeMinutes)} and they only have ${formatLeaveHours(request.remainingMinutes)} left. They will still be blocked on the schedule.`
+									: `This uses ${formatLeaveHours(request.chargeMinutes)}${request.leaveTypeName ? ` of ${request.leaveTypeName}` : ""} and blocks the schedule.`
+							}
+							confirmLabel="Approve"
+							disabled={busy}
+							onConfirm={onApprove}
+						/>
+					) : (
+						<div className="flex flex-col items-end gap-1">
+							<Button size="sm" variant="outline" disabled>
+								Approve
+							</Button>
+							<span className="text-muted-foreground text-xs">
+								Waiting on another approver
+							</span>
+						</div>
+					)}
 					<Button
 						size="sm"
 						variant="outline"
-						disabled={busy}
+						disabled={busy || !canDecide}
 						onClick={onDecline}
 					>
 						Decline
 					</Button>
+					{request.isEmergency ? (
+						<Button
+							size="sm"
+							variant="destructive"
+							disabled={busy}
+							onClick={onExpedite}
+						>
+							Expedite (emergency)
+						</Button>
+					) : null}
 					<ConfirmAction
 						trigger="Delete"
 						triggerVariant="ghost"
@@ -929,17 +1917,21 @@ function PendingRequestRow({
 }
 
 function WhoIsOut({
+	workplaceId,
 	requests,
 	loading,
 	busy,
 	onEdit,
 	onDelete,
+	onChanged,
 }: {
+	workplaceId: string | undefined;
 	requests: TimeOffRequestDto[];
 	loading: boolean;
 	busy: boolean;
 	onEdit: (request: TimeOffRequestDto) => void;
 	onDelete: (requestId: string) => void;
+	onChanged: () => void;
 }) {
 	const { formatLeaveRange, formatPerson } = useDisplayPrefs();
 	const upcoming = useMemo(() => {
@@ -985,7 +1977,7 @@ function WhoIsOut({
 					className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
 				>
 					<div className="min-w-0">
-						<p className="font-medium text-sm">
+						<p className="flex flex-wrap items-center gap-2 font-medium text-sm">
 							{formatPerson(request.worker.fullName, request.worker.email)}
 							{request.kind === "manager" ? (
 								<span className="font-normal text-muted-foreground">
@@ -993,6 +1985,7 @@ function WhoIsOut({
 									· Manager
 								</span>
 							) : null}
+							{request.isEmergency ? <EmergencyBadge /> : null}
 						</p>
 						<p className="text-sm tabular-nums">
 							{formatLeaveRange(request)}
@@ -1002,6 +1995,13 @@ function WhoIsOut({
 						{request.reason ? (
 							<p className="text-muted-foreground text-xs">{request.reason}</p>
 						) : null}
+						<div className="mt-1.5">
+							<RequestDocuments
+								workplaceId={workplaceId}
+								request={request}
+								onChanged={onChanged}
+							/>
+						</div>
 					</div>
 					<div className="flex flex-wrap items-center gap-2">
 						<Button
@@ -1034,19 +2034,28 @@ function BalancesPanel({
 	people,
 	leaveTypes,
 	balances,
+	overview,
+	overviewLoading,
+	canRunAccruals,
 	onSaved,
 }: {
 	workplaceId: string | undefined;
 	people: TeamMember[];
-	leaveTypes: { id: string; name: string; paid: boolean }[];
+	leaveTypes: LeaveTypeOption[];
 	balances: {
 		employmentId: string;
 		leaveTypeId: string;
 		minutes: number;
 	}[];
+	overview: LeaveBalanceDto[];
+	overviewLoading: boolean;
+	canRunAccruals: boolean;
 	onSaved: () => void;
 }) {
 	const [draft, setDraft] = useState<Record<string, string>>({});
+	const [history, setHistory] = useState<LeaveBalanceDto | null>(null);
+	const [adjust, setAdjust] = useState<LeaveBalanceDto | null>(null);
+	const [transfer, setTransfer] = useState<LeaveBalanceDto | null>(null);
 	const save = useMutation({
 		mutationFn: (input: {
 			employmentId: string;
@@ -1070,98 +2079,1136 @@ function BalancesPanel({
 		onError: (error) => toast.error((error as Error).message),
 	});
 
-	if (leaveTypes.length === 0) {
-		return (
-			<p className="text-muted-foreground text-sm">
-				Add a leave type first, then set hours here.
-			</p>
-		);
-	}
-	if (people.length === 0) {
-		return (
-			<p className="text-muted-foreground text-sm">
-				Invite people before tracking balances.
-			</p>
-		);
-	}
+	const runAccruals = useMutation({
+		mutationFn: () =>
+			api<{
+				accruals: {
+					creditedEntries: number;
+					creditedMinutes: number;
+					cappedMinutes: number;
+				};
+				carry: { carried: number; expired: number };
+			}>(`/v1/workplaces/${workplaceId}/leave-accruals/run`, {
+				method: "POST",
+				body: {},
+			}),
+		onSuccess: (result) => {
+			onSaved();
+			toast.success(
+				`Accruals ran: ${result.accruals.creditedEntries} credits (${formatLeaveHours(result.accruals.creditedMinutes)}), ${result.carry.carried} carry-forwards, ${result.carry.expired} expired.`,
+			);
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	const workerName = (row: LeaveBalanceDto) =>
+		row.employmentName ?? row.employmentEmail;
 
 	return (
-		<div className="overflow-x-auto">
-			<table className="w-full min-w-[36rem] border-collapse text-sm">
-				<thead>
-					<tr className="border-b text-left">
-						<th className="py-2 pr-3 font-medium">Person</th>
-						{leaveTypes.map((type) => (
-							<th key={type.id} className="px-2 py-2 font-medium">
-								{type.name}
-								<span className="block font-normal text-muted-foreground text-xs">
-									{type.paid ? "Paid · hours" : "Unpaid · hours"}
-								</span>
-							</th>
-						))}
-					</tr>
-				</thead>
-				<tbody>
-					{people.map((person) => (
-						<tr key={person.employmentId} className="border-b">
-							<td className="py-2 pr-3 font-medium">
-								{person.name}
-								{person.kind === "manager" ? (
-									<span className="font-normal text-muted-foreground">
-										{" "}
-										· Manager
-									</span>
-								) : null}
-							</td>
-							{leaveTypes.map((type) => {
-								const key = `${person.employmentId}:${type.id}`;
-								const current =
-									balances.find(
-										(row) =>
-											row.employmentId === person.employmentId &&
-											row.leaveTypeId === type.id,
-									)?.minutes ?? 0;
-								return (
-									<td key={type.id} className="px-2 py-2">
-										<div className="flex items-center gap-2">
-											<Input
-												aria-label={`${person.name} ${type.name} hours`}
-												type="number"
-												min={0}
-												step="0.5"
-												className="w-20 tabular-nums"
-												value={draft[key] ?? minutesToHoursInput(current)}
-												onChange={(event) =>
-													setDraft((values) => ({
-														...values,
-														[key]: event.target.value,
-													}))
-												}
-											/>
+		<div className="flex flex-col gap-6">
+			<div className="flex flex-wrap items-center justify-between gap-2">
+				<div>
+					<h2 className="font-heading font-medium text-sm">
+						Leave balances overview
+					</h2>
+					<p className="text-muted-foreground text-xs">
+						Ledger totals per worker and leave type. Adjust or transfer when
+						records need correcting.
+					</p>
+				</div>
+				{canRunAccruals ? (
+					<Button
+						size="sm"
+						variant="outline"
+						disabled={runAccruals.isPending}
+						onClick={() => runAccruals.mutate()}
+					>
+						{runAccruals.isPending ? (
+							<Spinner data-icon="inline-start" />
+						) : null}
+						Run accruals
+					</Button>
+				) : null}
+			</div>
+
+			{overviewLoading ? (
+				<div className="flex flex-col gap-2">
+					<Skeleton className="h-10" />
+					<Skeleton className="h-10" />
+					<Skeleton className="h-10" />
+				</div>
+			) : overview.length === 0 ? (
+				<p className="text-muted-foreground text-sm">
+					No ledger activity yet. Set initial hours below or run accruals.
+				</p>
+			) : (
+				<div className="overflow-x-auto rounded-lg border">
+					<table className="w-full min-w-[56rem] border-collapse text-sm">
+						<thead>
+							<tr className="border-b text-left">
+								<th className="px-3 py-2 font-medium">Worker</th>
+								<th className="px-3 py-2 font-medium">Type</th>
+								<th className="px-3 py-2 font-medium">Balance</th>
+								<th className="px-3 py-2 font-medium">Accrued</th>
+								<th className="px-3 py-2 font-medium">Used</th>
+								<th className="px-3 py-2 font-medium">Carried</th>
+								<th className="px-3 py-2 font-medium">Pending</th>
+								<th className="px-3 py-2 font-medium">Encashed</th>
+								<th className="px-3 py-2 text-right font-medium">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{overview.map((row) => (
+								<tr
+									key={`${row.employmentId}:${row.leaveTypeId}`}
+									className="border-b last:border-b-0"
+								>
+									<td className="px-3 py-2">
+										<span className="font-medium">{workerName(row)}</span>
+										{row.employmentKind === "manager" ? (
+											<span className="text-muted-foreground"> · Manager</span>
+										) : null}
+									</td>
+									<td className="px-3 py-2">
+										{row.leaveTypeName}
+										{row.leaveTypePaid ? null : (
+											<span className="text-muted-foreground"> · unpaid</span>
+										)}
+									</td>
+									<td className="px-3 py-2 font-medium tabular-nums">
+										{formatLeaveHours(row.balanceMinutes)}
+									</td>
+									<td className="px-3 py-2 text-muted-foreground tabular-nums">
+										{formatLeaveHours(row.accruedMinutes)}
+									</td>
+									<td className="px-3 py-2 text-muted-foreground tabular-nums">
+										{formatLeaveHours(row.usedMinutes)}
+									</td>
+									<td className="px-3 py-2 text-muted-foreground tabular-nums">
+										{formatLeaveHours(row.carriedMinutes)}
+									</td>
+									<td className="px-3 py-2 text-muted-foreground tabular-nums">
+										{formatLeaveHours(row.pendingMinutes)}
+									</td>
+									<td className="px-3 py-2 text-muted-foreground tabular-nums">
+										{formatLeaveHours(row.encashedMinutes)}
+									</td>
+									<td className="px-3 py-2">
+										<div className="flex flex-wrap justify-end gap-1.5">
 											<Button
 												size="sm"
 												variant="outline"
-												disabled={save.isPending}
-												onClick={() =>
-													save.mutate({
-														employmentId: person.employmentId,
-														leaveTypeId: type.id,
-														minutes: hoursToMinutes(
-															draft[key] ?? minutesToHoursInput(current),
-														),
-													})
-												}
+												onClick={() => setHistory(row)}
 											>
-												Save
+												History
+											</Button>
+											<Button
+												size="sm"
+												variant="outline"
+												onClick={() => setAdjust(row)}
+											>
+												Adjust
+											</Button>
+											<Button
+												size="sm"
+												variant="outline"
+												onClick={() => setTransfer(row)}
+											>
+												Transfer
 											</Button>
 										</div>
 									</td>
-								);
-							})}
-						</tr>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			)}
+
+			<div>
+				<h3 className="mb-2 font-heading font-medium text-sm">
+					Quick edit initial balances
+				</h3>
+				{leaveTypes.length === 0 ? (
+					<p className="text-muted-foreground text-sm">
+						Add a leave type first, then set hours here.
+					</p>
+				) : people.length === 0 ? (
+					<p className="text-muted-foreground text-sm">
+						Invite people before tracking balances.
+					</p>
+				) : (
+					<div className="overflow-x-auto">
+						<table className="w-full min-w-[36rem] border-collapse text-sm">
+							<thead>
+								<tr className="border-b text-left">
+									<th className="py-2 pr-3 font-medium">Person</th>
+									{leaveTypes.map((type) => (
+										<th key={type.id} className="px-2 py-2 font-medium">
+											{type.name}
+											<span className="block font-normal text-muted-foreground text-xs">
+												{type.paid ? "Paid · hours" : "Unpaid · hours"}
+											</span>
+										</th>
+									))}
+								</tr>
+							</thead>
+							<tbody>
+								{people.map((person) => (
+									<tr key={person.employmentId} className="border-b">
+										<td className="py-2 pr-3 font-medium">
+											{person.name}
+											{person.kind === "manager" ? (
+												<span className="font-normal text-muted-foreground">
+													{" "}
+													· Manager
+												</span>
+											) : null}
+										</td>
+										{leaveTypes.map((type) => {
+											const key = `${person.employmentId}:${type.id}`;
+											const current =
+												balances.find(
+													(row) =>
+														row.employmentId === person.employmentId &&
+														row.leaveTypeId === type.id,
+												)?.minutes ?? 0;
+											return (
+												<td key={type.id} className="px-2 py-2">
+													<div className="flex items-center gap-2">
+														<Input
+															aria-label={`${person.name} ${type.name} hours`}
+															type="number"
+															min={0}
+															step="0.5"
+															className="w-20 tabular-nums"
+															value={draft[key] ?? minutesToHoursInput(current)}
+															onChange={(event) =>
+																setDraft((values) => ({
+																	...values,
+																	[key]: event.target.value,
+																}))
+															}
+														/>
+														<Button
+															size="sm"
+															variant="outline"
+															disabled={save.isPending}
+															onClick={() =>
+																save.mutate({
+																	employmentId: person.employmentId,
+																	leaveTypeId: type.id,
+																	minutes: hoursToMinutes(
+																		draft[key] ?? minutesToHoursInput(current),
+																	),
+																})
+															}
+														>
+															Save
+														</Button>
+													</div>
+												</td>
+											);
+										})}
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				)}
+			</div>
+
+			{history ? (
+				<LeaveLedgerSheet
+					workplaceId={workplaceId}
+					row={history}
+					onOpenChange={(open) => {
+						if (!open) setHistory(null);
+					}}
+				/>
+			) : null}
+			{adjust ? (
+				<AdjustLeaveSheet
+					key={`adjust:${adjust.employmentId}:${adjust.leaveTypeId}`}
+					workplaceId={workplaceId}
+					row={adjust}
+					leaveTypes={leaveTypes}
+					onOpenChange={(open) => {
+						if (!open) setAdjust(null);
+					}}
+					onSaved={() => {
+						setAdjust(null);
+						onSaved();
+					}}
+				/>
+			) : null}
+			{transfer ? (
+				<TransferLeaveSheet
+					key={`transfer:${transfer.employmentId}:${transfer.leaveTypeId}`}
+					workplaceId={workplaceId}
+					row={transfer}
+					leaveTypes={leaveTypes}
+					onOpenChange={(open) => {
+						if (!open) setTransfer(null);
+					}}
+					onSaved={() => {
+						setTransfer(null);
+						onSaved();
+					}}
+				/>
+			) : null}
+		</div>
+	);
+}
+
+function LeaveLedgerSheet({
+	workplaceId,
+	row,
+	onOpenChange,
+}: {
+	workplaceId: string | undefined;
+	row: LeaveBalanceDto;
+	onOpenChange: (open: boolean) => void;
+}) {
+	const ledger = useLeaveLedger(workplaceId, row.employmentId, row.leaveTypeId);
+	const workerName = row.employmentName ?? row.employmentEmail;
+
+	return (
+		<Sheet open onOpenChange={onOpenChange}>
+			<SheetContent side="right" className="w-full sm:max-w-lg">
+				<SheetHeader>
+					<SheetTitle>Balance history</SheetTitle>
+					<SheetDescription>
+						{workerName} · {row.leaveTypeName}
+					</SheetDescription>
+				</SheetHeader>
+				<div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+					<LeaveLedgerList
+						entries={ledger.data}
+						isLoading={ledger.isLoading}
+						emptyLabel="No ledger entries for this balance yet."
+					/>
+				</div>
+			</SheetContent>
+		</Sheet>
+	);
+}
+
+function AdjustLeaveSheet({
+	workplaceId,
+	row,
+	leaveTypes,
+	onOpenChange,
+	onSaved,
+}: {
+	workplaceId: string | undefined;
+	row: LeaveBalanceDto;
+	leaveTypes: LeaveTypeOption[];
+	onOpenChange: (open: boolean) => void;
+	onSaved: () => void;
+}) {
+	const posthog = usePostHog();
+	const [leaveTypeId, setLeaveTypeId] = useState(row.leaveTypeId);
+	const [hours, setHours] = useState("");
+	const [effectiveDate, setEffectiveDate] = useState(todayIsoDate());
+	const [note, setNote] = useState("");
+	const minutes = signedHoursToMinutes(hours);
+
+	const adjust = useMutation({
+		mutationFn: () =>
+			api(`/v1/workplaces/${workplaceId}/leave-adjustments`, {
+				method: "POST",
+				body: {
+					employmentId: row.employmentId,
+					leaveTypeId,
+					minutes,
+					effectiveDate,
+					note: note.trim() || undefined,
+				},
+			}),
+		onSuccess: () => {
+			posthog?.capture("leave_adjustment_saved", { minutes });
+			onSaved();
+			toast.success("Adjustment saved.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	const workerName = row.employmentName ?? row.employmentEmail;
+
+	return (
+		<Sheet open onOpenChange={onOpenChange}>
+			<SheetContent side="right" className="w-full sm:max-w-md">
+				<SheetHeader>
+					<SheetTitle>Adjust balance</SheetTitle>
+					<SheetDescription>
+						{workerName} · Enter positive hours to add, negative to remove.
+					</SheetDescription>
+				</SheetHeader>
+				<div className="flex flex-col gap-4 overflow-y-auto px-6">
+					<Field>
+						<FieldLabel htmlFor="adjust-type">Leave type</FieldLabel>
+						<Select
+							items={leaveTypes.map((type) => ({
+								label: type.name,
+								value: type.id,
+							}))}
+							value={leaveTypeId}
+							onValueChange={(value) => value && setLeaveTypeId(value)}
+						>
+							<SelectTrigger id="adjust-type" className="w-full">
+								<SelectValue placeholder="Choose a leave type" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectGroup>
+									{leaveTypes.map((type) => (
+										<SelectItem key={type.id} value={type.id}>
+											{type.name}
+										</SelectItem>
+									))}
+								</SelectGroup>
+							</SelectContent>
+						</Select>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="adjust-hours">Hours (±)</FieldLabel>
+						<Input
+							id="adjust-hours"
+							type="number"
+							step="0.25"
+							className="tabular-nums"
+							value={hours}
+							onChange={(event) => setHours(event.target.value)}
+							placeholder="e.g. 2 or -1.5"
+						/>
+						<FieldDescription>
+							{minutes === 0
+								? "Enter a non-zero adjustment."
+								: `Adjusts the balance by ${formatLeaveHours(Math.abs(minutes))}.`}
+						</FieldDescription>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="adjust-date">Effective date</FieldLabel>
+						<Input
+							id="adjust-date"
+							type="date"
+							value={effectiveDate}
+							onChange={(event) => setEffectiveDate(event.target.value)}
+						/>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="adjust-note">Note (optional)</FieldLabel>
+						<Input
+							id="adjust-note"
+							value={note}
+							onChange={(event) => setNote(event.target.value)}
+							placeholder="Why this adjustment?"
+						/>
+					</Field>
+				</div>
+				<SheetFooter>
+					<Button
+						disabled={adjust.isPending || minutes === 0 || !leaveTypeId}
+						onClick={() => adjust.mutate()}
+					>
+						{adjust.isPending ? <Spinner data-icon="inline-start" /> : null}
+						Save adjustment
+					</Button>
+				</SheetFooter>
+			</SheetContent>
+		</Sheet>
+	);
+}
+
+function TransferLeaveSheet({
+	workplaceId,
+	row,
+	leaveTypes,
+	onOpenChange,
+	onSaved,
+}: {
+	workplaceId: string | undefined;
+	row: LeaveBalanceDto;
+	leaveTypes: LeaveTypeOption[];
+	onOpenChange: (open: boolean) => void;
+	onSaved: () => void;
+}) {
+	const posthog = usePostHog();
+	const [fromLeaveTypeId, setFromLeaveTypeId] = useState(row.leaveTypeId);
+	const [toLeaveTypeId, setToLeaveTypeId] = useState("");
+	const [hours, setHours] = useState("");
+	const [reason, setReason] = useState("");
+	const minutes = hoursToMinutes(hours);
+
+	const transfer = useMutation({
+		mutationFn: () =>
+			api(`/v1/workplaces/${workplaceId}/leave-transfers`, {
+				method: "POST",
+				body: {
+					employmentId: row.employmentId,
+					fromLeaveTypeId,
+					toLeaveTypeId,
+					minutes,
+					reason: reason.trim() || undefined,
+				},
+			}),
+		onSuccess: () => {
+			posthog?.capture("leave_transfer_saved", { minutes });
+			onSaved();
+			toast.success("Transfer saved.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	const workerName = row.employmentName ?? row.employmentEmail;
+
+	return (
+		<Sheet open onOpenChange={onOpenChange}>
+			<SheetContent side="right" className="w-full sm:max-w-md">
+				<SheetHeader>
+					<SheetTitle>Transfer balance</SheetTitle>
+					<SheetDescription>
+						{workerName} · Moves hours between two leave types.
+					</SheetDescription>
+				</SheetHeader>
+				<div className="flex flex-col gap-4 overflow-y-auto px-6">
+					<Field>
+						<FieldLabel htmlFor="transfer-from">From leave type</FieldLabel>
+						<Select
+							items={leaveTypes.map((type) => ({
+								label: type.name,
+								value: type.id,
+							}))}
+							value={fromLeaveTypeId}
+							onValueChange={(value) => value && setFromLeaveTypeId(value)}
+						>
+							<SelectTrigger id="transfer-from" className="w-full">
+								<SelectValue placeholder="Choose a leave type" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectGroup>
+									{leaveTypes.map((type) => (
+										<SelectItem key={type.id} value={type.id}>
+											{type.name}
+										</SelectItem>
+									))}
+								</SelectGroup>
+							</SelectContent>
+						</Select>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="transfer-to">To leave type</FieldLabel>
+						<Select
+							items={leaveTypes.map((type) => ({
+								label: type.name,
+								value: type.id,
+							}))}
+							value={toLeaveTypeId}
+							onValueChange={(value) => value && setToLeaveTypeId(value)}
+						>
+							<SelectTrigger id="transfer-to" className="w-full">
+								<SelectValue placeholder="Choose a leave type" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectGroup>
+									{leaveTypes.map((type) => (
+										<SelectItem key={type.id} value={type.id}>
+											{type.name}
+										</SelectItem>
+									))}
+								</SelectGroup>
+							</SelectContent>
+						</Select>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="transfer-hours">Hours</FieldLabel>
+						<Input
+							id="transfer-hours"
+							type="number"
+							min={0}
+							step="0.25"
+							className="tabular-nums"
+							value={hours}
+							onChange={(event) => setHours(event.target.value)}
+							placeholder="e.g. 4"
+						/>
+						<FieldDescription>
+							{minutes > 0
+								? `Transfers ${formatLeaveHours(minutes)}.`
+								: "Enter the positive hours to move."}
+						</FieldDescription>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="transfer-reason">Reason (optional)</FieldLabel>
+						<Input
+							id="transfer-reason"
+							value={reason}
+							onChange={(event) => setReason(event.target.value)}
+							placeholder="Why is this transfer needed?"
+						/>
+					</Field>
+				</div>
+				<SheetFooter>
+					<Button
+						disabled={
+							transfer.isPending ||
+							minutes <= 0 ||
+							!fromLeaveTypeId ||
+							!toLeaveTypeId ||
+							fromLeaveTypeId === toLeaveTypeId
+						}
+						onClick={() => transfer.mutate()}
+					>
+						{transfer.isPending ? <Spinner data-icon="inline-start" /> : null}
+						Save transfer
+					</Button>
+				</SheetFooter>
+			</SheetContent>
+		</Sheet>
+	);
+}
+
+function EncashmentsPanel({
+	workplaceId,
+	encashments,
+	loading,
+	people,
+	leaveTypes,
+	onChanged,
+}: {
+	workplaceId: string | undefined;
+	encashments: LeaveEncashmentDto[];
+	loading: boolean;
+	people: TeamMember[];
+	leaveTypes: LeaveTypeDto[];
+	onChanged: () => void;
+}) {
+	const posthog = usePostHog();
+	const [status, setStatus] = useState("all");
+	const [declineTarget, setDeclineTarget] = useState<LeaveEncashmentDto | null>(
+		null,
+	);
+	const [declineReason, setDeclineReason] = useState("");
+	const [createOpen, setCreateOpen] = useState(false);
+
+	const decide = useMutation({
+		mutationFn: (input: {
+			encashmentId: string;
+			decision: Decision;
+			reason?: string;
+		}) =>
+			api(
+				`/v1/workplaces/${workplaceId}/leave-encashments/${input.encashmentId}/decision`,
+				{
+					method: "POST",
+					body: {
+						decision: input.decision,
+						...(input.reason ? { reason: input.reason } : {}),
+					},
+				},
+			),
+		onSuccess: (_, input) => {
+			onChanged();
+			setDeclineTarget(null);
+			setDeclineReason("");
+			posthog?.capture(
+				input.decision === "approved"
+					? "leave_encashment_approved"
+					: "leave_encashment_declined",
+				{ reason_provided: Boolean(input.reason) },
+			);
+			toast.success(
+				input.decision === "approved"
+					? "Encashment approved."
+					: "Encashment declined.",
+			);
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	const markPaid = useMutation({
+		mutationFn: (encashmentId: string) =>
+			api(
+				`/v1/workplaces/${workplaceId}/leave-encashments/${encashmentId}/paid`,
+				{ method: "POST", body: {} },
+			),
+		onSuccess: () => {
+			onChanged();
+			toast.success("Encashment marked paid.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	const create = useMutation({
+		mutationFn: (input: {
+			employmentId: string;
+			leaveTypeId: string;
+			minutes: number;
+			note?: string;
+		}) =>
+			api(`/v1/workplaces/${workplaceId}/leave-encashments`, {
+				method: "POST",
+				body: input,
+			}),
+		onSuccess: () => {
+			onChanged();
+			setCreateOpen(false);
+			toast.success("Encashment requested.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	const rows = useMemo(() => {
+		if (status === "all") return encashments;
+		return encashments.filter((row) => row.status === status);
+	}, [encashments, status]);
+
+	const busy = decide.isPending || markPaid.isPending;
+
+	return (
+		<div className="flex flex-col gap-4">
+			<div className="flex flex-wrap items-center justify-between gap-2">
+				<div>
+					<h2 className="font-heading font-medium text-sm">
+						Leave encashments
+					</h2>
+					<p className="text-muted-foreground text-xs">
+						Approve requests to convert leave minutes into pay, then mark them
+						paid.
+					</p>
+				</div>
+				<Button size="sm" onClick={() => setCreateOpen(true)}>
+					Request encashment
+				</Button>
+			</div>
+
+			<TableToolbar
+				embedded
+				left={
+					<TableFilter
+						value={status}
+						onValueChange={setStatus}
+						items={[
+							{ label: "All statuses", value: "all" },
+							{ label: "Requested", value: "requested" },
+							{ label: "Approved", value: "approved" },
+							{ label: "Declined", value: "declined" },
+							{ label: "Paid", value: "paid" },
+							{ label: "Cancelled", value: "cancelled" },
+						]}
+						ariaLabel="Filter encashments by status"
+					/>
+				}
+			/>
+
+			{loading ? (
+				<div className="flex flex-col gap-3">
+					<Skeleton className="h-16" />
+					<Skeleton className="h-16" />
+				</div>
+			) : rows.length === 0 ? (
+				<Empty className="border-0">
+					<EmptyHeader>
+						<EmptyTitle>No encashments</EmptyTitle>
+						<EmptyDescription>
+							Requests from workers, or ones you create, will show here.
+						</EmptyDescription>
+					</EmptyHeader>
+				</Empty>
+			) : (
+				<ul className="divide-y rounded-lg border">
+					{rows.map((encashment) => (
+						<li
+							key={encashment.id}
+							className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+						>
+							<div className="min-w-0">
+								<p className="flex flex-wrap items-center gap-2 text-sm">
+									<span className="font-medium">
+										{encashment.employmentName ??
+											encashment.employmentEmail ??
+											"Worker"}
+									</span>
+									<Badge
+										variant={
+											encashment.status === "declined"
+												? "destructive"
+												: encashment.status === "paid"
+													? "outline"
+													: encashment.status === "approved"
+														? "default"
+														: "secondary"
+										}
+									>
+										{encashment.status}
+									</Badge>
+								</p>
+								<p className="text-sm tabular-nums">
+									{encashment.leaveTypeName ?? "Leave"} ·{" "}
+									{formatLeaveHours(encashment.minutes)} ·{" "}
+									{formatCents(encashment.amountCents)}
+								</p>
+								<p className="text-muted-foreground text-xs tabular-nums">
+									Requested {formatDateTime(encashment.createdAt)}
+									{encashment.decidedAt
+										? ` · Decided ${formatDateTime(encashment.decidedAt)}`
+										: ""}
+									{encashment.note ? ` · ${encashment.note}` : ""}
+								</p>
+							</div>
+							<div className="flex flex-wrap items-center gap-2">
+								{encashment.status === "requested" ? (
+									<>
+										<ConfirmAction
+											trigger="Approve"
+											triggerVariant="default"
+											title="Approve this encashment?"
+											description={`This encashes ${formatLeaveHours(encashment.minutes)} of ${encashment.leaveTypeName ?? "leave"}.`}
+											confirmLabel="Approve"
+											disabled={busy}
+											onConfirm={() =>
+												decide.mutate({
+													encashmentId: encashment.id,
+													decision: "approved",
+												})
+											}
+										/>
+										<Button
+											size="sm"
+											variant="outline"
+											disabled={busy}
+											onClick={() => {
+												setDeclineReason("");
+												setDeclineTarget(encashment);
+											}}
+										>
+											Decline
+										</Button>
+									</>
+								) : null}
+								{encashment.status === "approved" ? (
+									<ConfirmAction
+										trigger="Mark paid"
+										triggerVariant="default"
+										title="Mark this encashment paid?"
+										description="Use this after the payout has been processed."
+										confirmLabel="Mark paid"
+										disabled={busy}
+										onConfirm={() => markPaid.mutate(encashment.id)}
+									/>
+								) : null}
+							</div>
+						</li>
 					))}
-				</tbody>
-			</table>
+				</ul>
+			)}
+
+			<AlertDialog
+				open={declineTarget !== null}
+				onOpenChange={(open) => {
+					if (!open) {
+						setDeclineTarget(null);
+						setDeclineReason("");
+					}
+				}}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Decline this encashment?</AlertDialogTitle>
+						<AlertDialogDescription>
+							{declineTarget
+								? `${declineTarget.employmentName ?? declineTarget.employmentEmail ?? "The worker"} will see this decision. A reason is optional.`
+								: "The worker will see this decision. A reason is optional."}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<Input
+						id="encashment-decline-reason"
+						value={declineReason}
+						onChange={(event) => setDeclineReason(event.target.value)}
+						placeholder="Optional reason"
+						aria-label="Decline reason"
+					/>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							variant="destructive"
+							disabled={decide.isPending}
+							onClick={() => {
+								if (!declineTarget) return;
+								decide.mutate({
+									encashmentId: declineTarget.id,
+									decision: "declined",
+									reason: declineReason.trim() || undefined,
+								});
+							}}
+						>
+							{decide.isPending ? <Spinner data-icon="inline-start" /> : null}
+							Decline
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+
+			<EncashmentRequestSheet
+				open={createOpen}
+				onOpenChange={setCreateOpen}
+				people={people}
+				leaveTypes={leaveTypes}
+				creating={create.isPending}
+				onSubmit={(input) => create.mutate(input)}
+			/>
+		</div>
+	);
+}
+
+function EncashmentRequestSheet({
+	open,
+	onOpenChange,
+	people,
+	leaveTypes,
+	creating,
+	onSubmit,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	people: TeamMember[];
+	leaveTypes: LeaveTypeDto[];
+	creating: boolean;
+	onSubmit: (input: {
+		employmentId: string;
+		leaveTypeId: string;
+		minutes: number;
+		note?: string;
+	}) => void;
+}) {
+	const [employmentId, setEmploymentId] = useState("");
+	const [leaveTypeId, setLeaveTypeId] = useState("");
+	const [hours, setHours] = useState("");
+	const [note, setNote] = useState("");
+	const eligible = leaveTypes.filter((type) => type.policy?.encashmentEnabled);
+	const minutes = hoursToMinutes(hours);
+
+	return (
+		<Sheet open={open} onOpenChange={onOpenChange}>
+			<SheetContent side="right" className="w-full sm:max-w-md">
+				<SheetHeader>
+					<SheetTitle>Request encashment</SheetTitle>
+					<SheetDescription>
+						Creates a requested encashment for a worker. It deducts minutes when
+						approved.
+					</SheetDescription>
+				</SheetHeader>
+				<div className="flex flex-col gap-4 overflow-y-auto px-6">
+					<Field>
+						<FieldLabel htmlFor="encash-person">Worker</FieldLabel>
+						<Select
+							items={people.map((person) => ({
+								label:
+									person.kind === "manager"
+										? `${person.name} · Manager`
+										: person.name,
+								value: person.employmentId,
+							}))}
+							value={employmentId}
+							onValueChange={(value) => value && setEmploymentId(value)}
+						>
+							<SelectTrigger id="encash-person" className="w-full">
+								<SelectValue placeholder="Choose someone" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectGroup>
+									{people.map((person) => (
+										<SelectItem
+											key={person.employmentId}
+											value={person.employmentId}
+										>
+											{person.kind === "manager"
+												? `${person.name} · Manager`
+												: person.name}
+										</SelectItem>
+									))}
+								</SelectGroup>
+							</SelectContent>
+						</Select>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="encash-type">Leave type</FieldLabel>
+						{eligible.length === 0 ? (
+							<FieldDescription>
+								No leave type has encashment enabled. Turn it on in leave policy
+								settings first.
+							</FieldDescription>
+						) : (
+							<Select
+								items={eligible.map((type) => ({
+									label: type.name,
+									value: type.id,
+								}))}
+								value={leaveTypeId}
+								onValueChange={(value) => value && setLeaveTypeId(value)}
+							>
+								<SelectTrigger id="encash-type" className="w-full">
+									<SelectValue placeholder="Choose a leave type" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectGroup>
+										{eligible.map((type) => (
+											<SelectItem key={type.id} value={type.id}>
+												{type.name}
+											</SelectItem>
+										))}
+									</SelectGroup>
+								</SelectContent>
+							</Select>
+						)}
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="encash-hours">Hours</FieldLabel>
+						<Input
+							id="encash-hours"
+							type="number"
+							min={0}
+							step="0.25"
+							className="tabular-nums"
+							value={hours}
+							onChange={(event) => setHours(event.target.value)}
+							placeholder="e.g. 8"
+						/>
+						<FieldDescription>
+							{minutes > 0
+								? `Encashes ${formatLeaveHours(minutes)}.`
+								: "Enter the hours to encash."}
+						</FieldDescription>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="encash-note">Note (optional)</FieldLabel>
+						<Input
+							id="encash-note"
+							value={note}
+							onChange={(event) => setNote(event.target.value)}
+							placeholder="Payroll note…"
+						/>
+					</Field>
+				</div>
+				<SheetFooter>
+					<Button
+						disabled={
+							creating ||
+							!employmentId ||
+							!leaveTypeId ||
+							minutes <= 0 ||
+							eligible.length === 0
+						}
+						onClick={() =>
+							onSubmit({
+								employmentId,
+								leaveTypeId,
+								minutes,
+								note: note.trim() || undefined,
+							})
+						}
+					>
+						{creating ? <Spinner data-icon="inline-start" /> : null}
+						Request encashment
+					</Button>
+				</SheetFooter>
+			</SheetContent>
+		</Sheet>
+	);
+}
+
+function ForecastPanel({
+	workplaceId,
+	people,
+}: {
+	workplaceId: string | undefined;
+	people: TeamMember[];
+}) {
+	const [employmentId, setEmploymentId] = useState("");
+	const [months, setMonths] = useState(12);
+	const forecast = useLeaveForecast(
+		workplaceId,
+		employmentId || undefined,
+		months,
+	);
+
+	return (
+		<div className="flex flex-col gap-4">
+			<div>
+				<h2 className="font-heading font-medium text-sm">Leave forecast</h2>
+				<p className="text-muted-foreground text-xs">
+					Projected balance by month, including accruals and planned approved
+					usage.
+				</p>
+			</div>
+			<div className="flex flex-wrap items-end gap-3">
+				<Field className="w-64">
+					<FieldLabel htmlFor="forecast-person">Worker</FieldLabel>
+					<Select
+						items={people.map((person) => ({
+							label:
+								person.kind === "manager"
+									? `${person.name} · Manager`
+									: person.name,
+							value: person.employmentId,
+						}))}
+						value={employmentId}
+						onValueChange={(value) => value && setEmploymentId(value)}
+					>
+						<SelectTrigger id="forecast-person" className="w-full">
+							<SelectValue placeholder="Choose someone" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectGroup>
+								{people.map((person) => (
+									<SelectItem
+										key={person.employmentId}
+										value={person.employmentId}
+									>
+										{person.kind === "manager"
+											? `${person.name} · Manager`
+											: person.name}
+									</SelectItem>
+								))}
+							</SelectGroup>
+						</SelectContent>
+					</Select>
+				</Field>
+				<Field className="w-40">
+					<FieldLabel htmlFor="forecast-months">Horizon</FieldLabel>
+					<Select
+						items={[
+							{ label: "6 months", value: "6" },
+							{ label: "12 months", value: "12" },
+							{ label: "24 months", value: "24" },
+						]}
+						value={String(months)}
+						onValueChange={(value) => value && setMonths(Number(value))}
+					>
+						<SelectTrigger id="forecast-months" className="w-full">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectGroup>
+								<SelectItem value="6">6 months</SelectItem>
+								<SelectItem value="12">12 months</SelectItem>
+								<SelectItem value="24">24 months</SelectItem>
+							</SelectGroup>
+						</SelectContent>
+					</Select>
+				</Field>
+			</div>
+
+			{!employmentId ? (
+				<p className="text-muted-foreground text-sm">
+					Choose a worker to see their leave forecast.
+				</p>
+			) : (
+				<LeaveForecastTable
+					forecast={forecast.data}
+					isLoading={forecast.isLoading}
+				/>
+			)}
 		</div>
 	);
 }
@@ -1179,7 +3226,7 @@ function RecordLeaveSheet({
 	onOpenChange: (open: boolean) => void;
 	workplaceId: string | undefined;
 	people: TeamMember[];
-	leaveTypes: { id: string; name: string; paid: boolean }[];
+	leaveTypes: LeaveTypeOption[];
 	balances: {
 		employmentId: string;
 		leaveTypeId: string;
@@ -1196,6 +3243,7 @@ function RecordLeaveSheet({
 	const [startMinute, setStartMinute] = useState(9 * 60);
 	const [endMinute, setEndMinute] = useState(17 * 60);
 	const [reason, setReason] = useState("");
+	const [isEmergency, setIsEmergency] = useState(false);
 
 	const locations = useLocations(workplaceId);
 	const timeZone = locations.data?.[0]?.timezone;
@@ -1225,12 +3273,14 @@ function RecordLeaveSheet({
 					allDay,
 					...(allDay ? {} : { startMinute, endMinute }),
 					reason: reason.trim() || undefined,
+					isEmergency,
 				},
 			}),
 		onSuccess: () => {
 			onSaved();
 			onOpenChange(false);
 			setReason("");
+			setIsEmergency(false);
 			toast.success("Time off recorded.");
 		},
 		onError: (error) => toast.error((error as Error).message),
@@ -1299,7 +3349,13 @@ function RecordLeaveSheet({
 						reason={reason}
 						onReasonChange={setReason}
 						remainingMinutes={remaining}
+						isEmergency={isEmergency}
+						onIsEmergencyChange={setIsEmergency}
 					/>
+					<FieldDescription>
+						Supporting documents can be attached from the request list after
+						recording.
+					</FieldDescription>
 				</div>
 				<SheetFooter>
 					<Button
@@ -1330,7 +3386,7 @@ function RequestMyLeaveSheet({
 	onOpenChange: (open: boolean) => void;
 	workplaceId: string | undefined;
 	employmentId: string | null;
-	leaveTypes: { id: string; name: string; paid: boolean }[];
+	leaveTypes: LeaveTypeOption[];
 	balances: {
 		employmentId: string;
 		leaveTypeId: string;
@@ -1347,6 +3403,7 @@ function RequestMyLeaveSheet({
 	const [startMinute, setStartMinute] = useState(9 * 60);
 	const [endMinute, setEndMinute] = useState(17 * 60);
 	const [reason, setReason] = useState("");
+	const [isEmergency, setIsEmergency] = useState(false);
 
 	const locations = useLocations(workplaceId);
 	const timeZone = locations.data?.[0]?.timezone;
@@ -1377,16 +3434,19 @@ function RequestMyLeaveSheet({
 					allDay,
 					...(allDay ? {} : { startMinute, endMinute }),
 					reason: reason.trim() || undefined,
+					isEmergency,
 				},
 			}),
 		onSuccess: () => {
 			onSaved();
 			onOpenChange(false);
 			setReason("");
+			setIsEmergency(false);
 			posthogLeave?.capture("time_off_requested", {
 				all_day: allDay,
 				has_leave_type: Boolean(leaveTypeId),
 				has_reason: Boolean(reason.trim()),
+				is_emergency: isEmergency,
 			});
 			toast.success("Leave requested. Another manager can approve it.");
 		},
@@ -1427,6 +3487,8 @@ function RequestMyLeaveSheet({
 						reason={reason}
 						onReasonChange={setReason}
 						remainingMinutes={remaining}
+						isEmergency={isEmergency}
+						onIsEmergencyChange={setIsEmergency}
 					/>
 				</div>
 				<SheetFooter>
@@ -1452,17 +3514,19 @@ function EditLeaveSheet({
 	leaveTypes,
 	balances,
 	onSaved,
+	onChanged,
 }: {
 	request: TimeOffRequestDto;
 	onOpenChange: (open: boolean) => void;
 	workplaceId: string | undefined;
-	leaveTypes: { id: string; name: string; paid: boolean }[];
+	leaveTypes: LeaveTypeOption[];
 	balances: {
 		employmentId: string;
 		leaveTypeId: string;
 		minutes: number;
 	}[];
 	onSaved: () => void;
+	onChanged: () => void;
 }) {
 	const { formatPerson } = useDisplayPrefs();
 	const [leaveTypeId, setLeaveTypeId] = useState(request.leaveTypeId ?? "");
@@ -1539,6 +3603,11 @@ function EditLeaveSheet({
 						reason={reason}
 						onReasonChange={setReason}
 						remainingMinutes={remaining}
+					/>
+					<RequestDocuments
+						workplaceId={workplaceId}
+						request={request}
+						onChanged={onChanged}
 					/>
 				</div>
 				<SheetFooter>

@@ -85,6 +85,7 @@ import {
 	TableToolbar,
 	useTablePagination,
 } from "@/components/table-toolbar";
+import { WorkerImportSheet } from "@/components/worker-import-sheet";
 import { api } from "@/lib/api";
 import {
 	type InvitationDto,
@@ -95,7 +96,6 @@ import {
 } from "@/lib/queries";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
-import { parseWorkerCsv, type WorkerImportRow } from "@/lib/worker-import";
 
 export const Route = createFileRoute("/dashboard/workers/")({
 	component: WorkersPage,
@@ -162,7 +162,6 @@ function WorkersPage() {
 	const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
 	const [selectedPositions, setSelectedPositions] = useState<string[]>([]);
 	const [lastInviteToken, setLastInviteToken] = useState<string | null>(null);
-	const [importRows, setImportRows] = useState<WorkerImportRow[]>([]);
 
 	const queryClient = useQueryClient();
 
@@ -272,43 +271,15 @@ function WorkersPage() {
 		onError: (error) => toast.error((error as Error).message),
 	});
 
-	const openRoleEditor = useCallback((worker: WorkerDto) => {
-		setRoleTarget(worker);
-		setRoleKind(worker.kind);
-		setRolePrivileges(worker.privileges ?? []);
-	}, []);
-
-	const importWorkers = useMutation({
-		mutationFn: () =>
-			api<{ invitations: { email: string; token: string }[] }>(
-				`/v1/workplaces/${workplace?.id}/invitations/import`,
-				{ method: "POST", body: { rows: importRows } },
-			),
-		onSuccess: async (result) => {
-			setImportRows([]);
-			setImportOpen(false);
-			setTab("invitations");
-			await invalidate();
-			const links = result.invitations
-				.map((item) => `${item.email},${inviteLink(item.token)}`)
-				.join("\n");
-			await navigator.clipboard
-				.writeText(`email,invite_link\n${links}`)
-				.catch(() => undefined);
-			toast.success(
-				`${result.invitations.length} invitations created. Invite links were copied as CSV.`,
-			);
+	const openRoleEditor = useCallback(
+		(worker: WorkerDto) => {
+			if (worker.employmentId === myEmploymentId) return;
+			setRoleTarget(worker);
+			setRoleKind(worker.kind);
+			setRolePrivileges(worker.privileges ?? []);
 		},
-		onError: (error) => toast.error((error as Error).message),
-	});
-
-	async function readCsv(file: File) {
-		try {
-			setImportRows(parseWorkerCsv(await file.text()));
-		} catch (error) {
-			toast.error((error as Error).message);
-		}
-	}
+		[myEmploymentId],
+	);
 
 	function toggle(
 		list: string[],
@@ -461,12 +432,14 @@ function WorkersPage() {
 											<IdCardIcon />
 											View employment
 										</DropdownMenuItem>
-										<DropdownMenuItem onClick={() => openRoleEditor(worker)}>
-											<ShieldCheckIcon />
-											Edit role
-										</DropdownMenuItem>
 										{isSelf ? null : (
 											<>
+												<DropdownMenuItem
+													onClick={() => openRoleEditor(worker)}
+												>
+													<ShieldCheckIcon />
+													Edit role
+												</DropdownMenuItem>
 												<DropdownMenuSeparator />
 												<DropdownMenuItem
 													variant="destructive"
@@ -1022,55 +995,17 @@ function WorkersPage() {
 				</FieldGroup>
 			</FormSheet>
 
-			<FormSheet
-				open={importOpen}
-				onOpenChange={setImportOpen}
-				title="Import your team"
-				description="CSV columns: name, email, phone, position, location. Names must match Settings. Invite links are created and copied; no email is sent."
-				footer={
-					<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-						<Button variant="outline" onClick={() => setImportOpen(false)}>
-							Cancel
-						</Button>
-						<Button
-							disabled={importRows.length === 0 || importWorkers.isPending}
-							onClick={() => importWorkers.mutate()}
-						>
-							{importWorkers.isPending ? (
-								<Spinner data-icon="inline-start" />
-							) : (
-								<FileUpIcon data-icon="inline-start" />
-							)}
-							Create {importRows.length || ""} invitations
-						</Button>
-					</div>
-				}
-			>
-				<Field>
-					<FieldLabel htmlFor="worker-csv">CSV file</FieldLabel>
-					<Input
-						id="worker-csv"
-						type="file"
-						accept=".csv,text/csv"
-						onChange={(event) => {
-							const file = event.target.files?.[0];
-							if (file) void readCsv(file);
-						}}
-					/>
-				</Field>
-				{importRows.length > 0 ? (
-					<Alert>
-						<FileUpIcon />
-						<AlertTitle>
-							{importRows.length} worker
-							{importRows.length === 1 ? "" : "s"} ready
-						</AlertTitle>
-						<AlertDescription>
-							Create shareable invitation links. No email will be sent.
-						</AlertDescription>
-					</Alert>
-				) : null}
-			</FormSheet>
+			{workplace ? (
+				<WorkerImportSheet
+					open={importOpen}
+					onOpenChange={setImportOpen}
+					workplaceId={workplace.id}
+					onImported={() => {
+						setTab("invitations");
+						invalidate();
+					}}
+				/>
+			) : null}
 
 			<AlertDialog
 				open={deactivateTarget !== null}

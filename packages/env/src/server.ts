@@ -23,6 +23,8 @@ export const env = createEnv({
 		ZEPTOMAIL_API_URL: z.string().min(1).default("api.zeptomail.com/"),
 		ZEPTOMAIL_WEBHOOK_SECRET: z.string().min(16).optional(),
 		GEOCODER_BASE_URL: z.url().optional(),
+		/** Directory for uploaded leave documents. Defaults to ./uploads/leave. */
+		LEAVE_UPLOAD_DIR: z.string().min(1).optional(),
 		NODE_ENV: z
 			.enum(["development", "production", "test"])
 			.default("development"),

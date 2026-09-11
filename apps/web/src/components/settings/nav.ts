@@ -14,6 +14,7 @@ export type SettingsSection = {
 		| "/dashboard/settings/schedule-teams"
 		| "/dashboard/settings/tags"
 		| "/dashboard/settings/leave"
+		| "/dashboard/settings/leave-policies"
 		| "/dashboard/settings/time-blocks"
 		| "/dashboard/settings/day-parts"
 		| "/dashboard/settings/templates"
@@ -99,6 +100,12 @@ export const settingsGroups: SettingsGroup[] = [
 				to: "/dashboard/settings/time-off-policies",
 				label: "Time off",
 				description: "Who can request time off and when caps reset",
+				capability: "settings.manage",
+			},
+			{
+				to: "/dashboard/settings/leave-policies",
+				label: "Leave policies",
+				description: "Accrual, carry-forward, and approval chains",
 				capability: "settings.manage",
 			},
 		],

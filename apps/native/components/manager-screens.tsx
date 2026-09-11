@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as DocumentPicker from "expo-document-picker";
 import { useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
+	Platform,
 	Pressable,
 	StyleSheet,
 	Text,
@@ -29,13 +31,20 @@ import { confirmAction } from "@/lib/confirm-action";
 import { useDisplayPrefs } from "@/lib/display";
 import { formatLeaveHours, formatLeaveRange, todayIsoDate } from "@/lib/leave";
 import {
+	type LeaveApprovalDto,
 	type ManagerTimeOffResponse,
 	useCoverageSwaps,
 	useCurrentEmployment,
+	useDecideApprovalStep,
+	useExpediteLeaveRequest,
+	useLeaveEncashmentDecision,
+	useLeaveEncashments,
 	useLeaveTypes,
 	useManagerTimeOff,
 	useManagerWorkers,
 	useMarkAttendance,
+	useMarkLeaveEncashmentPaid,
+	useMyPendingApprovals,
 	useSwapDecision,
 } from "@/lib/queries";
 
@@ -517,13 +526,19 @@ export function ManagerTeam() {
 // ── Requests (Time-off) ──────────────────────────────────────────────────
 export function ManagerRequests() {
 	const { theme } = useAppTheme();
-	const { formatPerson } = useDisplayPrefs();
+	const { formatPerson, timeFormat } = useDisplayPrefs();
 	const { workplaceId, employment } = useCurrentEmployment();
 	const requests = useManagerTimeOff(workplaceId);
 	const workers = useManagerWorkers(workplaceId);
 	const leaveTypes = useLeaveTypes(workplaceId);
 	const swaps = useCoverageSwaps(workplaceId);
 	const coverage = useManagerCoverage(workplaceId);
+	const pendingApprovals = useMyPendingApprovals(workplaceId);
+	const encashments = useLeaveEncashments(workplaceId);
+	const decideStep = useDecideApprovalStep(workplaceId);
+	const expedite = useExpediteLeaveRequest(workplaceId);
+	const encashmentDecision = useLeaveEncashmentDecision(workplaceId);
+	const markEncashmentPaid = useMarkLeaveEncashmentPaid(workplaceId);
 	const client = useQueryClient();
 	const [employmentId, setEmploymentId] = useState("");
 	const [leaveTypeId, setLeaveTypeId] = useState("");
@@ -539,6 +554,7 @@ export function ManagerRequests() {
 	const [editStartDate, setEditStartDate] = useState(todayIsoDate);
 	const [editEndDate, setEditEndDate] = useState(todayIsoDate);
 	const [editReason, setEditReason] = useState("");
+	const [importing, setImporting] = useState(false);
 	const decide = useMutation({
 		mutationFn: ({
 			id,
@@ -551,12 +567,102 @@ export function ManagerRequests() {
 				method: "POST",
 				body: { decision },
 			}),
-		onSuccess: () =>
+		onSuccess: () => {
 			client.invalidateQueries({
 				queryKey: ["manager", workplaceId, "time-off"],
-			}),
+			});
+			client.invalidateQueries({
+				queryKey: ["my-pending-approvals", workplaceId],
+			});
+		},
 		onError: (e) => Alert.alert("Could not save", (e as Error).message),
 	});
+	async function commitLeaveImport(csv: string, expected: number) {
+		try {
+			setImporting(true);
+			const result = await api<{
+				import: { imported: number; failed: unknown[] };
+			}>(`/v1/workplaces/${workplaceId}/time-off/import`, {
+				method: "POST",
+				body: { csv, dryRun: false },
+			});
+			await client.invalidateQueries({
+				queryKey: ["manager", workplaceId, "time-off"],
+			});
+			await client.invalidateQueries({
+				queryKey: ["my-pending-approvals", workplaceId],
+			});
+			await client.invalidateQueries({ queryKey: ["pto"] });
+			Alert.alert(
+				"Imported",
+				`${result.import.imported} of ${expected} record(s) imported${
+					result.import.failed.length > 0
+						? `, ${result.import.failed.length} skipped`
+						: ""
+				}.`,
+			);
+		} catch (e) {
+			Alert.alert("Could not import", (e as Error).message);
+		} finally {
+			setImporting(false);
+		}
+	}
+
+	async function importLeaveCsv() {
+		try {
+			const picked = await DocumentPicker.getDocumentAsync({
+				type: [
+					"text/csv",
+					"text/comma-separated-values",
+					"application/csv",
+					"text/plain",
+				],
+				copyToCacheDirectory: true,
+			});
+			if (picked.canceled) return;
+			const asset = picked.assets[0];
+			if (!asset) return;
+			const csv = await (await fetch(asset.uri)).text();
+			if (!csv.trim()) {
+				Alert.alert("Empty file", "Choose a CSV with a header row.");
+				return;
+			}
+			setImporting(true);
+			const preview = await api<{
+				import: {
+					imported: number;
+					failed: { line: number; message: string }[];
+				};
+			}>(`/v1/workplaces/${workplaceId}/time-off/import`, {
+				method: "POST",
+				body: { csv, dryRun: true },
+			});
+			const skipped = preview.import.failed
+				.slice(0, 2)
+				.map((failure) => `Line ${failure.line}: ${failure.message}`)
+				.join("\n");
+			if (preview.import.imported === 0) {
+				Alert.alert(
+					"Nothing to import",
+					skipped || "No valid rows were found in this file.",
+				);
+				return;
+			}
+			confirmAction({
+				title: `Import ${preview.import.imported} record(s)?`,
+				message: skipped
+					? `Skipped rows:\n${skipped}`
+					: "Approved rows deduct balances; pending rows enter the approval queue.",
+				confirmLabel: "Import",
+				onConfirm: () => void commitLeaveImport(csv, preview.import.imported),
+			});
+		} catch (e) {
+			Alert.alert("Could not import", (e as Error).message);
+		} finally {
+			setImporting(false);
+		}
+	}
+
 	const record = useMutation({
 		mutationFn: () =>
 			api(`/v1/workplaces/${workplaceId}/time-off`, {
@@ -646,8 +752,49 @@ export function ManagerRequests() {
 		setEditEndDate(r.endDate ?? r.endsAt.slice(0, 10));
 		setEditReason(r.reason ?? "");
 	}
+	function expediteRequest(requestId: string) {
+		const run = (reason: string) =>
+			expedite.mutate(
+				{ requestId, reason: reason.trim() || "Emergency" },
+				{
+					onSuccess: () =>
+						Alert.alert(
+							"Expedited",
+							"All remaining approval steps were overridden.",
+						),
+				},
+			);
+		if (Platform.OS === "ios") {
+			Alert.prompt(
+				"Expedite emergency leave?",
+				"This approves all remaining steps. Give a short reason.",
+				[
+					{ text: "Cancel", style: "cancel" },
+					{
+						text: "Expedite",
+						style: "destructive",
+						onPress: (value?: string) => run(value ?? ""),
+					},
+				],
+				"plain-text",
+				"",
+			);
+			return;
+		}
+		confirmAction({
+			title: "Expedite emergency leave?",
+			message: 'This approves all remaining steps with the reason "Emergency".',
+			confirmLabel: "Expedite",
+			destructive: true,
+			onConfirm: () => run("Emergency"),
+		});
+	}
 	const pendingTimeOff =
 		requests.data?.requests.filter((r) => r.status === "pending") ?? [];
+	const requestedEncashments =
+		encashments.data?.filter((item) => item.status === "requested") ?? [];
+	const approvedEncashments =
+		encashments.data?.filter((item) => item.status === "approved") ?? [];
 	const approvedUpcoming =
 		requests.data?.requests.filter(
 			(r) =>
@@ -890,6 +1037,22 @@ export function ManagerRequests() {
 					onPress={() => record.mutate()}
 				/>
 			</Card>
+			<Card>
+				<Text style={[s.cardTitle, { color: theme.text }]}>
+					Import leave from CSV
+				</Text>
+				<Text style={[s.hint, { color: theme.muted }]}>
+					Columns: worker_email, leave_type, start_date, optional end_date,
+					all_day, start_time/end_time for partial days, reason, status
+					(approved or pending), emergency. You will see a preview before
+					anything is saved.
+				</Text>
+				<PrimaryButton
+					label={importing ? "Importing…" : "Choose CSV file"}
+					disabled={importing}
+					onPress={() => void importLeaveCsv()}
+				/>
+			</Card>
 			{requests.isLoading || swaps.isLoading ? (
 				<ActivityIndicator color={theme.primary} />
 			) : null}
@@ -971,6 +1134,122 @@ export function ManagerRequests() {
 					) : null}
 				</Card>
 			))}
+			{pendingApprovals.data?.length ? (
+				<Text style={[s.label, { color: theme.muted }]}>Waiting on you</Text>
+			) : null}
+			{(pendingApprovals.data ?? []).map((item) => {
+				const full = requests.data?.requests.find(
+					(request) => request.id === item.requestId,
+				);
+				const totalSteps = full?.approvals?.length;
+				return (
+					<Card key={`${item.requestId}-${item.approvalId}`}>
+						<View style={s.rowBetween}>
+							<Text style={[s.cardTitle, { color: theme.text }]}>
+								{formatPerson(item.worker.fullName, item.worker.email)}
+							</Text>
+							<View style={{ flexDirection: "row", gap: 6 }}>
+								{item.isEmergency ? (
+									<Badge label="Emergency" variant="amber" />
+								) : null}
+								<Badge
+									label={item.via === "delegation" ? "Delegated" : "Your step"}
+									variant="default"
+								/>
+							</View>
+						</View>
+						<Text
+							style={[
+								s.body,
+								{ color: theme.text, fontVariant: ["tabular-nums"] },
+							]}
+						>
+							{formatLeaveRange(item, timeFormat)}
+							{item.leaveTypeName ? ` · ${item.leaveTypeName}` : ""}
+							{item.chargeMinutes
+								? ` · ${formatLeaveHours(item.chargeMinutes)}`
+								: ""}
+						</Text>
+						<Text style={[s.hint, { color: theme.muted }]}>
+							Step {item.stepOrder + 1}
+							{totalSteps ? ` of ${totalSteps}` : ""}
+							{item.dueAt ? ` · due ${formatDay(item.dueAt.slice(0, 10))}` : ""}
+							{item.escalatedAt ? " · escalated" : ""}
+						</Text>
+						{item.remainingMinutes != null && item.chargeMinutes != null ? (
+							<Text style={[s.hint, { color: theme.muted }]}>
+								{item.remainingMinutes >= item.chargeMinutes
+									? `${formatLeaveHours(item.remainingMinutes)} remaining after this.`
+									: `Only ${formatLeaveHours(item.remainingMinutes)} remaining.`}
+							</Text>
+						) : null}
+						{item.reason ? (
+							<Text style={[s.hint, { color: theme.muted }]}>
+								{item.reason}
+							</Text>
+						) : null}
+						{full?.documents?.length ? (
+							<Text style={[s.hint, { color: theme.muted }]}>
+								Documents:{" "}
+								{full.documents.map((document) => document.fileName).join(", ")}
+							</Text>
+						) : null}
+						<View style={s.actions}>
+							<View style={{ flex: 1 }}>
+								<PrimaryButton
+									label="Approve"
+									disabled={decideStep.isPending}
+									onPress={() =>
+										confirmAction({
+											title: "Approve this time off?",
+											message: item.chargeMinutes
+												? `This uses ${formatLeaveHours(item.chargeMinutes)}${item.leaveTypeName ? ` of ${item.leaveTypeName}` : ""} and advances the approval chain.`
+												: "This advances the approval chain.",
+											confirmLabel: "Approve",
+											onConfirm: () =>
+												decideStep.mutate({
+													requestId: item.requestId,
+													approvalId: item.approvalId,
+													decision: "approved",
+												}),
+										})
+									}
+								/>
+							</View>
+							<View style={{ flex: 1 }}>
+								<SecondaryButton
+									label="Decline"
+									disabled={decideStep.isPending}
+									onPress={() =>
+										confirmAction({
+											title: "Decline this request?",
+											message: "The worker will see this decision.",
+											confirmLabel: "Decline",
+											destructive: true,
+											onConfirm: () =>
+												decideStep.mutate({
+													requestId: item.requestId,
+													approvalId: item.approvalId,
+													decision: "declined",
+												}),
+										})
+									}
+								/>
+							</View>
+						</View>
+						{item.isEmergency ? (
+							<SecondaryButton
+								label="Expedite emergency"
+								disabled={expedite.isPending}
+								onPress={() => expediteRequest(item.requestId)}
+							/>
+						) : null}
+					</Card>
+				);
+			})}
+			{pendingTimeOff.length > 0 && pendingApprovals.data?.length ? (
+				<Text style={[s.label, { color: theme.muted }]}>All requests</Text>
+			) : null}
 			{pendingTimeOff.map((r) => (
 				<Card key={r.id}>
 					<View style={s.rowBetween}>
@@ -978,7 +1257,12 @@ export function ManagerRequests() {
 							{formatPerson(r.worker.fullName, r.worker.email)}
 							{r.kind === "manager" ? " · Manager" : ""}
 						</Text>
-						<Badge label="Needs a decision" variant="default" />
+						<View style={{ flexDirection: "row", gap: 6 }}>
+							{r.isEmergency ? (
+								<Badge label="Emergency" variant="amber" />
+							) : null}
+							<Badge label="Needs a decision" variant="default" />
+						</View>
 					</View>
 					<Text
 						style={[
@@ -986,10 +1270,16 @@ export function ManagerRequests() {
 							{ color: theme.text, fontVariant: ["tabular-nums"] },
 						]}
 					>
-						{formatLeaveRange(r)}
+						{formatLeaveRange(r, timeFormat)}
 						{r.leaveTypeName ? ` · ${r.leaveTypeName}` : ""}
 						{r.chargeMinutes ? ` · ${formatLeaveHours(r.chargeMinutes)}` : ""}
 					</Text>
+					{r.approvals && r.approvals.length > 0 ? (
+						<ApprovalSteps
+							approvals={r.approvals}
+							currentStep={r.currentStep}
+						/>
+					) : null}
 					{r.remainingMinutes != null && r.chargeMinutes != null ? (
 						<Text style={[s.hint, { color: theme.muted }]}>
 							{r.remainingMinutes >= r.chargeMinutes
@@ -999,6 +1289,12 @@ export function ManagerRequests() {
 					) : null}
 					{r.reason ? (
 						<Text style={[s.hint, { color: theme.muted }]}>{r.reason}</Text>
+					) : null}
+					{r.documents && r.documents.length > 0 ? (
+						<Text style={[s.hint, { color: theme.muted }]}>
+							Documents:{" "}
+							{r.documents.map((document) => document.fileName).join(", ")}
+						</Text>
 					) : null}
 					<View style={s.actions}>
 						<View style={{ flex: 1 }}>
@@ -1077,7 +1373,7 @@ export function ManagerRequests() {
 										{ color: theme.muted, fontVariant: ["tabular-nums"] },
 									]}
 								>
-									{formatLeaveRange(r)}
+									{formatLeaveRange(r, timeFormat)}
 									{r.leaveTypeName ? ` · ${r.leaveTypeName}` : ""}
 								</Text>
 							</View>
@@ -1110,7 +1406,170 @@ export function ManagerRequests() {
 					))}
 				</Card>
 			) : null}
+			{requestedEncashments.length > 0 || approvedEncashments.length > 0 ? (
+				<Text style={[s.label, { color: theme.muted }]}>Leave encashments</Text>
+			) : null}
+			{requestedEncashments.map((item) => (
+				<Card key={item.id}>
+					<View style={s.rowBetween}>
+						<Text style={[s.cardTitle, { color: theme.text }]}>
+							{formatPerson(
+								item.employmentName ?? null,
+								item.employmentEmail ?? "",
+							)}
+						</Text>
+						<Badge label="Requested" variant="default" />
+					</View>
+					<Text style={[s.body, { color: theme.text }]}>
+						{item.leaveTypeName ?? "Leave"}: {formatLeaveHours(item.minutes)}
+						{item.amountCents > 0
+							? ` · $${(item.amountCents / 100).toFixed(2)}`
+							: ""}
+					</Text>
+					{item.note ? (
+						<Text style={[s.hint, { color: theme.muted }]}>{item.note}</Text>
+					) : null}
+					<View style={s.actions}>
+						<View style={{ flex: 1 }}>
+							<PrimaryButton
+								label="Approve"
+								disabled={encashmentDecision.isPending}
+								onPress={() =>
+									confirmAction({
+										title: "Approve this encashment?",
+										message: `This deducts ${formatLeaveHours(item.minutes)} from their balance.`,
+										confirmLabel: "Approve",
+										onConfirm: () =>
+											encashmentDecision.mutate(
+												{
+													encashmentId: item.id,
+													decision: "approved",
+												},
+												{
+													onSuccess: () =>
+														Alert.alert(
+															"Approved",
+															"The encashment was approved.",
+														),
+												},
+											),
+									})
+								}
+							/>
+						</View>
+						<View style={{ flex: 1 }}>
+							<SecondaryButton
+								label="Decline"
+								disabled={encashmentDecision.isPending}
+								onPress={() =>
+									confirmAction({
+										title: "Decline this encashment?",
+										message: "The worker keeps their balance.",
+										confirmLabel: "Decline",
+										destructive: true,
+										onConfirm: () =>
+											encashmentDecision.mutate({
+												encashmentId: item.id,
+												decision: "declined",
+											}),
+									})
+								}
+							/>
+						</View>
+					</View>
+				</Card>
+			))}
+			{approvedEncashments.map((item) => (
+				<Card key={item.id}>
+					<View style={s.rowBetween}>
+						<Text style={[s.cardTitle, { color: theme.text }]}>
+							{formatPerson(
+								item.employmentName ?? null,
+								item.employmentEmail ?? "",
+							)}
+						</Text>
+						<Badge label="Approved" variant="success" />
+					</View>
+					<Text style={[s.body, { color: theme.text }]}>
+						{item.leaveTypeName ?? "Leave"}: {formatLeaveHours(item.minutes)}
+						{item.amountCents > 0
+							? ` · $${(item.amountCents / 100).toFixed(2)}`
+							: ""}
+					</Text>
+					<PrimaryButton
+						label={markEncashmentPaid.isPending ? "Saving…" : "Mark paid"}
+						disabled={markEncashmentPaid.isPending}
+						onPress={() =>
+							confirmAction({
+								title: "Mark this encashment paid?",
+								message: "Record that the payout has been made.",
+								confirmLabel: "Mark paid",
+								onConfirm: () =>
+									markEncashmentPaid.mutate(
+										{ encashmentId: item.id },
+										{
+											onSuccess: () =>
+												Alert.alert(
+													"Marked paid",
+													"The encashment is settled.",
+												),
+										},
+									),
+							})
+						}
+					/>
+				</Card>
+			))}
 		</AppScreen>
+	);
+}
+
+function approvalStatusLabel(status: LeaveApprovalDto["status"]): string {
+	if (status === "approved") return "Approved";
+	if (status === "declined") return "Declined";
+	if (status === "skipped") return "Skipped";
+	if (status === "escalated") return "Escalated";
+	return "Waiting";
+}
+
+function ApprovalSteps({
+	approvals,
+	currentStep,
+}: {
+	approvals: LeaveApprovalDto[];
+	currentStep?: number;
+}) {
+	const { theme } = useAppTheme();
+	const current =
+		typeof currentStep === "number"
+			? approvals.find((approval) => approval.stepOrder === currentStep)
+			: approvals.find(
+					(approval) =>
+						approval.status === "pending" || approval.status === "escalated",
+				);
+	return (
+		<View style={s.stepChips}>
+			{approvals.map((approval) => (
+				<Badge
+					key={approval.id}
+					label={`${approval.stepOrder + 1}. ${approvalStatusLabel(approval.status)}`}
+					variant={
+						approval.status === "approved"
+							? "success"
+							: approval.status === "declined"
+								? "danger"
+								: approval.status === "skipped"
+									? "outline"
+									: "amber"
+					}
+				/>
+			))}
+			{approvals.length > 1 ? (
+				<Text style={[s.hint, { color: theme.muted }]}>
+					Step {(current?.stepOrder ?? 0) + 1} of {approvals.length}
+				</Text>
+			) : null}
+		</View>
 	);
 }
 
@@ -1149,6 +1608,12 @@ const s = StyleSheet.create({
 		paddingHorizontal: 14,
 	},
 	chipText: { fontSize: 13, fontWeight: "700" },
+	stepChips: {
+		flexDirection: "row",
+		flexWrap: "wrap",
+		gap: 6,
+		alignItems: "center",
+	},
 	summaryRow: { flexDirection: "row", gap: 10 },
 	dayLabel: {
 		fontSize: 12,

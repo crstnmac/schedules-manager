@@ -245,6 +245,7 @@ export async function publishScheduleNow(
 		.where(eq(workplaces.id, location.workplaceId))
 		.limit(1);
 	const noticeWindowHours = workplace?.noticeWindowHours ?? 48;
+	const autoAcceptLateChanges = workplace?.autoAcceptLateChanges ?? false;
 	const now = Date.now();
 
 	const published = await db.transaction(async (tx) => {
@@ -431,6 +432,9 @@ export async function publishScheduleNow(
 								versionShiftId: versionShift.id,
 								employmentId: change.employmentId,
 								changeSummary: change.summary,
+								...(autoAcceptLateChanges
+									? { status: "accepted" as const, respondedAt: new Date() }
+									: {}),
 							},
 						];
 					}),
@@ -491,15 +495,17 @@ export async function publishScheduleNow(
 			},
 			tx,
 		);
-		await notifyEmployments(
-			acceptanceEmploymentIds,
-			{
-				kind: "late_change",
-				title: "A late change needs your acceptance",
-				body: "A material change was published inside the notice window. Open your schedule to accept or decline the shift.",
-			},
-			tx,
-		);
+		if (!autoAcceptLateChanges) {
+			await notifyEmployments(
+				acceptanceEmploymentIds,
+				{
+					kind: "late_change",
+					title: "A late change needs your acceptance",
+					body: "A material change was published inside the notice window. Open your schedule to accept or decline the shift.",
+				},
+				tx,
+			);
+		}
 
 		return {
 			version: {
@@ -511,7 +517,9 @@ export async function publishScheduleNow(
 			changes: {
 				total: changes.length,
 				material: changes.filter((change) => change.material).length,
-				acceptancesRequired: acceptanceTargets.length,
+				acceptancesRequired: autoAcceptLateChanges
+					? 0
+					: acceptanceTargets.length,
 			},
 			notices: {
 				workerIds,
@@ -630,7 +638,11 @@ export const publicationRoutes = new Elysia({
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
 			const { schedule, location } = await scheduleContext(params.scheduleId);
-			await requirePrivilege(profile.id, location.workplaceId, "schedule.publish");
+			await requirePrivilege(
+				profile.id,
+				location.workplaceId,
+				"schedule.publish",
+			);
 
 			return withIdempotency({
 				actorProfileId: profile.id,
@@ -663,7 +675,11 @@ export const publicationRoutes = new Elysia({
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
 			const { schedule, location } = await scheduleContext(params.scheduleId);
-			await requirePrivilege(profile.id, location.workplaceId, "schedule.publish");
+			await requirePrivilege(
+				profile.id,
+				location.workplaceId,
+				"schedule.publish",
+			);
 
 			const shiftIds = [...new Set(body.shiftIds)];
 			if (shiftIds.length === 0) {

@@ -1,6 +1,6 @@
 import { expoClient } from "@better-auth/expo/client";
-import * as SecureStore from "expo-secure-store";
 import { createAuthClient } from "better-auth/react";
+import * as SecureStore from "expo-secure-store";
 
 import { getServerUrl } from "./server-url";
 

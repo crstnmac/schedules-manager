@@ -135,7 +135,7 @@ export function registerMyScheduleTests(getContext: () => Context) {
 		const reassignedShifts = [
 			...(reassignedBody.currentWeek?.shifts ?? []),
 			...(reassignedBody.nextWeek?.shifts ?? []),
-		];
+		].filter((shift: { isMine?: boolean }) => shift.isMine);
 		expect(reassignedShifts).toHaveLength(0);
 		expect(reassignedBody.nextShift).toBeNull();
 
@@ -325,7 +325,7 @@ export function registerMyScheduleTests(getContext: () => Context) {
 		const weekShifts1 = [
 			...(body1.currentWeek?.shifts ?? []),
 			...(body1.nextWeek?.shifts ?? []),
-		];
+		].filter((shift: { isMine?: boolean }) => shift.isMine);
 		expect(weekShifts1).toHaveLength(0);
 
 		await d.db
@@ -344,12 +344,12 @@ export function registerMyScheduleTests(getContext: () => Context) {
 		const body2 = await (await getSchedule()).json();
 		expect(body2.nextShift).not.toBeNull();
 		expect(body2.nextShift?.id).toBe(required(xA3).id);
-		const cwShifts = (body2.currentWeek?.shifts ?? []).map(
-			(shift: { id: string }) => shift.id,
-		);
-		const nwShifts = (body2.nextWeek?.shifts ?? []).map(
-			(shift: { id: string }) => shift.id,
-		);
+		const cwShifts = (body2.currentWeek?.shifts ?? [])
+			.filter((shift: { isMine?: boolean }) => shift.isMine)
+			.map((shift: { id: string }) => shift.id);
+		const nwShifts = (body2.nextWeek?.shifts ?? [])
+			.filter((shift: { isMine?: boolean }) => shift.isMine)
+			.map((shift: { id: string }) => shift.id);
 		expect(cwShifts).toContain(required(xA3).id);
 		expect(nwShifts).toHaveLength(0);
 		expect(body2.nextShift?.id).not.toBe(required(draftX).id);

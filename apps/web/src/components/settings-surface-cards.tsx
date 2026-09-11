@@ -1,3 +1,4 @@
+import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
 import {
@@ -40,14 +41,20 @@ import {
 	SettingsCrudCard,
 	SettingsFormSheet,
 } from "@/components/settings/crud";
+import { LeavePolicySheet } from "@/components/settings/leave-policies-card";
 import { TimePicker } from "@/components/time-picker";
 import { api } from "@/lib/api";
-import type { LocationDto, PositionDto, WorkerDto } from "@/lib/queries";
+import {
+	type LeaveTypeDto,
+	type LocationDto,
+	type PositionDto,
+	useApprovalChains,
+	type WorkerDto,
+} from "@/lib/queries";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 
 type Group = { id: string; name: string; employmentIds: string[] };
 type Tag = { id: string; name: string };
-type LeaveType = { id: string; name: string; paid: boolean };
 type RangeRow = {
 	id: string;
 	name: string;
@@ -65,9 +72,26 @@ type TemplateRow = {
 
 const groupHelper = createDataColumnHelper<Group>();
 const tagHelper = createDataColumnHelper<Tag>();
-const leaveHelper = createDataColumnHelper<LeaveType>();
+const leaveHelper = createDataColumnHelper<LeaveTypeDto>();
 const rangeHelper = createDataColumnHelper<RangeRow>();
 const templateHelper = createDataColumnHelper<TemplateRow>();
+
+const LEAVE_CLASSIFICATION_ITEMS = [
+	{ label: "Standard", value: "standard" },
+	{ label: "Floating holiday", value: "floating_holiday" },
+	{ label: "Working away", value: "working_away" },
+	{ label: "Special", value: "special" },
+] as const;
+
+const LEAVE_CLASSIFICATION_LABELS: Record<
+	LeaveTypeDto["classification"],
+	string
+> = {
+	standard: "Standard",
+	floating_holiday: "Floating holiday",
+	working_away: "Working away",
+	special: "Special",
+};
 
 export type TimeConfiguration = {
 	timeBlocks: RangeRow[];
@@ -525,18 +549,38 @@ export function LeaveTypesCard({
 	leaveTypes,
 }: {
 	workplaceId: string | undefined;
-	leaveTypes: LeaveType[];
+	leaveTypes: LeaveTypeDto[];
 }) {
 	const queryClient = useQueryClient();
+	const approvalChains = useApprovalChains(workplaceId);
 	const [open, setOpen] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [leaveName, setLeaveName] = useState("");
 	const [paid, setPaid] = useState(false);
+	const [code, setCode] = useState("");
+	const [description, setDescription] = useState("");
+	const [classification, setClassification] =
+		useState<LeaveTypeDto["classification"]>("standard");
+	const [active, setActive] = useState(true);
+	const [approvalChainId, setApprovalChainId] = useState("default");
+	const [policyTarget, setPolicyTarget] = useState<LeaveTypeDto | null>(null);
+	const [policyOpen, setPolicyOpen] = useState(false);
+
+	const chainName = useCallback(
+		(id: string) =>
+			approvalChains.data?.find((chain) => chain.id === id)?.name ?? "",
+		[approvalChains.data],
+	);
 
 	const resetForm = useCallback(() => {
 		setEditingId(null);
 		setLeaveName("");
 		setPaid(false);
+		setCode("");
+		setDescription("");
+		setClassification("standard");
+		setActive(true);
+		setApprovalChainId("default");
 	}, []);
 
 	const save = useMutation({
@@ -547,7 +591,16 @@ export function LeaveTypesCard({
 					: `/v1/workplaces/${workplaceId}/leave-types`,
 				{
 					method: editingId ? "PATCH" : "POST",
-					body: { name: leaveName.trim(), paid },
+					body: {
+						name: leaveName.trim(),
+						paid,
+						code: code.trim(),
+						description: description.trim(),
+						classification,
+						active,
+						approvalChainId:
+							approvalChainId === "default" ? null : approvalChainId,
+					},
 				},
 			),
 		onSuccess: () => {
@@ -578,28 +631,94 @@ export function LeaveTypesCard({
 		resetForm();
 		setOpen(true);
 	};
-	const startEdit = (leaveType: LeaveType) => {
+	const startEdit = (leaveType: LeaveTypeDto) => {
 		setEditingId(leaveType.id);
 		setLeaveName(leaveType.name);
 		setPaid(leaveType.paid);
+		setCode(leaveType.code ?? "");
+		setDescription(leaveType.description ?? "");
+		setClassification(leaveType.classification);
+		setActive(leaveType.active);
+		setApprovalChainId(leaveType.approvalChainId ?? "default");
 		setOpen(true);
 	};
+	const openPolicy = useCallback((leaveType: LeaveTypeDto) => {
+		setPolicyTarget(leaveType);
+		setPolicyOpen(true);
+	}, []);
 
 	const columns = useMemo(
 		() =>
 			leaveHelper.columns([
 				leaveHelper.accessor("name", {
 					header: "Leave type",
-					cell: ({ getValue }) => (
-						<span className="font-medium">{getValue()}</span>
+					cell: ({ row }) => (
+						<span className="flex items-center gap-2">
+							<span className="font-medium">{row.original.name}</span>
+							{row.original.active ? null : (
+								<Badge variant="outline">Inactive</Badge>
+							)}
+						</span>
 					),
 				}),
+				leaveHelper.accessor(
+					(row) => LEAVE_CLASSIFICATION_LABELS[row.classification],
+					{
+						id: "classification",
+						header: "Classification",
+						cell: ({ getValue }) => (
+							<Badge variant="secondary">{getValue()}</Badge>
+						),
+					},
+				),
 				leaveHelper.accessor("paid", {
 					header: "Pay",
 					cell: ({ getValue }) => (getValue() ? "Paid" : "Unpaid"),
 				}),
+				leaveHelper.accessor(
+					(row) =>
+						row.approvalChainId
+							? chainName(row.approvalChainId) || "Custom chain"
+							: "Default",
+					{
+						id: "approval",
+						header: "Approval",
+						cell: ({ getValue }) => (
+							<span className="text-muted-foreground">{getValue()}</span>
+						),
+					},
+				),
+				leaveHelper.accessor(
+					(row) => (row.policy ? "Policy set" : "No policy"),
+					{
+						id: "policy",
+						header: "Policy",
+						cell: ({ getValue }) =>
+							getValue() === "Policy set" ? (
+								<Badge variant="secondary">Policy set</Badge>
+							) : (
+								<span className="text-muted-foreground">{getValue()}</span>
+							),
+					},
+				),
+				leaveHelper.display({
+					id: "rules",
+					header: () => <span className="block text-right">Rules</span>,
+					enableSorting: false,
+					cell: ({ row }) => (
+						<div className="flex justify-end">
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => openPolicy(row.original)}
+							>
+								Rules
+							</Button>
+						</div>
+					),
+				}),
 			]),
-		[],
+		[chainName, openPolicy],
 	);
 
 	return (
@@ -611,7 +730,11 @@ export function LeaveTypesCard({
 				data={leaveTypes}
 				columns={columns}
 				getRowId={(row) => row.id}
-				getSearchText={(row) => `${row.name} ${row.paid ? "paid" : "unpaid"}`}
+				getSearchText={(row) =>
+					`${row.name} ${row.code ?? ""} ${row.description ?? ""} ${
+						LEAVE_CLASSIFICATION_LABELS[row.classification]
+					} ${row.paid ? "paid" : "unpaid"}`
+				}
 				searchPlaceholder="Search leave types"
 				entityLabel="leave type"
 				emptyIcon={<CalendarOffIcon />}
@@ -638,7 +761,7 @@ export function LeaveTypesCard({
 				title={editingId ? "Edit leave type" : "Add leave type"}
 				description={
 					editingId
-						? "Rename this type or change whether it deducts paid hours."
+						? "Update this category, its label, and who approves it."
 						: "Paid types deduct remaining hours when a request is approved."
 				}
 				footer={
@@ -682,6 +805,89 @@ export function LeaveTypesCard({
 							required
 						/>
 					</Field>
+					<Field>
+						<FieldLabel htmlFor="leave-code">Code (optional)</FieldLabel>
+						<Input
+							id="leave-code"
+							value={code}
+							onChange={(event) => setCode(event.target.value)}
+							placeholder="VAC"
+							maxLength={12}
+						/>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="leave-description">
+							Description (optional)
+						</FieldLabel>
+						<Textarea
+							id="leave-description"
+							value={description}
+							onChange={(event) => setDescription(event.target.value)}
+							placeholder="When people should pick this type."
+							maxLength={400}
+						/>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="leave-classification">
+							Classification
+						</FieldLabel>
+						<Select
+							items={[...LEAVE_CLASSIFICATION_ITEMS]}
+							value={classification}
+							onValueChange={(value) => {
+								if (value) {
+									setClassification(value as LeaveTypeDto["classification"]);
+								}
+							}}
+						>
+							<SelectTrigger id="leave-classification" className="w-full">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent alignItemWithTrigger={false}>
+								<SelectGroup>
+									{LEAVE_CLASSIFICATION_ITEMS.map((item) => (
+										<SelectItem key={item.value} value={item.value}>
+											{item.label}
+										</SelectItem>
+									))}
+								</SelectGroup>
+							</SelectContent>
+						</Select>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="leave-approval-chain">
+							Approval chain
+						</FieldLabel>
+						<Select
+							items={[
+								{ label: "Default / manager approval", value: "default" },
+								...(approvalChains.data ?? []).map((chain) => ({
+									label: chain.name,
+									value: chain.id,
+								})),
+							]}
+							value={approvalChainId}
+							onValueChange={(value) => {
+								if (value) setApprovalChainId(value);
+							}}
+						>
+							<SelectTrigger id="leave-approval-chain" className="w-full">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent alignItemWithTrigger={false}>
+								<SelectGroup>
+									<SelectItem value="default">
+										Default / manager approval
+									</SelectItem>
+									{(approvalChains.data ?? []).map((chain) => (
+										<SelectItem key={chain.id} value={chain.id}>
+											{chain.name}
+										</SelectItem>
+									))}
+								</SelectGroup>
+							</SelectContent>
+						</Select>
+					</Field>
 					<Field orientation="horizontal" className="items-center">
 						<Checkbox
 							id="leave-paid"
@@ -692,8 +898,25 @@ export function LeaveTypesCard({
 							Paid leave type
 						</FieldLabel>
 					</Field>
+					<Field orientation="horizontal" className="items-center">
+						<Checkbox
+							id="leave-active"
+							checked={active}
+							onCheckedChange={(checked) => setActive(checked === true)}
+						/>
+						<FieldLabel htmlFor="leave-active" className="font-normal">
+							Active
+						</FieldLabel>
+					</Field>
 				</form>
 			</SettingsFormSheet>
+
+			<LeavePolicySheet
+				workplaceId={workplaceId}
+				leaveType={policyTarget}
+				open={policyOpen}
+				onOpenChange={setPolicyOpen}
+			/>
 		</>
 	);
 }

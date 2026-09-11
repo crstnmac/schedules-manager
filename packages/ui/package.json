@@ -25,6 +25,7 @@
 		"lucide-react": "catalog:",
 		"next-themes": "catalog:",
 		"react": "19.2.3",
+		"react-colorful": "^5.8.1",
 		"react-day-picker": "^10.0.1",
 		"react-dom": "19.2.3",
 		"recharts": "3.8.0",

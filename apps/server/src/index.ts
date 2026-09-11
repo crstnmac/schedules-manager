@@ -1,6 +1,8 @@
 import { createApp } from "./app";
 import { processAutoClockOutBatch } from "./auto-clock-out";
 import { processEmailOutboxBatch } from "./email-outbox";
+import { runLeaveAccruals, runLeaveCarryForward } from "./leave-accrual";
+import { escalateOverdueLeaveApprovals } from "./leave-approvals";
 import {
 	processNotificationOutboxBatch,
 	processPushReceiptBatch,
@@ -15,6 +17,19 @@ createApp().listen({ port: 3000, hostname: "0.0.0.0" }, () => {
 });
 
 let dispatchInFlight = false;
+let lastLeaveAccrualRun = 0;
+
+/**
+ * Leave automation: escalations run on every tick; accruals, carry-forward and
+ * expiry run at most hourly. Both are idempotent, so a missed tick is safe.
+ */
+async function processLeaveAutomation() {
+	await escalateOverdueLeaveApprovals();
+	if (Date.now() - lastLeaveAccrualRun < 60 * 60_000) return;
+	lastLeaveAccrualRun = Date.now();
+	await runLeaveCarryForward({});
+	await runLeaveAccruals({});
+}
 
 async function dispatchNotifications() {
 	if (dispatchInFlight) return;
@@ -26,6 +41,7 @@ async function dispatchNotifications() {
 			processPushReceiptBatch(),
 			processAutoClockOutBatch(),
 			dispatchWebhookDeliveries(),
+			processLeaveAutomation(),
 		]);
 		for (const result of results) {
 			if (result.status === "rejected") {

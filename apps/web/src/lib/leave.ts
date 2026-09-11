@@ -51,9 +51,12 @@ export function formatLeaveRange(
 		: `${start} ${formatMinute(input.startMinute ?? 0, timeFormat)} – ${end} ${formatMinute(input.endMinute ?? 0, timeFormat)}`;
 }
 
-export function leaveStatusLabel(status: "pending" | "approved" | "declined") {
+export function leaveStatusLabel(
+	status: "pending" | "approved" | "declined" | "cancelled",
+) {
 	if (status === "pending") return "Needs a decision";
 	if (status === "approved") return "Approved";
+	if (status === "cancelled") return "Cancelled";
 	return "Declined";
 }
 

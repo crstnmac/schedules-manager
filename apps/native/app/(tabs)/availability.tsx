@@ -1,9 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import * as DocumentPicker from "expo-document-picker";
+import { useEffect, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
 	Pressable,
+	Share,
 	StyleSheet,
 	Text,
 	View,
@@ -21,16 +23,34 @@ import {
 	NativeWeekdayPicker,
 	PageHeader,
 	PrimaryButton,
+	SecondaryButton,
 	useAppTheme,
 } from "@/components/ui";
 import { api } from "@/lib/api";
+import { authClient } from "@/lib/auth-client";
 import { confirmAction } from "@/lib/confirm-action";
-import { formatLeaveHours, formatLeaveRange, todayIsoDate } from "@/lib/leave";
+import { useDisplayPrefs } from "@/lib/display";
 import {
+	formatLeaveHours,
+	formatLeaveMonth,
+	formatLeaveRange,
+	hoursToMinutes,
+	leavePolicySummary,
+	todayIsoDate,
+} from "@/lib/leave";
+import {
+	type LeaveApprovalDto,
+	type LeaveTypeDto,
+	useCalendarTokens,
+	useCreateMyCalendarToken,
+	useCreateMyLeaveEncashment,
 	useCurrentEmployment,
+	useLeaveForecast,
 	useLeaveTypes,
 	usePtoBalances,
+	useRevokeCalendarToken,
 } from "@/lib/queries";
+import { getServerUrl } from "@/lib/server-url";
 import { useSelectedWorkplaceId } from "@/lib/workplace-store";
 
 interface ConstraintsResponse {
@@ -55,9 +75,22 @@ interface ConstraintsResponse {
 		endMinute?: number | null;
 		chargeMinutes?: number;
 		reason: string | null;
-		status: "pending" | "approved" | "declined";
+		status: "pending" | "approved" | "declined" | "cancelled";
 		decisionReason: string | null;
 		leaveTypeId?: string | null;
+		batchId?: string | null;
+		isEmergency?: boolean;
+		currentStep?: number;
+		createdAt?: string;
+		cancelledAt?: string | null;
+		approvals?: LeaveApprovalDto[];
+		documents?: {
+			id: string;
+			fileName: string;
+			mimeType: string;
+			sizeBytes: number;
+			createdAt: string;
+		}[];
 	}[];
 }
 interface RecurringDraft {
@@ -72,6 +105,16 @@ interface DateDraft {
 	start: string;
 	end: string;
 }
+
+type RequestMode = "single" | "repeats";
+type RecurrenceFrequency = "weekly" | "biweekly" | "monthly";
+
+const RECURRENCE_FREQUENCIES: { value: RecurrenceFrequency; label: string }[] =
+	[
+		{ value: "weekly", label: "Weekly" },
+		{ value: "biweekly", label: "Biweekly" },
+		{ value: "monthly", label: "Monthly" },
+	];
 
 const DAY_NAMES = [
 	"Sunday",
@@ -128,12 +171,67 @@ function toLabel(min: number) {
 	return `${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
 
+function approvalStatusLabel(status: LeaveApprovalDto["status"]): string {
+	if (status === "approved") return "Approved";
+	if (status === "declined") return "Declined";
+	if (status === "skipped") return "Skipped";
+	if (status === "escalated") return "Escalated";
+	return "Waiting";
+}
+
+function ApprovalSteps({
+	approvals,
+	currentStep,
+}: {
+	approvals: LeaveApprovalDto[];
+	currentStep?: number;
+}) {
+	const { theme } = useAppTheme();
+	const current =
+		typeof currentStep === "number"
+			? approvals.find((approval) => approval.stepOrder === currentStep)
+			: approvals.find(
+					(approval) =>
+						approval.status === "pending" || approval.status === "escalated",
+				);
+	return (
+		<View style={styles.chipsRow}>
+			{approvals.map((approval) => (
+				<Badge
+					key={approval.id}
+					label={`${approval.stepOrder + 1}. ${approvalStatusLabel(approval.status)}`}
+					variant={
+						approval.status === "approved"
+							? "success"
+							: approval.status === "declined"
+								? "danger"
+								: approval.status === "skipped"
+									? "outline"
+									: "amber"
+					}
+				/>
+			))}
+			{approvals.length > 1 ? (
+				<Text style={[styles.desc, { color: theme.muted }]}>
+					Step {(current?.stepOrder ?? 0) + 1} of {approvals.length}
+				</Text>
+			) : null}
+		</View>
+	);
+}
+
 export default function AvailabilityScreen() {
 	const { theme } = useAppTheme();
 	const { selected } = useSelectedWorkplaceId();
+	const { timeFormat } = useDisplayPrefs();
 	const { employment } = useCurrentEmployment();
 	const leaveTypes = useLeaveTypes(selected ?? undefined);
 	const pto = usePtoBalances(selected ?? undefined, employment?.id);
+	const calendarTokens = useCalendarTokens(selected ?? undefined);
+	const createCalendarToken = useCreateMyCalendarToken(selected ?? undefined);
+	const revokeCalendarToken = useRevokeCalendarToken(selected ?? undefined);
+	const createEncashment = useCreateMyLeaveEncashment(selected ?? undefined);
+	const forecast = useLeaveForecast(selected ?? undefined, employment?.id, 6);
 	const qc = useQueryClient();
 	const c = useQuery({
 		queryKey: ["constraints", selected],
@@ -156,9 +254,37 @@ export default function AvailabilityScreen() {
 	const [offStart, setOffStart] = useState("09:00");
 	const [offEnd, setOffEnd] = useState("17:00");
 	const [offReason, setOffReason] = useState("");
+	const [offEmergency, setOffEmergency] = useState(false);
+	const [requestMode, setRequestMode] = useState<RequestMode>("single");
+	const [recurrenceFrequency, setRecurrenceFrequency] =
+		useState<RecurrenceFrequency>("weekly");
+	const [recurrenceCount, setRecurrenceCount] = useState(4);
 	const [leaveTypeId, setLeaveTypeId] = useState("");
 	const [requesting, setRequesting] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
+	const [uploadingRequestId, setUploadingRequestId] = useState<string | null>(
+		null,
+	);
+	const [forecastOpen, setForecastOpen] = useState(false);
+	const [calendarUrl, setCalendarUrl] = useState<string | null>(null);
+	const [encashOpen, setEncashOpen] = useState(false);
+	const [encashLeaveTypeId, setEncashLeaveTypeId] = useState("");
+	const [encashHours, setEncashHours] = useState("8");
+	const [encashNote, setEncashNote] = useState("");
+
+	const typeById = useMemo(() => {
+		const map = new Map<string, LeaveTypeDto>();
+		for (const type of leaveTypes.data?.leaveTypes ?? [])
+			map.set(type.id, type);
+		return map;
+	}, [leaveTypes.data]);
+	const myCalendarToken =
+		(calendarTokens.data ?? []).find(
+			(token) => token.employmentId === employment?.id && !token.revokedAt,
+		) ?? null;
+	const encashableTypes = (leaveTypes.data?.leaveTypes ?? []).filter(
+		(type) => type.policy?.encashmentEnabled,
+	);
 
 	useEffect(() => {
 		if (!c.data) return;
@@ -287,21 +413,40 @@ export default function AvailabilityScreen() {
 				await qc.invalidateQueries({ queryKey: ["pto", selected] });
 				Alert.alert("Updated", "Your pending request was updated.");
 			} else {
+				const window = {
+					startDate: offStartDate,
+					endDate,
+					allDay: offAllDay,
+					...(offAllDay ? {} : { startMinute: s, endMinute: e }),
+					reason: offReason.trim() || undefined,
+					leaveTypeId,
+				};
+				const recurring = requestMode === "repeats";
 				await api(`/v1/workplaces/${selected}/my/time-off`, {
 					method: "POST",
-					body: {
-						startDate: offStartDate,
-						endDate,
-						allDay: offAllDay,
-						...(offAllDay ? {} : { startMinute: s, endMinute: e }),
-						reason: offReason.trim() || undefined,
-						leaveTypeId,
-					},
+					body: recurring
+						? {
+								windows: [window],
+								recurrence: {
+									frequency: recurrenceFrequency,
+									count: recurrenceCount,
+								},
+								isEmergency: offEmergency,
+							}
+						: { ...window, isEmergency: offEmergency },
 				});
 				setOffReason("");
+				setOffEmergency(false);
+				setRequestMode("single");
 				await qc.invalidateQueries({ queryKey: ["constraints", selected] });
 				await qc.invalidateQueries({ queryKey: ["pto", selected] });
-				Alert.alert("Requested", "Your manager will review this time off.");
+				await qc.invalidateQueries({ queryKey: ["leave-forecast", selected] });
+				Alert.alert(
+					"Requested",
+					recurring
+						? `${recurrenceCount} recurring requests submitted. Your manager will review them.`
+						: "Your manager will review this time off.",
+				);
 			}
 		} catch (err) {
 			Alert.alert(
@@ -322,6 +467,104 @@ export default function AvailabilityScreen() {
 			Alert.alert("Could not cancel", (e as Error).message);
 		}
 	}
+	async function cancelApprovedRequest(id: string) {
+		try {
+			await api(`/v1/workplaces/${selected}/my/time-off/${id}/cancel`, {
+				method: "POST",
+			});
+			await qc.invalidateQueries({ queryKey: ["constraints", selected] });
+			await qc.invalidateQueries({ queryKey: ["pto", selected] });
+			await qc.invalidateQueries({ queryKey: ["leave-forecast", selected] });
+			Alert.alert("Cancelled", "Any charged balance was restored.");
+		} catch (e) {
+			Alert.alert("Could not cancel", (e as Error).message);
+		}
+	}
+	async function attachDocument(requestId: string) {
+		try {
+			const result = await DocumentPicker.getDocumentAsync({
+				type: [
+					"application/pdf",
+					"image/jpeg",
+					"image/png",
+					"image/webp",
+					"image/heic",
+				],
+				copyToCacheDirectory: true,
+			});
+			if (result.canceled) return;
+			const asset = result.assets[0];
+			if (!asset) return;
+			if (asset.size != null && asset.size > 10 * 1024 * 1024) {
+				Alert.alert("Too large", "Documents must be 10 MB or smaller.");
+				return;
+			}
+			setUploadingRequestId(requestId);
+			const formData = new FormData();
+			formData.append("file", {
+				uri: asset.uri,
+				name: asset.name,
+				type: asset.mimeType ?? "application/octet-stream",
+			} as unknown as Blob);
+			const cookie = await authClient.getCookie();
+			const response = await fetch(
+				`${getServerUrl()}/v1/workplaces/${selected}/time-off/${requestId}/documents`,
+				{
+					method: "POST",
+					headers: cookie ? { Cookie: cookie } : undefined,
+					body: formData,
+				},
+			);
+			if (!response.ok) {
+				let message = `Upload failed (${response.status}).`;
+				try {
+					const payload = (await response.json()) as { message?: string };
+					if (payload.message) message = payload.message;
+				} catch {
+					// keep default message
+				}
+				throw new Error(message);
+			}
+			await qc.invalidateQueries({ queryKey: ["constraints", selected] });
+			Alert.alert("Attached", "The document was uploaded.");
+		} catch (e) {
+			Alert.alert("Could not attach", (e as Error).message);
+		} finally {
+			setUploadingRequestId(null);
+		}
+	}
+	async function shareCalendarLink() {
+		if (!calendarUrl) return;
+		try {
+			await Share.share({ message: calendarUrl, url: calendarUrl });
+		} catch {
+			// The share sheet can be dismissed; there is nothing to recover.
+		}
+	}
+	async function submitEncashment() {
+		if (!encashLeaveTypeId) {
+			Alert.alert("Leave type", "Choose a leave type to encash.");
+			return;
+		}
+		const minutes = hoursToMinutes(encashHours);
+		if (minutes <= 0) {
+			Alert.alert("Hours", "Enter how many hours to encash.");
+			return;
+		}
+		try {
+			await createEncashment.mutateAsync({
+				leaveTypeId: encashLeaveTypeId,
+				minutes,
+				note: encashNote.trim() || undefined,
+			});
+			setEncashOpen(false);
+			setEncashHours("8");
+			setEncashNote("");
+			Alert.alert("Requested", "Your manager will review the encashment.");
+		} catch (e) {
+			Alert.alert("Could not request", (e as Error).message);
+		}
+	}
 
 	if (c.isLoading)
 		return (
@@ -339,89 +582,142 @@ export default function AvailabilityScreen() {
 				<Text style={[styles.desc, { color: theme.muted }]}>
 					All-day by default. Your manager reviews every request.
 				</Text>
-				{(pto.data?.balances ?? []).map((balance) => (
-					<Text
-						key={balance.leaveTypeId}
-						style={[styles.desc, { color: theme.muted }]}
-					>
-						{balance.name}: {formatLeaveHours(balance.minutes)} remaining
-					</Text>
-				))}
-				{(c.data?.timeOff ?? []).map((r) => (
-					<View
-						key={r.id}
-						style={[styles.rowCard, { borderColor: theme.border }]}
-					>
-						<View style={{ flex: 1, gap: 4 }}>
-							<Text
-								style={[
-									styles.rowLabel,
-									{ color: theme.text, fontVariant: ["tabular-nums"] },
-								]}
-							>
-								{formatLeaveRange(r)}
-								{r.chargeMinutes
-									? ` · ${formatLeaveHours(r.chargeMinutes)}`
-									: ""}
+				{(pto.data?.balances ?? []).map((balance) => {
+					const type = typeById.get(balance.leaveTypeId);
+					const chips = type?.policy ? leavePolicySummary(type.policy) : [];
+					return (
+						<View key={balance.leaveTypeId} style={{ gap: 4 }}>
+							<Text style={[styles.desc, { color: theme.muted }]}>
+								{balance.name}: {formatLeaveHours(balance.minutes)} remaining
 							</Text>
-							<View style={{ flexDirection: "row" }}>
-								<Badge
-									label={
-										r.status === "pending"
-											? "Waiting for manager"
-											: r.status === "approved"
-												? "Approved"
-												: "Declined"
-									}
-									variant={
-										r.status === "approved"
-											? "success"
-											: r.status === "declined"
-												? "danger"
-												: "outline"
-									}
-								/>
-							</View>
-							{r.decisionReason ? (
-								<Text style={[styles.desc, { color: theme.muted }]}>
-									Manager: {r.decisionReason}
-								</Text>
+							{chips.length > 0 ? (
+								<View style={styles.chipsRow}>
+									{chips.map((chip) => (
+										<Badge key={chip} label={chip} variant="outline" />
+									))}
+								</View>
 							) : null}
 						</View>
-						{r.status === "pending" ? (
-							<View style={{ alignItems: "flex-end", gap: 8 }}>
-								<Link
-									label={`Edit request ${formatLeaveRange(r)}`}
-									color={theme.primary}
-									onPress={() => {
-										setEditingId(r.id);
-										setLeaveTypeId(r.leaveTypeId ?? "");
-										setOffStartDate(r.startDate ?? r.startsAt.slice(0, 10));
-										setOffEndDate(r.endDate ?? r.endsAt.slice(0, 10));
-										setOffAllDay(r.allDay ?? true);
-										setOffStart(toLabel(r.startMinute ?? 9 * 60));
-										setOffEnd(toLabel(r.endMinute ?? 17 * 60));
-										setOffReason(r.reason ?? "");
-									}}
-								/>
-								<Link
-									label="Cancel request"
-									color={theme.primary}
-									onPress={() =>
-										confirmAction({
-											title: "Cancel this time-off request?",
-											message:
-												"Your manager will no longer review it. You can submit a new request later.",
-											confirmLabel: "Cancel request",
-											destructive: true,
-											onConfirm: () => void cancelRequest(r.id),
-										})
-									}
-								/>
+					);
+				})}
+				{(c.data?.timeOff ?? []).map((r) => {
+					const attachable = r.status === "pending" || r.status === "approved";
+					return (
+						<View
+							key={r.id}
+							style={[styles.rowCard, { borderColor: theme.border }]}
+						>
+							<View style={{ flex: 1, gap: 4 }}>
+								<Text
+									style={[
+										styles.rowLabel,
+										{ color: theme.text, fontVariant: ["tabular-nums"] },
+									]}
+								>
+									{formatLeaveRange(r, timeFormat)}
+									{r.chargeMinutes
+										? ` · ${formatLeaveHours(r.chargeMinutes)}`
+										: ""}
+								</Text>
+								<View style={styles.chipsRow}>
+									<Badge
+										label={
+											r.status === "pending"
+												? "Waiting for manager"
+												: r.status === "approved"
+													? "Approved"
+													: r.status === "cancelled"
+														? "Cancelled"
+														: "Declined"
+										}
+										variant={
+											r.status === "approved"
+												? "success"
+												: r.status === "declined"
+													? "danger"
+													: "outline"
+										}
+									/>
+									{r.isEmergency ? (
+										<Badge label="Emergency" variant="amber" />
+									) : null}
+								</View>
+								{r.approvals && r.approvals.length > 0 ? (
+									<ApprovalSteps
+										approvals={r.approvals}
+										currentStep={r.currentStep}
+									/>
+								) : null}
+								{r.decisionReason ? (
+									<Text style={[styles.desc, { color: theme.muted }]}>
+										Manager: {r.decisionReason}
+									</Text>
+								) : null}
+								{r.documents && r.documents.length > 0 ? (
+									<Text style={[styles.desc, { color: theme.muted }]}>
+										Documents:{" "}
+										{r.documents
+											.map((document) => document.fileName)
+											.join(", ")}
+									</Text>
+								) : null}
+								{attachable ? (
+									<Link
+										label={
+											uploadingRequestId === r.id
+												? "Uploading…"
+												: `Attach document to ${formatLeaveRange(r, timeFormat)}`
+										}
+										color={theme.primary}
+										onPress={() => void attachDocument(r.id)}
+									/>
+								) : null}
 							</View>
-						) : null}
-					</View>
-				))}
+							{r.status === "pending" || r.status === "approved" ? (
+								<View style={{ alignItems: "flex-end", gap: 8 }}>
+									{r.status === "pending" ? (
+										<Link
+											label={`Edit request ${formatLeaveRange(r, timeFormat)}`}
+											color={theme.primary}
+											onPress={() => {
+												setEditingId(r.id);
+												setLeaveTypeId(r.leaveTypeId ?? "");
+												setOffStartDate(r.startDate ?? r.startsAt.slice(0, 10));
+												setOffEndDate(r.endDate ?? r.endsAt.slice(0, 10));
+												setOffAllDay(r.allDay ?? true);
+												setOffStart(toLabel(r.startMinute ?? 9 * 60));
+												setOffEnd(toLabel(r.endMinute ?? 17 * 60));
+												setOffReason(r.reason ?? "");
+											}}
+										/>
+									) : null}
+									<Link
+										label="Cancel request"
+										color={theme.primary}
+										onPress={() =>
+											confirmAction({
+												title:
+													r.status === "approved"
+														? "Cancel this approved time off?"
+														: "Cancel this time-off request?",
+												message:
+													r.status === "approved"
+														? "Your manager will see the cancellation and any charged balance will be restored."
+														: "Your manager will no longer review it. You can submit a new request later.",
+												confirmLabel: "Cancel request",
+												destructive: true,
+												onConfirm: () =>
+													void (r.status === "approved"
+														? cancelApprovedRequest(r.id)
+														: cancelRequest(r.id)),
+											})
+										}
+									/>
+								</View>
+							) : null}
+						</View>
+					);
+				})}
 				<View style={styles.builder}>
 					<Text style={[styles.label, { color: theme.muted }]}>
 						{editingId ? "Edit request" : "New request"}
@@ -493,6 +789,145 @@ export default function AvailabilityScreen() {
 						value={offReason}
 						onChange={setOffReason}
 					/>
+					<NativeSwitchField
+						label="Emergency"
+						value={offEmergency}
+						onChange={setOffEmergency}
+					/>
+					{editingId ? null : (
+						<>
+							<Text style={[styles.label, { color: theme.muted }]}>Repeat</Text>
+							<View style={styles.chipsRow}>
+								{(
+									[
+										{ value: "single", label: "Single" },
+										{ value: "repeats", label: "Repeats" },
+									] as const
+								).map((option) => {
+									const active = requestMode === option.value;
+									return (
+										<Pressable
+											key={option.value}
+											accessibilityRole="radio"
+											accessibilityLabel={option.label}
+											accessibilityState={{ checked: active }}
+											onPress={() => setRequestMode(option.value)}
+											style={[
+												styles.chip,
+												{
+													borderColor: active ? theme.primary : theme.border,
+													backgroundColor: active
+														? theme.primary
+														: "transparent",
+												},
+											]}
+										>
+											<Text
+												style={[
+													styles.chipText,
+													{
+														color: active ? theme.onPrimary : theme.text,
+													},
+												]}
+											>
+												{option.label}
+											</Text>
+										</Pressable>
+									);
+								})}
+							</View>
+							{requestMode === "repeats" ? (
+								<>
+									<View style={styles.chipsRow}>
+										{RECURRENCE_FREQUENCIES.map((option) => {
+											const active = recurrenceFrequency === option.value;
+											return (
+												<Pressable
+													key={option.value}
+													accessibilityRole="radio"
+													accessibilityLabel={option.label}
+													accessibilityState={{ checked: active }}
+													onPress={() => setRecurrenceFrequency(option.value)}
+													style={[
+														styles.chip,
+														{
+															borderColor: active
+																? theme.primary
+																: theme.border,
+															backgroundColor: active
+																? theme.primary
+																: "transparent",
+														},
+													]}
+												>
+													<Text
+														style={[
+															styles.chipText,
+															{
+																color: active ? theme.onPrimary : theme.text,
+															},
+														]}
+													>
+														{option.label}
+													</Text>
+												</Pressable>
+											);
+										})}
+									</View>
+									<View style={styles.stepperRow}>
+										<Pressable
+											accessibilityRole="button"
+											accessibilityLabel="Fewer repeats"
+											onPress={() =>
+												setRecurrenceCount((count) => Math.max(2, count - 1))
+											}
+											style={[
+												styles.stepperButton,
+												{ borderColor: theme.border },
+											]}
+										>
+											<Text
+												style={[
+													styles.stepperButtonText,
+													{ color: theme.text },
+												]}
+											>
+												−
+											</Text>
+										</Pressable>
+										<Text style={[styles.rowLabel, { color: theme.text }]}>
+											{recurrenceCount} times
+										</Text>
+										<Pressable
+											accessibilityRole="button"
+											accessibilityLabel="More repeats"
+											onPress={() =>
+												setRecurrenceCount((count) => Math.min(12, count + 1))
+											}
+											style={[
+												styles.stepperButton,
+												{ borderColor: theme.border },
+											]}
+										>
+											<Text
+												style={[
+													styles.stepperButtonText,
+													{ color: theme.text },
+												]}
+											>
+												+
+											</Text>
+										</Pressable>
+										<Text
+											style={[styles.desc, { color: theme.muted, flex: 1 }]}
+										>
+											Repeats this window automatically.
+										</Text>
+									</View>
+								</>
+							) : null}
+						</>
+					)}
 					<PrimaryButton
 						label={
 							requesting
@@ -514,10 +949,237 @@ export default function AvailabilityScreen() {
 								setOffStartDate(todayIsoDate());
 								setOffEndDate(todayIsoDate());
 								setOffAllDay(true);
+								setOffEmergency(false);
+								setRequestMode("single");
 							}}
 						/>
 					) : null}
 				</View>
+			</Card>
+
+			{encashableTypes.length > 0 ? (
+				<Card>
+					<Text style={[styles.title, { color: theme.text }]}>
+						Encash leave
+					</Text>
+					<Text style={[styles.desc, { color: theme.muted }]}>
+						Turn unused leave into pay. A manager must approve the request.
+					</Text>
+					{encashOpen ? (
+						<>
+							<View style={styles.chipsRow}>
+								{encashableTypes.map((type) => {
+									const active = encashLeaveTypeId === type.id;
+									return (
+										<Pressable
+											key={type.id}
+											accessibilityRole="radio"
+											accessibilityLabel={type.name}
+											accessibilityState={{ checked: active }}
+											onPress={() => setEncashLeaveTypeId(type.id)}
+											style={[
+												styles.chip,
+												{
+													borderColor: active ? theme.primary : theme.border,
+													backgroundColor: active
+														? theme.primary
+														: "transparent",
+												},
+											]}
+										>
+											<Text
+												style={[
+													styles.chipText,
+													{ color: active ? theme.onPrimary : theme.text },
+												]}
+											>
+												{type.name}
+											</Text>
+										</Pressable>
+									);
+								})}
+							</View>
+							<NativeField
+								label="Hours"
+								value={encashHours}
+								onChange={setEncashHours}
+								keyboardType="decimal-pad"
+							/>
+							<Field
+								label="Note (optional)"
+								value={encashNote}
+								onChange={setEncashNote}
+							/>
+							<PrimaryButton
+								label={
+									createEncashment.isPending ? "Sending…" : "Request encashment"
+								}
+								disabled={createEncashment.isPending}
+								onPress={() => void submitEncashment()}
+							/>
+							<Link
+								label="Cancel encashment"
+								color={theme.primary}
+								onPress={() => setEncashOpen(false)}
+							/>
+						</>
+					) : (
+						<SecondaryButton
+							label="Encash leave"
+							onPress={() => {
+								setEncashLeaveTypeId(
+									(current) => current || encashableTypes[0]?.id || "",
+								);
+								setEncashOpen(true);
+							}}
+						/>
+					)}
+				</Card>
+			) : null}
+
+			<Card>
+				<Text style={[styles.title, { color: theme.text }]}>Calendar sync</Text>
+				<Text style={[styles.desc, { color: theme.muted }]}>
+					Subscribe to your published schedule and approved leave in a calendar
+					app.
+				</Text>
+				{myCalendarToken ? (
+					<>
+						<View style={styles.chipsRow}>
+							<Badge label="Active" variant="success" />
+						</View>
+						{calendarUrl ? (
+							<Text
+								style={[styles.desc, { color: theme.muted }]}
+								numberOfLines={1}
+							>
+								{calendarUrl}
+							</Text>
+						) : (
+							<Hint>Create a new link to share its URL again.</Hint>
+						)}
+						<View style={styles.actionsRow}>
+							{calendarUrl ? (
+								<View style={{ flex: 1 }}>
+									<PrimaryButton
+										label="Share link"
+										onPress={() => void shareCalendarLink()}
+									/>
+								</View>
+							) : null}
+							<View style={{ flex: 1 }}>
+								<SecondaryButton
+									label="Revoke link"
+									disabled={revokeCalendarToken.isPending}
+									onPress={() =>
+										confirmAction({
+											title: "Revoke this calendar link?",
+											message:
+												"Calendar apps using this link will stop updating. You can create a new link later.",
+											confirmLabel: "Revoke",
+											destructive: true,
+											onConfirm: () =>
+												revokeCalendarToken.mutate(myCalendarToken.id, {
+													onSuccess: () => {
+														setCalendarUrl(null);
+														Alert.alert("Revoked", "Calendar link revoked.");
+													},
+													onError: (e) =>
+														Alert.alert(
+															"Could not revoke",
+															(e as Error).message,
+														),
+												}),
+										})
+									}
+								/>
+							</View>
+						</View>
+					</>
+				) : (
+					<PrimaryButton
+						label={
+							createCalendarToken.isPending
+								? "Creating…"
+								: "Create calendar link"
+						}
+						disabled={createCalendarToken.isPending}
+						onPress={() =>
+							createCalendarToken.mutate(undefined, {
+								onSuccess: (result) => {
+									setCalendarUrl(
+										result.token.url
+											? `${getServerUrl()}${result.token.url}`
+											: null,
+									);
+									Alert.alert("Created", "Calendar link created.");
+								},
+								onError: (e) =>
+									Alert.alert("Could not create", (e as Error).message),
+							})
+						}
+					/>
+				)}
+			</Card>
+
+			<Card>
+				<Pressable
+					accessibilityRole="button"
+					accessibilityState={{ expanded: forecastOpen }}
+					onPress={() => setForecastOpen((open) => !open)}
+					style={styles.rowHeader}
+				>
+					<View style={{ flex: 1, gap: 3 }}>
+						<Text style={[styles.title, { color: theme.text }]}>
+							Leave forecast
+						</Text>
+						<Text style={[styles.desc, { color: theme.muted }]}>
+							Projected accrual, planned usage, and balance for the next 6
+							months.
+						</Text>
+					</View>
+					<Text style={[styles.link, { color: theme.primary }]}>
+						{forecastOpen ? "Hide" : "Show"}
+					</Text>
+				</Pressable>
+				{forecastOpen ? (
+					forecast.isLoading ? (
+						<ActivityIndicator color={theme.primary} />
+					) : (forecast.data ?? []).length === 0 ? (
+						<Hint>No accrual policies to forecast yet.</Hint>
+					) : (
+						(forecast.data ?? []).map((entry) => (
+							<View key={entry.leaveTypeId} style={{ gap: 4 }}>
+								<Text style={[styles.rowLabel, { color: theme.text }]}>
+									{entry.leaveTypeName}
+								</Text>
+								<Text style={[styles.desc, { color: theme.muted }]}>
+									Starting {formatLeaveHours(entry.startingMinutes)}
+									{entry.pendingMinutes > 0
+										? ` · ${formatLeaveHours(entry.pendingMinutes)} pending`
+										: ""}
+								</Text>
+								{entry.points.slice(0, 6).map((point) => (
+									<Text
+										key={point.month}
+										style={[
+											styles.desc,
+											{
+												color: theme.muted,
+												fontVariant: ["tabular-nums"],
+											},
+										]}
+									>
+										{formatLeaveMonth(point.month)}: +
+										{formatLeaveHours(point.accruedMinutes)} · −
+										{formatLeaveHours(point.plannedUsageMinutes)} planned ·{" "}
+										{formatLeaveHours(point.balanceMinutes)} balance
+									</Text>
+								))}
+							</View>
+						))
+					)
+				) : null}
 			</Card>
 
 			{/* Unavailability */}
@@ -750,6 +1412,27 @@ const styles = StyleSheet.create({
 	rowLabel: { fontSize: 15, fontWeight: "600", fontVariant: ["tabular-nums"] },
 	link: { fontSize: 13, fontWeight: "700" },
 	builder: { gap: 12, paddingTop: 2 },
+	rowHeader: {
+		minHeight: 44,
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 8,
+	},
+	actionsRow: { flexDirection: "row", gap: 10 },
+	stepperRow: {
+		flexDirection: "row",
+		alignItems: "center",
+		gap: 12,
+	},
+	stepperButton: {
+		width: 44,
+		height: 44,
+		borderWidth: 1,
+		borderRadius: 10,
+		alignItems: "center",
+		justifyContent: "center",
+	},
+	stepperButtonText: { fontSize: 20, fontWeight: "700", lineHeight: 22 },
 	pickerStack: { gap: 12, width: "100%" },
 	pickerField: { width: "100%", minHeight: 52 },
 	chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

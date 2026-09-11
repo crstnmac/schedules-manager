@@ -15,6 +15,10 @@ import {
 } from "@SchedulesManager/ui/components/select";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import {
+	ToggleGroup,
+	ToggleGroupItem,
+} from "@SchedulesManager/ui/components/toggle-group";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
@@ -29,6 +33,9 @@ import {
 import { useRegisterUnsavedChanges } from "@/components/unsaved-changes";
 import { api } from "@/lib/api";
 import type { WorkplaceSettings } from "@/lib/queries";
+import { WEEKDAY_NAMES } from "@/lib/time";
+
+const WEEKEND_DAY_LABELS = WEEKDAY_NAMES.map((name) => name.slice(0, 3));
 
 const SCHEDULE_VISIBILITY_ITEMS = [
 	{ label: "Everyone's shifts", value: "full" },
@@ -370,6 +377,49 @@ export function SchedulePoliciesCard({
 						</FieldGroup>
 					</SettingsSection>
 					<SettingsSection
+						title="Automatic approvals"
+						description="Skip manager review or worker acceptance for specific flows. These override the per-week Approval Policy Groups."
+					>
+						<FieldGroup>
+							<SettingsToggleField
+								id="auto-accept-shift-pickups"
+								label="Auto-accept shift pickups"
+								description="Open shift pickups are assigned immediately instead of waiting for manager review."
+								checked={form.value("autoAcceptShiftPickups")}
+								onCheckedChange={(checked) =>
+									form.patch({ autoAcceptShiftPickups: checked })
+								}
+							/>
+							<SettingsToggleField
+								id="auto-accept-shift-swaps"
+								label="Auto-accept shift swaps"
+								description="Agreed worker-to-worker swaps are applied and republished without manager review."
+								checked={form.value("autoAcceptShiftSwaps")}
+								onCheckedChange={(checked) =>
+									form.patch({ autoAcceptShiftSwaps: checked })
+								}
+							/>
+							<SettingsToggleField
+								id="auto-accept-shift-releases"
+								label="Auto-accept shift releases"
+								description="Release requests open the shift for pickup immediately instead of waiting for manager review."
+								checked={form.value("autoAcceptShiftReleases")}
+								onCheckedChange={(checked) =>
+									form.patch({ autoAcceptShiftReleases: checked })
+								}
+							/>
+							<SettingsToggleField
+								id="auto-accept-late-changes"
+								label="Auto-accept late schedule changes"
+								description="Material changes inside the notice window no longer require worker Shift Acceptance."
+								checked={form.value("autoAcceptLateChanges")}
+								onCheckedChange={(checked) =>
+									form.patch({ autoAcceptLateChanges: checked })
+								}
+							/>
+						</FieldGroup>
+					</SettingsSection>
+					<SettingsSection
 						title="Breaks & compliance"
 						description="Rest rules used when building and warning on the schedule."
 					>
@@ -645,6 +695,45 @@ export function TimeOffPoliciesCard({
 									form.patch({ workersCanRequestTimeOff: checked })
 								}
 							/>
+						</FieldGroup>
+					</SettingsSection>
+					<SettingsSection
+						title="Weekends"
+						description="Days treated as weekend when leave is charged and schedules are built."
+					>
+						<FieldGroup>
+							<SettingsField
+								id="weekend-days"
+								label="Weekend days"
+								description="Selected days count as weekend. At least one working day must remain."
+							>
+								<ToggleGroup
+									multiple
+									variant="outline"
+									size="sm"
+									className="flex-wrap"
+									value={form.value("weekendDays").map(String)}
+									onValueChange={(value) => {
+										if (value.length === 0) {
+											toast.error("Keep at least one working day.");
+											return;
+										}
+										form.patch({
+											weekendDays: value.map(Number).sort((a, b) => a - b),
+										});
+									}}
+								>
+									{WEEKEND_DAY_LABELS.map((label, day) => (
+										<ToggleGroupItem
+											key={label}
+											value={String(day)}
+											aria-label={WEEKDAY_NAMES[day]}
+										>
+											{label}
+										</ToggleGroupItem>
+									))}
+								</ToggleGroup>
+							</SettingsField>
 						</FieldGroup>
 					</SettingsSection>
 					<SettingsSection

@@ -209,7 +209,10 @@ export const rosterRoutes = new Elysia({
 			return { roster, timeOff };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			query: t.Object({
 				date: t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
@@ -272,7 +275,10 @@ export const rosterRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "The pay period containing today",
@@ -284,7 +290,11 @@ export const rosterRoutes = new Elysia({
 		"/workplaces/:workplaceId/version-shifts/:versionShiftId/attendance",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"approvals.review",
+			);
 			await requireSubscriptionCapability(params.workplaceId, "attendance");
 			return withIdempotency({
 				actorProfileId: profile.id,
@@ -367,12 +377,15 @@ export const rosterRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				versionShiftId: t.String({ format: "uuid" }),

@@ -224,7 +224,11 @@ export function registerMocks() {
 		useBilling: () => state.billing,
 		useMe: () => state.me,
 		useNotifications: () => state.inbox,
-		useMySchedule: () => ({ data: undefined, isLoading: false, isError: false }),
+		useMySchedule: () => ({
+			data: undefined,
+			isLoading: false,
+			isError: false,
+		}),
 		useClockIn: () => inertMutation,
 		useClockOut: () => inertMutation,
 	}));

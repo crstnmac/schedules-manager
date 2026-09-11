@@ -12,6 +12,7 @@ import {
 import { registerEnsureProfileCollisionTests } from "./ensure-profile-collision-cases";
 import { registerJoinPolicyTests } from "./join-policy-cases";
 import { registerKioskRateLimitTests } from "./kiosk-rate-limit-cases";
+import { registerLeaveTests } from "./leave-cases";
 import { registerMyScheduleTests } from "./my-schedule-cases";
 import { registerOpsTests } from "./ops-cases";
 import { registerOwnReleaseTests } from "./own-release-cases";
@@ -22,6 +23,7 @@ import { registerReportTests } from "./report-cases";
 import { registerReportsTests } from "./reports-cases";
 import { registerStalePositionTests } from "./stale-position-cases";
 import { registerTimeClockTests } from "./time-clock-cases";
+import { registerWorkspaceAutoAcceptTests } from "./workspace-auto-accept-cases";
 
 const integrationDescribe =
 	process.env.RUN_INTEGRATION_TESTS === "1" ? describe : describe.skip;
@@ -78,7 +80,11 @@ integrationDescribe("Schedule publication", () => {
 	async function managerToken(profileId: string, email: string) {
 		const [authUser] = await database.db
 			.insert(database.user)
-			.values({ id: profileId, name: email.split("@")[0] ?? "Test user", email })
+			.values({
+				id: profileId,
+				name: email.split("@")[0] ?? "Test user",
+				email,
+			})
 			.onConflictDoNothing()
 			.returning({ id: database.user.id });
 		if (!authUser) {
@@ -122,6 +128,7 @@ integrationDescribe("Schedule publication", () => {
 	registerReportTests(() => ({ database, app, token: managerToken }));
 	registerReportsTests(() => ({ database, app, token: managerToken }));
 	registerStalePositionTests(() => ({ database, app, token: managerToken }));
+	registerLeaveTests(() => ({ database, app, token: managerToken }));
 	registerOwnReleaseTests(() => ({ database, app, token: managerToken }));
 	registerAcceptanceRaceTests(() => ({ database, app, token: managerToken }));
 	registerAutoClockOutBreaksTests(() => ({
@@ -143,8 +150,15 @@ integrationDescribe("Schedule publication", () => {
 		const signUp = await app.handle(
 			new Request("http://localhost/api/auth/sign-up/email", {
 				method: "POST",
-				headers: { "content-type": "application/json", origin: "http://localhost:3001" },
-				body: JSON.stringify({ name: "Auth Test", email, password: "correct-horse-battery-staple" }),
+				headers: {
+					"content-type": "application/json",
+					origin: "http://localhost:3001",
+				},
+				body: JSON.stringify({
+					name: "Auth Test",
+					email,
+					password: "correct-horse-battery-staple",
+				}),
 			}),
 		);
 		expect(signUp.status).toBe(200);
@@ -159,7 +173,10 @@ integrationDescribe("Schedule publication", () => {
 			}),
 		);
 		expect(me.status).toBe(200);
-		expect((await me.json()).profile).toMatchObject({ email, fullName: "Auth Test" });
+		expect((await me.json()).profile).toMatchObject({
+			email,
+			fullName: "Auth Test",
+		});
 
 		const signOut = await app.handle(
 			new Request("http://localhost/api/auth/sign-out", {
@@ -1770,4 +1787,9 @@ integrationDescribe("Schedule publication", () => {
 	// global-count assertion in "simultaneous swap proposals cannot reserve
 	// the same Shift" above (which counts all shift_swaps rows).
 	registerCoverageTests(() => ({ database, app, token: managerToken }));
+	registerWorkspaceAutoAcceptTests(() => ({
+		database,
+		app,
+		token: managerToken,
+	}));
 });

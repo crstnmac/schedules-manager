@@ -1,4 +1,5 @@
 import { Button } from "@SchedulesManager/ui/components/button";
+import { ColorPicker } from "@SchedulesManager/ui/components/color-picker";
 import {
 	Field,
 	FieldGroup,
@@ -244,20 +245,11 @@ export function ScheduleTeamsCard({ locations }: { locations: LocationDto[] }) {
 							<FieldLabel htmlFor="schedule-team-color">
 								Color (optional)
 							</FieldLabel>
-							<div className="flex items-center gap-2">
-								{color.trim() ? (
-									<span
-										className="size-6 shrink-0 rounded-full border"
-										style={{ backgroundColor: color.trim() }}
-									/>
-								) : null}
-								<Input
-									id="schedule-team-color"
-									value={color}
-									onChange={(event) => setColor(event.target.value)}
-									placeholder="#f97316"
-								/>
-							</div>
+							<ColorPicker
+								id="schedule-team-color"
+								value={color}
+								onChange={setColor}
+							/>
 						</Field>
 					</FieldGroup>
 				</form>

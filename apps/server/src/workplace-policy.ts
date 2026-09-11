@@ -35,6 +35,10 @@ export type WorkplaceSettingsPayload = {
 	breaksEnabled: boolean;
 	shiftExchangesEnabled: boolean;
 	unavailabilityRequiresApproval: boolean;
+	autoAcceptShiftPickups: boolean;
+	autoAcceptShiftSwaps: boolean;
+	autoAcceptShiftReleases: boolean;
+	autoAcceptLateChanges: boolean;
 	clopeningMinutes: number;
 	maxConsecutiveWorkDays: number;
 	geofenceRequired: boolean;
@@ -42,6 +46,8 @@ export type WorkplaceSettingsPayload = {
 	timesheetNotesEnabled: boolean;
 	leaveCapReset: Workplace["leaveCapReset"];
 	leaveCapResetMonthDay: string | null;
+	/** Weekday numbers (0 = Sunday) that do not count as working days. */
+	weekendDays: number[];
 	workersCanRequestTimeOff: boolean;
 };
 
@@ -92,6 +98,10 @@ export function workplaceSettingsPayload(
 		breaksEnabled: workplace.breaksEnabled,
 		shiftExchangesEnabled: workplace.shiftExchangesEnabled,
 		unavailabilityRequiresApproval: workplace.unavailabilityRequiresApproval,
+		autoAcceptShiftPickups: workplace.autoAcceptShiftPickups,
+		autoAcceptShiftSwaps: workplace.autoAcceptShiftSwaps,
+		autoAcceptShiftReleases: workplace.autoAcceptShiftReleases,
+		autoAcceptLateChanges: workplace.autoAcceptLateChanges,
 		clopeningMinutes: workplace.clopeningMinutes,
 		maxConsecutiveWorkDays: workplace.maxConsecutiveWorkDays,
 		geofenceRequired: workplace.geofenceRequired,
@@ -99,6 +109,7 @@ export function workplaceSettingsPayload(
 		timesheetNotesEnabled: workplace.timesheetNotesEnabled,
 		leaveCapReset: workplace.leaveCapReset,
 		leaveCapResetMonthDay: workplace.leaveCapResetMonthDay,
+		weekendDays: workplace.weekendDays,
 		workersCanRequestTimeOff: workplace.workersCanRequestTimeOff,
 	};
 }

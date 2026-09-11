@@ -23,6 +23,7 @@ import { holidayRoutes } from "./routes/holidays";
 import { integrationRoutes } from "./routes/integrations";
 import { invitationsRoutes } from "./routes/invitations";
 import { kioskRoutes } from "./routes/kiosk";
+import { leaveRoutes } from "./routes/leave";
 import { locationsRoutes } from "./routes/locations";
 import { meRoutes } from "./routes/me";
 import { notificationsRoutes } from "./routes/notifications";
@@ -214,6 +215,7 @@ export function createApp(options: CreateAppOptions = {}) {
 		.use(swapRoutes)
 		.use(rosterRoutes)
 		.use(surfaceRoutes)
+		.use(leaveRoutes)
 		.use(kioskRoutes)
 		.use(reportRoutes);
 }

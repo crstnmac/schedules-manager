@@ -4,7 +4,6 @@ import { BadRequestError } from "./errors";
 import { shiftDays, wallToInstant, zonedDayInfo } from "./time";
 
 export const PAID_DAY_MINUTES = 480;
-
 export function inclusiveDayCount(startDate: string, endDate: string): number {
 	const start = Date.parse(`${startDate}T00:00:00Z`);
 	const end = Date.parse(`${endDate}T00:00:00Z`);
@@ -200,4 +199,170 @@ export function leaveCapResetPayload(
 			timeZone,
 		}),
 	};
+}
+
+/**
+ * Calendar-day helpers for leave policy maths. All date keys are bare
+ * `YYYY-MM-DD` strings evaluated in UTC so weekend and holiday comparisons are
+ * calendar questions, not clock questions.
+ */
+export function enumerateDateKeys(
+	startDate: string,
+	endDate: string,
+): string[] {
+	const keys: string[] = [];
+	let cursor = startDate;
+	while (cursor <= endDate) {
+		keys.push(cursor);
+		cursor = shiftDays(cursor, 1);
+	}
+	return keys;
+}
+
+export function isWeekend(
+	dateKey: string,
+	weekendDays: readonly number[],
+): boolean {
+	return weekendDays.includes(new Date(`${dateKey}T00:00:00Z`).getUTCDay());
+}
+
+export interface LeaveChargeContext {
+	/** Charge only working days; weekend and holiday days cost nothing. */
+	workingDaysOnly: boolean;
+	weekendDays: readonly number[];
+	/** Holiday date keys, already expanded for the requested range. */
+	holidayDates: ReadonlySet<string>;
+}
+
+/**
+ * Policy-aware charge for a leave window. Partial days always charge their
+ * actual elapsed minutes; all-day windows charge full paid days, optionally
+ * skipping weekends and holidays.
+ */
+export function chargeLeaveMinutes(
+	window: {
+		allDay: boolean;
+		startDate: string;
+		endDate: string;
+		startsAt: Date;
+		endsAt: Date;
+	},
+	context?: LeaveChargeContext,
+): number {
+	if (!window.allDay || !context?.workingDaysOnly) {
+		return leaveChargeMinutes(window);
+	}
+	const workingDays = enumerateDateKeys(
+		window.startDate,
+		window.endDate,
+	).filter(
+		(dateKey) =>
+			!isWeekend(dateKey, context.weekendDays) &&
+			!context.holidayDates.has(dateKey),
+	).length;
+	return workingDays * PAID_DAY_MINUTES;
+}
+
+/** Number of calendar days in the window that count as working days. */
+export function workingDaysInWindow(
+	startDate: string,
+	endDate: string,
+	weekendDays: readonly number[],
+	holidayDates: ReadonlySet<string>,
+): number {
+	return enumerateDateKeys(startDate, endDate).filter(
+		(dateKey) => !isWeekend(dateKey, weekendDays) && !holidayDates.has(dateKey),
+	).length;
+}
+
+function pad2(value: number): string {
+	return String(value).padStart(2, "0");
+}
+
+export function parseMonthDay(monthDay: string | null | undefined): {
+	month: number;
+	day: number;
+} {
+	const match = /^(\d{2})-(\d{2})$/.exec(monthDay ?? "");
+	if (!match) return { month: 1, day: 1 };
+	return { month: Number(match[1]), day: Number(match[2]) };
+}
+
+function clampDayOfMonth(year: number, month: number, day: number): string {
+	const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+	return `${year}-${pad2(month)}-${pad2(Math.min(day, lastDay))}`;
+}
+
+/** First date key of the leave year that contains `dateKey`. */
+export function leaveYearStartDate(
+	dateKey: string,
+	leaveYearStartMonthDay: string,
+): string {
+	const { month, day } = parseMonthDay(leaveYearStartMonthDay);
+	const year = Number(dateKey.slice(0, 4));
+	const startThisYear = clampDayOfMonth(year, month, day);
+	return dateKey >= startThisYear
+		? startThisYear
+		: clampDayOfMonth(year - 1, month, day);
+}
+
+export function leaveYearForDate(
+	dateKey: string,
+	leaveYearStartMonthDay: string,
+): number {
+	return Number(
+		leaveYearStartDate(dateKey, leaveYearStartMonthDay).slice(0, 4),
+	);
+}
+
+/** Inclusive bounds of a leave year labelled by its start year. */
+export function leaveYearRange(
+	leaveYear: number,
+	leaveYearStartMonthDay: string,
+): { startDate: string; endDate: string } {
+	const { month, day } = parseMonthDay(leaveYearStartMonthDay);
+	return {
+		startDate: clampDayOfMonth(leaveYear, month, day),
+		endDate: shiftDays(clampDayOfMonth(leaveYear + 1, month, day), -1),
+	};
+}
+
+export function addMonthsToDateKey(dateKey: string, months: number): string {
+	const year = Number(dateKey.slice(0, 4));
+	const month = Number(dateKey.slice(5, 7));
+	const day = Number(dateKey.slice(8, 10));
+	const targetMonthIndex = month - 1 + months;
+	const targetYear = year + Math.floor(targetMonthIndex / 12);
+	const targetMonth = ((targetMonthIndex % 12) + 12) % 12;
+	return clampDayOfMonth(targetYear, targetMonth + 1, day);
+}
+
+/** Whole days between two date keys, floored at zero. */
+export function daysBetween(startDate: string, endDate: string): number {
+	const start = Date.parse(`${startDate}T00:00:00Z`);
+	const end = Date.parse(`${endDate}T00:00:00Z`);
+	if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
+	return Math.max(0, Math.round((end - start) / 86_400_000));
+}
+
+/** Expands recurring holidays (month/day) into the given window. */
+export function holidayDatesInRange(
+	holidays: ReadonlyArray<{ date: string; recurring: boolean }>,
+	startDate: string,
+	endDate: string,
+): Set<string> {
+	const keys = new Set<string>();
+	for (const holiday of holidays) {
+		if (!holiday.recurring) {
+			if (holiday.date >= startDate && holiday.date <= endDate) {
+				keys.add(holiday.date);
+			}
+			continue;
+		}
+		const monthDay = holiday.date.slice(5);
+		for (const dateKey of enumerateDateKeys(startDate, endDate)) {
+			if (dateKey.slice(5) === monthDay) keys.add(dateKey);
+		}
+	}
+	return keys;
 }

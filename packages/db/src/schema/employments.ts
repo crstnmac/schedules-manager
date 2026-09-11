@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import {
+	date,
 	integer,
 	pgEnum,
 	pgTable,
@@ -55,6 +56,8 @@ export const employments = pgTable(
 		/** Explicit capabilities. Null or empty for a manager means full access. */
 		privileges: text("privileges").array(),
 		hourlyWageCents: integer("hourly_wage_cents"),
+		/** Date the Employment started, used for pro-rated leave accruals. */
+		joinedAt: date("joined_at"),
 		kioskPinHash: text("kiosk_pin_hash"),
 		emergencyContactName: text("emergency_contact_name"),
 		emergencyContactPhone: text("emergency_contact_phone"),

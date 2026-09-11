@@ -21,7 +21,7 @@ import {
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { managerEmploymentIds, notifyEmployments, writeAudit } from "../notify";
-import { assertWorkplaceEnabled } from "../workplace-policy";
+import { assertWorkplaceEnabled, loadWorkplace } from "../workplace-policy";
 import { assertEligible } from "./coverage";
 import { publishScheduleNow } from "./publication";
 
@@ -249,6 +249,285 @@ async function assertFutureShift(startsAt: Date, label: string) {
 	if (startsAt.getTime() <= Date.now()) {
 		throw new BadRequestError(`${label} must be a future shift`);
 	}
+}
+
+export async function approveShiftSwap(input: {
+	actorProfileId: string;
+	workplaceId: string;
+	swapId: string;
+}): Promise<{ status: "approved"; publishedVersion: number }> {
+	const swap = await loadSwapDetail(input.swapId);
+	if (swap.workplaceId !== input.workplaceId) {
+		throw new NotFoundError("Swap request not found");
+	}
+	if (swap.status !== "pending_manager") {
+		throw new ConflictError("This swap is not awaiting manager approval");
+	}
+
+	const requesterDraftId = await draftShiftIdFor(swap.requesterShift.id);
+	const counterpartDraftId = await draftShiftIdFor(swap.counterpartShift.id);
+	if (!requesterDraftId || !counterpartDraftId) {
+		throw new ConflictError(
+			"The underlying shifts could not be found for this swap",
+		);
+	}
+
+	const draftRows = await db
+		.select({ id: shiftsTable.id, scheduleId: shiftsTable.scheduleId })
+		.from(shiftsTable)
+		.where(inArray(shiftsTable.id, [requesterDraftId, counterpartDraftId]));
+	if (draftRows.length !== 2) {
+		throw new ConflictError("The underlying shifts could not be found");
+	}
+	const scheduleIds = [...new Set(draftRows.map((row) => row.scheduleId))];
+	if (scheduleIds.length !== 1) {
+		throw new ConflictError(
+			"Swaps between different Schedules are not supported",
+		);
+	}
+
+	const published = await publishScheduleNow(
+		scheduleIds[0] ?? "",
+		input.actorProfileId,
+		{
+			beforePublish: async (tx) => {
+				const [lockedSwap] = await tx
+					.select()
+					.from(shiftSwaps)
+					.where(eq(shiftSwaps.id, swap.id))
+					.for("update");
+				if (lockedSwap?.status !== "pending_manager") {
+					throw new ConflictError("This swap was already decided");
+				}
+				if (
+					lockedSwap.requesterEmploymentId ===
+					lockedSwap.counterpartEmploymentId
+				) {
+					throw new ConflictError("A worker cannot swap with themselves");
+				}
+
+				const lockedEmployments = await tx
+					.select()
+					.from(employments)
+					.where(
+						inArray(employments.id, [
+							lockedSwap.requesterEmploymentId,
+							lockedSwap.counterpartEmploymentId,
+						]),
+					)
+					.for("update");
+				if (
+					lockedEmployments.length !== 2 ||
+					lockedEmployments.some(
+						(employment) =>
+							employment.status !== "active" ||
+							employment.workplaceId !== input.workplaceId,
+					)
+				) {
+					throw new ConflictError(
+						"Both workers must still be active in this workplace",
+					);
+				}
+
+				const lockedVersionShifts = await tx
+					.select()
+					.from(versionShifts)
+					.where(
+						inArray(versionShifts.id, [
+							lockedSwap.requesterShiftId,
+							lockedSwap.counterpartShiftId,
+						]),
+					)
+					.for("update");
+				const requesterVersionShift = lockedVersionShifts.find(
+					(row) => row.id === lockedSwap.requesterShiftId,
+				);
+				const counterpartVersionShift = lockedVersionShifts.find(
+					(row) => row.id === lockedSwap.counterpartShiftId,
+				);
+				if (
+					!requesterVersionShift ||
+					!counterpartVersionShift ||
+					!requesterVersionShift.shiftId ||
+					!counterpartVersionShift.shiftId ||
+					requesterVersionShift.versionId !==
+						counterpartVersionShift.versionId ||
+					requesterVersionShift.employmentId !==
+						lockedSwap.requesterEmploymentId ||
+					counterpartVersionShift.employmentId !==
+						lockedSwap.counterpartEmploymentId
+				) {
+					throw new ConflictError("The published swap shifts are stale");
+				}
+				const [latestVersion] = await tx
+					.select()
+					.from(scheduleVersions)
+					.where(eq(scheduleVersions.scheduleId, scheduleIds[0] ?? ""))
+					.orderBy(desc(scheduleVersions.versionNumber))
+					.limit(1);
+				if (
+					!latestVersion ||
+					latestVersion.id !== requesterVersionShift.versionId
+				) {
+					throw new ConflictError(
+						"This swap is based on an outdated Schedule Version",
+					);
+				}
+
+				const lockedDrafts = await tx
+					.select()
+					.from(shiftsTable)
+					.where(
+						inArray(shiftsTable.id, [
+							requesterVersionShift.shiftId,
+							counterpartVersionShift.shiftId,
+						]),
+					)
+					.for("update");
+				const requesterDraft = lockedDrafts.find(
+					(row) => row.id === requesterVersionShift.shiftId,
+				);
+				const counterpartDraft = lockedDrafts.find(
+					(row) => row.id === counterpartVersionShift.shiftId,
+				);
+				if (
+					!requesterDraft ||
+					!counterpartDraft ||
+					requesterDraft.scheduleId !== (scheduleIds[0] ?? "") ||
+					counterpartDraft.scheduleId !== (scheduleIds[0] ?? "") ||
+					requesterDraft.employmentId !== lockedSwap.requesterEmploymentId ||
+					counterpartDraft.employmentId !==
+						lockedSwap.counterpartEmploymentId ||
+					requesterDraft.positionId !== requesterVersionShift.positionId ||
+					counterpartDraft.positionId !== counterpartVersionShift.positionId ||
+					requesterDraft.startsAt.getTime() !==
+						requesterVersionShift.startsAt.getTime() ||
+					counterpartDraft.startsAt.getTime() !==
+						counterpartVersionShift.startsAt.getTime() ||
+					requesterDraft.endsAt.getTime() !==
+						requesterVersionShift.endsAt.getTime() ||
+					counterpartDraft.endsAt.getTime() !==
+						counterpartVersionShift.endsAt.getTime()
+				) {
+					throw new ConflictError(
+						"The underlying shifts changed after this swap was proposed",
+					);
+				}
+
+				const [schedule] = await tx
+					.select({ locationId: schedules.locationId })
+					.from(schedules)
+					.where(eq(schedules.id, requesterDraft.scheduleId));
+				if (!schedule) throw new ConflictError("The Schedule no longer exists");
+				await assertFutureShift(requesterDraft.startsAt, "Your shift");
+				await assertFutureShift(counterpartDraft.startsAt, "Counterpart shift");
+				for (const [employmentId, incoming, outgoing] of [
+					[lockedSwap.requesterEmploymentId, counterpartDraft, requesterDraft],
+					[
+						lockedSwap.counterpartEmploymentId,
+						requesterDraft,
+						counterpartDraft,
+					],
+				] as const) {
+					await assertEligible(
+						employmentId,
+						schedule.locationId,
+						incoming.positionId,
+						incoming.startsAt,
+						incoming.endsAt,
+						tx,
+					);
+					await assertNoOverlaps(
+						{
+							employmentId,
+							keepDraftShiftId: outgoing.id,
+							startsAt: incoming.startsAt,
+							endsAt: incoming.endsAt,
+						},
+						tx,
+					);
+				}
+
+				const decided = await tx
+					.update(shiftSwaps)
+					.set({
+						status: "approved",
+						decidedAt: new Date(),
+						decidedByProfileId: input.actorProfileId,
+					})
+					.where(
+						and(
+							eq(shiftSwaps.id, swap.id),
+							eq(shiftSwaps.status, "pending_manager"),
+						),
+					)
+					.returning({ id: shiftSwaps.id });
+				if (decided.length === 0) {
+					throw new ConflictError("This swap was already decided");
+				}
+
+				const reassignedRequester = await tx
+					.update(shiftsTable)
+					.set({
+						employmentId: swap.counterpart.employmentId,
+						updatedAt: new Date(),
+					})
+					.where(
+						and(
+							eq(shiftsTable.id, requesterDraft.id),
+							eq(shiftsTable.employmentId, lockedSwap.requesterEmploymentId),
+						),
+					)
+					.returning({ id: shiftsTable.id });
+				const reassignedCounterpart = await tx
+					.update(shiftsTable)
+					.set({
+						employmentId: swap.requester.employmentId,
+						updatedAt: new Date(),
+					})
+					.where(
+						and(
+							eq(shiftsTable.id, counterpartDraft.id),
+							eq(shiftsTable.employmentId, lockedSwap.counterpartEmploymentId),
+						),
+					)
+					.returning({ id: shiftsTable.id });
+				if (
+					reassignedRequester.length !== 1 ||
+					reassignedCounterpart.length !== 1
+				) {
+					throw new ConflictError(
+						"The underlying shifts changed during approval",
+					);
+				}
+				await notifyEmployments(
+					[swap.requester.employmentId, swap.counterpart.employmentId],
+					{
+						kind: "swap_approved",
+						title: "Swap approved",
+						body: "The shift swap was approved and the schedule was republished. Check your schedule for your new shift.",
+					},
+					tx,
+				);
+				await writeAudit(
+					{
+						workplaceId: input.workplaceId,
+						actorProfileId: input.actorProfileId,
+						action: "swap.approved",
+						entityType: "shift_swap",
+						entityId: swap.id,
+						summary: "Approved a shift swap and republished the schedule",
+					},
+					tx,
+				);
+			},
+		},
+	);
+
+	return {
+		status: "approved" as const,
+		publishedVersion: published.version.versionNumber,
+	};
 }
 
 export const swapRoutes = new Elysia({
@@ -496,7 +775,10 @@ export const swapRoutes = new Elysia({
 					}
 
 					const accepted = body.decision === "accept";
-					return db.transaction(async (tx) => {
+					const workplace = await loadWorkplace(swap.workplaceId);
+					const autoApprove = accepted && workplace.autoAcceptShiftSwaps;
+
+					await db.transaction(async (tx) => {
 						const changed = await tx
 							.update(shiftSwaps)
 							.set({
@@ -522,15 +804,19 @@ export const swapRoutes = new Elysia({
 									? "swap_counterpart_accepted"
 									: "swap_counterpart_declined",
 								title: accepted
-									? "Swap accepted — awaiting manager approval"
+									? autoApprove
+										? "Swap accepted"
+										: "Swap accepted — awaiting manager approval"
 									: "Swap declined",
 								body: accepted
-									? `${swap.counterpart.name} agreed to the swap. A manager can now approve it.`
+									? autoApprove
+										? `${swap.counterpart.name} agreed to the swap. It will be applied automatically.`
+										: `${swap.counterpart.name} agreed to the swap. A manager can now approve it.`
 									: `${swap.counterpart.name} declined the swap. You keep your shift.`,
 							},
 							tx,
 						);
-						if (accepted) {
+						if (accepted && !autoApprove) {
 							await notifyEmployments(
 								await managerEmploymentIds(swap.workplaceId),
 								{
@@ -556,9 +842,17 @@ export const swapRoutes = new Elysia({
 							},
 							tx,
 						);
-
-						return { swap: await loadSwapDetail(swap.id) };
 					});
+
+					if (autoApprove) {
+						await approveShiftSwap({
+							actorProfileId: profile.id,
+							workplaceId: swap.workplaceId,
+							swapId: swap.id,
+						});
+					}
+
+					return { swap: await loadSwapDetail(swap.id) };
 				},
 			});
 		},
@@ -654,7 +948,11 @@ export const swapRoutes = new Elysia({
 		"/workplaces/:workplaceId/coverage/swaps",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"approvals.review",
+			);
 
 			const rows = await db
 				.select({ id: shiftSwaps.id })
@@ -693,7 +991,11 @@ export const swapRoutes = new Elysia({
 		"/workplaces/:workplaceId/swaps/:swapId/decision",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"approvals.review",
+			);
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `swap.decision:${params.swapId}`,
@@ -753,300 +1055,11 @@ export const swapRoutes = new Elysia({
 						return { status: "declined" as const };
 					}
 
-					const requesterDraftId = await draftShiftIdFor(
-						swap.requesterShift.id,
-					);
-					const counterpartDraftId = await draftShiftIdFor(
-						swap.counterpartShift.id,
-					);
-					if (!requesterDraftId || !counterpartDraftId) {
-						throw new ConflictError(
-							"The underlying shifts could not be found for this swap",
-						);
-					}
-
-					const draftRows = await db
-						.select({ id: shiftsTable.id, scheduleId: shiftsTable.scheduleId })
-						.from(shiftsTable)
-						.where(
-							inArray(shiftsTable.id, [requesterDraftId, counterpartDraftId]),
-						);
-					if (draftRows.length !== 2) {
-						throw new ConflictError("The underlying shifts could not be found");
-					}
-					const scheduleIds = [
-						...new Set(draftRows.map((row) => row.scheduleId)),
-					];
-					if (scheduleIds.length !== 1) {
-						throw new ConflictError(
-							"Swaps between different Schedules are not supported",
-						);
-					}
-
-					const published = await publishScheduleNow(
-						scheduleIds[0] ?? "",
-						profile.id,
-						{
-							beforePublish: async (tx) => {
-								const [lockedSwap] = await tx
-									.select()
-									.from(shiftSwaps)
-									.where(eq(shiftSwaps.id, swap.id))
-									.for("update");
-								if (lockedSwap?.status !== "pending_manager") {
-									throw new ConflictError("This swap was already decided");
-								}
-								if (
-									lockedSwap.requesterEmploymentId ===
-									lockedSwap.counterpartEmploymentId
-								) {
-									throw new ConflictError(
-										"A worker cannot swap with themselves",
-									);
-								}
-
-								const lockedEmployments = await tx
-									.select()
-									.from(employments)
-									.where(
-										inArray(employments.id, [
-											lockedSwap.requesterEmploymentId,
-											lockedSwap.counterpartEmploymentId,
-										]),
-									)
-									.for("update");
-								if (
-									lockedEmployments.length !== 2 ||
-									lockedEmployments.some(
-										(employment) =>
-											employment.status !== "active" ||
-											employment.workplaceId !== params.workplaceId,
-									)
-								) {
-									throw new ConflictError(
-										"Both workers must still be active in this workplace",
-									);
-								}
-
-								const lockedVersionShifts = await tx
-									.select()
-									.from(versionShifts)
-									.where(
-										inArray(versionShifts.id, [
-											lockedSwap.requesterShiftId,
-											lockedSwap.counterpartShiftId,
-										]),
-									)
-									.for("update");
-								const requesterVersionShift = lockedVersionShifts.find(
-									(row) => row.id === lockedSwap.requesterShiftId,
-								);
-								const counterpartVersionShift = lockedVersionShifts.find(
-									(row) => row.id === lockedSwap.counterpartShiftId,
-								);
-								if (
-									!requesterVersionShift ||
-									!counterpartVersionShift ||
-									!requesterVersionShift.shiftId ||
-									!counterpartVersionShift.shiftId ||
-									requesterVersionShift.versionId !==
-										counterpartVersionShift.versionId ||
-									requesterVersionShift.employmentId !==
-										lockedSwap.requesterEmploymentId ||
-									counterpartVersionShift.employmentId !==
-										lockedSwap.counterpartEmploymentId
-								) {
-									throw new ConflictError(
-										"The published swap shifts are stale",
-									);
-								}
-								const [latestVersion] = await tx
-									.select()
-									.from(scheduleVersions)
-									.where(eq(scheduleVersions.scheduleId, scheduleIds[0] ?? ""))
-									.orderBy(desc(scheduleVersions.versionNumber))
-									.limit(1);
-								if (
-									!latestVersion ||
-									latestVersion.id !== requesterVersionShift.versionId
-								) {
-									throw new ConflictError(
-										"This swap is based on an outdated Schedule Version",
-									);
-								}
-
-								const lockedDrafts = await tx
-									.select()
-									.from(shiftsTable)
-									.where(
-										inArray(shiftsTable.id, [
-											requesterVersionShift.shiftId,
-											counterpartVersionShift.shiftId,
-										]),
-									)
-									.for("update");
-								const requesterDraft = lockedDrafts.find(
-									(row) => row.id === requesterVersionShift.shiftId,
-								);
-								const counterpartDraft = lockedDrafts.find(
-									(row) => row.id === counterpartVersionShift.shiftId,
-								);
-								if (
-									!requesterDraft ||
-									!counterpartDraft ||
-									requesterDraft.scheduleId !== (scheduleIds[0] ?? "") ||
-									counterpartDraft.scheduleId !== (scheduleIds[0] ?? "") ||
-									requesterDraft.employmentId !==
-										lockedSwap.requesterEmploymentId ||
-									counterpartDraft.employmentId !==
-										lockedSwap.counterpartEmploymentId ||
-									requesterDraft.positionId !==
-										requesterVersionShift.positionId ||
-									counterpartDraft.positionId !==
-										counterpartVersionShift.positionId ||
-									requesterDraft.startsAt.getTime() !==
-										requesterVersionShift.startsAt.getTime() ||
-									counterpartDraft.startsAt.getTime() !==
-										counterpartVersionShift.startsAt.getTime() ||
-									requesterDraft.endsAt.getTime() !==
-										requesterVersionShift.endsAt.getTime() ||
-									counterpartDraft.endsAt.getTime() !==
-										counterpartVersionShift.endsAt.getTime()
-								) {
-									throw new ConflictError(
-										"The underlying shifts changed after this swap was proposed",
-									);
-								}
-
-								const [schedule] = await tx
-									.select({ locationId: schedules.locationId })
-									.from(schedules)
-									.where(eq(schedules.id, requesterDraft.scheduleId));
-								if (!schedule)
-									throw new ConflictError("The Schedule no longer exists");
-								await assertFutureShift(requesterDraft.startsAt, "Your shift");
-								await assertFutureShift(
-									counterpartDraft.startsAt,
-									"Counterpart shift",
-								);
-								for (const [employmentId, incoming, outgoing] of [
-									[
-										lockedSwap.requesterEmploymentId,
-										counterpartDraft,
-										requesterDraft,
-									],
-									[
-										lockedSwap.counterpartEmploymentId,
-										requesterDraft,
-										counterpartDraft,
-									],
-								] as const) {
-									await assertEligible(
-										employmentId,
-										schedule.locationId,
-										incoming.positionId,
-										incoming.startsAt,
-										incoming.endsAt,
-										tx,
-									);
-									await assertNoOverlaps(
-										{
-											employmentId,
-											keepDraftShiftId: outgoing.id,
-											startsAt: incoming.startsAt,
-											endsAt: incoming.endsAt,
-										},
-										tx,
-									);
-								}
-
-								const decided = await tx
-									.update(shiftSwaps)
-									.set({
-										status: "approved",
-										decidedAt: new Date(),
-										decidedByProfileId: profile.id,
-									})
-									.where(
-										and(
-											eq(shiftSwaps.id, swap.id),
-											eq(shiftSwaps.status, "pending_manager"),
-										),
-									)
-									.returning({ id: shiftSwaps.id });
-								if (decided.length === 0) {
-									throw new ConflictError("This swap was already decided");
-								}
-
-								const reassignedRequester = await tx
-									.update(shiftsTable)
-									.set({
-										employmentId: swap.counterpart.employmentId,
-										updatedAt: new Date(),
-									})
-									.where(
-										and(
-											eq(shiftsTable.id, requesterDraft.id),
-											eq(
-												shiftsTable.employmentId,
-												lockedSwap.requesterEmploymentId,
-											),
-										),
-									)
-									.returning({ id: shiftsTable.id });
-								const reassignedCounterpart = await tx
-									.update(shiftsTable)
-									.set({
-										employmentId: swap.requester.employmentId,
-										updatedAt: new Date(),
-									})
-									.where(
-										and(
-											eq(shiftsTable.id, counterpartDraft.id),
-											eq(
-												shiftsTable.employmentId,
-												lockedSwap.counterpartEmploymentId,
-											),
-										),
-									)
-									.returning({ id: shiftsTable.id });
-								if (
-									reassignedRequester.length !== 1 ||
-									reassignedCounterpart.length !== 1
-								) {
-									throw new ConflictError(
-										"The underlying shifts changed during approval",
-									);
-								}
-								await notifyEmployments(
-									[swap.requester.employmentId, swap.counterpart.employmentId],
-									{
-										kind: "swap_approved",
-										title: "Swap approved",
-										body: "The shift swap was approved and the schedule was republished. Check your schedule for your new shift.",
-									},
-									tx,
-								);
-								await writeAudit(
-									{
-										workplaceId: params.workplaceId,
-										actorProfileId: profile.id,
-										action: "swap.approved",
-										entityType: "shift_swap",
-										entityId: swap.id,
-										summary:
-											"Approved a shift swap and republished the schedule",
-									},
-									tx,
-								);
-							},
-						},
-					);
-
-					return {
-						status: "approved" as const,
-						publishedVersion: published.version.versionNumber,
-					};
+					return approveShiftSwap({
+						actorProfileId: profile.id,
+						workplaceId: params.workplaceId,
+						swapId: swap.id,
+					});
 				},
 			});
 		},
