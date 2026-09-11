@@ -8,6 +8,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@SchedulesManager/ui/components/dropdown-menu";
+import { PageFade } from "@SchedulesManager/ui/components/motion";
 import {
 	Sidebar,
 	SidebarContent,
@@ -183,6 +184,9 @@ function DashboardLayout() {
 		: "";
 	const pathname = useRouterState({
 		select: (state) => state.location.pathname,
+	});
+	const routeId = useRouterState({
+		select: (state) => state.matches.at(-1)?.routeId,
 	});
 	const isSchedule = pathname.startsWith("/dashboard/schedule");
 	const isSettings = pathname.startsWith("/dashboard/settings");
@@ -441,7 +445,12 @@ function DashboardLayout() {
 					tabIndex={-1}
 					className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-0!"
 				>
-					<Outlet />
+					<PageFade
+						key={routeId}
+						className="flex min-h-0 min-w-0 flex-1 flex-col"
+					>
+						<Outlet />
+					</PageFade>
 				</main>
 			</SidebarInset>
 		</SidebarProvider>

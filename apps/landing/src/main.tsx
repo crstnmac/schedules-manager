@@ -1,6 +1,11 @@
 import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import {
+	AnimatedNumber,
+	MotionRoot,
+	motion,
+} from "@SchedulesManager/ui/components/motion";
+import {
 	ScrollArea,
 	ScrollBar,
 } from "@SchedulesManager/ui/components/scroll-area";
@@ -9,6 +14,15 @@ import {
 	ToggleGroup,
 	ToggleGroupItem,
 } from "@SchedulesManager/ui/components/toggle-group";
+import {
+	useParallax,
+	useScrollReveal,
+} from "@SchedulesManager/ui/hooks/use-motion-scroll";
+import {
+	fadeUp,
+	spring,
+	staggerContainer,
+} from "@SchedulesManager/ui/lib/motion";
 import { cn } from "@SchedulesManager/ui/lib/utils";
 import {
 	ArrowRight,
@@ -37,7 +51,7 @@ import {
 	Utensils,
 	X,
 } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { LandingLink } from "./landing-link";
 import { PrivacyPolicyPage, TermsPage } from "./legal";
@@ -195,7 +209,13 @@ function Pricing() {
 	return (
 		<section className="pricing-section" id="pricing">
 			<div className="section-container">
-				<div className="pricing-heading">
+				<motion.div
+					className="pricing-heading"
+					initial="hidden"
+					whileInView="visible"
+					viewport={{ once: true, amount: 0.4 }}
+					variants={fadeUp}
+				>
 					<p className="eyebrow">Simple pricing</p>
 					<h2>
 						One price for the place.
@@ -206,7 +226,7 @@ function Pricing() {
 						Every feature, every worker. One clear price per location — slide to
 						see what your workplaces would pay.
 					</p>
-				</div>
+				</motion.div>
 
 				<div className="pricing-config">
 					<ToggleGroup
@@ -260,12 +280,14 @@ function Pricing() {
 						const yearlyTotal = plan.perLocation.annual * 12 * locations;
 
 						return (
-							<article
+							<motion.article
 								className={cn(
 									"pricing-plan",
 									plan.recommended && "is-recommended",
 								)}
 								key={plan.id}
+								whileHover={{ y: -3 }}
+								transition={spring.soft}
 							>
 								<div className="pricing-plan-head">
 									<h3>{plan.name}</h3>
@@ -275,7 +297,13 @@ function Pricing() {
 								</div>
 								<p className="pricing-plan-tagline">{plan.tagline}</p>
 								<div className="pricing-plan-price">
-									<span className="pricing-plan-amount">${monthlyTotal}</span>
+									<span className="pricing-plan-amount">
+										$
+										<AnimatedNumber
+											value={monthlyTotal}
+											format={(n) => Math.round(n).toString()}
+										/>
+									</span>
 									<span className="pricing-plan-unit">/ month</span>
 								</div>
 								<p className="pricing-plan-detail">
@@ -304,7 +332,7 @@ function Pricing() {
 									Start 30 days free
 									<ArrowUpRight aria-hidden="true" />
 								</LandingLink>
-							</article>
+							</motion.article>
 						);
 					})}
 				</div>
@@ -542,12 +570,37 @@ function HomePage() {
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [scrolled, setScrolled] = useState(false);
 
+	const industriesListRef = useRef<HTMLDivElement>(null);
+	const industriesArtRef = useRef<HTMLImageElement>(null);
+	const workflowListRef = useRef<HTMLOListElement>(null);
+	const teamArtRef = useRef<HTMLImageElement>(null);
+	const faqListRef = useRef<HTMLDivElement>(null);
+
 	useEffect(() => {
 		const updateHeader = () => setScrolled(window.scrollY > 12);
 		updateHeader();
 		window.addEventListener("scroll", updateHeader, { passive: true });
 		return () => window.removeEventListener("scroll", updateHeader);
 	}, []);
+
+	useScrollReveal(industriesListRef, {
+		selector: "span",
+		y: 12,
+		stagger: 0.06,
+	});
+	useScrollReveal(workflowListRef, {
+		selector: "li",
+		y: 18,
+		stagger: 0.12,
+		duration: 0.6,
+	});
+	useScrollReveal(faqListRef, {
+		selector: "article",
+		y: 16,
+		stagger: 0.07,
+	});
+	useParallax(industriesArtRef, { depth: 16 });
+	useParallax(teamArtRef, { depth: 22 });
 
 	return (
 		<div className="site">
@@ -602,7 +655,12 @@ function HomePage() {
 				</div>
 			</header>
 			<main id="main-content">
-				<section className="hero">
+				<motion.section
+					className="hero"
+					initial="hidden"
+					animate="visible"
+					variants={staggerContainer(0.08, 0.04)}
+				>
 					<div className="hero-wash" aria-hidden="true" />
 					<img
 						className="hero-illustration"
@@ -610,7 +668,7 @@ function HomePage() {
 						alt=""
 						aria-hidden="true"
 					/>
-					<h1>
+					<motion.h1 variants={fadeUp}>
 						Good weeks
 						<br />
 						start <span>here.</span>
@@ -621,13 +679,13 @@ function HomePage() {
 						>
 							<path d="M8 29 28 8M17 35l22-6M4 19 7 2" />
 						</svg>
-					</h1>
-					<p className="hero-description">
+					</motion.h1>
+					<motion.p className="hero-description" variants={fadeUp}>
 						Shift scheduling for hourly teams.
 						<br />
 						Plan shifts, handle changes, and keep everyone in sync.
-					</p>
-					<div className="hero-actions">
+					</motion.p>
+					<motion.div className="hero-actions" variants={fadeUp}>
 						<CTA>Get started</CTA>
 						<LandingLink
 							className="button button-secondary"
@@ -637,11 +695,13 @@ function HomePage() {
 						>
 							See it in action <ArrowRight size={16} />
 						</LandingLink>
-					</div>
-					<SchedulePreview />
-				</section>
+					</motion.div>
+					<motion.div variants={fadeUp}>
+						<SchedulePreview />
+					</motion.div>
+				</motion.section>
 				<section className="industries" aria-label="Built for hourly teams">
-					<div className="industry-list">
+					<div className="industry-list" ref={industriesListRef}>
 						<span>
 							<Coffee /> Cafés & restaurants
 						</span>
@@ -664,11 +724,18 @@ function HomePage() {
 						decoding="async"
 						src="/illustration-industries.webp"
 						alt="A connected neighborhood of café, retail, healthcare, hospitality, and field teams"
+						ref={industriesArtRef}
 					/>
 				</section>
 				<section className="workflow-section" id="how-it-works">
 					<div className="section-container workflow-layout">
-						<div className="workflow-heading">
+						<motion.div
+							className="workflow-heading"
+							initial="hidden"
+							whileInView="visible"
+							viewport={{ once: true, amount: 0.3 }}
+							variants={fadeUp}
+						>
 							<p className="eyebrow">How it works</p>
 							<h2>Set up. Schedule. Send.</h2>
 							<p>
@@ -682,8 +749,8 @@ function HomePage() {
 								alt=""
 								aria-hidden="true"
 							/>
-						</div>
-						<ol className="workflow-list">
+						</motion.div>
+						<ol className="workflow-list" ref={workflowListRef}>
 							<li>
 								<div>
 									<h3>Set up your workplace.</h3>
@@ -712,7 +779,13 @@ function HomePage() {
 					</div>
 				</section>
 				<section className="team-section section-container" id="for-your-team">
-					<div className="team-copy">
+					<motion.div
+						className="team-copy"
+						initial="hidden"
+						whileInView="visible"
+						viewport={{ once: true, amount: 0.3 }}
+						variants={fadeUp}
+					>
 						<h2>
 							Built for managers.
 							<br />
@@ -737,7 +810,7 @@ function HomePage() {
 							</li>
 						</ul>
 						<CTA>Get started</CTA>
-					</div>
+					</motion.div>
 					<div className="phone-scene">
 						<img
 							className="team-illustration"
@@ -745,6 +818,7 @@ function HomePage() {
 							decoding="async"
 							src="/illustration-team.webp"
 							alt="Four hourly workers reviewing their week together"
+							ref={teamArtRef}
 						/>
 						<span className="scene-note">
 							A little more clarity.
@@ -828,7 +902,13 @@ function HomePage() {
 				</section>
 				<Pricing />
 				<section className="faq-section" id="faq">
-					<div className="faq-intro">
+					<motion.div
+						className="faq-intro"
+						initial="hidden"
+						whileInView="visible"
+						viewport={{ once: true, amount: 0.3 }}
+						variants={fadeUp}
+					>
 						<p className="eyebrow">Questions, answered</p>
 						<h2>Glad you asked.</h2>
 						<p>Everything your team needs to get started.</p>
@@ -840,8 +920,8 @@ function HomePage() {
 							alt=""
 							aria-hidden="true"
 						/>
-					</div>
-					<div className="faq-list">
+					</motion.div>
+					<div className="faq-list" ref={faqListRef}>
 						{faqs.map(([q, a], index) => {
 							const Icon = faqIcons[index];
 							return (
@@ -859,7 +939,13 @@ function HomePage() {
 			</main>
 			<footer className="sky-footer">
 				<div className="footer-sky" aria-hidden="true" />
-				<div className="footer-callout section-container">
+				<motion.div
+					className="footer-callout section-container"
+					initial="hidden"
+					whileInView="visible"
+					viewport={{ once: true, amount: 0.3 }}
+					variants={fadeUp}
+				>
 					<span className="footer-kicker">
 						<CheckCheck size={15} /> Your week, sorted
 					</span>
@@ -873,7 +959,7 @@ function HomePage() {
 						that matters.
 					</p>
 					<CTA>Get started</CTA>
-				</div>
+				</motion.div>
 				<div className="footer-directory section-container">
 					<div className="footer-intro">
 						<Brand />
@@ -927,6 +1013,8 @@ function App() {
 
 createRoot(document.getElementById("root")!).render(
 	<React.StrictMode>
-		<App />
+		<MotionRoot>
+			<App />
+		</MotionRoot>
 	</React.StrictMode>,
 );

@@ -1,3 +1,4 @@
+import { MotionRoot } from "@SchedulesManager/ui/components/motion";
 import { Toaster } from "@SchedulesManager/ui/components/sonner";
 import { TooltipProvider } from "@SchedulesManager/ui/components/tooltip";
 import { PostHogProvider } from "@posthog/react";
@@ -72,9 +73,11 @@ function RootComponent() {
 			>
 				<TooltipProvider>
 					<AuthProvider>
-						<div className="min-h-svh">
-							<Outlet />
-						</div>
+						<MotionRoot>
+							<div className="min-h-svh">
+								<Outlet />
+							</div>
+						</MotionRoot>
 					</AuthProvider>
 				</TooltipProvider>
 				<Toaster richColors />
