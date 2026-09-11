@@ -11,7 +11,6 @@ import { BellIcon, CalendarDaysIcon, UsersIcon } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { LogoMark } from "@/components/logo-mark";
-import { useMediaQuery } from "@/lib/use-media-query";
 
 const highlights = [
 	{
@@ -54,21 +53,20 @@ function useWebgl2(): boolean {
 }
 
 export function AuthShell({ children }: { children: ReactNode }) {
-	const isDesktop = useMediaQuery("(min-width: 1024px)");
 	const webgl2 = useWebgl2();
 
 	return (
 		<main
 			id="main-content"
 			tabIndex={-1}
-			className="light min-h-svh lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+			className="light relative min-h-svh overflow-hidden lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
 		>
-			<section
+			<div
 				aria-hidden="true"
-				className="relative hidden overflow-hidden p-10 text-[#111B28] lg:flex lg:flex-col lg:justify-between"
+				className="pointer-events-none absolute inset-0"
 				style={{ backgroundColor: BRAND_CANVAS }}
 			>
-				{isDesktop && webgl2 ? (
+				{webgl2 ? (
 					<StaticMeshGradient
 						className="absolute inset-0"
 						width="100%"
@@ -92,8 +90,14 @@ export function AuthShell({ children }: { children: ReactNode }) {
 						style={{ backgroundImage: FALLBACK_GRADIENT }}
 					/>
 				)}
-				<div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#F3F8FD] via-[#F3F8FD]/55 to-transparent" />
+				<div className="absolute inset-0 bg-[#F3F8FD]/45" />
+				<div className="absolute inset-0 hidden bg-gradient-to-r from-[#F3F8FD] via-[#F3F8FD]/55 to-transparent lg:block" />
+			</div>
 
+			<section
+				aria-hidden="true"
+				className="relative z-10 hidden overflow-hidden p-10 text-[#111B28] lg:flex lg:flex-col lg:justify-between"
+			>
 				<div className="relative z-10 flex flex-col gap-10">
 					<div className="flex items-center gap-3">
 						<LogoMark size={44} />
@@ -145,7 +149,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
 				</p>
 			</section>
 
-			<section className="flex flex-col items-center justify-center bg-muted/35 px-4 py-10">
+			<section className="relative z-10 flex flex-col items-center justify-center px-4 py-10">
 				<div className="mb-8 flex items-center gap-3 lg:hidden">
 					<LogoMark size={40} />
 					<div className="flex flex-col gap-0.5">
