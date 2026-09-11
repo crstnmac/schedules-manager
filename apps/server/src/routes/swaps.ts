@@ -382,7 +382,7 @@ export const swapRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			body: t.Object({
 				requesterShiftId: t.String({ format: "uuid" }),
 				counterpartEmploymentId: t.String({ format: "uuid" }),
@@ -451,7 +451,7 @@ export const swapRoutes = new Elysia({
 			return { swaps: detailed };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Shift swaps you proposed or received",
@@ -552,7 +552,7 @@ export const swapRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({ swapId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				decision: t.Union([t.Literal("accept"), t.Literal("decline")]),
@@ -620,7 +620,7 @@ export const swapRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({ swapId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Cancel a swap you proposed",
@@ -656,7 +656,7 @@ export const swapRoutes = new Elysia({
 			return { swaps };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Agreed swaps awaiting manager approval",
@@ -1031,7 +1031,7 @@ export const swapRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				swapId: t.String({ format: "uuid" }),

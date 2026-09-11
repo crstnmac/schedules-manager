@@ -1242,7 +1242,7 @@ export const schedulesRoutes = new Elysia({
 			return loadCalendarPayload(location, params.monthStart);
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				monthStart: dateSchema,
@@ -1277,7 +1277,7 @@ export const schedulesRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: dateSchema,
@@ -1324,7 +1324,7 @@ export const schedulesRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: dateSchema,
@@ -1353,7 +1353,7 @@ export const schedulesRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: dateSchema,
@@ -1420,7 +1420,7 @@ export const schedulesRoutes = new Elysia({
 			return { shiftId: shift.id };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: dateSchema,
@@ -1517,7 +1517,7 @@ export const schedulesRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ shiftId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				employmentId: t.Optional(
@@ -1550,7 +1550,7 @@ export const schedulesRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ shiftId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Remove a Shift from the draft Schedule (Manager)",
@@ -1629,7 +1629,7 @@ export const schedulesRoutes = new Elysia({
 			return { copied: sourceShifts.length };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: dateSchema,
@@ -1713,7 +1713,7 @@ export const schedulesRoutes = new Elysia({
 			return { assigned };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: dateSchema,
@@ -1789,7 +1789,7 @@ export const schedulesRoutes = new Elysia({
 			return { updated: rows.length };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: dateSchema,
@@ -1845,7 +1845,7 @@ export const schedulesRoutes = new Elysia({
 			return { pasted: created.length };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: dateSchema,
@@ -1909,7 +1909,7 @@ export const schedulesRoutes = new Elysia({
 			return { copied };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ shiftId: t.String({ format: "uuid" }) }),
 			body: t.Object({ weeks: t.Integer({ minimum: 1, maximum: 12 }) }),
 			detail: {

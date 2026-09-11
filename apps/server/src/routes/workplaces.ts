@@ -52,7 +52,7 @@ export const workplacesRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			detail: {
 				summary: "List workplaces connected through active Employments",
 				security: [{ bearerAuth: [] }],
@@ -157,7 +157,7 @@ export const workplacesRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 120 }),
 				location: t.Object({
@@ -188,7 +188,7 @@ export const workplacesRoutes = new Elysia({
 			return { workplace: workplaceSettingsPayload(workplace) };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Return Workplace settings (Manager)",
@@ -309,7 +309,7 @@ export const workplacesRoutes = new Elysia({
 			return { workplace: workplaceSettingsPayload(updated) };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),

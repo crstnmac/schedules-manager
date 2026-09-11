@@ -264,7 +264,7 @@ export const coverageRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			body: t.Object({
 				versionShiftId: t.String({ format: "uuid" }),
 				reason: t.Optional(t.String({ maxLength: 300 })),
@@ -360,7 +360,7 @@ export const coverageRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "List open shifts the caller could pick up (Worker)",
@@ -448,7 +448,7 @@ export const coverageRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({ openShiftId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -538,7 +538,7 @@ export const coverageRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Coverage queue: releases and pickups (Manager)",
@@ -734,7 +734,7 @@ export const coverageRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				releaseId: t.String({ format: "uuid" }),
@@ -769,7 +769,7 @@ export const coverageRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				pickupId: t.String({ format: "uuid" }),

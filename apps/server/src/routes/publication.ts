@@ -555,7 +555,7 @@ export const publicationRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({ scheduleId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -574,7 +574,7 @@ export const publicationRoutes = new Elysia({
 			return { versions: await loadPublicationVersions(schedule.id) };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ scheduleId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -955,7 +955,7 @@ export const publicationRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			query: t.Object({
 				scope: t.Optional(t.Union([t.Literal("home"), t.Literal("full")])),
@@ -1084,7 +1084,7 @@ export const publicationRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ versionId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -1111,7 +1111,7 @@ export const publicationRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({ versionId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:

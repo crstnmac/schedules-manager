@@ -154,7 +154,7 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 		},
 	)
@@ -176,7 +176,7 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 			return { feedback: { id: feedback?.id } };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				category: t.Union([
@@ -250,7 +250,7 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 		},
 	)
@@ -354,7 +354,7 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				rows: t.Array(

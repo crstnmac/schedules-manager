@@ -8,6 +8,13 @@ import {
 	CardTitle,
 } from "@SchedulesManager/ui/components/card";
 import {
+	Empty,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyMedia,
+	EmptyTitle,
+} from "@SchedulesManager/ui/components/empty";
+import {
 	Item,
 	ItemContent,
 	ItemDescription,
@@ -29,7 +36,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
 	AlarmClockIcon,
-	CalendarCheckIcon,
+	BellRingIcon,
+	ChevronRightIcon,
 	CircleCheckIcon,
 	CircleIcon,
 	MapPinIcon,
@@ -37,6 +45,7 @@ import {
 	UserPlusIcon,
 	UsersIcon,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppDocument } from "@/components/app-page";
@@ -53,10 +62,11 @@ import {
 	usePositions,
 	useRespondToAcceptance,
 	useSchedule,
+	useScheduleLabor,
 	useWorkers,
 	useWorkplaceSettings,
 } from "@/lib/queries";
-import { weekStartOf } from "@/lib/schedule-calendar";
+import { addDays, weekStartOf } from "@/lib/schedule-calendar";
 import { formatDay, WEEKDAY_NAMES } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
@@ -71,6 +81,26 @@ type MyAcceptanceRow = NonNullable<
 const staffHelper = createDataColumnHelper<StaffRow>();
 const acceptanceHelper = createDataColumnHelper<AcceptanceRow>();
 const myAcceptanceHelper = createDataColumnHelper<MyAcceptanceRow>();
+
+function formatWeekLabel(weekStart: string): string {
+	const start = new Date(`${weekStart}T12:00:00`);
+	const end = new Date(`${addDays(weekStart, 6)}T12:00:00`);
+	const fmt = (date: Date) =>
+		date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+	return `${fmt(start)} – ${fmt(end)}`;
+}
+
+function formatHours(minutes: number): string {
+	return `${(minutes / 60).toFixed(1)}h`;
+}
+
+function formatCurrency(cents: number): string {
+	return (cents / 100).toLocaleString(undefined, {
+		style: "currency",
+		currency: "USD",
+		maximumFractionDigits: 0,
+	});
+}
 
 function staffConstraintText(
 	member: StaffRow,
@@ -111,6 +141,7 @@ function createStaffColumns(formatMinute: (minute: number) => string) {
 		}),
 	]);
 }
+
 const overviewAcceptanceColumns = acceptanceHelper.columns([
 	acceptanceHelper.accessor(
 		(row) => `${row.workerName} · v${row.versionNumber}`,
@@ -142,6 +173,81 @@ const overviewAcceptanceColumns = acceptanceHelper.columns([
 	}),
 ]);
 
+const SECTION_ENTER =
+	"animate-in fade-in-0 slide-in-from-bottom-1 fill-mode-both duration-300 motion-reduce:animate-none";
+
+function WeekMetric({
+	label,
+	value,
+	hint,
+	tone = "default",
+}: {
+	label: string;
+	value: ReactNode;
+	hint?: ReactNode;
+	tone?: "default" | "amber" | "destructive";
+}) {
+	return (
+		<div className="flex min-w-0 flex-col gap-0.5">
+			<dt className="text-muted-foreground text-xs">{label}</dt>
+			<dd
+				className={cn(
+					"font-heading font-semibold text-xl tabular-nums",
+					tone === "amber" && "text-warning-foreground",
+					tone === "destructive" && "text-destructive",
+				)}
+			>
+				{value}
+			</dd>
+			{hint ? (
+				<span className="text-muted-foreground text-xs tabular-nums">
+					{hint}
+				</span>
+			) : null}
+		</div>
+	);
+}
+
+function StatLink({
+	icon: Icon,
+	value,
+	label,
+	to,
+	delay,
+}: {
+	icon: typeof MapPinIcon;
+	value: number;
+	label: string;
+	to:
+		| "/dashboard/settings/locations"
+		| "/dashboard/settings/positions"
+		| "/dashboard/workers";
+	delay: number;
+}) {
+	return (
+		<Item
+			variant="outline"
+			size="sm"
+			render={<Link to={to} />}
+			className={cn(
+				"transition-transform duration-150 ease-out active:scale-[0.99] motion-reduce:transform-none",
+				SECTION_ENTER,
+			)}
+			style={{ animationDelay: `${delay}ms` }}
+		>
+			<ItemMedia variant="icon">
+				<Icon />
+			</ItemMedia>
+			<ItemContent>
+				<ItemTitle className="font-semibold text-base tabular-nums">
+					{value}
+				</ItemTitle>
+				<ItemDescription>{label}</ItemDescription>
+			</ItemContent>
+		</Item>
+	);
+}
+
 function Overview() {
 	const { workplace } = useWorkplace();
 	const { formatMinute, formatShiftRange } = useDisplayPrefs();
@@ -158,12 +264,11 @@ function Overview() {
 	const focusLocation =
 		locations.data?.find((location) => location.id === focusLocationId) ??
 		locations.data?.[0];
-	const currentSchedule = useSchedule(
-		focusLocation?.id,
-		settings.data
-			? weekStartOf(new Date(), settings.data.weekStartDay)
-			: undefined,
-	);
+	const weekStart = settings.data
+		? weekStartOf(new Date(), settings.data.weekStartDay)
+		: undefined;
+	const currentSchedule = useSchedule(focusLocation?.id, weekStart);
+	const scheduleLabor = useScheduleLabor(focusLocation?.id, weekStart);
 	const acceptances = useAcceptances(currentSchedule.data?.schedule.id);
 	const mySchedule = useMySchedule(workplace?.id, "home");
 	const respond = useRespondToAcceptance();
@@ -204,32 +309,6 @@ function Overview() {
 				new Date(invitation.expiresAt).getTime() > Date.now(),
 		) ?? [];
 
-	const stats = [
-		{
-			label: "Locations",
-			value: locations.data?.length ?? 0,
-			to: "/dashboard/settings/locations" as const,
-			icon: MapPinIcon,
-		},
-		{
-			label: "Positions",
-			value: positions.data?.length ?? 0,
-			to: "/dashboard/settings/positions" as const,
-			icon: TagsIcon,
-		},
-		{
-			label: "Active workers",
-			value: activeWorkers.length,
-			to: "/dashboard/workers" as const,
-			icon: UsersIcon,
-		},
-		{
-			label: "Pending invitations",
-			value: pendingInvitations.length,
-			to: "/dashboard/workers" as const,
-			icon: UserPlusIcon,
-		},
-	];
 	const pilotCounts = pilot.data?.counts;
 	const checklist = [
 		{
@@ -262,7 +341,32 @@ function Overview() {
 		},
 	];
 	const completedSteps = checklist.filter((step) => step.done).length;
+
 	const scheduleData = currentSchedule.data;
+	const openShiftCount =
+		scheduleData?.shifts.filter((shift) => shift.employmentId === null)
+			.length ?? 0;
+	const conflictCount =
+		scheduleData?.shifts.reduce(
+			(sum, shift) => sum + shift.conflicts.length,
+			0,
+		) ?? 0;
+	const scheduledMinutes =
+		scheduleData?.hours.reduce((sum, entry) => sum + entry.minutes, 0) ?? 0;
+	const laborPercent = scheduleLabor.data?.laborPercent ?? null;
+	const laborGoal = settings.data?.laborCostPercentGoal ?? null;
+	const latestVersion = scheduleData?.publication.latestVersionNumber ?? null;
+	const hasUnpublishedChanges =
+		scheduleData?.publication.hasUnpublishedChanges ?? false;
+	const unacknowledged = pilotCounts?.unacknowledgedDeliveries ?? 0;
+
+	const scheduleStatus =
+		latestVersion === null
+			? { label: "Draft schedule", published: false }
+			: hasUnpublishedChanges
+				? { label: `Draft changes on v${latestVersion}`, published: false }
+				: { label: `Published v${latestVersion}`, published: true };
+
 	const constrainedStaff = (scheduleData?.staff ?? []).filter(
 		(member) =>
 			(member.unavailability?.length ?? 0) > 0 ||
@@ -343,7 +447,8 @@ function Overview() {
 			]),
 		[respond, formatMinute, queryClient],
 	);
-	const hasScheduleDetails =
+
+	const hasAttentionItems =
 		constrainedStaff.length > 0 ||
 		outstandingAcceptances.length > 0 ||
 		myPendingAcceptances.length > 0;
@@ -351,7 +456,12 @@ function Overview() {
 	return (
 		<AppDocument widthClassName="max-w-5xl">
 			{nextShift ? (
-				<Card className={cn(onClock && "border-primary/40 bg-primary/5")}>
+				<Card
+					className={cn(
+						SECTION_ENTER,
+						onClock && "border-primary/40 bg-primary/5",
+					)}
+				>
 					<CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
 						<div className="flex min-w-0 items-start gap-3">
 							<div className="mt-0.5 rounded-lg bg-primary/10 p-2 text-primary">
@@ -382,45 +492,237 @@ function Overview() {
 					</CardHeader>
 				</Card>
 			) : null}
-			{isLoading ? (
-				<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-					{["locations", "positions", "workers", "invitations"].map((key) => (
-						<Skeleton key={key} className="h-20" />
-					))}
-				</div>
-			) : (
-				<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-					{stats.map((stat) => (
-						<Item
-							key={stat.label}
-							variant="outline"
-							size="sm"
-							render={<Link to={stat.to} />}
-						>
-							<ItemMedia variant="icon">
-								<stat.icon />
-							</ItemMedia>
-							<ItemContent>
-								<ItemTitle className="font-semibold text-lg tabular-nums">
-									{stat.value}
-								</ItemTitle>
-								<ItemDescription>{stat.label}</ItemDescription>
-							</ItemContent>
-						</Item>
-					))}
-				</div>
-			)}
+
+			<Card
+				className={cn(SECTION_ENTER, "overflow-visible")}
+				style={{ animationDelay: "0ms" }}
+			>
+				<CardHeader>
+					<div className="flex flex-wrap items-start justify-between gap-3">
+						<div className="min-w-0">
+							<div className="flex flex-wrap items-center gap-2">
+								<CardTitle>This week</CardTitle>
+								<Badge
+									variant={scheduleStatus.published ? "default" : "secondary"}
+								>
+									{scheduleStatus.published ? (
+										<CircleCheckIcon data-icon="inline-start" />
+									) : (
+										<CircleIcon data-icon="inline-start" />
+									)}
+									{scheduleStatus.label}
+								</Badge>
+							</div>
+							<CardDescription>
+								{weekStart ? formatWeekLabel(weekStart) : "Loading week"}
+								{focusLocation ? ` · ${focusLocation.name}` : ""}
+							</CardDescription>
+						</div>
+						<div className="flex flex-wrap items-center gap-2">
+							{(locations.data?.length ?? 0) > 1 ? (
+								<Select
+									items={(locations.data ?? []).map((location) => ({
+										label: location.name,
+										value: location.id,
+									}))}
+									value={focusLocation?.id ?? null}
+									onValueChange={(value) => {
+										if (value) setFocusLocationId(value);
+									}}
+								>
+									<SelectTrigger
+										aria-label="Week location"
+										size="sm"
+										className="w-36"
+									>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectGroup>
+											{(locations.data ?? []).map((location) => (
+												<SelectItem key={location.id} value={location.id}>
+													{location.name}
+												</SelectItem>
+											))}
+										</SelectGroup>
+									</SelectContent>
+								</Select>
+							) : null}
+							<Button
+								variant="outline"
+								size="sm"
+								nativeButton={false}
+								render={<Link to="/dashboard/schedule" />}
+							>
+								Open schedule
+							</Button>
+						</div>
+					</div>
+				</CardHeader>
+				<CardContent className="flex flex-col gap-4">
+					{isLoading || currentSchedule.isLoading ? (
+						<dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+							{["hours", "labor", "open", "conflicts"].map((key) => (
+								<Skeleton key={key} className="h-14" />
+							))}
+						</dl>
+					) : (
+						<dl className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
+							<WeekMetric
+								label="Scheduled"
+								value={formatHours(scheduledMinutes)}
+								hint={
+									scheduleLabor.data
+										? formatCurrency(scheduleLabor.data.scheduledCents)
+										: undefined
+								}
+							/>
+							<WeekMetric
+								label="Labor %"
+								value={
+									laborPercent == null ? "—" : `${laborPercent.toFixed(1)}%`
+								}
+								hint={laborGoal == null ? undefined : `Goal ${laborGoal}%`}
+							/>
+							<WeekMetric
+								label="Open shifts"
+								value={openShiftCount}
+								tone={openShiftCount > 0 ? "amber" : "default"}
+								hint={openShiftCount > 0 ? "Need a worker" : "All covered"}
+							/>
+							<WeekMetric
+								label="Conflicts"
+								value={conflictCount}
+								tone={conflictCount > 0 ? "destructive" : "default"}
+								hint={conflictCount > 0 ? "Resolve before publishing" : "None"}
+							/>
+						</dl>
+					)}
+					{unacknowledged > 0 ? (
+						<div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+							<p className="flex items-center gap-2 text-muted-foreground text-xs">
+								<BellRingIcon className="size-4" />
+								<span className="tabular-nums">
+									{unacknowledged} schedule change
+									{unacknowledged === 1 ? "" : "s"} still need acknowledgement
+								</span>
+							</p>
+							<Button
+								variant="ghost"
+								size="sm"
+								disabled={remind.isPending}
+								onClick={() => remind.mutate()}
+							>
+								{remind.isPending ? "Sending…" : "Remind workers"}
+							</Button>
+						</div>
+					) : null}
+				</CardContent>
+			</Card>
+
+			<Card className={SECTION_ENTER} style={{ animationDelay: "60ms" }}>
+				<CardHeader>
+					<CardTitle>Needs attention</CardTitle>
+					<CardDescription>
+						Current-week constraints and unresolved shift decisions
+						{focusLocation ? ` for ${focusLocation.name}` : ""}.
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="grid gap-6">
+					{!hasAttentionItems ? (
+						<Empty>
+							<EmptyHeader>
+								<EmptyMedia variant="icon">
+									<CircleCheckIcon />
+								</EmptyMedia>
+								<EmptyTitle>You're all caught up</EmptyTitle>
+								<EmptyDescription>
+									No worker constraints or pending shift decisions for this
+									week.
+								</EmptyDescription>
+							</EmptyHeader>
+						</Empty>
+					) : null}
+					{constrainedStaff.length > 0 ? (
+						<section aria-labelledby="overview-constraints-heading">
+							<div className="mb-3 flex items-center gap-2">
+								<h3
+									id="overview-constraints-heading"
+									className="font-semibold text-sm"
+								>
+									Constraints
+								</h3>
+								<Badge variant="secondary">{constrainedStaff.length}</Badge>
+							</div>
+							<DataTable
+								fill={false}
+								bounded
+								columns={staffColumns}
+								data={constrainedStaff.slice(0, 6)}
+								getRowId={(row) => row.employmentId}
+							/>
+						</section>
+					) : null}
+					{myPendingAcceptances.length > 0 ? (
+						<section aria-labelledby="overview-my-acceptances-heading">
+							<div className="mb-1 flex items-center gap-2">
+								<h3
+									id="overview-my-acceptances-heading"
+									className="font-semibold text-sm"
+								>
+									Your shifts need acceptance
+								</h3>
+								<Badge
+									variant="secondary"
+									className="h-5 rounded-md px-1.5 tabular-nums"
+								>
+									{myPendingAcceptances.length}
+								</Badge>
+							</div>
+							<p className="mb-3 text-muted-foreground text-xs">
+								A late material change touched your own shifts. Accept or
+								decline each one.
+							</p>
+							<DataTable
+								fill={false}
+								bounded
+								columns={myAcceptanceColumns}
+								data={myPendingAcceptances}
+								getRowId={(row) => row.id}
+							/>
+						</section>
+					) : null}
+					{outstandingAcceptances.length > 0 ? (
+						<section aria-labelledby="overview-acceptances-heading">
+							<h3
+								id="overview-acceptances-heading"
+								className="mb-3 font-semibold text-sm"
+							>
+								Shift acceptances
+							</h3>
+							<DataTable
+								fill={false}
+								bounded
+								columns={overviewAcceptanceColumns}
+								data={outstandingAcceptances.slice(0, 6)}
+								getRowId={(row) => row.id}
+							/>
+						</section>
+					) : null}
+				</CardContent>
+			</Card>
+
 			{completedSteps < checklist.length ? (
-				<Card>
+				<Card className={SECTION_ENTER} style={{ animationDelay: "120ms" }}>
 					<CardHeader>
 						<div className="flex flex-wrap items-center justify-between gap-2">
-							<CardTitle>Setup</CardTitle>
+							<CardTitle>Set up scheduling</CardTitle>
 							<Badge variant="secondary">
 								{completedSteps} of {checklist.length} complete
 							</Badge>
 						</div>
 						<CardDescription>
-							Finish these steps to get scheduling ready.
+							Finish these steps to get your workplace ready.
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
@@ -430,7 +732,7 @@ function Overview() {
 									<Button
 										variant="ghost"
 										className={cn(
-											"h-auto w-full justify-start py-2.5",
+											"h-auto w-full justify-start py-2.5 transition-colors duration-150",
 											step.done && "text-muted-foreground",
 										)}
 										nativeButton={false}
@@ -454,175 +756,62 @@ function Overview() {
 					</CardContent>
 				</Card>
 			) : null}
-			{hasScheduleDetails ? (
-				<Card>
-					<CardHeader>
-						<div className="flex flex-wrap items-start justify-between gap-3">
-							<div>
-								<CardTitle>Needs attention</CardTitle>
-								<CardDescription>
-									Current-week constraints and unresolved shift decisions for{" "}
-									{focusLocation?.name ?? "your location"}.
-								</CardDescription>
-							</div>
-							<div className="flex flex-wrap items-center gap-2">
-								{(locations.data?.length ?? 0) > 1 ? (
-									<Select
-										items={(locations.data ?? []).map((location) => ({
-											label: location.name,
-											value: location.id,
-										}))}
-										value={focusLocation?.id ?? null}
-										onValueChange={(value) => {
-											if (value) setFocusLocationId(value);
-										}}
-									>
-										<SelectTrigger
-											aria-label="Location for Needs attention"
-											size="sm"
-											className="w-36"
-										>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											<SelectGroup>
-												{(locations.data ?? []).map((location) => (
-													<SelectItem key={location.id} value={location.id}>
-														{location.name}
-													</SelectItem>
-												))}
-											</SelectGroup>
-										</SelectContent>
-									</Select>
-								) : null}
-								<Button
-									variant="outline"
-									size="sm"
-									nativeButton={false}
-									render={<Link to="/dashboard/schedule" />}
-								>
-									Open schedule
-								</Button>
-							</div>
-						</div>
-					</CardHeader>
-					<CardContent className="grid gap-4">
-						{constrainedStaff.length > 0 ? (
-							<section aria-labelledby="overview-constraints-heading">
-								<div className="mb-3 flex items-center gap-2">
-									<h3
-										id="overview-constraints-heading"
-										className="font-semibold text-sm"
-									>
-										Constraints
-									</h3>
-									<Badge variant="secondary">{constrainedStaff.length}</Badge>
-								</div>
-								<DataTable
-									fill={false}
-									bounded
-									columns={staffColumns}
-									data={constrainedStaff.slice(0, 6)}
-									getRowId={(row) => row.employmentId}
-								/>
-							</section>
-						) : null}
-						{myPendingAcceptances.length > 0 ? (
-							<section aria-labelledby="overview-my-acceptances-heading">
-								<div className="mb-1 flex items-center gap-2">
-									<h3
-										id="overview-my-acceptances-heading"
-										className="font-semibold text-sm"
-									>
-										Your shifts need acceptance
-									</h3>
-									<Badge
-										variant="secondary"
-										className="h-5 rounded-md px-1.5 tabular-nums"
-									>
-										{myPendingAcceptances.length}
-									</Badge>
-								</div>
-								<p className="mb-3 text-muted-foreground text-xs">
-									A late material change touched your own shifts. Accept or
-									decline each one.
-								</p>
-								<DataTable
-									fill={false}
-									bounded
-									columns={myAcceptanceColumns}
-									data={myPendingAcceptances}
-									getRowId={(row) => row.id}
-								/>
-							</section>
-						) : null}
-						{outstandingAcceptances.length > 0 ? (
-							<section aria-labelledby="overview-acceptances-heading">
-								<h3
-									id="overview-acceptances-heading"
-									className="mb-3 font-semibold text-sm"
-								>
-									Shift acceptances
-								</h3>
-								<DataTable
-									fill={false}
-									bounded
-									columns={overviewAcceptanceColumns}
-									data={outstandingAcceptances.slice(0, 6)}
-									getRowId={(row) => row.id}
-								/>
-							</section>
-						) : null}
-					</CardContent>
-				</Card>
-			) : null}
-			<Card>
+
+			<Card className={SECTION_ENTER} style={{ animationDelay: "180ms" }}>
 				<CardHeader>
-					<div className="flex flex-wrap items-start justify-between gap-3">
-						<div>
-							<CardTitle className="flex items-center gap-2">
-								<CalendarCheckIcon /> Schedule follow-up
-							</CardTitle>
-							<CardDescription>
-								Check which schedule notifications still need to be seen.
-							</CardDescription>
-						</div>
-						<Button
-							variant="outline"
-							size="sm"
-							disabled={
-								remind.isPending ||
-								(pilotCounts?.unacknowledgedDeliveries ?? 0) === 0
-							}
-							onClick={() => remind.mutate()}
-						>
-							{remind.isPending ? "Sending…" : "Remind workers to review"}
-						</Button>
-					</div>
+					<CardTitle>Workplace</CardTitle>
+					<CardDescription>Team and settings at a glance.</CardDescription>
 				</CardHeader>
-				<CardContent className="flex flex-wrap gap-x-8 gap-y-3">
-					<div className="flex items-baseline gap-2">
-						<p className="font-semibold text-lg tabular-nums">
-							{pilotCounts?.publishedVersions ?? 0}
-						</p>
-						<p className="text-muted-foreground text-xs">Published versions</p>
-					</div>
-					<div className="flex items-baseline gap-2">
-						<p className="font-semibold text-lg tabular-nums">
-							{pilotCounts?.unacknowledgedDeliveries ?? 0}
-						</p>
-						<p className="text-muted-foreground text-xs">
-							Need acknowledgement
-						</p>
-					</div>
-					<div className="flex items-baseline gap-2">
-						<p className="font-semibold text-lg tabular-nums">
-							{pilot.data?.feedback.length ?? 0}
-						</p>
-						<p className="text-muted-foreground text-xs">
-							Recent feedback items
-						</p>
-					</div>
+				<CardContent>
+					{isLoading ? (
+						<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+							{["locations", "positions", "workers", "invitations"].map(
+								(key) => (
+									<Skeleton key={key} className="h-16" />
+								),
+							)}
+						</div>
+					) : (
+						<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+							<StatLink
+								icon={MapPinIcon}
+								value={locations.data?.length ?? 0}
+								label="Locations"
+								to="/dashboard/settings/locations"
+								delay={0}
+							/>
+							<StatLink
+								icon={TagsIcon}
+								value={positions.data?.length ?? 0}
+								label="Positions"
+								to="/dashboard/settings/positions"
+								delay={40}
+							/>
+							<StatLink
+								icon={UsersIcon}
+								value={activeWorkers.length}
+								label="Active workers"
+								to="/dashboard/workers"
+								delay={80}
+							/>
+							<StatLink
+								icon={UserPlusIcon}
+								value={pendingInvitations.length}
+								label="Pending invitations"
+								to="/dashboard/workers"
+								delay={120}
+							/>
+						</div>
+					)}
+					{pendingInvitations.length > 0 ? (
+						<Link
+							to="/dashboard/workers"
+							className="mt-3 inline-flex items-center gap-1 text-primary text-xs transition-colors duration-150 hover:underline"
+						>
+							Review pending invitations
+							<ChevronRightIcon className="size-3.5" />
+						</Link>
+					) : null}
 				</CardContent>
 			</Card>
 		</AppDocument>

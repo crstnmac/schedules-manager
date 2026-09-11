@@ -209,7 +209,7 @@ export const rosterRoutes = new Elysia({
 			return { roster, timeOff };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			query: t.Object({
 				date: t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
@@ -272,7 +272,7 @@ export const rosterRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "The pay period containing today",
@@ -372,7 +372,7 @@ export const rosterRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				versionShiftId: t.String({ format: "uuid" }),

@@ -40,7 +40,7 @@ export const emailDeliveryRoutes = new Elysia({ prefix: "/v1" })
 			return { deliveries };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 		},
 	)

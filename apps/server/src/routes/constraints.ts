@@ -270,7 +270,7 @@ export const constraintsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -415,7 +415,7 @@ export const constraintsRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				recurring: t.Array(
@@ -480,7 +480,7 @@ export const constraintsRoutes = new Elysia({
 			return { ok: true as const, status: "approved" as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				unavailabilityId: t.String({ format: "uuid" }),
@@ -531,7 +531,7 @@ export const constraintsRoutes = new Elysia({
 			return { preference: body.note.trim() };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				note: t.Union([t.String({ maxLength: 500 }), t.Null()]),
@@ -591,7 +591,7 @@ export const constraintsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: leaveWindowBody,
 			detail: {
@@ -632,7 +632,7 @@ export const constraintsRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				requestId: t.String({ format: "uuid" }),
@@ -759,7 +759,7 @@ export const constraintsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "List Time-off Requests for the Workplace (Manager)",
@@ -848,7 +848,7 @@ export const constraintsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				employmentId: t.String({ format: "uuid" }),
@@ -971,7 +971,7 @@ export const constraintsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				requestId: t.String({ format: "uuid" }),
@@ -1095,7 +1095,7 @@ export const constraintsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				requestId: t.String({ format: "uuid" }),
@@ -1157,7 +1157,7 @@ export const constraintsRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				requestId: t.String({ format: "uuid" }),
@@ -1226,7 +1226,7 @@ export const constraintsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				requestId: t.String({ format: "uuid" }),

@@ -357,7 +357,7 @@ export const changesRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ scheduleId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -427,7 +427,7 @@ export const changesRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ scheduleId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -455,7 +455,7 @@ export const changesRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({ acceptanceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Accept a materially changed or newly added Shift",
@@ -482,7 +482,7 @@ export const changesRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({ acceptanceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Decline a materially changed Shift (Manager can see this)",

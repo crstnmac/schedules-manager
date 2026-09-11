@@ -90,7 +90,7 @@ export const invitationsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			detail: {
 				summary: "List unexpired pending invitations for the signed-in person",
 				security: [{ bearerAuth: [] }],
@@ -270,7 +270,7 @@ export const invitationsRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			body: t.Object({ token: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:

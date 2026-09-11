@@ -288,7 +288,7 @@ export const timeEntryRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({ versionShiftId: t.String({ format: "uuid" }) }),
 			body: t.Optional(
 				t.Object({
@@ -323,7 +323,7 @@ export const timeEntryRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({ versionShiftId: t.String({ format: "uuid" }) }),
 			body: t.Optional(
 				t.Object({
@@ -408,7 +408,7 @@ export const timeEntryRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Recent Time Entries for the signed-in employment",
@@ -529,7 +529,7 @@ export const timeEntryRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				versionShiftId: t.String({ format: "uuid" }),

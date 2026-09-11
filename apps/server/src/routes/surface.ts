@@ -123,7 +123,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid }),
 		},
 	)
@@ -152,7 +152,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { group: { id: group.id, name: group.name } };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 80 }),
@@ -190,7 +190,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { group: { id: group.id, name: group.name } };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid, groupId: uuid }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 80 }),
@@ -214,7 +214,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid, groupId: uuid }),
 		},
 	)
@@ -230,7 +230,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { tags: tags.map((tag) => ({ id: tag.id, name: tag.name })) };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid }),
 		},
 	)
@@ -248,7 +248,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { tag: { id: tag.id, name: tag.name } };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid }),
 			body: t.Object({ name: t.String({ minLength: 1, maxLength: 40 }) }),
 		},
@@ -272,7 +272,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { tag: { id: tag.id, name: tag.name } };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid, tagId: uuid }),
 			body: t.Object({ name: t.String({ minLength: 1, maxLength: 40 }) }),
 		},
@@ -293,7 +293,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid, tagId: uuid }),
 		},
 	)
@@ -315,7 +315,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid }),
 		},
 	)
@@ -339,7 +339,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 80 }),
@@ -382,7 +382,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid, leaveTypeId: uuid }),
 			body: t.Object({
 				name: t.Optional(t.String({ minLength: 1, maxLength: 80 })),
@@ -408,7 +408,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid, leaveTypeId: uuid }),
 		},
 	)
@@ -456,7 +456,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid, employmentId: uuid }),
 			body: t.Object({
 				leaveTypeId: uuid,
@@ -500,7 +500,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid }),
 		},
 	)
@@ -551,7 +551,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid, employmentId: uuid }),
 		},
 	)
@@ -595,7 +595,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ locationId: uuid }),
 		},
 	)
@@ -625,7 +625,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ locationId: uuid }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 40 }),
@@ -671,7 +671,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ locationId: uuid, blockId: uuid }),
 			body: t.Object({
 				name: t.Optional(t.String({ minLength: 1, maxLength: 40 })),
@@ -698,7 +698,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ locationId: uuid, blockId: uuid }),
 		},
 	)
@@ -728,7 +728,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ locationId: uuid }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 40 }),
@@ -774,7 +774,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ locationId: uuid, dayPartId: uuid }),
 			body: t.Object({
 				name: t.Optional(t.String({ minLength: 1, maxLength: 40 })),
@@ -801,7 +801,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ locationId: uuid, dayPartId: uuid }),
 		},
 	)
@@ -835,7 +835,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ locationId: uuid }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 80 }),
@@ -903,7 +903,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ locationId: uuid, templateId: uuid }),
 			body: t.Object({
 				name: t.Optional(t.String({ minLength: 1, maxLength: 80 })),
@@ -930,7 +930,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ locationId: uuid, templateId: uuid }),
 		},
 	)
@@ -954,7 +954,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({
 				locationId: uuid,
 				saleDate: t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
@@ -989,7 +989,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid }),
 		},
 	)
@@ -1045,7 +1045,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { announcement: { id: created.id } };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid }),
 			body: t.Object({
 				title: t.String({ minLength: 1, maxLength: 120 }),
@@ -1218,7 +1218,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid }),
 		},
 	)
@@ -1303,7 +1303,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { conversation: { id: created.id } };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid }),
 			body: t.Object({ counterpartEmploymentId: uuid }),
 		},
@@ -1400,7 +1400,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ conversationId: uuid }),
 			query: t.Object({
 				limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
@@ -1469,7 +1469,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ conversationId: uuid }),
 			body: t.Object({ body: t.String({ minLength: 1, maxLength: 2000 }) }),
 		},
@@ -1505,7 +1505,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid, employmentId: uuid }),
 		},
 	)
@@ -1539,7 +1539,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { document: { id: created.id } };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid, employmentId: uuid }),
 			body: t.Object({
 				title: t.String({ minLength: 1, maxLength: 120 }),
@@ -1610,7 +1610,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid, employmentId: uuid }),
 			body: t.Object({
 				hourlyWageCents: t.Optional(
@@ -1645,7 +1645,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ shiftId: uuid }),
 			body: t.Object({ tagIds: t.Array(uuid) }),
 		},
@@ -1674,7 +1674,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ shiftId: uuid }),
 			body: t.Object({
 				titles: t.Array(t.String({ minLength: 1, maxLength: 120 })),
@@ -1722,7 +1722,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ versionShiftId: uuid }),
 		},
 	)
@@ -1759,7 +1759,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ versionShiftId: uuid, taskId: uuid }),
 		},
 	)
@@ -1815,7 +1815,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ timeEntryId: uuid }),
 		},
 	)
@@ -1862,7 +1862,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ timeEntryId: uuid }),
 		},
 	)
@@ -1911,7 +1911,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid, timeEntryId: uuid }),
 			body: t.Object({
 				decision: t.Union([t.Literal("approved"), t.Literal("declined")]),
@@ -1948,7 +1948,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: uuid }),
 		},
 	);

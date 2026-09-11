@@ -34,7 +34,7 @@ export const placesRoutes = new Elysia({
 			return { places };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			query: t.Object({
 				q: t.String({ minLength: 1, maxLength: 200 }),
 				lat: t.Optional(t.Number()),
@@ -64,7 +64,7 @@ export const placesRoutes = new Elysia({
 			return { place };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			query: t.Object({
 				lat: t.Number(),
 				lon: t.Number(),

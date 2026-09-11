@@ -120,7 +120,7 @@ export const templateRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ locationId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "List named Schedule Templates for a Location (Manager)",
@@ -234,7 +234,7 @@ export const templateRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: t.String(),
@@ -354,7 +354,7 @@ export const templateRoutes = new Elysia({
 				"idempotency-key": t.Optional(
 					t.String({ minLength: 8, maxLength: 200 }),
 				),
-			}),
+			}, { additionalProperties: true }),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: t.String(),

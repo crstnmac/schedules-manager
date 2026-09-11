@@ -68,7 +68,7 @@ export const locationsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "List Locations for a Workplace (Manager)",
@@ -122,7 +122,7 @@ export const locationsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 120 }),
@@ -223,7 +223,7 @@ export const locationsRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ locationId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
@@ -281,7 +281,7 @@ export const locationsRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }),
+			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
 			params: t.Object({ locationId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Delete a Location (Manager)",
