@@ -1,9 +1,18 @@
 import { Badge } from "@SchedulesManager/ui/components/badge";
-import { Button, buttonVariants } from "@SchedulesManager/ui/components/button";
+import { Button } from "@SchedulesManager/ui/components/button";
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardFooter,
+	CardHeader,
+	CardTitle,
+} from "@SchedulesManager/ui/components/card";
 import {
 	ScrollArea,
 	ScrollBar,
 } from "@SchedulesManager/ui/components/scroll-area";
+import { Slider } from "@SchedulesManager/ui/components/slider";
 import {
 	ToggleGroup,
 	ToggleGroupItem,
@@ -38,25 +47,11 @@ import {
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { LandingLink } from "./landing-link";
+import { PrivacyPolicyPage, TermsPage } from "./legal";
+import { usePathname } from "./router";
 import "./styles.css";
 
-function LandingLink({
-	className,
-	variant = "link",
-	size = "default",
-	...props
-}: React.ComponentProps<"a"> & {
-	variant?: "default" | "outline" | "secondary" | "ghost" | "link";
-	size?: "default" | "xs" | "sm" | "lg";
-}) {
-	return (
-		<a
-			data-slot="button"
-			className={cn(buttonVariants({ variant, size }), className)}
-			{...props}
-		/>
-	);
-}
 const appUrl = import.meta.env.VITE_APP_URL || "http://localhost:3001";
 const signUpUrl = new URL(appUrl);
 signUpUrl.searchParams.set("mode", "sign-up");
@@ -167,25 +162,44 @@ function CTA({ children = "Get started" }: { children?: React.ReactNode }) {
 	);
 }
 
-const pricingFeatures = {
-	schedule: [
-		"Weekly schedules and reusable templates",
-		"Availability, time off, open shifts, and swaps",
-		"Versioned publishing and change history",
-		"Team notifications and messaging",
-		"Unlimited workers and managers",
-	],
-	operations: [
-		"Everything in Schedule",
-		"Time clock, kiosk, and geofencing",
-		"Attendance, breaks, and timesheet approval",
-		"Labor cost and overtime reporting",
-		"Auto-assign and workforce controls",
-	],
-} as const;
+const locationRange = { min: 1, max: 25 };
+
+const plans = [
+	{
+		id: "schedule",
+		name: "Schedule",
+		tagline: "For clear, dependable scheduling",
+		perLocation: { monthly: 39, annual: 31 },
+		features: [
+			"Weekly schedules and reusable templates",
+			"Availability, time off, open shifts, and swaps",
+			"Versioned publishing and change history",
+			"Team notifications and messaging",
+			"Unlimited workers and managers",
+		],
+		recommended: false,
+	},
+	{
+		id: "operations",
+		name: "Operations",
+		tagline: "For complete workforce operations",
+		perLocation: { monthly: 79, annual: 63 },
+		features: [
+			"Everything in Schedule",
+			"Time clock, kiosk, and geofencing",
+			"Attendance, breaks, and timesheet approval",
+			"Labor cost and overtime reporting",
+			"Auto-assign and workforce controls",
+		],
+		recommended: true,
+	},
+] as const;
 
 function Pricing() {
 	const [annual, setAnnual] = useState(true);
+	const [locations, setLocations] = useState(1);
+	const interval = annual ? "annual" : "monthly";
+
 	return (
 		<section className="pricing-section" id="pricing">
 			<div className="section-container">
@@ -198,72 +212,114 @@ function Pricing() {
 							<span>Everyone included.</span>
 						</h2>
 					</div>
-					<ToggleGroup
-						className="billing-toggle"
-						aria-label="Billing interval"
-						value={[annual ? "annual" : "monthly"]}
-						onValueChange={(value) => {
-							const interval = value.at(-1);
-							if (interval) setAnnual(interval === "annual");
-						}}
-						spacing={0}
-					>
-						<ToggleGroupItem value="monthly">Monthly</ToggleGroupItem>
-						<ToggleGroupItem value="annual">
-							Annual <small>Save 20%</small>
-						</ToggleGroupItem>
-					</ToggleGroup>
+					<p className="text-pretty text-muted-foreground text-sm">
+						Every feature, every worker. One clear price per location — slide to
+						see what your workplaces would pay.
+					</p>
 				</div>
-				<div className="pricing-grid">
-					{(["schedule", "operations"] as const).map((plan) => {
-						const price =
-							plan === "schedule" ? (annual ? 31 : 39) : annual ? 63 : 79;
+				<Card className="mx-auto max-w-3xl">
+					<CardContent className="grid gap-8 pt-6 sm:grid-cols-[auto_1fr] sm:items-center">
+						<ToggleGroup
+							aria-label="Billing interval"
+							className="rounded-lg border p-1"
+							value={[interval]}
+							onValueChange={(value) => {
+								const next = value.at(-1);
+								if (next) setAnnual(next === "annual");
+							}}
+							spacing={0}
+						>
+							<ToggleGroupItem className="h-9 px-4" value="monthly">
+								Monthly
+							</ToggleGroupItem>
+							<ToggleGroupItem className="h-9 px-4" value="annual">
+								Annual
+								<span className="ml-1 text-emerald-600 text-xs">Save 20%</span>
+							</ToggleGroupItem>
+						</ToggleGroup>
+						<div>
+							<div className="flex items-center justify-between gap-4">
+								<span className="font-medium text-sm">Locations</span>
+								<Badge variant="secondary">
+									{locations} {locations === 1 ? "location" : "locations"}
+								</Badge>
+							</div>
+							<Slider
+								aria-label="Number of locations"
+								className="py-4"
+								max={locationRange.max}
+								min={locationRange.min}
+								onValueChange={setLocations}
+								value={locations}
+							/>
+							<div className="flex justify-between text-muted-foreground text-xs">
+								<span>{locationRange.min}</span>
+								<span>{locationRange.max} locations</span>
+							</div>
+						</div>
+					</CardContent>
+				</Card>
+				<div className="mx-auto mt-8 grid max-w-5xl gap-6 md:grid-cols-2">
+					{plans.map((plan) => {
+						const price = plan.perLocation[interval];
+						const monthlyTotal = price * locations;
+						const yearlyTotal = plan.perLocation.annual * 12 * locations;
+
 						return (
-							<article
-								className={`pricing-card pricing-card-${plan}`}
-								key={plan}
+							<Card
+								className={cn(
+									"flex flex-col",
+									plan.recommended && "ring-2 ring-primary/40",
+								)}
+								key={plan.id}
 							>
-								<div className="pricing-card-heading">
-									<div>
-										<p>
-											{plan === "schedule"
-												? "For clear, dependable scheduling"
-												: "For complete workforce operations"}
-										</p>
-										<h3>{plan === "schedule" ? "Schedule" : "Operations"}</h3>
+								<CardHeader>
+									<div className="flex items-start justify-between gap-4">
+										<div>
+											<CardDescription>{plan.tagline}</CardDescription>
+											<CardTitle className="mt-1 text-xl">
+												{plan.name}
+											</CardTitle>
+										</div>
+										{plan.recommended ? <Badge>Recommended</Badge> : null}
 									</div>
-									{plan === "operations" ? <span>Recommended</span> : null}
-								</div>
-								<div className="pricing-price">
-									<strong>${price}</strong>
-									<span>
-										per location
-										<br />
-										per month
-									</span>
-								</div>
-								<p className="pricing-billed">
-									{annual
-										? `Billed annually at $${plan === "schedule" ? 372 : 756} per location.`
-										: "Billed monthly. Cancel any time."}
-								</p>
-								<ul>
-									{pricingFeatures[plan].map((feature) => (
-										<li key={feature}>
-											<Check size={16} />
-											{feature}
-										</li>
-									))}
-								</ul>
-								<LandingLink
-									className={`button ${plan === "operations" ? "button-primary" : "button-secondary"}`}
-									href={signUpUrl.toString()}
-									variant={plan === "operations" ? "default" : "outline"}
-									size="lg"
-								>
-									Start 30 days free <ArrowUpRight data-icon="inline-end" />
-								</LandingLink>
-							</article>
+									<div className="mt-6 flex items-baseline gap-2">
+										<span className="font-semibold text-4xl tabular-nums tracking-tight">
+											${monthlyTotal}
+										</span>
+										<span className="text-muted-foreground text-sm">
+											/ month
+										</span>
+									</div>
+									<p className="text-pretty text-muted-foreground text-xs">
+										${price} per location · {locations}{" "}
+										{locations === 1 ? "location" : "locations"}
+										{annual
+											? ` · billed $${yearlyTotal} yearly`
+											: " · billed monthly"}
+									</p>
+								</CardHeader>
+								<CardContent className="flex-1">
+									<ul className="grid gap-2.5 text-sm">
+										{plan.features.map((feature) => (
+											<li className="flex items-start gap-2" key={feature}>
+												<Check className="mt-0.5 size-4 text-primary" />
+												<span>{feature}</span>
+											</li>
+										))}
+									</ul>
+								</CardContent>
+								<CardFooter>
+									<Button
+										className="w-full"
+										nativeButton={false}
+										render={<a href={signUpUrl.toString()} />}
+										variant={plan.recommended ? "default" : "outline"}
+									>
+										Start 30 days free <ArrowUpRight data-icon="inline-end" />
+									</Button>
+								</CardFooter>
+							</Card>
 						);
 					})}
 				</div>
@@ -496,7 +552,7 @@ function SchedulePreview() {
 		</div>
 	);
 }
-function App() {
+function HomePage() {
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [scrolled, setScrolled] = useState(false);
 
@@ -852,6 +908,10 @@ function App() {
 				</div>
 				<div className="footer-bottom section-container">
 					<span>© {new Date().getFullYear()} jooling</span>
+					<nav className="footer-legal" aria-label="Legal">
+						<LandingLink href="/privacy">Privacy Policy</LandingLink>
+						<LandingLink href="/terms">Terms &amp; Conditions</LandingLink>
+					</nav>
 				</div>
 				<div
 					className="footer-landscape"
@@ -862,6 +922,23 @@ function App() {
 		</div>
 	);
 }
+const titles: Record<string, string> = {
+	"/privacy": "Privacy Policy — jooling",
+	"/terms": "Terms & Conditions — jooling",
+};
+
+function App() {
+	const pathname = usePathname();
+
+	useEffect(() => {
+		document.title = titles[pathname] ?? "jooling — Good weeks start here.";
+	}, [pathname]);
+
+	if (pathname === "/privacy") return <PrivacyPolicyPage />;
+	if (pathname === "/terms") return <TermsPage />;
+	return <HomePage />;
+}
+
 createRoot(document.getElementById("root")!).render(
 	<React.StrictMode>
 		<App />
