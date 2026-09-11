@@ -707,7 +707,7 @@ function WorkerHome() {
 				) : null}
 
 				{view === "calendar" ? (
-					<div className="min-h-0 flex-1 overflow-y-auto">
+					<div className="card-inset min-h-0 flex-1 overflow-y-auto">
 						<WorkerScheduleCalendar workplaceId={workplace?.id} />
 					</div>
 				) : !schedule.isLoading && !schedule.isError && !hasAnySchedule ? (
@@ -761,7 +761,7 @@ function WorkerHome() {
 							</nav>
 						</aside>
 
-						<div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+						<div className="card-inset flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
 							<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
 								{section === "this-week" ? (
 									<>

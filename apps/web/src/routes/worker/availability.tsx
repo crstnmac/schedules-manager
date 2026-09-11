@@ -558,7 +558,7 @@ function AvailabilityPage() {
 			/>
 			<AppPageBody scroll={false} className="gap-0">
 				{constraints.isLoading ? (
-					<div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+					<div className="min-h-0 flex-1 overflow-y-auto p-4">
 						<Skeleton className="h-40" />
 					</div>
 				) : (
@@ -566,7 +566,7 @@ function AvailabilityPage() {
 						defaultValue="time-off"
 						className="min-h-0 flex-1 flex-col gap-0"
 					>
-						<div className="shrink-0 border-b px-4 md:px-6">
+						<div className="shrink-0 border-b px-4">
 							<TabsList variant="line">
 								<TabsTrigger value="time-off">Time off</TabsTrigger>
 								<TabsTrigger value="unavailable">When I can't work</TabsTrigger>
@@ -574,7 +574,7 @@ function AvailabilityPage() {
 							</TabsList>
 						</div>
 
-						<div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+						<div className="card-inset min-h-0 flex-1 overflow-y-auto">
 							<TabsContent value="time-off">
 								<Card>
 									<CardHeader>
