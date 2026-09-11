@@ -1,14 +1,6 @@
 import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardFooter,
-	CardHeader,
-	CardTitle,
-} from "@SchedulesManager/ui/components/card";
-import {
 	ScrollArea,
 	ScrollBar,
 } from "@SchedulesManager/ui/components/scroll-area";
@@ -204,125 +196,119 @@ function Pricing() {
 		<section className="pricing-section" id="pricing">
 			<div className="section-container">
 				<div className="pricing-heading">
-					<div>
-						<p className="eyebrow">Simple pricing</p>
-						<h2>
-							One price for the place.
-							<br />
-							<span>Everyone included.</span>
-						</h2>
-					</div>
-					<p className="text-pretty text-muted-foreground text-sm">
+					<p className="eyebrow">Simple pricing</p>
+					<h2>
+						One price for the place.
+						<br />
+						<span>Everyone included.</span>
+					</h2>
+					<p className="pricing-lede">
 						Every feature, every worker. One clear price per location — slide to
 						see what your workplaces would pay.
 					</p>
 				</div>
-				<Card className="mx-auto max-w-3xl">
-					<CardContent className="grid gap-8 pt-6 sm:grid-cols-[auto_1fr] sm:items-center">
-						<ToggleGroup
-							aria-label="Billing interval"
-							className="rounded-lg border p-1"
-							value={[interval]}
-							onValueChange={(value) => {
-								const next = value.at(-1);
-								if (next) setAnnual(next === "annual");
-							}}
-							spacing={0}
+
+				<div className="pricing-config">
+					<ToggleGroup
+						aria-label="Billing interval"
+						className="pricing-interval-control"
+						value={[interval]}
+						onValueChange={(value) => {
+							const next = value.at(-1);
+							if (next) setAnnual(next === "annual");
+						}}
+						spacing={0}
+					>
+						<ToggleGroupItem
+							className="pricing-interval-option"
+							value="monthly"
 						>
-							<ToggleGroupItem className="h-9 px-4" value="monthly">
-								Monthly
-							</ToggleGroupItem>
-							<ToggleGroupItem className="h-9 px-4" value="annual">
-								Annual
-								<span className="ml-1 text-emerald-600 text-xs">Save 20%</span>
-							</ToggleGroupItem>
-						</ToggleGroup>
-						<div>
-							<div className="flex items-center justify-between gap-4">
-								<span className="font-medium text-sm">Locations</span>
-								<Badge variant="secondary">
-									{locations} {locations === 1 ? "location" : "locations"}
-								</Badge>
-							</div>
-							<Slider
-								aria-label="Number of locations"
-								className="py-4"
-								max={locationRange.max}
-								min={locationRange.min}
-								onValueChange={setLocations}
-								value={locations}
-							/>
-							<div className="flex justify-between text-muted-foreground text-xs">
-								<span>{locationRange.min}</span>
-								<span>{locationRange.max} locations</span>
-							</div>
+							Monthly
+						</ToggleGroupItem>
+						<ToggleGroupItem className="pricing-interval-option" value="annual">
+							Annual
+							<span className="pricing-interval-save">Save 20%</span>
+						</ToggleGroupItem>
+					</ToggleGroup>
+
+					<div className="pricing-locations">
+						<div className="pricing-locations-head">
+							<span className="pricing-locations-label">Locations</span>
+							<span className="pricing-locations-value">
+								{locations} {locations === 1 ? "location" : "locations"}
+							</span>
 						</div>
-					</CardContent>
-				</Card>
-				<div className="mx-auto mt-8 grid max-w-5xl gap-6 md:grid-cols-2">
+						<Slider
+							aria-label="Number of locations"
+							className="pricing-slider"
+							max={locationRange.max}
+							min={locationRange.min}
+							onValueChange={setLocations}
+							value={locations}
+						/>
+						<div className="pricing-locations-scale">
+							<span>{locationRange.min}</span>
+							<span>{locationRange.max} locations</span>
+						</div>
+					</div>
+				</div>
+
+				<div className="pricing-plans">
 					{plans.map((plan) => {
 						const price = plan.perLocation[interval];
 						const monthlyTotal = price * locations;
 						const yearlyTotal = plan.perLocation.annual * 12 * locations;
 
 						return (
-							<Card
+							<article
 								className={cn(
-									"flex flex-col",
-									plan.recommended && "ring-2 ring-primary/40",
+									"pricing-plan",
+									plan.recommended && "is-recommended",
 								)}
 								key={plan.id}
 							>
-								<CardHeader>
-									<div className="flex items-start justify-between gap-4">
-										<div>
-											<CardDescription>{plan.tagline}</CardDescription>
-											<CardTitle className="mt-1 text-xl">
-												{plan.name}
-											</CardTitle>
-										</div>
-										{plan.recommended ? <Badge>Recommended</Badge> : null}
-									</div>
-									<div className="mt-6 flex items-baseline gap-2">
-										<span className="font-semibold text-4xl tabular-nums tracking-tight">
-											${monthlyTotal}
-										</span>
-										<span className="text-muted-foreground text-sm">
-											/ month
-										</span>
-									</div>
-									<p className="text-pretty text-muted-foreground text-xs">
-										${price} per location · {locations}{" "}
-										{locations === 1 ? "location" : "locations"}
-										{annual
-											? ` · billed $${yearlyTotal} yearly`
-											: " · billed monthly"}
-									</p>
-								</CardHeader>
-								<CardContent className="flex-1">
-									<ul className="grid gap-2.5 text-sm">
-										{plan.features.map((feature) => (
-											<li className="flex items-start gap-2" key={feature}>
-												<Check className="mt-0.5 size-4 text-primary" />
-												<span>{feature}</span>
-											</li>
-										))}
-									</ul>
-								</CardContent>
-								<CardFooter>
-									<Button
-										className="w-full"
-										nativeButton={false}
-										render={<a href={signUpUrl.toString()} />}
-										variant={plan.recommended ? "default" : "outline"}
-									>
-										Start 30 days free <ArrowUpRight data-icon="inline-end" />
-									</Button>
-								</CardFooter>
-							</Card>
+								<div className="pricing-plan-head">
+									<h3>{plan.name}</h3>
+									{plan.recommended ? (
+										<span className="pricing-plan-flag">Recommended</span>
+									) : null}
+								</div>
+								<p className="pricing-plan-tagline">{plan.tagline}</p>
+								<div className="pricing-plan-price">
+									<span className="pricing-plan-amount">${monthlyTotal}</span>
+									<span className="pricing-plan-unit">/ month</span>
+								</div>
+								<p className="pricing-plan-detail">
+									${price} per location · {locations}{" "}
+									{locations === 1 ? "location" : "locations"}
+									{annual
+										? ` · billed $${yearlyTotal} yearly`
+										: " · billed monthly"}
+								</p>
+								<ul className="pricing-plan-features">
+									{plan.features.map((feature) => (
+										<li key={feature}>
+											<Check aria-hidden="true" />
+											<span>{feature}</span>
+										</li>
+									))}
+								</ul>
+								<LandingLink
+									className={cn(
+										"button pricing-plan-cta",
+										plan.recommended ? "button-primary" : "button-secondary",
+									)}
+									href={signUpUrl.toString()}
+									variant={plan.recommended ? "default" : "outline"}
+								>
+									Start 30 days free
+									<ArrowUpRight aria-hidden="true" />
+								</LandingLink>
+							</article>
 						);
 					})}
 				</div>
+
 				<p className="pricing-note">
 					No worker fees. No setup fee. Your team keeps access to its schedule
 					history.

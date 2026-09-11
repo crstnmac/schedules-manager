@@ -1,4 +1,5 @@
 @import "@SchedulesManager/ui/globals.css";
+@import "@fontsource/young-serif";
 @source "./**/*.{ts,tsx}";
 
 :root {
@@ -2695,13 +2696,14 @@ h2 span {
 
 /* Editorial typography system shared by the landing page and footer. */
 :root {
-	--font-display: var(--font-heading);
+	--font-display: "Young Serif", Georgia, "Times New Roman", serif;
 	--font-ui: var(--font-sans);
 }
 body {
 	font-family: var(--font-ui);
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
+	font-synthesis: none;
 	overflow-x: clip;
 }
 .hero h1,
@@ -4527,56 +4529,282 @@ body {
 	}
 }
 
-/* Pricing — shadcn components, framed to fit the editorial page. */
+/* Pricing — editorial plan comparison on the landing canvas. */
 .pricing-section {
-	/* The landing remaps --muted to the muted text colour; restore the
-	   neutral surface token so shadcn surfaces render correctly here. */
-	--muted: oklch(0.97 0 0);
-	padding: 120px 0;
+	padding: 124px 0;
 	background: #fbfbfa;
 	color: var(--ink);
 }
 .pricing-heading {
 	display: grid;
 	grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
+	column-gap: 72px;
 	align-items: end;
-	justify-content: space-between;
-	gap: 72px;
-	margin-bottom: 56px;
+	margin-bottom: 64px;
+}
+.pricing-heading .eyebrow {
+	grid-column: 1 / -1;
+	margin-bottom: 20px;
 }
 .pricing-heading h2 {
-	margin-top: 20px;
 	font-family: var(--font-display);
 	font-size: clamp(58px, 6.4vw, 88px);
 	font-weight: 400;
-	line-height: 0.96;
-	letter-spacing: -0.055em;
+	line-height: 0.94;
+	letter-spacing: -0.058em;
+	text-wrap: balance;
 }
 .pricing-heading h2 span {
-	color: var(--muted-foreground);
+	color: var(--muted);
 }
+.pricing-lede {
+	max-width: 35ch;
+	margin: 0 0 8px;
+	color: #69727a;
+	font-size: 15px;
+	line-height: 1.65;
+	text-wrap: pretty;
+}
+
+/* Configure — a hairline control strip rather than a floating form card. */
+.pricing-config {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 28px 64px;
+	padding: 22px 0;
+	border-top: 1px solid var(--line);
+	border-bottom: 1px solid var(--line);
+}
+.pricing-interval-control {
+	display: inline-flex;
+	gap: 0;
+	padding: 3px;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	background: var(--surface);
+}
+.pricing-interval-option {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	height: 34px;
+	padding: 0 14px;
+	border-radius: 3px;
+	color: #69727a;
+	font-size: 13px;
+	font-weight: 550;
+	letter-spacing: -0.01em;
+}
+.pricing-interval-option:hover:not([data-pressed]):not([aria-pressed="true"]) {
+	color: var(--ink);
+	background: color-mix(in srgb, var(--blue) 7%, transparent);
+}
+.pricing-interval-option[data-pressed],
+.pricing-interval-option[aria-pressed="true"] {
+	color: white;
+	background: var(--ink);
+}
+.pricing-interval-save {
+	color: var(--blue);
+	font-weight: 600;
+}
+.pricing-interval-option[data-pressed] .pricing-interval-save,
+.pricing-interval-option[aria-pressed="true"] .pricing-interval-save {
+	color: color-mix(in srgb, var(--blue) 35%, white);
+}
+
+.pricing-locations {
+	width: min(360px, 100%);
+}
+.pricing-locations-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 16px;
+}
+.pricing-locations-label {
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+.pricing-locations-value {
+	color: var(--blue);
+	font-size: 13px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+.pricing-slider {
+	padding: 12px 0 4px;
+}
+.pricing-slider [data-slot="slider-track"] {
+	height: 2px;
+	background: color-mix(in srgb, var(--ink) 12%, transparent);
+}
+.pricing-slider [data-slot="slider-indicator"] {
+	background: var(--blue);
+}
+.pricing-slider [data-slot="slider-thumb"] {
+	width: 16px;
+	height: 16px;
+	border: 2px solid var(--blue);
+	background: white;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.pricing-locations-scale {
+	display: flex;
+	justify-content: space-between;
+	color: #69727a;
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Plans — two open columns divided by hairlines, not a card stack. */
+.pricing-plans {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 0 72px;
+	margin-top: 56px;
+}
+.pricing-plan {
+	display: flex;
+	flex-direction: column;
+	padding: 32px 0 8px;
+	border-top: 1px solid var(--line);
+}
+.pricing-plan.is-recommended {
+	border-top-color: var(--blue);
+}
+.pricing-plan-head {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+.pricing-plan-head h3 {
+	font-family: var(--font-display);
+	font-size: 26px;
+	font-weight: 400;
+	line-height: 1.1;
+	letter-spacing: -0.01em;
+}
+.pricing-plan-flag {
+	padding: 3px 8px;
+	border: 1px solid color-mix(in srgb, var(--blue) 35%, transparent);
+	border-radius: 3px;
+	color: var(--blue);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+	white-space: nowrap;
+}
+.pricing-plan-tagline {
+	margin-top: 6px;
+	color: #69727a;
+	font-size: 14px;
+	line-height: 1.5;
+}
+.pricing-plan-price {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	margin-top: 32px;
+}
+.pricing-plan-amount {
+	font-family: var(--font-display);
+	font-size: 56px;
+	font-weight: 400;
+	line-height: 1;
+	letter-spacing: -0.05em;
+	font-variant-numeric: tabular-nums;
+}
+.pricing-plan-unit {
+	color: #69727a;
+	font-size: 14px;
+}
+.pricing-plan-detail {
+	margin-top: 10px;
+	color: #69727a;
+	font-size: 13px;
+	line-height: 1.5;
+	font-variant-numeric: tabular-nums;
+}
+.pricing-plan-features {
+	display: grid;
+	gap: 12px;
+	margin: 28px 0 0;
+	padding: 28px 0 0;
+	list-style: none;
+	border-top: 1px solid var(--line);
+}
+.pricing-plan-features li {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	font-size: 14px;
+	line-height: 1.5;
+}
+.pricing-plan-features svg {
+	width: 16px;
+	height: 16px;
+	margin-top: 3px;
+	color: var(--blue);
+}
+.pricing-plan-cta {
+	width: 100%;
+	margin-top: 32px;
+	gap: 8px;
+}
+.pricing-plan .button-primary {
+	background: var(--blue);
+}
+.pricing-plan .button-primary:hover {
+	background: var(--blue);
+	filter: brightness(0.92);
+}
+.pricing-plan .button-secondary {
+	border-color: color-mix(in srgb, var(--ink) 18%, transparent);
+	color: var(--ink);
+}
+.pricing-plan .button-secondary:hover {
+	background: color-mix(in srgb, var(--blue) 6%, transparent);
+}
+
 .pricing-note {
-	margin-top: 24px;
-	color: #67737e;
-	font-size: 12px;
+	margin-top: 40px;
+	color: #69727a;
+	font-size: 13px;
 	text-align: center;
 }
-@media (max-width: 800px) {
+
+@media (max-width: 900px) {
 	.pricing-section {
-		padding: 88px 0;
+		padding: 96px 0;
 	}
 	.pricing-heading {
-		align-items: start;
 		grid-template-columns: 1fr;
-		gap: 24px;
+		gap: 20px;
+	}
+	.pricing-lede {
+		margin: 0;
+	}
+	.pricing-plans {
+		gap: 0 48px;
 	}
 }
-@media (max-width: 520px) {
+@media (max-width: 640px) {
 	.pricing-section {
-		padding: 72px 0;
+		padding: 80px 0;
 	}
-	.pricing-heading h2 {
-		font-size: clamp(44px, 13vw, 58px);
+	.pricing-config {
+		align-items: stretch;
+	}
+	.pricing-plans {
+		grid-template-columns: 1fr;
+		gap: 0;
+	}
+	.pricing-plan {
+		padding-bottom: 32px;
 	}
 }
 
@@ -4634,9 +4862,9 @@ body {
 	margin-bottom: 16px;
 	font-family: var(--font-display);
 	font-size: 24px;
-	font-weight: 500;
+	font-weight: 400;
 	line-height: 1.25;
-	letter-spacing: -0.03em;
+	letter-spacing: -0.01em;
 }
 .legal-body p,
 .legal-body li {
