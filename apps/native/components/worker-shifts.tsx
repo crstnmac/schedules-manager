@@ -70,6 +70,7 @@ export function ShiftDetailScreen({
 	const coworkers = (roster.data?.roster ?? []).filter(
 		(row) => !row.mine && row.employmentId,
 	);
+	const isMine = shift.isMine;
 
 	return (
 		<View style={[styles.screen, { backgroundColor: theme.background }]}>
@@ -100,6 +101,11 @@ export function ShiftDetailScreen({
 				<Text style={[styles.detailLine, { color: theme.muted }]}>
 					{locationName ?? "Location"}
 				</Text>
+				{!isMine ? (
+					<Text style={[styles.detailLine, { color: theme.muted }]}>
+						{shift.workerName ?? "Coworker"}
+					</Text>
+				) : null}
 				{shift.note ? (
 					<Text style={[styles.detailLine, { color: theme.muted }]}>
 						{shift.note}
@@ -108,40 +114,49 @@ export function ShiftDetailScreen({
 
 				{mode === "info" ? (
 					<>
-						<Text style={[styles.sectionTitle, { color: theme.muted }]}>
-							SHIFT TASKS
-						</Text>
-						{tasks.isLoading ? (
-							<ActivityIndicator color={theme.primary} />
-						) : (
-							<View style={styles.rosterList}>
-								{(tasks.data ?? []).map((task) => (
-									<NativeCheckboxRow
-										key={task.id}
-										label={task.title}
-										checked={task.completed}
-										disabled={task.completed || completeTask.isPending}
-										strikethrough
-										onChange={() => {
-											tapSuccess();
-											completeTask.mutate(task.id);
-										}}
-									/>
-								))}
-								{tasks.data?.length === 0 ? (
-									<Text style={[styles.rosterEmpty, { color: theme.muted }]}>
-										No tasks for this Shift.
-									</Text>
-								) : null}
-								{tasks.isError || completeTask.isError ? (
-									<Text
-										style={[styles.rosterEmpty, { color: theme.notification }]}
-									>
-										{friendlyMessage(tasks.error ?? completeTask.error)}
-									</Text>
-								) : null}
-							</View>
-						)}
+						{isMine ? (
+							<>
+								<Text style={[styles.sectionTitle, { color: theme.muted }]}>
+									SHIFT TASKS
+								</Text>
+								{tasks.isLoading ? (
+									<ActivityIndicator color={theme.primary} />
+								) : (
+									<View style={styles.rosterList}>
+										{(tasks.data ?? []).map((task) => (
+											<NativeCheckboxRow
+												key={task.id}
+												label={task.title}
+												checked={task.completed}
+												disabled={task.completed || completeTask.isPending}
+												strikethrough
+												onChange={() => {
+													tapSuccess();
+													completeTask.mutate(task.id);
+												}}
+											/>
+										))}
+										{tasks.data?.length === 0 ? (
+											<Text
+												style={[styles.rosterEmpty, { color: theme.muted }]}
+											>
+												No tasks for this Shift.
+											</Text>
+										) : null}
+										{tasks.isError || completeTask.isError ? (
+											<Text
+												style={[
+													styles.rosterEmpty,
+													{ color: theme.notification },
+												]}
+											>
+												{friendlyMessage(tasks.error ?? completeTask.error)}
+											</Text>
+										) : null}
+									</View>
+								)}
+							</>
+						) : null}
 						<Text style={[styles.sectionTitle, { color: theme.muted }]}>
 							WHO ELSE IS WORKING
 						</Text>
@@ -159,27 +174,29 @@ export function ShiftDetailScreen({
 								) : null}
 							</View>
 						)}
-						<View style={styles.actions}>
-							<SecondaryButton
-								label="Propose swap"
-								onPress={() => setMode("swap")}
-								style={{ flex: 1 }}
-							/>
-							<SecondaryButton
-								label={release.isPending ? "Requesting…" : "Release shift"}
-								disabled={release.isPending}
-								onPress={() =>
-									confirmAction({
-										title: "Release this shift?",
-										message:
-											"Your Manager must approve the release. You remain responsible for the shift until then.",
-										confirmLabel: "Request release",
-										onConfirm: () => release.mutate(shift.id),
-									})
-								}
-								style={{ flex: 1 }}
-							/>
-						</View>
+						{isMine ? (
+							<View style={styles.actions}>
+								<SecondaryButton
+									label="Propose swap"
+									onPress={() => setMode("swap")}
+									style={{ flex: 1 }}
+								/>
+								<SecondaryButton
+									label={release.isPending ? "Requesting…" : "Release shift"}
+									disabled={release.isPending}
+									onPress={() =>
+										confirmAction({
+											title: "Release this shift?",
+											message:
+												"Your Manager must approve the release. You remain responsible for the shift until then.",
+											confirmLabel: "Request release",
+											onConfirm: () => release.mutate(shift.id),
+										})
+									}
+									style={{ flex: 1 }}
+								/>
+							</View>
+						) : null}
 					</>
 				) : (
 					<SwapProposer

@@ -5,11 +5,13 @@ import {
 	pgTable,
 	text,
 	timestamp,
-	unique,
+	uniqueIndex,
 	uuid,
 } from "drizzle-orm/pg-core";
 
+import { approvalPolicyGroups } from "./approval-policies";
 import { employments } from "./employments";
+import { scheduleTeams } from "./schedule-teams";
 import { locations, positions } from "./workplaces";
 
 export const schedules = pgTable(
@@ -20,6 +22,18 @@ export const schedules = pgTable(
 			.notNull()
 			.references(() => locations.id, { onDelete: "cascade" }),
 		weekStartDate: date("week_start_date").notNull(),
+		/**
+		 * Optional team segment. Null is the Location's primary schedule; a set
+		 * value is a parallel team schedule for the same workweek.
+		 */
+		teamId: uuid("team_id").references(() => scheduleTeams.id, {
+			onDelete: "cascade",
+		}),
+		/** Approval policy group governing request decisions for this week. */
+		policyGroupId: uuid("policy_group_id").references(
+			() => approvalPolicyGroups.id,
+			{ onDelete: "set null" },
+		),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),
@@ -28,10 +42,14 @@ export const schedules = pgTable(
 			.notNull(),
 	},
 	(table) => [
-		unique("schedules_location_week_unique").on(
-			table.locationId,
-			table.weekStartDate,
-		),
+		// One primary (team-less) schedule per Location and workweek.
+		uniqueIndex("schedules_location_week_primary_unique")
+			.on(table.locationId, table.weekStartDate)
+			.where(sql`${table.teamId} is null`),
+		// One schedule per team, per Location, per workweek.
+		uniqueIndex("schedules_location_week_team_unique")
+			.on(table.locationId, table.weekStartDate, table.teamId)
+			.where(sql`${table.teamId} is not null`),
 	],
 );
 
@@ -68,6 +86,10 @@ export const scheduleRelations = relations(schedules, ({ one, many }) => ({
 	location: one(locations, {
 		fields: [schedules.locationId],
 		references: [locations.id],
+	}),
+	team: one(scheduleTeams, {
+		fields: [schedules.teamId],
+		references: [scheduleTeams.id],
 	}),
 	shifts: many(shifts),
 }));

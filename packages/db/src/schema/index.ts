@@ -1,3 +1,33 @@
+export type {
+	NewShiftAcceptance,
+	ShiftAcceptance,
+} from "./acceptances";
+export {
+	shiftAcceptanceStatusEnum,
+	shiftAcceptances,
+} from "./acceptances";
+export type {
+	ApprovalPolicyGroup,
+	ApprovalPolicyRule,
+	ApprovalRequestType,
+	NewApprovalPolicyGroup,
+	NewApprovalPolicyRule,
+} from "./approval-policies";
+export {
+	approvalPolicyGroupRelations,
+	approvalPolicyGroups,
+	approvalPolicyRuleRelations,
+	approvalPolicyRules,
+	approvalRequestTypeEnum,
+} from "./approval-policies";
+export type {
+	AttendanceMark,
+	NewAttendanceMark,
+} from "./attendance-marks";
+export {
+	attendanceMarkKindEnum,
+	attendanceMarks,
+} from "./attendance-marks";
 export type { AuthSession, AuthUser } from "./auth";
 export {
 	account,
@@ -8,22 +38,6 @@ export {
 	userRelations,
 	verification,
 } from "./auth";
-export type {
-	NewShiftAcceptance,
-	ShiftAcceptance,
-} from "./acceptances";
-export {
-	shiftAcceptanceStatusEnum,
-	shiftAcceptances,
-} from "./acceptances";
-export type {
-	AttendanceMark,
-	NewAttendanceMark,
-} from "./attendance-marks";
-export {
-	attendanceMarkKindEnum,
-	attendanceMarks,
-} from "./attendance-marks";
 export type { WorkplaceSubscription } from "./billing";
 export {
 	billingIntervalEnum,
@@ -71,19 +85,45 @@ export {
 	emailDeliveryStatusEnum,
 	emailWebhookEvents,
 } from "./email-delivery";
-export type { Employment, NewEmployment } from "./employments";
+export type {
+	Employment,
+	EmploymentPrivilege,
+	NewEmployment,
+} from "./employments";
 export {
+	EMPLOYMENT_PRIVILEGES,
 	employmentKindEnum,
 	employmentLocations,
 	employmentPositions,
 	employmentStatusEnum,
 	employments,
 } from "./employments";
+export type { Holiday, NewHoliday } from "./holidays";
+export { holidayRelations, holidays } from "./holidays";
 export type {
 	IdempotencyRecord,
 	NewIdempotencyRecord,
 } from "./idempotency";
 export { idempotencyRecords } from "./idempotency";
+export type {
+	ApiKey,
+	ApiKeyScope,
+	NewApiKey,
+	NewWebhookDelivery,
+	NewWebhookEndpoint,
+	WebhookDelivery,
+	WebhookEndpoint,
+} from "./integrations";
+export {
+	apiKeyRelations,
+	apiKeyScopeEnum,
+	apiKeys,
+	webhookDeliveries,
+	webhookDeliveryRelations,
+	webhookDeliveryStatusEnum,
+	webhookEndpointRelations,
+	webhookEndpoints,
+} from "./integrations";
 export type { Invitation, NewInvitation } from "./invitations";
 export {
 	invitationLocations,
@@ -143,6 +183,24 @@ export {
 } from "./schedule-templates";
 export type { NewSchedule, NewShift, Schedule, Shift } from "./schedules";
 export { schedules, shifts } from "./schedules";
+export type { NewScheduleTeam, ScheduleTeam } from "./schedule-teams";
+export { scheduleTeamRelations, scheduleTeams } from "./schedule-teams";
+export type {
+	NewShiftPattern,
+	NewShiftPatternMember,
+	NewShiftPatternShift,
+	ShiftPattern,
+	ShiftPatternMember,
+	ShiftPatternShift,
+} from "./shift-patterns";
+export {
+	shiftPatternMemberRelations,
+	shiftPatternMembers,
+	shiftPatternRelations,
+	shiftPatternShiftRelations,
+	shiftPatternShifts,
+	shiftPatterns,
+} from "./shift-patterns";
 export type { NewShiftSwap, ShiftSwap } from "./shift-swaps";
 export { shiftSwaps, swapStatusEnum } from "./shift-swaps";
 export type {
@@ -194,6 +252,7 @@ export {
 	leaveCapResetEnum,
 	locations,
 	payPeriodTypeEnum,
+	plannedShiftsVisibilityEnum,
 	positions,
 	workerScheduleVisibilityEnum,
 	workplaces,

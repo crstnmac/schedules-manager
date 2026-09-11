@@ -6,7 +6,7 @@ import { useCurrentEmployment, useNotifications } from "@/lib/queries";
 
 export default function TabLayout() {
 	const material = useTabTheme();
-	const { isManager, employment } = useCurrentEmployment();
+	const { isManager, canReview, employment } = useCurrentEmployment();
 	const inbox = useNotifications(employment?.workplace.id);
 	const unreadCount = isManager ? 0 : (inbox.data?.unreadCount ?? 0);
 	usePushRegistration();
@@ -39,6 +39,11 @@ export default function TabLayout() {
 				</NativeTabs.Trigger.Label>
 			</NativeTabs.Trigger>
 
+			<NativeTabs.Trigger name="myschedules" hidden={isManager}>
+				<NativeTabs.Trigger.Icon md="date_range" sf="calendar.badge.clock" />
+				<NativeTabs.Trigger.Label>Calendar</NativeTabs.Trigger.Label>
+			</NativeTabs.Trigger>
+
 			<NativeTabs.Trigger name="availability" hidden>
 				<NativeTabs.Trigger.Icon md="schedule" sf="clock" />
 				<NativeTabs.Trigger.Label>Availability</NativeTabs.Trigger.Label>
@@ -69,7 +74,7 @@ export default function TabLayout() {
 				<NativeTabs.Trigger.Label>Team</NativeTabs.Trigger.Label>
 			</NativeTabs.Trigger>
 
-			<NativeTabs.Trigger name="manager-requests" hidden={!isManager}>
+			<NativeTabs.Trigger name="manager-requests" hidden={!canReview}>
 				<NativeTabs.Trigger.Icon md="task_alt" sf="checkmark.circle" />
 				<NativeTabs.Trigger.Label>Requests</NativeTabs.Trigger.Label>
 			</NativeTabs.Trigger>

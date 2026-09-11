@@ -17,7 +17,7 @@ import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
 import {
-	requireManager,
+	requirePrivilege,
 	requireSession,
 	requireWorkplaceMember,
 } from "../context";
@@ -51,7 +51,7 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 		"/workplaces/:workplaceId/pilot-status",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
 
 			const [
 				locationRows,
@@ -193,7 +193,7 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 		"/workplaces/:workplaceId/reminders/unacknowledged",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "schedule.publish");
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `schedule.reminder:${params.workplaceId}`,
@@ -258,7 +258,7 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 		"/workplaces/:workplaceId/invitations/import",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
 			const normalized = body.rows.map((row) => ({
 				...row,
 				email: row.email.trim().toLowerCase(),

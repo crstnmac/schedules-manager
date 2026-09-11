@@ -24,6 +24,7 @@ export const meRoutes = new Elysia({ prefix: "/v1", tags: ["Identity"] })
 					({ employment, workplace, subscription }) => ({
 						id: employment.id,
 						kind: employment.kind,
+						privileges: employment.privileges ?? [],
 						capabilities: {
 							scheduling: Boolean(
 								subscription && hasActiveSubscription(subscription.status),
@@ -44,7 +45,10 @@ export const meRoutes = new Elysia({ prefix: "/v1", tags: ["Identity"] })
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			detail: {
 				summary: "Return the current profile and active Employments",
 				security: [{ bearerAuth: [] }],
@@ -74,7 +78,10 @@ export const meRoutes = new Elysia({ prefix: "/v1", tags: ["Identity"] })
 			return { profile: profilePreferencesPayload(updated) };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			body: t.Object({
 				timeFormat: t.Optional(t.Union([t.Literal("12h"), t.Literal("24h")])),
 				nameFormat: t.Optional(

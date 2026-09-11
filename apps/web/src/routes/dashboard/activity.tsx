@@ -1,3 +1,4 @@
+import { env } from "@SchedulesManager/env/web";
 import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import {
@@ -7,6 +8,7 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@SchedulesManager/ui/components/empty";
+import { Field, FieldLabel } from "@SchedulesManager/ui/components/field";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import {
@@ -16,12 +18,13 @@ import {
 	TabsTrigger,
 } from "@SchedulesManager/ui/components/tabs";
 import { createFileRoute } from "@tanstack/react-router";
-import { BellIcon, ScrollTextIcon } from "lucide-react";
+import { BellIcon, DownloadIcon, ScrollTextIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import { DatePicker } from "@/components/date-picker";
 import {
 	TableFilter,
 	TablePagination,
@@ -32,7 +35,7 @@ import {
 import {
 	type AuditEventDto,
 	type InboxNotification,
-	useAudit,
+	useAuditEvents,
 	useMarkAllNotificationsRead,
 	useMarkNotificationRead,
 	useNotifications,
@@ -51,6 +54,21 @@ const READ_FILTERS = [
 	{ label: "Unread", value: "unread" },
 	{ label: "Read", value: "read" },
 ];
+
+const AUDIT_ACTIONS = [
+	{ label: "All actions", value: "all" },
+	{ label: "Schedule published", value: "schedule.published" },
+	{ label: "Schedule reminder", value: "schedule.reminder" },
+	{ label: "Time off recorded", value: "time_off.recorded" },
+	{ label: "Shift release approved", value: "coverage.release_approved" },
+	{ label: "Shift pickup approved", value: "coverage.pickup_approved" },
+	{ label: "Shift swap approved", value: "swap.approved" },
+	{ label: "Attendance marked", value: "attendance.marked" },
+	{ label: "Time entry edited", value: "time_entry.edited" },
+	{ label: "Announcement posted", value: "announcement.posted" },
+];
+
+const AUDIT_PAGE_SIZE = 25;
 
 const auditColumns = auditHelper.columns([
 	auditHelper.accessor("summary", {
@@ -75,17 +93,68 @@ const auditColumns = auditHelper.columns([
 function ActivityPage() {
 	const { workplace } = useWorkplace();
 	const inbox = useNotifications(workplace?.id);
-	const audit = useAudit(workplace?.id);
 	const markRead = useMarkNotificationRead(workplace?.id);
 	const markAll = useMarkAllNotificationsRead(workplace?.id);
 	const items = inbox.data?.notifications ?? [];
 	const unreadCount = inbox.data?.unreadCount ?? 0;
-	const events = audit.data ?? [];
 
 	const [tab, setTab] = useState<"inbox" | "audit">("inbox");
 	const [inboxSearch, setInboxSearch] = useState("");
 	const [readFilter, setReadFilter] = useState("all");
-	const [auditSearch, setAuditSearch] = useState("");
+	const [auditFrom, setAuditFrom] = useState("");
+	const [auditTo, setAuditTo] = useState("");
+	const [auditAction, setAuditAction] = useState("all");
+	const [auditPage, setAuditPage] = useState(1);
+	const [auditPageSize, setAuditPageSize] = useState(AUDIT_PAGE_SIZE);
+	const [isDownloadingAudit, setIsDownloadingAudit] = useState(false);
+
+	const audit = useAuditEvents(workplace?.id, {
+		from: auditFrom || undefined,
+		to: auditTo || undefined,
+		action: auditAction === "all" ? undefined : auditAction,
+		limit: auditPageSize,
+		offset: (auditPage - 1) * auditPageSize,
+	});
+	const events = audit.data?.events ?? [];
+	const auditTotal = audit.data?.total ?? events.length;
+	const auditPageCount = Math.max(1, Math.ceil(auditTotal / auditPageSize));
+
+	function updateAuditFilters(apply: () => void) {
+		apply();
+		setAuditPage(1);
+	}
+
+	async function downloadAudit() {
+		if (!workplace || isDownloadingAudit) return;
+		setIsDownloadingAudit(true);
+		try {
+			const params = new URLSearchParams({ format: "csv", limit: "200" });
+			if (auditFrom) params.set("from", auditFrom);
+			if (auditTo) params.set("to", auditTo);
+			if (auditAction !== "all") params.set("action", auditAction);
+			const response = await fetch(
+				`${env.VITE_SERVER_URL}/v1/workplaces/${workplace.id}/audit?${params.toString()}`,
+				{ credentials: "include" },
+			);
+			if (!response.ok) throw new Error("Couldn’t download the audit trail.");
+			const blob = await response.blob();
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = "audit.csv";
+			link.click();
+			URL.revokeObjectURL(url);
+			toast.success("Audit trail downloaded");
+		} catch (error) {
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Couldn’t download the audit trail.",
+			);
+		} finally {
+			setIsDownloadingAudit(false);
+		}
+	}
 
 	const inboxColumns = useMemo(
 		() =>
@@ -155,20 +224,27 @@ function ActivityPage() {
 		});
 	}, [items, inboxSearch, readFilter]);
 
-	const auditRows = useMemo(() => {
-		const term = auditSearch.trim().toLowerCase();
-		if (!term) return events;
-		return events.filter((event) =>
-			`${event.summary} ${event.actorName ?? ""}`.toLowerCase().includes(term),
-		);
-	}, [events, auditSearch]);
+	const auditRows = events;
 
 	const inboxPagination = useTablePagination(inboxRows, {
 		resetKey: `${inboxSearch}|${readFilter}`,
 	});
-	const auditPagination = useTablePagination(auditRows, {
-		resetKey: auditSearch,
-	});
+	const auditPagination = {
+		page: Math.min(auditPage, auditPageCount),
+		pageCount: auditPageCount,
+		pageSize: auditPageSize,
+		total: auditTotal,
+		rangeStart: auditTotal === 0 ? 0 : (auditPage - 1) * auditPageSize + 1,
+		rangeEnd: Math.min(
+			(auditPage - 1) * auditPageSize + events.length,
+			auditTotal,
+		),
+		setPage: setAuditPage,
+		setPageSize: (size: number) => {
+			setAuditPageSize(size);
+			setAuditPage(1);
+		},
+	};
 
 	return (
 		<AppPage>
@@ -214,7 +290,7 @@ function ActivityPage() {
 							</TabsTrigger>
 							<TabsTrigger value="audit">
 								Audit trail
-								<Badge variant="secondary">{events.length}</Badge>
+								<Badge variant="secondary">{auditTotal}</Badge>
 							</TabsTrigger>
 						</TabsList>
 					</div>
@@ -280,11 +356,47 @@ function ActivityPage() {
 					<TabsContent value="audit" className="flex min-h-0 flex-1 flex-col">
 						<TableToolbar
 							left={
-								<TableSearch
-									value={auditSearch}
-									onValueChange={setAuditSearch}
-									placeholder="Search audit events"
-								/>
+								<>
+									<Field className="w-36">
+										<FieldLabel htmlFor="audit-from">From</FieldLabel>
+										<DatePicker
+											id="audit-from"
+											value={auditFrom}
+											onValueChange={(value) =>
+												updateAuditFilters(() => setAuditFrom(value))
+											}
+											displayValue={auditFrom || "Any"}
+										/>
+									</Field>
+									<Field className="w-36">
+										<FieldLabel htmlFor="audit-to">To</FieldLabel>
+										<DatePicker
+											id="audit-to"
+											value={auditTo}
+											onValueChange={(value) =>
+												updateAuditFilters(() => setAuditTo(value))
+											}
+											displayValue={auditTo || "Any"}
+										/>
+									</Field>
+									<TableFilter
+										value={auditAction}
+										onValueChange={(value) =>
+											updateAuditFilters(() => setAuditAction(value))
+										}
+										items={AUDIT_ACTIONS}
+										ariaLabel="Filter by action"
+									/>
+									<Button
+										size="sm"
+										variant="outline"
+										disabled={isDownloadingAudit || !workplace}
+										onClick={() => void downloadAudit()}
+									>
+										<DownloadIcon data-icon="inline-start" />
+										{isDownloadingAudit ? "Downloading…" : "Download CSV"}
+									</Button>
+								</>
 							}
 							right={<TablePagination {...auditPagination} />}
 						/>
@@ -299,7 +411,7 @@ function ActivityPage() {
 									stacked
 									query={audit}
 									columns={auditColumns}
-									data={auditPagination.pageRows}
+									data={auditRows}
 									getRowId={(row) => row.id}
 									empty={
 										<div className="p-4">
@@ -309,14 +421,14 @@ function ActivityPage() {
 														<ScrollTextIcon />
 													</EmptyMedia>
 													<EmptyTitle>
-														{events.length === 0
+														{auditTotal === 0
 															? "No manager actions yet"
 															: "No matches"}
 													</EmptyTitle>
 													<EmptyDescription>
-														{events.length === 0
+														{auditTotal === 0
 															? "Publishing a week or deciding a request writes an audit event."
-															: "Try a different search."}
+															: "Try a different date range or action."}
 													</EmptyDescription>
 												</EmptyHeader>
 											</Empty>

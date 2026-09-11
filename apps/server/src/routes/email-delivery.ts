@@ -3,7 +3,7 @@ import { env } from "@SchedulesManager/env/server";
 import { and, desc, eq, ne, or } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { AuthenticationError } from "../auth";
-import { requireManager, requireSession } from "../context";
+import { requirePrivilege, requireSession } from "../context";
 import { BadRequestError } from "../errors";
 import { clientIpFromRequest, consumeRateLimitOrThrow } from "../rate-limit";
 import {
@@ -16,7 +16,7 @@ export const emailDeliveryRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/email-deliveries",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
 			// Explicit projection prevents invitation tokens and email bodies leaking into delivery reports.
 			const deliveries = await db
 				.select({

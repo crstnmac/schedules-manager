@@ -32,6 +32,8 @@ export interface WorkplaceWorkerPolicies {
 	contactDetailsVisible: boolean;
 	workerScheduleVisibility: "own" | "full";
 	workerTimeOffVisibility: boolean;
+	plannedShiftsVisibility: "never" | "always" | "within_days";
+	plannedShiftLeadDays: number;
 	breaksEnabled: boolean;
 	shiftExchangesEnabled: boolean;
 	workersCanRequestTimeOff: boolean;
@@ -42,7 +44,8 @@ export interface WorkplaceWorkerPolicies {
 
 export interface MeEmployment {
 	id: string;
-	kind: "manager" | "worker";
+	kind: "manager" | "worker" | "viewer";
+	privileges: string[];
 	capabilities: {
 		scheduling: boolean;
 		operations: boolean;
@@ -90,8 +93,9 @@ export interface PositionDto {
 
 export interface WorkerDto {
 	employmentId: string;
-	kind: "manager" | "worker";
+	kind: "manager" | "worker" | "viewer";
 	status: "active" | "deactivated";
+	privileges: string[];
 	joinedAt: string;
 	hourlyWageCents: number | null;
 	emergencyContactName: string | null;
@@ -109,7 +113,7 @@ export interface WorkerDto {
 export interface InvitationDto {
 	id: string;
 	email: string;
-	kind: "worker" | "manager";
+	kind: "worker" | "manager" | "viewer";
 	status: "pending" | "accepted" | "revoked";
 	createdAt: string;
 	expiresAt: string;
@@ -133,7 +137,7 @@ export function useMe(enabled = true) {
 
 export interface InvitationPreview {
 	email: string;
-	kind: "worker" | "manager";
+	kind: "worker" | "manager" | "viewer";
 	workplaceName: string;
 	status: "pending" | "accepted" | "revoked" | "expired";
 	expiresAt: string;
@@ -152,7 +156,7 @@ export interface PendingInvitationsResponse {
 	invitations: {
 		id: string;
 		token: string;
-		kind: "worker" | "manager";
+		kind: "worker" | "manager" | "viewer";
 		workplaceName: string;
 		expiresAt: string;
 	}[];
@@ -173,7 +177,7 @@ export function useAcceptInvitation() {
 			api<{
 				employment: {
 					id: string;
-					kind: "manager" | "worker";
+					kind: "manager" | "worker" | "viewer";
 					workplace: { id: string; name: string };
 				};
 			}>("/v1/invitations/accept", {
@@ -319,6 +323,9 @@ export interface ScheduleResponse {
 		id: string;
 		locationId: string;
 		weekStartDate: string;
+		policyGroupId: string | null;
+		teamId: string | null;
+		teamName: string | null;
 		timezone: string;
 		weekStartDay: number;
 	};
@@ -384,12 +391,95 @@ export interface ScheduleResponse {
 const SCHEDULE_STALE_TIME = 2 * 60 * 1000;
 const SCHEDULE_CACHE_TIME = 30 * 60 * 1000;
 
-export function scheduleQueryOptions(locationId: string, weekStart: string) {
+export interface ScheduleTeamDto {
+	id: string;
+	name: string;
+	color: string | null;
+	locationId: string;
+}
+
+export function useScheduleTeams(locationId: string | undefined) {
+	return useQuery({
+		queryKey: ["schedule-teams", locationId],
+		queryFn: () =>
+			api<{ teams: ScheduleTeamDto[] }>(
+				`/v1/locations/${locationId}/schedule-teams`,
+			).then((data) => data.teams),
+		enabled: Boolean(locationId),
+	});
+}
+
+export function useCreateScheduleTeam(locationId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: { name: string; color?: string | null }) =>
+			api<{ team: ScheduleTeamDto }>(
+				`/v1/locations/${locationId}/schedule-teams`,
+				{ method: "POST", body: input },
+			),
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["schedule-teams", locationId],
+			});
+		},
+	});
+}
+
+export function useUpdateScheduleTeam(locationId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			teamId: string;
+			name?: string;
+			color?: string | null;
+		}) => {
+			const { teamId, ...body } = input;
+			return api<{ team: ScheduleTeamDto }>(
+				`/v1/locations/${locationId}/schedule-teams/${teamId}`,
+				{ method: "PATCH", body },
+			);
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["schedule-teams", locationId],
+			});
+			queryClient.invalidateQueries({ queryKey: ["schedule"] });
+		},
+	});
+}
+
+export function useDeleteScheduleTeam(locationId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (teamId: string) =>
+			api<{ ok: true }>(
+				`/v1/locations/${locationId}/schedule-teams/${teamId}`,
+				{ method: "DELETE" },
+			),
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["schedule-teams", locationId],
+			});
+			queryClient.invalidateQueries({ queryKey: ["schedule"] });
+		},
+	});
+}
+
+function teamQueryParam(teamId: string | null | undefined): string {
+	return teamId ? `teamId=${teamId}` : "";
+}
+
+export function scheduleQueryOptions(
+	locationId: string,
+	weekStart: string,
+	teamId?: string | null,
+) {
+	const team = teamQueryParam(teamId);
 	return queryOptions({
-		queryKey: ["schedule", locationId, weekStart] as const,
+		queryKey: ["schedule", locationId, weekStart, teamId ?? null] as const,
 		queryFn: () =>
 			api<ScheduleResponse>(
-				`/v1/locations/${locationId}/schedules/${weekStart}?exclude=labor,timeclock`,
+				`/v1/locations/${locationId}/schedules/${weekStart}?exclude=labor,timeclock${team ? `&${team}` : ""}`,
 			),
 		staleTime: SCHEDULE_STALE_TIME,
 		gcTime: SCHEDULE_CACHE_TIME,
@@ -400,12 +490,19 @@ export function scheduleQueryOptions(locationId: string, weekStart: string) {
 export function useScheduleTimeclock(
 	locationId: string | undefined,
 	weekStart: string | undefined,
+	teamId?: string | null,
 ) {
+	const team = teamQueryParam(teamId);
 	return useQuery({
-		queryKey: ["schedule-timeclock", locationId, weekStart] as const,
+		queryKey: [
+			"schedule-timeclock",
+			locationId,
+			weekStart,
+			teamId ?? null,
+		] as const,
 		queryFn: () =>
 			api<{ timeclock: ScheduleTimeclockEntry[] }>(
-				`/v1/locations/${locationId}/schedules/${weekStart}/timeclock`,
+				`/v1/locations/${locationId}/schedules/${weekStart}/timeclock${team ? `?${team}` : ""}`,
 			).then((data) => data.timeclock),
 		enabled: Boolean(locationId && weekStart),
 		staleTime: SCHEDULE_STALE_TIME,
@@ -417,12 +514,19 @@ export function useScheduleTimeclock(
 export function useScheduleLabor(
 	locationId: string | undefined,
 	weekStart: string | undefined,
+	teamId?: string | null,
 ) {
+	const team = teamQueryParam(teamId);
 	return useQuery({
-		queryKey: ["schedule-labor", locationId, weekStart] as const,
+		queryKey: [
+			"schedule-labor",
+			locationId,
+			weekStart,
+			teamId ?? null,
+		] as const,
 		queryFn: () =>
 			api<{ labor: ScheduleLabor }>(
-				`/v1/locations/${locationId}/schedules/${weekStart}/labor`,
+				`/v1/locations/${locationId}/schedules/${weekStart}/labor${team ? `?${team}` : ""}`,
 			).then((data) => data.labor),
 		enabled: Boolean(locationId && weekStart),
 		staleTime: SCHEDULE_STALE_TIME,
@@ -434,9 +538,10 @@ export function useScheduleLabor(
 export function useSchedule(
 	locationId: string | undefined,
 	weekStart: string | undefined,
+	teamId?: string | null,
 ) {
 	return useQuery({
-		...scheduleQueryOptions(locationId ?? "", weekStart ?? ""),
+		...scheduleQueryOptions(locationId ?? "", weekStart ?? "", teamId),
 		enabled: Boolean(locationId && weekStart),
 		placeholderData: keepPreviousData,
 	});
@@ -452,12 +557,19 @@ export function useScheduleCalendar(
 	locationId: string | undefined,
 	monthStart: string | undefined,
 	enabled = true,
+	teamId?: string | null,
 ) {
+	const team = teamQueryParam(teamId);
 	return useQuery({
-		queryKey: ["schedule-calendar", locationId, monthStart] as const,
+		queryKey: [
+			"schedule-calendar",
+			locationId,
+			monthStart,
+			teamId ?? null,
+		] as const,
 		queryFn: () =>
 			api<ScheduleCalendarResponse>(
-				`/v1/locations/${locationId}/calendar/${monthStart}`,
+				`/v1/locations/${locationId}/calendar/${monthStart}${team ? `?${team}` : ""}`,
 			),
 		enabled: Boolean(locationId && monthStart) && enabled,
 		staleTime: SCHEDULE_STALE_TIME,
@@ -533,6 +645,8 @@ export interface WorkplaceSettings {
 	contactDetailsVisible: boolean;
 	workerScheduleVisibility: "own" | "full";
 	workerTimeOffVisibility: boolean;
+	plannedShiftsVisibility: "never" | "always" | "within_days";
+	plannedShiftLeadDays: number;
 	breaksEnabled: boolean;
 	shiftExchangesEnabled: boolean;
 	unavailabilityRequiresApproval: boolean;
@@ -694,10 +808,13 @@ export interface PublishedWeek {
 		id: string;
 		versionNumber: number;
 		publishedAt: string;
-	};
+	} | null;
 	deliveryStatus: "sent" | "delivered" | "acknowledged" | null;
 	shifts: {
 		id: string;
+		employmentId: string | null;
+		workerName: string | null;
+		isMine: boolean;
 		positionName: string;
 		startsAt: string;
 		endsAt: string;
@@ -706,6 +823,7 @@ export interface PublishedWeek {
 		endMinute: number;
 		overnight: boolean;
 		note: string | null;
+		planned?: boolean;
 		releaseStatus: "pending" | null;
 		timeEntry: {
 			clockedInAt: string;
@@ -727,6 +845,7 @@ export interface MyScheduleResponse {
 		startMinute: number;
 		endMinute: number;
 		overnight: boolean;
+		planned: boolean;
 		timeEntry: {
 			clockedInAt: string;
 			clockedOutAt: string | null;
@@ -1122,12 +1241,16 @@ export function useScheduleTemplates(locationId: string | undefined) {
 export function useSaveScheduleTemplate(locationId: string | undefined) {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (input: { weekStart: string; name: string }) =>
+		mutationFn: (input: {
+			weekStart: string;
+			name: string;
+			teamId?: string | null;
+		}) =>
 			api(
 				`/v1/locations/${locationId}/schedules/${input.weekStart}/templates`,
 				{
 					method: "POST",
-					body: { name: input.name },
+					body: { name: input.name, teamId: input.teamId ?? null },
 				},
 			),
 		onSuccess: () => {
@@ -1139,15 +1262,24 @@ export function useSaveScheduleTemplate(locationId: string | undefined) {
 export function useApplyScheduleTemplate(locationId: string | undefined) {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: (input: { weekStart: string; templateId: string }) =>
+		mutationFn: (input: {
+			weekStart: string;
+			templateId: string;
+			teamId?: string | null;
+		}) =>
 			api(
 				`/v1/locations/${locationId}/schedules/${input.weekStart}/templates/${input.templateId}/apply`,
-				{ method: "POST" },
+				{ method: "POST", body: { teamId: input.teamId ?? null } },
 			),
 		onSuccess: (_result, input) => {
 			// The template only touches the week it was applied to.
 			queryClient.invalidateQueries({
-				queryKey: ["schedule", locationId, input.weekStart],
+				queryKey: [
+					"schedule",
+					locationId,
+					input.weekStart,
+					input.teamId ?? null,
+				],
 			});
 		},
 	});
@@ -1232,6 +1364,87 @@ export function useLeaveTypes(workplaceId: string | undefined) {
 				`/v1/workplaces/${workplaceId}/leave-types`,
 			),
 		enabled: Boolean(workplaceId),
+	});
+}
+
+export interface HolidayDto {
+	id: string;
+	name: string;
+	date: string;
+	recurring: boolean;
+	locationId: string | null;
+}
+
+export function useHolidays(
+	workplaceId: string | undefined,
+	range?: { from?: string; to?: string; locationId?: string | null },
+) {
+	const params = new URLSearchParams();
+	if (range?.from) params.set("from", range.from);
+	if (range?.to) params.set("to", range.to);
+	if (range?.locationId) params.set("locationId", range.locationId);
+	const query = params.toString();
+	return useQuery({
+		queryKey: ["holidays", workplaceId, query],
+		queryFn: () =>
+			api<{ holidays: HolidayDto[] }>(
+				`/v1/workplaces/${workplaceId}/holidays${query ? `?${query}` : ""}`,
+			),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useCreateHoliday(workplaceId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			name: string;
+			date: string;
+			recurring?: boolean;
+			locationId?: string | null;
+		}) =>
+			api<{ holiday: HolidayDto }>(`/v1/workplaces/${workplaceId}/holidays`, {
+				method: "POST",
+				body: input,
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["holidays", workplaceId] });
+		},
+	});
+}
+
+export function useUpdateHoliday(workplaceId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			holidayId: string;
+			name?: string;
+			date?: string;
+			recurring?: boolean;
+			locationId?: string | null;
+		}) => {
+			const { holidayId, ...body } = input;
+			return api<{ holiday: HolidayDto }>(
+				`/v1/workplaces/${workplaceId}/holidays/${holidayId}`,
+				{ method: "PATCH", body },
+			);
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["holidays", workplaceId] });
+		},
+	});
+}
+
+export function useDeleteHoliday(workplaceId: string | undefined) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (holidayId: string) =>
+			api<{ ok: true }>(`/v1/workplaces/${workplaceId}/holidays/${holidayId}`, {
+				method: "DELETE",
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["holidays", workplaceId] });
+		},
 	});
 }
 
@@ -1490,5 +1703,328 @@ export function useReportSummary(
 				`/v1/workplaces/${workplaceId}/reports/summary?from=${from}&to=${to}`,
 			),
 		enabled: Boolean(workplaceId) && enabled && from <= to,
+	});
+}
+
+export interface CoverageMetrics {
+	scheduledShifts: number;
+	assignedShifts: number;
+	openShifts: number;
+	fillRate: number;
+	scheduledMinutes: number;
+	assignedMinutes: number;
+	utilization: number;
+}
+
+export interface CoverageReport {
+	range: { from: string; to: string };
+	totals: CoverageMetrics;
+	byDate: ({ date: string } & CoverageMetrics)[];
+	byLocation: ({ locationId: string; name: string } & CoverageMetrics)[];
+}
+
+export type RequestType =
+	| "time_off"
+	| "shift_release"
+	| "shift_pickup"
+	| "shift_swap";
+
+export interface RequestTypeMetrics {
+	type: RequestType;
+	total: number;
+	approved: number;
+	declined: number;
+	pending: number;
+	approvalRate: number;
+	averageDecisionHours: number;
+}
+
+export interface RequestAnalytics {
+	range: { from: string; to: string };
+	requests: RequestTypeMetrics[];
+}
+
+export function useCoverageReport(
+	workplaceId: string | undefined,
+	from: string,
+	to: string,
+	enabled = true,
+	locationId?: string,
+) {
+	return useQuery({
+		queryKey: ["report-coverage", workplaceId, from, to, locationId] as const,
+		queryFn: () =>
+			api<CoverageReport>(
+				`/v1/workplaces/${workplaceId}/reports/coverage?from=${from}&to=${to}${
+					locationId ? `&locationId=${locationId}` : ""
+				}`,
+			),
+		enabled: Boolean(workplaceId) && enabled && from <= to,
+	});
+}
+
+export function useRequestAnalytics(
+	workplaceId: string | undefined,
+	from: string,
+	to: string,
+	enabled = true,
+) {
+	return useQuery({
+		queryKey: ["report-requests", workplaceId, from, to] as const,
+		queryFn: () =>
+			api<RequestAnalytics>(
+				`/v1/workplaces/${workplaceId}/reports/requests?from=${from}&to=${to}`,
+			),
+		enabled: Boolean(workplaceId) && enabled && from <= to,
+	});
+}
+
+export interface AuditFilters {
+	from?: string;
+	to?: string;
+	action?: string;
+	actorProfileId?: string;
+	limit?: number;
+	offset?: number;
+}
+
+export interface AuditResponse {
+	events: AuditEventDto[];
+	total?: number;
+	limit?: number;
+	offset?: number;
+}
+
+export function useAuditEvents(
+	workplaceId: string | undefined,
+	filters: AuditFilters = {},
+) {
+	const params = new URLSearchParams();
+	if (filters.from) params.set("from", filters.from);
+	if (filters.to) params.set("to", filters.to);
+	if (filters.action) params.set("action", filters.action);
+	if (filters.actorProfileId)
+		params.set("actorProfileId", filters.actorProfileId);
+	if (filters.limit !== undefined) params.set("limit", String(filters.limit));
+	if (filters.offset !== undefined)
+		params.set("offset", String(filters.offset));
+	const queryString = params.toString();
+
+	return useQuery({
+		queryKey: [
+			"audit",
+			workplaceId,
+			filters.from ?? "",
+			filters.to ?? "",
+			filters.action ?? "",
+			filters.actorProfileId ?? "",
+			filters.limit ?? null,
+			filters.offset ?? null,
+		] as const,
+		queryFn: () =>
+			api<AuditResponse>(
+				`/v1/workplaces/${workplaceId}/audit${
+					queryString ? `?${queryString}` : ""
+				}`,
+			),
+		enabled: Boolean(workplaceId),
+		placeholderData: keepPreviousData,
+	});
+}
+
+export interface ShiftPatternDto {
+	id: string;
+	name: string;
+	description: string | null;
+	locationId: string | null;
+	cycleWeeks: number;
+	shiftCount: number;
+	memberCount: number;
+	updatedAt: string;
+}
+
+export function useShiftPatterns(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["shift-patterns", workplaceId],
+		queryFn: () =>
+			api<{ patterns: ShiftPatternDto[] }>(
+				`/v1/workplaces/${workplaceId}/shift-patterns`,
+			).then((data) => data.patterns),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export type ApprovalRequestType =
+	| "time_off"
+	| "unavailability"
+	| "shift_release"
+	| "shift_pickup"
+	| "shift_swap";
+
+export interface ApprovalPolicyGroupDto {
+	id: string;
+	name: string;
+	description: string | null;
+	rules: { requestType: ApprovalRequestType; requiresApproval: boolean }[];
+}
+
+export function useApprovalPolicyGroups(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["approval-policy-groups", workplaceId],
+		queryFn: () =>
+			api<{ groups: ApprovalPolicyGroupDto[] }>(
+				`/v1/workplaces/${workplaceId}/approval-policy-groups`,
+			),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useSetSchedulePolicyGroup(
+	locationId: string | undefined,
+	weekStart: string | undefined,
+) {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (policyGroupId: string | null) =>
+			api<{ ok: true }>(
+				`/v1/locations/${locationId}/schedules/${weekStart}/policy-group`,
+				{ method: "PATCH", body: { policyGroupId } },
+			),
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["schedule", locationId, weekStart],
+			});
+		},
+	});
+}
+
+export interface MyReleaseDto {
+	id: string;
+	versionShiftId: string;
+	positionName: string;
+	startsAt: string;
+	endsAt: string;
+	date: string;
+	startMinute: number;
+	endMinute: number;
+	overnight: boolean;
+	status: "pending" | "approved" | "declined";
+	reason: string | null;
+	decidedAt: string | null;
+	createdAt: string;
+}
+
+export function useMyReleases(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["my-releases", workplaceId],
+		queryFn: () =>
+			api<{ releases: MyReleaseDto[] }>(
+				`/v1/workplaces/${workplaceId}/my/releases`,
+			).then((data) => data.releases),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export interface MyPickupDto {
+	id: string;
+	openShiftId: string;
+	openShiftStatus: "open" | "filled" | "closed";
+	locationName: string;
+	positionName: string;
+	startsAt: string | null;
+	endsAt: string | null;
+	date: string | null;
+	startMinute: number | null;
+	endMinute: number | null;
+	overnight: boolean;
+	status: "pending" | "approved" | "declined";
+	requestedAt: string;
+	decidedAt: string | null;
+}
+
+export function useMyPickups(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["my-pickups", workplaceId],
+		queryFn: () =>
+			api<{ pickups: MyPickupDto[] }>(
+				`/v1/workplaces/${workplaceId}/my/pickups`,
+			).then((data) => data.pickups),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export function useWithdrawRelease() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (releaseId: string) =>
+			api<{ ok: true }>(`/v1/my/releases/${releaseId}`, {
+				method: "DELETE",
+			}),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["my-releases"] });
+			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
+		},
+	});
+}
+
+export interface PendingUnavailabilityDto {
+	id: string;
+	employmentId: string;
+	worker: { email: string; fullName: string | null };
+	kind: "recurring" | "date";
+	weekday: number | null;
+	date: string | null;
+	startMinute: number;
+	endMinute: number;
+	note: string | null;
+	status: "pending";
+}
+
+export interface TimeOffBoardResponse {
+	timezone: string;
+	pendingUnavailability: PendingUnavailabilityDto[];
+	requests: TimeOffRequestDto[];
+}
+
+export function useTimeOffBoard(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["workplaces", workplaceId, "time-off-board"],
+		queryFn: () =>
+			api<TimeOffBoardResponse>(`/v1/workplaces/${workplaceId}/time-off`),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+export interface MyCalendarShift {
+	id: string;
+	positionName: string;
+	startsAt: string;
+	endsAt: string;
+	date: string;
+	startMinute: number;
+	endMinute: number;
+	overnight: boolean;
+	note: string | null;
+	planned?: boolean;
+}
+
+export interface MyCalendarResponse {
+	monthStart: string;
+	weekStartDay: number;
+	shifts: MyCalendarShift[];
+}
+
+export function useMyCalendar(
+	workplaceId: string | undefined,
+	monthStart: string | undefined,
+) {
+	return useQuery({
+		queryKey: ["my-calendar", workplaceId, monthStart] as const,
+		queryFn: () =>
+			api<MyCalendarResponse>(
+				`/v1/workplaces/${workplaceId}/my/calendar/${monthStart}`,
+			),
+		enabled: Boolean(workplaceId && monthStart),
+		placeholderData: keepPreviousData,
 	});
 }

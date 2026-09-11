@@ -17,6 +17,7 @@ import {
 	getExpoReceipts,
 	sendExpoPush,
 } from "./push";
+import { emitWebhookEvent } from "./webhooks";
 
 type NotificationWriter = Pick<typeof db, "insert">;
 
@@ -403,5 +404,13 @@ export async function writeAudit(
 		entityType: input.entityType,
 		entityId: input.entityId ?? null,
 		summary: input.summary,
+	});
+	// Every audited action is also a webhook event named after the action.
+	await emitWebhookEvent(input.workplaceId, input.action, {
+		action: input.action,
+		entityType: input.entityType,
+		entityId: input.entityId ?? null,
+		summary: input.summary,
+		actorProfileId: input.actorProfileId,
 	});
 }

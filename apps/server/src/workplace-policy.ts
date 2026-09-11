@@ -30,6 +30,8 @@ export type WorkplaceSettingsPayload = {
 	contactDetailsVisible: boolean;
 	workerScheduleVisibility: Workplace["workerScheduleVisibility"];
 	workerTimeOffVisibility: boolean;
+	plannedShiftsVisibility: Workplace["plannedShiftsVisibility"];
+	plannedShiftLeadDays: number;
 	breaksEnabled: boolean;
 	shiftExchangesEnabled: boolean;
 	unavailabilityRequiresApproval: boolean;
@@ -50,6 +52,8 @@ export type WorkplaceWorkerPolicies = {
 	contactDetailsVisible: boolean;
 	workerScheduleVisibility: Workplace["workerScheduleVisibility"];
 	workerTimeOffVisibility: boolean;
+	plannedShiftsVisibility: Workplace["plannedShiftsVisibility"];
+	plannedShiftLeadDays: number;
 	breaksEnabled: boolean;
 	shiftExchangesEnabled: boolean;
 	workersCanRequestTimeOff: boolean;
@@ -83,6 +87,8 @@ export function workplaceSettingsPayload(
 		contactDetailsVisible: workplace.contactDetailsVisible,
 		workerScheduleVisibility: workplace.workerScheduleVisibility,
 		workerTimeOffVisibility: workplace.workerTimeOffVisibility,
+		plannedShiftsVisibility: workplace.plannedShiftsVisibility,
+		plannedShiftLeadDays: workplace.plannedShiftLeadDays,
 		breaksEnabled: workplace.breaksEnabled,
 		shiftExchangesEnabled: workplace.shiftExchangesEnabled,
 		unavailabilityRequiresApproval: workplace.unavailabilityRequiresApproval,
@@ -107,6 +113,8 @@ export function workplaceWorkerPolicies(
 		contactDetailsVisible: workplace.contactDetailsVisible,
 		workerScheduleVisibility: workplace.workerScheduleVisibility,
 		workerTimeOffVisibility: workplace.workerTimeOffVisibility,
+		plannedShiftsVisibility: workplace.plannedShiftsVisibility,
+		plannedShiftLeadDays: workplace.plannedShiftLeadDays,
 		breaksEnabled: workplace.breaksEnabled,
 		shiftExchangesEnabled: workplace.shiftExchangesEnabled,
 		workersCanRequestTimeOff: workplace.workersCanRequestTimeOff,

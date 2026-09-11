@@ -8,7 +8,7 @@ import {
 } from "@SchedulesManager/db";
 import { and, eq, ne } from "drizzle-orm";
 import { Elysia, t } from "elysia";
-import { requireManager, requireSession } from "../context";
+import { requirePrivilege, requireSession } from "../context";
 import { ConflictError, NotFoundError } from "../errors";
 import { firstRow } from "../rows";
 
@@ -27,7 +27,7 @@ export const positionsRoutes = new Elysia({
 		"/workplaces/:workplaceId/positions",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "schedule.view");
 
 			const rows = await db
 				.select()
@@ -51,7 +51,7 @@ export const positionsRoutes = new Elysia({
 		"/workplaces/:workplaceId/positions",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
 
 			const [position] = await db
 				.insert(positions)
@@ -93,7 +93,7 @@ export const positionsRoutes = new Elysia({
 				.limit(1);
 
 			if (!existing) throw new NotFoundError("Position not found");
-			await requireManager(profile.id, existing.workplaceId);
+			await requirePrivilege(profile.id, existing.workplaceId, "settings.manage");
 
 			if (body.name !== undefined && body.name !== existing.name) {
 				const [sibling] = await db
@@ -149,7 +149,7 @@ export const positionsRoutes = new Elysia({
 				.limit(1);
 
 			if (!existing) throw new NotFoundError("Position not found");
-			await requireManager(profile.id, existing.workplaceId);
+			await requirePrivilege(profile.id, existing.workplaceId, "settings.manage");
 
 			const [[shift], [template], [templateShift], [assignment]] =
 				await Promise.all([

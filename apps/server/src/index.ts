@@ -5,6 +5,7 @@ import {
 	processNotificationOutboxBatch,
 	processPushReceiptBatch,
 } from "./notify";
+import { dispatchWebhookDeliveries } from "./webhooks";
 
 createApp().listen({ port: 3000, hostname: "0.0.0.0" }, () => {
 	console.log("Server is running on http://0.0.0.0:3000");
@@ -24,6 +25,7 @@ async function dispatchNotifications() {
 			processEmailOutboxBatch(),
 			processPushReceiptBatch(),
 			processAutoClockOutBatch(),
+			dispatchWebhookDeliveries(),
 		]);
 		for (const result of results) {
 			if (result.status === "rejected") {

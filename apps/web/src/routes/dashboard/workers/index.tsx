@@ -68,10 +68,11 @@ import {
 	IdCardIcon,
 	LinkIcon,
 	RefreshCwIcon,
+	ShieldCheckIcon,
 	UserPlusIcon,
 	UsersIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
@@ -106,8 +107,21 @@ const invitationHelper = createDataColumnHelper<InvitationDto>();
 const ROLE_FILTERS = [
 	{ label: "All roles", value: "all" },
 	{ label: "Managers", value: "manager" },
+	{ label: "Viewers", value: "viewer" },
 	{ label: "Workers", value: "worker" },
 ];
+
+const PRIVILEGE_OPTIONS = [
+	{ value: "schedule.view", label: "View schedule" },
+	{ value: "schedule.manage", label: "Manage schedule" },
+	{ value: "schedule.publish", label: "Publish schedule" },
+	{ value: "approvals.review", label: "Review approvals" },
+	{ value: "policies.manage", label: "Manage policies" },
+	{ value: "reports.view", label: "View reports" },
+	{ value: "workers.manage", label: "Manage workers" },
+	{ value: "settings.manage", label: "Manage settings" },
+	{ value: "integrations.manage", label: "Manage integrations" },
+] as const;
 
 const INVITATION_FILTERS = [
 	{ label: "All invitations", value: "all" },
@@ -137,9 +151,14 @@ function WorkersPage() {
 		null,
 	);
 	const [revokeTarget, setRevokeTarget] = useState<InvitationDto | null>(null);
+	const [roleTarget, setRoleTarget] = useState<WorkerDto | null>(null);
+	const [roleKind, setRoleKind] = useState<"manager" | "worker" | "viewer">(
+		"worker",
+	);
+	const [rolePrivileges, setRolePrivileges] = useState<string[]>([]);
 
 	const [email, setEmail] = useState("");
-	const [kind, setKind] = useState<"worker" | "manager">("worker");
+	const [kind, setKind] = useState<"worker" | "manager" | "viewer">("worker");
 	const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
 	const [selectedPositions, setSelectedPositions] = useState<string[]>([]);
 	const [lastInviteToken, setLastInviteToken] = useState<string | null>(null);
@@ -232,6 +251,32 @@ function WorkersPage() {
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
+
+	const updateRole = useMutation({
+		mutationFn: () =>
+			api(
+				`/v1/workplaces/${workplace?.id}/employments/${roleTarget?.employmentId}/role`,
+				{
+					method: "PATCH",
+					body:
+						roleKind === "worker"
+							? { kind: roleKind }
+							: { kind: roleKind, privileges: rolePrivileges },
+				},
+			),
+		onSuccess: () => {
+			invalidate();
+			setRoleTarget(null);
+			toast.success("Role updated.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	const openRoleEditor = useCallback((worker: WorkerDto) => {
+		setRoleTarget(worker);
+		setRoleKind(worker.kind);
+		setRolePrivileges(worker.privileges ?? []);
+	}, []);
 
 	const importWorkers = useMutation({
 		mutationFn: () =>
@@ -416,6 +461,10 @@ function WorkersPage() {
 											<IdCardIcon />
 											View employment
 										</DropdownMenuItem>
+										<DropdownMenuItem onClick={() => openRoleEditor(worker)}>
+											<ShieldCheckIcon />
+											Edit role
+										</DropdownMenuItem>
 										{isSelf ? null : (
 											<>
 												<DropdownMenuSeparator />
@@ -435,9 +484,8 @@ function WorkersPage() {
 					},
 				}),
 			]),
-		[formatPerson, locationNames, myEmploymentId, navigate],
+		[formatPerson, locationNames, myEmploymentId, navigate, openRoleEditor],
 	);
-
 	const invitationColumns = useMemo(
 		() =>
 			invitationHelper.columns([
@@ -799,18 +847,23 @@ function WorkersPage() {
 						<Field>
 							<FieldLabel>They are a…</FieldLabel>
 							<ToggleGroup
-								className="grid w-full grid-cols-2"
+								className="grid w-full grid-cols-3"
 								variant="outline"
 								value={[kind]}
 								onValueChange={(value) => {
 									const next = value[0];
-									if (next === "worker" || next === "manager") {
+									if (
+										next === "worker" ||
+										next === "manager" ||
+										next === "viewer"
+									) {
 										setKind(next);
 									}
 								}}
 								aria-label="Role"
 							>
 								<ToggleGroupItem value="worker">Worker</ToggleGroupItem>
+								<ToggleGroupItem value="viewer">Viewer</ToggleGroupItem>
 								<ToggleGroupItem value="manager">Manager</ToggleGroupItem>
 							</ToggleGroup>
 						</Field>
@@ -878,6 +931,95 @@ function WorkersPage() {
 						) : null}
 					</FieldGroup>
 				</form>
+			</FormSheet>
+
+			<FormSheet
+				open={roleTarget !== null}
+				onOpenChange={(open) => {
+					if (!open) setRoleTarget(null);
+				}}
+				title="Edit role"
+				description={
+					roleTarget
+						? `Choose the role and capabilities for ${roleTarget.profile.email}.`
+						: undefined
+				}
+				footer={
+					<div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+						<Button variant="outline" onClick={() => setRoleTarget(null)}>
+							Cancel
+						</Button>
+						<Button
+							disabled={updateRole.isPending}
+							onClick={() => updateRole.mutate()}
+						>
+							{updateRole.isPending ? (
+								<Spinner data-icon="inline-start" />
+							) : (
+								<ShieldCheckIcon data-icon="inline-start" />
+							)}
+							{updateRole.isPending ? "Saving…" : "Save role"}
+						</Button>
+					</div>
+				}
+			>
+				<FieldGroup>
+					<Field>
+						<FieldLabel>Role</FieldLabel>
+						<ToggleGroup
+							className="grid w-full grid-cols-3"
+							variant="outline"
+							value={[roleKind]}
+							onValueChange={(value) => {
+								const next = value[0];
+								if (
+									next === "worker" ||
+									next === "manager" ||
+									next === "viewer"
+								) {
+									setRoleKind(next);
+								}
+							}}
+							aria-label="Role"
+						>
+							<ToggleGroupItem value="worker">Worker</ToggleGroupItem>
+							<ToggleGroupItem value="viewer">Viewer</ToggleGroupItem>
+							<ToggleGroupItem value="manager">Manager</ToggleGroupItem>
+						</ToggleGroup>
+						<p className="text-muted-foreground text-xs">
+							{roleKind === "manager"
+								? "No capabilities selected means full manager access."
+								: roleKind === "viewer"
+									? "Viewers can only use the capabilities you select."
+									: "Workers have no manager capabilities."}
+						</p>
+					</Field>
+					{roleKind !== "worker" ? (
+						<FieldSet>
+							<FieldLegend variant="label">Capabilities</FieldLegend>
+							<FieldGroup className="grid grid-cols-1 gap-2">
+								{PRIVILEGE_OPTIONS.map((option) => (
+									<Field key={option.value} orientation="horizontal">
+										<Checkbox
+											id={`role-privilege-${option.value}`}
+											aria-label={option.label}
+											checked={rolePrivileges.includes(option.value)}
+											onCheckedChange={() =>
+												toggle(rolePrivileges, option.value, setRolePrivileges)
+											}
+										/>
+										<FieldLabel
+											htmlFor={`role-privilege-${option.value}`}
+											className="font-normal"
+										>
+											{option.label}
+										</FieldLabel>
+									</Field>
+								))}
+							</FieldGroup>
+						</FieldSet>
+					) : null}
+				</FieldGroup>
 			</FormSheet>
 
 			<FormSheet

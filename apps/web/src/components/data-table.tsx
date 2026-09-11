@@ -53,6 +53,7 @@ export function DataTable<TData extends RowData>({
 	fill = true,
 	query,
 	stacked = false,
+	stickyHeader = false,
 }: {
 	columns: Array<ColumnDef<typeof features, TData, unknown>>;
 	data: TData[];
@@ -67,6 +68,11 @@ export function DataTable<TData extends RowData>({
 	 * readable and tappable on phones, while the table is shown from `md` up.
 	 */
 	stacked?: boolean;
+	/**
+	 * Makes the table body the scroll region and pins the column headings, so
+	 * the surrounding card header and toolbar stay visible while rows scroll.
+	 */
+	stickyHeader?: boolean;
 }) {
 	const dataTable = useTable({
 		features,
@@ -145,6 +151,8 @@ export function DataTable<TData extends RowData>({
 				"schedule-grid-scroll min-h-0 print:max-h-none print:overflow-visible",
 				fill && "flex-1",
 				bounded && "max-h-[min(28rem,calc(100dvh-12rem))]",
+				stickyHeader &&
+					"overflow-y-auto overscroll-contain [&_[data-slot=table-container]]:overflow-visible [&_[data-slot=table-header]]:sticky [&_[data-slot=table-header]]:top-0 [&_[data-slot=table-header]]:z-10 [&_[data-slot=table-header]]:bg-card",
 			)}
 		>
 			<Table>
@@ -227,7 +235,9 @@ export function DataTable<TData extends RowData>({
 			)}
 		>
 			{stacked ? (
-				<div className="hidden md:block md:min-h-0 md:flex-1">{tableNode}</div>
+				<div className="hidden min-h-0 flex-1 flex-col md:flex">
+					{tableNode}
+				</div>
 			) : (
 				tableNode
 			)}

@@ -183,6 +183,20 @@
       "when": 1789100722960,
       "tag": "0025_sharp_loki",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789108100937,
+      "tag": "0026_perpetual_talisman",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1789109963623,
+      "tag": "0027_early_lockjaw",
+      "breakpoints": true
     }
   ]
 }

@@ -27,7 +27,8 @@ async function sendZeptoMail(payload: Record<string, unknown>) {
 			? env.ZEPTOMAIL_API_URL
 			: `https://${env.ZEPTOMAIL_API_URL}`,
 	);
-	if (endpoint.protocol !== "https:") throw new Error("ZeptoMail requires HTTPS");
+	if (endpoint.protocol !== "https:")
+		throw new Error("ZeptoMail requires HTTPS");
 	if (!endpoint.pathname.includes("/v1.1/")) endpoint.pathname = "/v1.1/email";
 	const response = await fetch(endpoint, {
 		method: "POST",
@@ -75,8 +76,18 @@ export async function sendPasswordResetEmail(input: {
 }) {
 	const env = await getMailEnv();
 	return sendZeptoMail({
-		from: { address: env.ZEPTOMAIL_FROM_ADDRESS, name: env.ZEPTOMAIL_FROM_NAME },
-		to: [{ email_address: { address: input.email, name: input.name || input.email } }],
+		from: {
+			address: env.ZEPTOMAIL_FROM_ADDRESS,
+			name: env.ZEPTOMAIL_FROM_NAME,
+		},
+		to: [
+			{
+				email_address: {
+					address: input.email,
+					name: input.name || input.email,
+				},
+			},
+		],
 		subject: "Reset your jooling password",
 		textbody: `Reset your jooling password: ${input.url}`,
 		htmlbody: `<p>We received a request to reset your jooling password.</p><p><a href="${escapeHtml(input.url)}">Reset password</a></p><p>If you did not request this, you can ignore this email.</p>`,
@@ -98,7 +109,12 @@ export async function sendInvitationEmail(input: {
 		env.APP_URL,
 	);
 	const workplaceName = escapeHtml(input.workplaceName);
-	const role = input.kind === "manager" ? "manager" : "worker";
+	const role =
+		input.kind === "manager"
+			? "manager"
+			: input.kind === "viewer"
+				? "viewer"
+				: "worker";
 
 	const payload = {
 		from: {

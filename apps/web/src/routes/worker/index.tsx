@@ -30,20 +30,37 @@ import {
 } from "@SchedulesManager/ui/components/empty";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import {
+	ToggleGroup,
+	ToggleGroupItem,
+} from "@SchedulesManager/ui/components/toggle-group";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
 	ArrowLeftRightIcon,
+	CalendarClockIcon,
 	CalendarDaysIcon,
 	CheckIcon,
+	CircleAlertIcon,
+	ClipboardListIcon,
 	EyeIcon,
+	HistoryIcon,
+	ListChecksIcon,
+	type LucideIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
-import { TimeClockCard } from "@/components/time-clock-card";
+import {
+	TableFilter,
+	TablePagination,
+	TableSearch,
+	TableToolbar,
+	useTablePagination,
+} from "@/components/table-toolbar";
+import { WorkerScheduleCalendar } from "@/components/worker-schedule-calendar";
 import { api } from "@/lib/api";
 import {
 	type DayRosterEntry,
@@ -51,6 +68,8 @@ import {
 	useAcknowledge,
 	useCancelSwap,
 	useDayRoster,
+	useMyPickups,
+	useMyReleases,
 	useMySchedule,
 	useMySwaps,
 	useProposeSwap,
@@ -58,6 +77,7 @@ import {
 	useRespondToAcceptance,
 	useRespondToSwap,
 	useShiftTasks,
+	useWithdrawRelease,
 } from "@/lib/queries";
 import { formatSwapExchange } from "@/lib/swaps";
 import { formatDay } from "@/lib/time";
@@ -71,6 +91,51 @@ export const Route = createFileRoute("/worker/")({
 type WorkerShift = NonNullable<
 	NonNullable<ReturnType<typeof useMySchedule>["data"]>["currentWeek"]
 >["shifts"][number];
+/**
+ * `planned` and a nullable week version are returned for unpublished drafts but
+ * may not be present in the shared query type yet.
+ */
+type PlannedAwareShift = WorkerShift & { planned?: boolean };
+type WorkerWeek = Omit<
+	NonNullable<
+		NonNullable<ReturnType<typeof useMySchedule>["data"]>["currentWeek"]
+	>,
+	"version" | "shifts"
+> & {
+	version: { id: string } | null;
+	shifts: PlannedAwareShift[];
+};
+
+function isPlanned(shift: WorkerShift | PlannedAwareShift): boolean {
+	return Boolean((shift as PlannedAwareShift).planned);
+}
+
+/** Day-filter options (All days + each date present in the week). */
+function dayFilterItems(shifts: { date: string }[]) {
+	const dates = Array.from(new Set(shifts.map((shift) => shift.date))).sort();
+	return [
+		{ label: "All days", value: "all" },
+		...dates.map((date) => ({ label: formatDay(date), value: date })),
+	];
+}
+
+function filterShiftsByDayAndTerm<
+	T extends {
+		date: string;
+		workerName?: string | null;
+		positionName: string;
+		note?: string | null;
+	},
+>(shifts: T[], day: string, search: string) {
+	const term = search.trim().toLowerCase();
+	return shifts.filter((shift) => {
+		if (day !== "all" && shift.date !== day) return false;
+		if (!term) return true;
+		return `${shift.workerName ?? ""} ${shift.positionName} ${shift.note ?? ""}`
+			.toLowerCase()
+			.includes(term);
+	});
+}
 type AcceptanceRow = NonNullable<
 	NonNullable<ReturnType<typeof useMySchedule>["data"]>["pendingAcceptances"]
 >[number];
@@ -87,6 +152,46 @@ const swapHelper = createDataColumnHelper<SwapRow>();
 const taskHelper = createDataColumnHelper<ShiftTask>();
 const coworkerHelper = createDataColumnHelper<DayRosterEntry>();
 
+type ScheduleSectionId =
+	| "this-week"
+	| "next-week"
+	| "earlier"
+	| "pending"
+	| "tasks"
+	| "requests"
+	| "swaps";
+
+const SCHEDULE_SECTIONS: {
+	id: ScheduleSectionId;
+	label: string;
+	icon: LucideIcon;
+}[] = [
+	{ id: "this-week", label: "This week", icon: CalendarDaysIcon },
+	{ id: "next-week", label: "Next week", icon: CalendarClockIcon },
+	{ id: "earlier", label: "Earlier weeks", icon: HistoryIcon },
+	{ id: "pending", label: "Pending changes", icon: CircleAlertIcon },
+	{ id: "tasks", label: "Shift tasks", icon: ListChecksIcon },
+	{ id: "requests", label: "Requests", icon: ClipboardListIcon },
+	{ id: "swaps", label: "Swaps", icon: ArrowLeftRightIcon },
+];
+
+function SectionEmpty({
+	title,
+	description,
+}: {
+	title: string;
+	description: string;
+}) {
+	return (
+		<Empty className="border border-dashed">
+			<EmptyHeader>
+				<EmptyTitle>{title}</EmptyTitle>
+				<EmptyDescription>{description}</EmptyDescription>
+			</EmptyHeader>
+		</Empty>
+	);
+}
+
 function WorkerHome() {
 	const { formatMinute, formatShiftRange } = useDisplayPrefs();
 	const { workplace } = useWorkplace();
@@ -95,12 +200,20 @@ function WorkerHome() {
 	const respond = useRespondToAcceptance();
 	const release = useRequestRelease();
 	const [swapShift, setSwapShift] = useState<WorkerShift | null>(null);
+	const [view, setView] = useState<"week" | "calendar">("week");
+	const [weekSearch, setWeekSearch] = useState("");
+	const [weekDay, setWeekDay] = useState("all");
+	const [nextWeekSearch, setNextWeekSearch] = useState("");
+	const [nextWeekDay, setNextWeekDay] = useState("all");
+	const [historySearch, setHistorySearch] = useState("");
+	const [section, setSection] = useState<ScheduleSectionId>("this-week");
 	const nowMs = Date.now();
 
-	const currentWeek = schedule.data?.currentWeek ?? null;
-	const nextWeek = schedule.data?.nextWeek ?? null;
+	const currentWeek = (schedule.data?.currentWeek ?? null) as WorkerWeek | null;
+	const nextWeek = (schedule.data?.nextWeek ?? null) as WorkerWeek | null;
 	const nextShift = schedule.data?.nextShift ?? null;
 	const shiftTasks = useShiftTasks(nextShift?.id);
+	const tasks = shiftTasks.data?.tasks ?? [];
 	const queryClient = useQueryClient();
 	const completeTask = useMutation({
 		mutationFn: (taskId: string) =>
@@ -117,19 +230,93 @@ function WorkerHome() {
 	});
 	const roster = useDayRoster(workplace?.id, swapShift?.date);
 	const proposeSwap = useProposeSwap();
+	const mySwaps = useMySwaps(workplace?.id);
+	const myReleases = useMyReleases(workplace?.id);
+	const myPickups = useMyPickups(workplace?.id);
 
 	const pendingAcceptances = schedule.data?.pendingAcceptances ?? [];
 	const currentChanges = schedule.data?.currentChanges ?? [];
 	const history = schedule.data?.history ?? [];
+	const currentMineShifts = (currentWeek?.shifts ?? []).filter(
+		(shift) => shift.isMine,
+	);
 	const needsAcknowledgement =
 		currentWeek !== null &&
-		(currentWeek.shifts?.length ?? 0) > 0 &&
+		currentWeek.version !== null &&
+		currentMineShifts.some((shift) => !isPlanned(shift)) &&
 		currentWeek.deliveryStatus !== "acknowledged";
 	const currentHours =
-		(currentWeek?.shifts.reduce((sum, shift) => {
+		currentMineShifts.reduce((sum, shift) => {
 			const end = shift.overnight ? shift.endMinute + 1440 : shift.endMinute;
 			return sum + end - shift.startMinute;
-		}, 0) ?? 0) / 60;
+		}, 0) / 60;
+
+	const currentWeekFiltered = useMemo(
+		() =>
+			filterShiftsByDayAndTerm(currentWeek?.shifts ?? [], weekDay, weekSearch),
+		[currentWeek, weekDay, weekSearch],
+	);
+	const currentWeekDayItems = useMemo(
+		() => dayFilterItems(currentWeek?.shifts ?? []),
+		[currentWeek],
+	);
+	const currentWeekPagination = useTablePagination(currentWeekFiltered, {
+		resetKey: `${currentWeek?.weekStart ?? ""}|${weekDay}|${weekSearch}`,
+	});
+	const nextWeekFiltered = useMemo(
+		() =>
+			filterShiftsByDayAndTerm(
+				nextWeek?.shifts ?? [],
+				nextWeekDay,
+				nextWeekSearch,
+			),
+		[nextWeek, nextWeekDay, nextWeekSearch],
+	);
+	const nextWeekDayItems = useMemo(
+		() => dayFilterItems(nextWeek?.shifts ?? []),
+		[nextWeek],
+	);
+	const nextWeekPagination = useTablePagination(nextWeekFiltered, {
+		resetKey: `${nextWeek?.weekStart ?? ""}|${nextWeekDay}|${nextWeekSearch}`,
+	});
+	const historyFiltered = useMemo(() => {
+		const term = historySearch.trim().toLowerCase();
+		if (!term) return history;
+		return history.filter((row) =>
+			`${formatDay(row.weekStart)} v${row.versionNumber} ${row.publishedAt}`
+				.toLowerCase()
+				.includes(term),
+		);
+	}, [history, historySearch]);
+	const historyPagination = useTablePagination(historyFiltered, {
+		resetKey: historySearch,
+	});
+	const acceptancePagination = useTablePagination(pendingAcceptances, {
+		resetKey: pendingAcceptances.length,
+	});
+
+	const activeSwaps = (mySwaps.data?.swaps ?? []).filter(
+		(item) =>
+			item.swap.status === "pending_counterpart" ||
+			item.swap.status === "pending_manager",
+	).length;
+	const requestCount =
+		(myReleases.data?.length ?? 0) +
+		(myPickups.data?.length ?? 0) +
+		(mySwaps.data?.swaps.length ?? 0);
+	const sectionCounts: Partial<Record<ScheduleSectionId, number>> = {
+		"this-week": currentWeek?.shifts.length ?? 0,
+		"next-week": nextWeek?.shifts.length ?? 0,
+		earlier: history.length,
+		pending: pendingAcceptances.length,
+		tasks: tasks.length,
+		requests: requestCount,
+		swaps: activeSwaps,
+	};
+	const hasAnySchedule = Boolean(currentWeek || nextWeek) || history.length > 0;
+	const hasGlobalItems =
+		(!schedule.isLoading && !schedule.isError && !nextShift) ||
+		(needsAcknowledgement && currentWeek !== null);
 
 	const acceptanceColumns = useMemo(
 		() =>
@@ -198,8 +385,15 @@ function WorkerHome() {
 				shiftHelper.accessor((row) => formatDay(row.date), {
 					id: "date",
 					header: "Date",
-					cell: ({ getValue }) => (
-						<span className="font-medium">{getValue()}</span>
+					cell: ({ getValue, row }) => (
+						<span className="flex items-center gap-2 font-medium">
+							{getValue()}
+							{isPlanned(row.original) ? (
+								<Badge variant="outline" className="uppercase">
+									Planned
+								</Badge>
+							) : null}
+						</span>
 					),
 				}),
 				shiftHelper.accessor(
@@ -225,6 +419,20 @@ function WorkerHome() {
 					enableSorting: false,
 					cell: ({ row }) => {
 						const shift = row.original;
+						if (isPlanned(shift)) {
+							return (
+								<span className="text-muted-foreground text-xs">
+									Planned — not yet published
+								</span>
+							);
+						}
+						if (!shift.isMine) {
+							return (
+								<span className="text-muted-foreground text-xs">
+									{shift.workerName ?? "Coworker"}
+								</span>
+							);
+						}
 						if (new Date(shift.startsAt).getTime() <= nowMs)
 							return (
 								<span className="text-muted-foreground text-xs">
@@ -279,8 +487,15 @@ function WorkerHome() {
 				shiftHelper.accessor((row) => formatDay(row.date), {
 					id: "date",
 					header: "Date",
-					cell: ({ getValue }) => (
-						<span className="font-medium">{getValue()}</span>
+					cell: ({ getValue, row }) => (
+						<span className="flex items-center gap-2 font-medium">
+							{getValue()}
+							{isPlanned(row.original) ? (
+								<Badge variant="outline" className="uppercase">
+									Planned
+								</Badge>
+							) : null}
+						</span>
 					),
 				}),
 				shiftHelper.accessor(
@@ -296,7 +511,11 @@ function WorkerHome() {
 						),
 					},
 				),
-				shiftHelper.accessor("positionName", { header: "Position" }),
+				shiftHelper.accessor(
+					(row) =>
+						`${row.positionName}${!row.isMine && row.workerName ? ` · ${row.workerName}` : ""}`,
+					{ id: "position", header: "Position" },
+				),
 			]),
 		[formatShiftRange],
 	);
@@ -393,21 +612,37 @@ function WorkerHome() {
 				}
 				description={
 					currentWeek
-						? `${currentWeek.shifts.length} shift${currentWeek.shifts.length === 1 ? "" : "s"} · ${currentHours.toFixed(1)}h this week`
+						? `${currentMineShifts.length} shift${currentMineShifts.length === 1 ? "" : "s"} · ${currentHours.toFixed(1)}h this week`
 						: "Your published shifts, Shift Tasks, and swaps."
 				}
 				actions={
-					<Button
-						size="sm"
-						variant="outline"
-						nativeButton={false}
-						render={<Link to="/worker/timecard" />}
-					>
-						My timecard
-					</Button>
+					<div className="flex items-center gap-2">
+						<ToggleGroup
+							aria-label="Schedule view"
+							value={[view]}
+							variant="outline"
+							size="sm"
+							spacing={0}
+							onValueChange={(value) => {
+								const next = value[0];
+								if (next === "week" || next === "calendar") setView(next);
+							}}
+						>
+							<ToggleGroupItem value="week">Week</ToggleGroupItem>
+							<ToggleGroupItem value="calendar">Calendar</ToggleGroupItem>
+						</ToggleGroup>
+						<Button
+							size="sm"
+							variant="outline"
+							nativeButton={false}
+							render={<Link to="/worker/timecard" />}
+						>
+							My timecard
+						</Button>
+					</div>
 				}
 			/>
-			<AppPageBody className="gap-4 p-4 md:p-6">
+			<AppPageBody scroll={false} className="gap-0">
 				{schedule.isLoading ? (
 					<div className="flex flex-col gap-3">
 						<Skeleton className="h-28" />
@@ -430,201 +665,405 @@ function WorkerHome() {
 					</Alert>
 				) : null}
 
-				{!schedule.isLoading && !schedule.isError && !nextShift ? (
-					<Card>
-						<CardHeader>
-							<CardTitle>No upcoming shifts</CardTitle>
-							<CardDescription>
-								Your next assigned shift will appear here once it’s published.
-								Check Open shifts for available work.
-							</CardDescription>
-						</CardHeader>
-					</Card>
-				) : null}
-				{nextShift ? (
-					<TimeClockCard shift={nextShift} timecardTo="/worker/timecard">
-						{(shiftTasks.data?.tasks.length ?? 0) > 0 ? (
-							<div className="grid gap-2 border-primary-foreground/30 border-t pt-4">
-								<p className="font-medium text-sm">Shift Tasks</p>
-								<DataTable
-									stacked
-									fill={false}
-									columns={taskColumns}
-									data={shiftTasks.data?.tasks ?? []}
-									getRowId={(row) => row.id}
-								/>
-							</div>
+				{hasGlobalItems ? (
+					<div className="flex shrink-0 flex-col gap-4 px-4 py-4 md:px-6 md:py-6">
+						{!schedule.isLoading && !schedule.isError && !nextShift ? (
+							<Card>
+								<CardHeader>
+									<CardTitle>No upcoming shifts</CardTitle>
+									<CardDescription>
+										Your next assigned shift will appear here once it’s
+										published. Check Open shifts for available work.
+									</CardDescription>
+								</CardHeader>
+							</Card>
 						) : null}
-					</TimeClockCard>
+						{needsAcknowledgement && currentWeek ? (
+							<Alert>
+								<EyeIcon />
+								<AlertTitle>Your manager published the schedule</AlertTitle>
+								<AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+									<span>Let them know you saw this week’s schedule.</span>
+									<Button
+										size="sm"
+										disabled={acknowledge.isPending}
+										onClick={() =>
+											acknowledge.mutate(currentWeek.version?.id ?? "", {
+												onSuccess: () => toast.success("Marked as seen."),
+												onError: (error) =>
+													toast.error((error as Error).message),
+											})
+										}
+									>
+										{acknowledge.isPending ? (
+											<Spinner data-icon="inline-start" />
+										) : null}
+										I saw this
+									</Button>
+								</AlertDescription>
+							</Alert>
+						) : null}
+					</div>
 				) : null}
 
-				{needsAcknowledgement && currentWeek ? (
-					<Alert>
-						<EyeIcon />
-						<AlertTitle>Your manager published the schedule</AlertTitle>
-						<AlertDescription className="flex flex-wrap items-center justify-between gap-3">
-							<span>Let them know you saw this week’s schedule.</span>
-							<Button
-								size="sm"
-								disabled={acknowledge.isPending}
-								onClick={() =>
-									acknowledge.mutate(currentWeek.version.id, {
-										onSuccess: () => toast.success("Marked as seen."),
-										onError: (error) => toast.error((error as Error).message),
-									})
-								}
+				{view === "calendar" ? (
+					<div className="min-h-0 flex-1 overflow-y-auto">
+						<WorkerScheduleCalendar workplaceId={workplace?.id} />
+					</div>
+				) : !schedule.isLoading && !schedule.isError && !hasAnySchedule ? (
+					<div className="flex min-h-0 flex-1 items-start justify-center overflow-y-auto px-4 pt-6 md:px-6">
+						<Empty className="border border-dashed">
+							<EmptyHeader>
+								<EmptyMedia variant="icon">
+									<CalendarDaysIcon />
+								</EmptyMedia>
+								<EmptyTitle>No schedule has been published yet</EmptyTitle>
+								<EmptyDescription>
+									When your manager publishes the week, your next shift will
+									appear here.
+								</EmptyDescription>
+							</EmptyHeader>
+						</Empty>
+					</div>
+				) : (
+					<div className="flex min-h-0 w-full flex-1 flex-col gap-4 md:flex-row md:items-stretch md:gap-0">
+						<aside className="w-full shrink-0 border-b bg-muted/30 md:w-52 md:overflow-y-auto md:border-r md:border-b-0">
+							<nav
+								aria-label="My schedule sections"
+								className="flex gap-1 overflow-x-auto overscroll-x-contain p-2 md:flex-col md:gap-1 md:overflow-visible"
 							>
-								{acknowledge.isPending ? (
-									<Spinner data-icon="inline-start" />
+								{SCHEDULE_SECTIONS.map((item) => {
+									const count = sectionCounts[item.id] ?? 0;
+									const active = section === item.id;
+									return (
+										<Button
+											key={item.id}
+											type="button"
+											variant={active ? "secondary" : "ghost"}
+											size="sm"
+											aria-current={active ? "page" : undefined}
+											className="w-auto shrink-0 justify-start gap-2 md:w-full"
+											onClick={() => setSection(item.id)}
+										>
+											<item.icon />
+											<span>{item.label}</span>
+											{count > 0 ? (
+												<Badge
+													variant="secondary"
+													className="ml-auto tabular-nums"
+												>
+													{count}
+												</Badge>
+											) : null}
+										</Button>
+									);
+								})}
+							</nav>
+						</aside>
+
+						<div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+							<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+								{section === "this-week" ? (
+									<>
+										{currentWeek && currentWeek.shifts.length > 0 ? (
+											<Card className="flex min-h-0 flex-1 flex-col">
+												<CardHeader className="shrink-0">
+													<div className="flex items-start justify-between gap-3">
+														<div>
+															<CardTitle>This week</CardTitle>
+															<CardDescription>
+																Week of {formatDay(currentWeek.weekStart)}
+															</CardDescription>
+														</div>
+														<p className="font-medium text-muted-foreground text-sm tabular-nums">
+															{currentMineShifts.length} shift
+															{currentMineShifts.length === 1 ? "" : "s"} ·{" "}
+															{currentHours.toFixed(1)}h
+														</p>
+													</div>
+												</CardHeader>
+												<CardContent className="flex min-h-0 flex-1 flex-col">
+													<TableToolbar
+														embedded
+														className="shrink-0"
+														left={
+															<>
+																<TableSearch
+																	value={weekSearch}
+																	onValueChange={setWeekSearch}
+																	placeholder="Search shifts"
+																/>
+																{currentWeekDayItems.length > 1 ? (
+																	<TableFilter
+																		value={weekDay}
+																		onValueChange={setWeekDay}
+																		items={currentWeekDayItems}
+																		ariaLabel="Filter by day"
+																	/>
+																) : null}
+															</>
+														}
+														right={
+															<TablePagination {...currentWeekPagination} />
+														}
+													/>
+													<DataTable
+														stacked
+														stickyHeader
+														columns={weekShiftColumns}
+														data={currentWeekPagination.pageRows}
+														getRowId={(row) => row.id}
+														className="[&_tbody_tr:last-child]:border-b-0"
+														empty={
+															<p className="py-6 text-center text-muted-foreground text-sm">
+																No shifts match your search or day filter.
+															</p>
+														}
+													/>
+												</CardContent>
+												<CardFooter className="flex flex-col items-start gap-1">
+													{currentWeek.shifts.some((shift) =>
+														isPlanned(shift),
+													) ? (
+														<p className="text-muted-foreground text-xs">
+															Planned shifts aren’t published yet and are
+															subject to change. You can’t swap or release one
+															until it is published.
+														</p>
+													) : null}
+													<p className="text-muted-foreground text-xs">
+														You remain responsible for a released shift until
+														your manager approves the hand-off.
+													</p>
+												</CardFooter>
+											</Card>
+										) : (
+											<SectionEmpty
+												title="No shifts this week"
+												description="Shifts assigned to you this week will appear here."
+											/>
+										)}
+										<SwapSheet
+											key={swapShift?.id ?? "closed"}
+											shift={swapShift}
+											open={swapShift !== null}
+											onOpenChange={(open) => {
+												if (!open) setSwapShift(null);
+											}}
+											roster={roster}
+											proposeSwap={proposeSwap}
+										/>
+									</>
 								) : null}
-								I saw this
-							</Button>
-						</AlertDescription>
-					</Alert>
-				) : null}
 
-				{pendingAcceptances.length > 0 ? (
-					<Card>
-						<CardHeader>
-							<CardTitle>Your shift changed</CardTitle>
-							<CardDescription>
-								Your manager changed this shift after the schedule was sent.
-								Accept if you can work it — if not, we’ll tell your manager.
-							</CardDescription>
-						</CardHeader>
-						<CardContent>
-							<DataTable
-								stacked
-								fill={false}
-								columns={acceptanceColumns}
-								data={pendingAcceptances}
-								getRowId={(row) => row.id}
-							/>
-						</CardContent>
-					</Card>
-				) : null}
+								{section === "next-week" ? (
+									nextWeek && (nextWeek.shifts?.length ?? 0) > 0 ? (
+										<Card className="flex min-h-0 flex-1 flex-col">
+											<CardHeader className="shrink-0">
+												<CardTitle>Next week</CardTitle>
+												<CardDescription>
+													Week of {formatDay(nextWeek.weekStart)}
+												</CardDescription>
+											</CardHeader>
+											<CardContent className="flex min-h-0 flex-1 flex-col">
+												<TableToolbar
+													embedded
+													className="shrink-0"
+													left={
+														<>
+															<TableSearch
+																value={nextWeekSearch}
+																onValueChange={setNextWeekSearch}
+																placeholder="Search shifts"
+															/>
+															{nextWeekDayItems.length > 1 ? (
+																<TableFilter
+																	value={nextWeekDay}
+																	onValueChange={setNextWeekDay}
+																	items={nextWeekDayItems}
+																	ariaLabel="Filter by day"
+																/>
+															) : null}
+														</>
+													}
+													right={<TablePagination {...nextWeekPagination} />}
+												/>
+												<DataTable
+													stacked
+													stickyHeader
+													columns={nextWeekColumns}
+													data={nextWeekPagination.pageRows}
+													getRowId={(row) => row.id}
+													empty={
+														<p className="py-6 text-center text-muted-foreground text-sm">
+															No shifts match your search or day filter.
+														</p>
+													}
+												/>
+												{nextWeek.shifts.some((shift) => isPlanned(shift)) ? (
+													<p className="mt-2 text-muted-foreground text-xs">
+														Planned shifts aren’t published yet and are subject
+														to change.
+													</p>
+												) : null}
+											</CardContent>
+										</Card>
+									) : (
+										<SectionEmpty
+											title="No shifts next week"
+											description="Shifts planned or published for next week will appear here."
+										/>
+									)
+								) : null}
 
-				<WorkerSwapsCard workplaceId={workplace?.id} />
+								{section === "earlier" ? (
+									history.length > 0 ? (
+										<Card className="flex min-h-0 flex-1 flex-col">
+											<CardHeader className="shrink-0">
+												<CardTitle>Earlier published weeks</CardTitle>
+												<CardDescription>
+													Opening a past week does not mark it as seen.
+												</CardDescription>
+											</CardHeader>
+											<CardContent className="flex min-h-0 flex-1 flex-col">
+												<TableToolbar
+													embedded
+													className="shrink-0"
+													left={
+														<TableSearch
+															value={historySearch}
+															onValueChange={setHistorySearch}
+															placeholder="Search weeks"
+														/>
+													}
+													right={<TablePagination {...historyPagination} />}
+												/>
+												<DataTable
+													stacked
+													stickyHeader
+													columns={historyColumns}
+													data={historyPagination.pageRows}
+													getRowId={(row) => row.versionId}
+													empty={
+														<p className="py-6 text-center text-muted-foreground text-sm">
+															No published weeks match your search.
+														</p>
+													}
+												/>
+											</CardContent>
+										</Card>
+									) : (
+										<SectionEmpty
+											title="No earlier published weeks"
+											description="Past published weeks you can still open will appear here."
+										/>
+									)
+								) : null}
 
-				{currentChanges.length > 0 ? (
-					<Alert>
-						<AlertTitle>What changed this week</AlertTitle>
-						<AlertDescription>
-							<ul className="flex flex-col gap-1">
-								{currentChanges.map((change) => (
-									<li key={change}>{change}</li>
-								))}
-							</ul>
-						</AlertDescription>
-					</Alert>
-				) : null}
+								{section === "pending" ? (
+									pendingAcceptances.length > 0 || currentChanges.length > 0 ? (
+										<>
+											{currentChanges.length > 0 ? (
+												<Alert>
+													<AlertTitle>What changed this week</AlertTitle>
+													<AlertDescription>
+														<ul className="flex flex-col gap-1">
+															{currentChanges.map((change) => (
+																<li key={change}>{change}</li>
+															))}
+														</ul>
+													</AlertDescription>
+												</Alert>
+											) : null}
+											{pendingAcceptances.length > 0 ? (
+												<Card>
+													<CardHeader>
+														<CardTitle>Your shift changed</CardTitle>
+														<CardDescription>
+															Your manager changed this shift after the schedule
+															was sent. Accept if you can work it — if not,
+															we’ll tell your manager.
+														</CardDescription>
+													</CardHeader>
+													<CardContent className="flex flex-col">
+														<TableToolbar
+															embedded
+															right={
+																<TablePagination {...acceptancePagination} />
+															}
+														/>
+														<DataTable
+															stacked
+															fill={false}
+															columns={acceptanceColumns}
+															data={acceptancePagination.pageRows}
+															getRowId={(row) => row.id}
+														/>
+													</CardContent>
+												</Card>
+											) : null}
+										</>
+									) : (
+										<SectionEmpty
+											title="Nothing pending"
+											description="Late schedule changes that need your acceptance appear here."
+										/>
+									)
+								) : null}
 
-				<div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-					<div className="flex flex-col gap-4">
-						{currentWeek && currentWeek.shifts.length > 0 ? (
-							<Card>
-								<CardHeader>
-									<div className="flex items-start justify-between gap-3">
-										<div>
-											<CardTitle>This week</CardTitle>
-											<CardDescription>
-												Week of {formatDay(currentWeek.weekStart)}
-											</CardDescription>
-										</div>
-										<p className="font-medium text-muted-foreground text-sm tabular-nums">
-											{currentWeek.shifts.length} shift
-											{currentWeek.shifts.length === 1 ? "" : "s"} ·{" "}
-											{currentHours.toFixed(1)}h
-										</p>
-									</div>
-								</CardHeader>
-								<CardContent>
-									<DataTable
-										stacked
-										fill={false}
-										columns={weekShiftColumns}
-										data={currentWeek.shifts}
-										getRowId={(row) => row.id}
-										className="[&_tbody_tr:last-child]:border-b-0"
-									/>
-								</CardContent>
-								<CardFooter>
-									<p className="text-muted-foreground text-xs">
-										You remain responsible for a released shift until your
-										manager approves the hand-off.
-									</p>
-								</CardFooter>
-							</Card>
-						) : null}
+								{section === "tasks" ? (
+									tasks.length > 0 ? (
+										<Card>
+											<CardHeader>
+												<CardTitle>Shift tasks</CardTitle>
+												<CardDescription>
+													Checklist for your next shift. Completing a task does
+													not affect your hours.
+												</CardDescription>
+											</CardHeader>
+											<CardContent className="flex flex-col">
+												<DataTable
+													stacked
+													fill={false}
+													columns={taskColumns}
+													data={tasks}
+													getRowId={(row) => row.id}
+												/>
+											</CardContent>
+										</Card>
+									) : (
+										<SectionEmpty
+											title="No shift tasks"
+											description="Tasks for your next shift will appear here."
+										/>
+									)
+								) : null}
+
+								{section === "requests" ? (
+									requestCount > 0 ? (
+										<WorkerRequestsCard workplaceId={workplace?.id} />
+									) : (
+										<SectionEmpty
+											title="No requests yet"
+											description="Your releases, pickups, and swaps appear here."
+										/>
+									)
+								) : null}
+
+								{section === "swaps" ? (
+									activeSwaps > 0 ? (
+										<WorkerSwapsCard workplaceId={workplace?.id} />
+									) : (
+										<SectionEmpty
+											title="No pending swaps"
+											description="Swaps waiting on you or a manager appear here."
+										/>
+									)
+								) : null}
+							</div>
+						</div>
 					</div>
-					<div className="flex flex-col gap-4">
-						<SwapSheet
-							key={swapShift?.id ?? "closed"}
-							shift={swapShift}
-							open={swapShift !== null}
-							onOpenChange={(open) => {
-								if (!open) setSwapShift(null);
-							}}
-							roster={roster}
-							proposeSwap={proposeSwap}
-						/>
-
-						{nextWeek && (nextWeek.shifts?.length ?? 0) > 0 ? (
-							<Card>
-								<CardHeader>
-									<CardTitle>Next week</CardTitle>
-									<CardDescription>
-										Week of {formatDay(nextWeek.weekStart)}
-									</CardDescription>
-								</CardHeader>
-								<CardContent>
-									<DataTable
-										stacked
-										fill={false}
-										columns={nextWeekColumns}
-										data={nextWeek.shifts}
-										getRowId={(row) => row.id}
-									/>
-								</CardContent>
-							</Card>
-						) : null}
-
-						{history.length > 0 ? (
-							<Card>
-								<CardHeader>
-									<CardTitle>Earlier published weeks</CardTitle>
-									<CardDescription>
-										Opening a past week does not mark it as seen.
-									</CardDescription>
-								</CardHeader>
-								<CardContent>
-									<DataTable
-										stacked
-										fill={false}
-										columns={historyColumns}
-										data={history}
-										getRowId={(row) => row.versionId}
-									/>
-								</CardContent>
-							</Card>
-						) : null}
-					</div>
-				</div>
-
-				{!schedule.isLoading && !schedule.isError && !currentWeek ? (
-					<Empty className="border border-dashed">
-						<EmptyHeader>
-							<EmptyMedia variant="icon">
-								<CalendarDaysIcon />
-							</EmptyMedia>
-							<EmptyTitle>No schedule has been published yet</EmptyTitle>
-							<EmptyDescription>
-								When your manager publishes the week, your next shift will
-								appear here.
-							</EmptyDescription>
-						</EmptyHeader>
-					</Empty>
-				) : null}
+				)}
 			</AppPageBody>
 		</AppPage>
 	);
@@ -639,16 +1078,208 @@ const SWAP_STATUS_LABELS = {
 	cancelled: "Cancelled",
 } as const;
 
+type WorkerRequestItem = {
+	key: string;
+	kind: "release" | "pickup" | "swap";
+	title: string;
+	detail: string;
+	statusLabel: string;
+	group: "pending" | "decided" | "cancelled";
+	tone: "default" | "secondary" | "destructive" | "outline";
+	releaseId?: string;
+};
+
+const REQUEST_GROUPS: { key: WorkerRequestItem["group"]; label: string }[] = [
+	{ key: "pending", label: "Pending" },
+	{ key: "decided", label: "Decided" },
+	{ key: "cancelled", label: "Cancelled" },
+];
+
+function WorkerRequestsCard({
+	workplaceId,
+}: {
+	workplaceId: string | undefined;
+}) {
+	const { formatShiftRange, formatClockTime } = useDisplayPrefs();
+	const releases = useMyReleases(workplaceId);
+	const pickups = useMyPickups(workplaceId);
+	const swaps = useMySwaps(workplaceId);
+	const withdraw = useWithdrawRelease();
+
+	const items = useMemo(() => {
+		const list: WorkerRequestItem[] = [];
+		for (const release of releases.data ?? []) {
+			list.push({
+				key: `release-${release.id}`,
+				kind: "release",
+				title: `Release · ${release.positionName}`,
+				detail: `${formatDay(release.date)} · ${formatShiftRange(
+					release.startMinute,
+					release.endMinute,
+					release.overnight,
+				)}`,
+				statusLabel: release.status,
+				group: release.status === "pending" ? "pending" : "decided",
+				tone:
+					release.status === "approved"
+						? "default"
+						: release.status === "declined"
+							? "destructive"
+							: "secondary",
+				releaseId: release.status === "pending" ? release.id : undefined,
+			});
+		}
+		for (const pickup of pickups.data ?? []) {
+			list.push({
+				key: `pickup-${pickup.id}`,
+				kind: "pickup",
+				title: `Pickup · ${pickup.positionName}`,
+				detail: pickup.date
+					? `${formatDay(pickup.date)} · ${formatShiftRange(
+							pickup.startMinute ?? 0,
+							pickup.endMinute ?? 0,
+							pickup.overnight,
+						)} · ${pickup.locationName}`
+					: pickup.locationName,
+				statusLabel: pickup.status,
+				group: pickup.status === "pending" ? "pending" : "decided",
+				tone:
+					pickup.status === "approved"
+						? "default"
+						: pickup.status === "declined"
+							? "destructive"
+							: "secondary",
+			});
+		}
+		for (const { direction, swap } of swaps.data?.swaps ?? []) {
+			if (
+				swap.status === "pending_counterpart" ||
+				swap.status === "pending_manager"
+			) {
+				continue;
+			}
+			list.push({
+				key: `swap-${swap.id}`,
+				kind: "swap",
+				title:
+					direction === "incoming"
+						? `Swap from ${swap.requester.name}`
+						: `Swap with ${swap.counterpart.name}`,
+				detail: formatSwapExchange(direction, swap, formatClockTime),
+				statusLabel: SWAP_STATUS_LABELS[swap.status],
+				group: swap.status === "cancelled" ? "cancelled" : "decided",
+				tone:
+					swap.status === "approved"
+						? "default"
+						: swap.status.startsWith("declined")
+							? "destructive"
+							: "outline",
+			});
+		}
+		return list;
+	}, [
+		formatClockTime,
+		formatShiftRange,
+		pickups.data,
+		releases.data,
+		swaps.data,
+	]);
+
+	const loading = releases.isLoading || pickups.isLoading || swaps.isLoading;
+	if ((loading && items.length === 0) || items.length === 0) return null;
+
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle>Requests</CardTitle>
+				<CardDescription>
+					Your releases, pickups, and swaps — including decisions. You can
+					withdraw a release while it is pending.
+				</CardDescription>
+			</CardHeader>
+			<CardContent className="flex flex-col gap-4">
+				{REQUEST_GROUPS.map((group) => {
+					const groupItems = items.filter((item) => item.group === group.key);
+					if (groupItems.length === 0) return null;
+					return (
+						<div key={group.key} className="flex flex-col gap-2">
+							<p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+								{group.label}
+							</p>
+							<ul className="divide-y rounded-md border">
+								{groupItems.map((item) => (
+									<li
+										key={item.key}
+										className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+									>
+										<div className="min-w-0">
+											<p className="font-medium text-sm">{item.title}</p>
+											<p className="text-muted-foreground text-xs tabular-nums">
+												{item.detail}
+											</p>
+										</div>
+										<div className="flex items-center gap-2">
+											<Badge variant={item.tone} className="uppercase">
+												{item.statusLabel}
+											</Badge>
+											{item.releaseId ? (
+												<ConfirmAction
+													trigger="Withdraw request"
+													triggerVariant="ghost"
+													title="Withdraw this release request?"
+													description="Your manager will no longer see it. You keep the shift."
+													confirmLabel="Withdraw request"
+													destructive
+													disabled={withdraw.isPending}
+													onConfirm={() =>
+														withdraw.mutate(item.releaseId ?? "", {
+															onSuccess: () =>
+																toast.success("Release request withdrawn."),
+															onError: (error) =>
+																toast.error((error as Error).message),
+														})
+													}
+												/>
+											) : null}
+										</div>
+									</li>
+								))}
+							</ul>
+						</div>
+					);
+				})}
+			</CardContent>
+		</Card>
+	);
+}
+
 function WorkerSwapsCard({ workplaceId }: { workplaceId: string | undefined }) {
 	const { formatClockTime } = useDisplayPrefs();
 	const swaps = useMySwaps(workplaceId);
 	const respond = useRespondToSwap();
 	const cancel = useCancelSwap();
-	const items = (swaps.data?.swaps ?? []).filter(
-		(item) =>
-			item.swap.status === "pending_counterpart" ||
-			item.swap.status === "pending_manager",
+	const [search, setSearch] = useState("");
+	const items = useMemo(
+		() =>
+			(swaps.data?.swaps ?? []).filter(
+				(item) =>
+					item.swap.status === "pending_counterpart" ||
+					item.swap.status === "pending_manager",
+			),
+		[swaps.data],
 	);
+	const filtered = useMemo(() => {
+		const term = search.trim().toLowerCase();
+		if (!term) return items;
+		return items.filter((row) =>
+			`${row.swap.requester.name} ${row.swap.counterpart.name} ${
+				SWAP_STATUS_LABELS[row.swap.status]
+			} ${formatSwapExchange(row.direction, row.swap, formatClockTime)}`
+				.toLowerCase()
+				.includes(term),
+		);
+	}, [items, search, formatClockTime]);
+	const pagination = useTablePagination(filtered, { resetKey: search });
 
 	if (swaps.isLoading || items.length === 0) return null;
 
@@ -762,13 +1393,29 @@ function WorkerSwapsCard({ workplaceId }: { workplaceId: string | undefined }) {
 					approves. Until then everyone keeps their own shift.
 				</CardDescription>
 			</CardHeader>
-			<CardContent>
+			<CardContent className="flex flex-col">
+				<TableToolbar
+					embedded
+					left={
+						<TableSearch
+							value={search}
+							onValueChange={setSearch}
+							placeholder="Search swaps"
+						/>
+					}
+					right={<TablePagination {...pagination} />}
+				/>
 				<DataTable
 					stacked
 					fill={false}
 					columns={columns}
-					data={items}
+					data={pagination.pageRows}
 					getRowId={(row) => row.swap.id}
+					empty={
+						<p className="py-6 text-center text-muted-foreground text-sm">
+							No swaps match your search.
+						</p>
+					}
 				/>
 			</CardContent>
 		</Card>

@@ -1,5 +1,7 @@
 import {
 	db,
+	EMPLOYMENT_PRIVILEGES,
+	type EmploymentPrivilege,
 	employmentLocations,
 	employmentPositions,
 	employments,
@@ -12,7 +14,7 @@ import {
 } from "@SchedulesManager/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { Elysia, t } from "elysia";
-import { requireManager, requireSession } from "../context";
+import { requirePrivilege, requireSession } from "../context";
 import { enqueueInvitationEmail } from "../email-outbox";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { withIdempotency } from "../idempotency";
@@ -54,7 +56,7 @@ export const workersRoutes = new Elysia({
 		"/workplaces/:workplaceId/workers",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
 
 			const employmentRows = await db
 				.select({
@@ -90,6 +92,7 @@ export const workersRoutes = new Elysia({
 					employmentId: employment.id,
 					kind: employment.kind,
 					status: employment.status,
+					privileges: employment.privileges ?? [],
 					joinedAt: employment.createdAt.toISOString(),
 					hourlyWageCents: employment.hourlyWageCents,
 					emergencyContactName: employment.emergencyContactName,
@@ -123,7 +126,10 @@ export const workersRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -136,7 +142,7 @@ export const workersRoutes = new Elysia({
 		"/workplaces/:workplaceId/invitations",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
 
 			const email = normalizeEmail(body.email);
 			assertDeliverableInvitationEmail(email);
@@ -279,23 +285,29 @@ export const workersRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				email: emailSchema,
-				kind: t.Union([t.Literal("worker"), t.Literal("manager")], {
-					default: "worker",
-				}),
+				kind: t.Union(
+					[t.Literal("worker"), t.Literal("manager"), t.Literal("viewer")],
+					{
+						default: "worker",
+					},
+				),
 				locationIds: t.Optional(t.Array(t.String({ format: "uuid" }))),
 				positionIds: t.Optional(t.Array(t.String({ format: "uuid" }))),
 			}),
 			detail: {
-				summary: "Invite a Worker or Manager by email (Manager)",
+				summary: "Invite a Worker, Viewer, or Manager by email (Manager)",
 				security: [{ bearerAuth: [] }],
 			},
 		},
@@ -304,7 +316,7 @@ export const workersRoutes = new Elysia({
 		"/workplaces/:workplaceId/invitations/:invitationId/resend",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
 
 			return withIdempotency({
 				actorProfileId: profile.id,
@@ -369,12 +381,15 @@ export const workersRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				invitationId: t.String({ format: "uuid" }),
@@ -389,7 +404,7 @@ export const workersRoutes = new Elysia({
 		"/workplaces/:workplaceId/invitations/:invitationId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
 
 			const [invitation] = await db
 				.select()
@@ -412,7 +427,10 @@ export const workersRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				invitationId: t.String({ format: "uuid" }),
@@ -427,7 +445,7 @@ export const workersRoutes = new Elysia({
 		"/workplaces/:workplaceId/employments/:employmentId/deactivate",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
 
 			if (params.employmentId === params.workplaceId) {
 				throw new BadRequestError("Invalid employment");
@@ -463,7 +481,10 @@ export const workersRoutes = new Elysia({
 			return { employmentId: updated.id, status: updated.status };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				employmentId: t.String({ format: "uuid" }),
@@ -471,6 +492,80 @@ export const workersRoutes = new Elysia({
 			detail: {
 				summary:
 					"Deactivate an Employment so the person immediately loses access (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.patch(
+		"/workplaces/:workplaceId/employments/:employmentId/role",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+
+			const [employment] = await db
+				.select()
+				.from(employments)
+				.where(
+					and(
+						eq(employments.id, params.employmentId),
+						eq(employments.workplaceId, params.workplaceId),
+					),
+				)
+				.limit(1);
+
+			if (!employment) throw new NotFoundError("Employment not found");
+
+			const requestedPrivileges = body.privileges ?? [];
+			const invalid = requestedPrivileges.filter(
+				(privilege) =>
+					!(EMPLOYMENT_PRIVILEGES as readonly string[]).includes(privilege),
+			);
+			if (invalid.length > 0) {
+				throw new BadRequestError(
+					`Unknown privilege${invalid.length === 1 ? "" : "s"}: ${invalid.join(", ")}`,
+				);
+			}
+
+			// A Worker never holds privileges; Managers and Viewers keep the
+			// explicit set. For a Manager an empty set means full access.
+			const privileges: EmploymentPrivilege[] =
+				body.kind === "worker"
+					? []
+					: (requestedPrivileges as EmploymentPrivilege[]);
+
+			const updated = firstRow(
+				await db
+					.update(employments)
+					.set({ kind: body.kind, privileges })
+					.where(eq(employments.id, employment.id))
+					.returning(),
+			);
+
+			return {
+				employmentId: updated.id,
+				kind: updated.kind,
+				privileges: updated.privileges ?? [],
+			};
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({
+				workplaceId: t.String({ format: "uuid" }),
+				employmentId: t.String({ format: "uuid" }),
+			}),
+			body: t.Object({
+				kind: t.Union([
+					t.Literal("manager"),
+					t.Literal("worker"),
+					t.Literal("viewer"),
+				]),
+				privileges: t.Optional(t.Array(t.String({ maxLength: 64 }))),
+			}),
+			detail: {
+				summary: "Change an Employment's role and privileges (Manager)",
 				security: [{ bearerAuth: [] }],
 			},
 		},

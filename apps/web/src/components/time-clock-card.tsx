@@ -29,6 +29,7 @@ export type TimeClockShift = {
 	startMinute: number;
 	endMinute: number;
 	overnight: boolean;
+	planned?: boolean;
 	timeEntry: {
 		clockedInAt: string;
 		clockedOutAt: string | null;
@@ -56,6 +57,7 @@ export function TimeClockCard({
 	const entry = shift.timeEntry;
 	const onClock = entry !== null && entry.clockedOutAt === null;
 	const canStart =
+		!shift.planned &&
 		entry === null &&
 		nowMs >= new Date(shift.startsAt).getTime() - CLOCK_IN_EARLY_MS &&
 		nowMs <= new Date(shift.endsAt).getTime();
@@ -77,7 +79,11 @@ export function TimeClockCard({
 			<div className="flex flex-col gap-4 rounded-2xl bg-primary p-6 text-primary-foreground shadow-sm">
 				<div>
 					<p className="mb-3 font-medium text-primary-foreground/75 text-sm">
-						{onClock ? "You're on the clock" : "Next shift"}
+						{onClock
+							? "You're on the clock"
+							: shift.planned
+								? "Planned shift"
+								: "Next shift"}
 					</p>
 					<h1 className="font-semibold text-2xl tracking-[-0.025em]">
 						{formatDay(shift.startsAt)}
@@ -147,7 +153,7 @@ export function TimeClockCard({
 					</div>
 				) : null}
 
-				{!canStart && entry === null ? (
+				{!canStart && entry === null && !shift.planned ? (
 					<p className="text-primary-foreground/75 text-sm">
 						Clock-in opens at{" "}
 						{formatClockTime(
@@ -156,6 +162,12 @@ export function TimeClockCard({
 							).toISOString(),
 						)}{" "}
 						— 15 minutes before your shift.
+					</p>
+				) : null}
+
+				{shift.planned ? (
+					<p className="text-primary-foreground/75 text-sm">
+						Planned — not yet published. You can clock in once it is published.
 					</p>
 				) : null}
 

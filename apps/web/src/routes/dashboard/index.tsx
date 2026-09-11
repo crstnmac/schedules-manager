@@ -51,6 +51,12 @@ import { toast } from "sonner";
 import { AppDocument } from "@/components/app-page";
 import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import {
+	TablePagination,
+	TableSearch,
+	TableToolbar,
+	useTablePagination,
+} from "@/components/table-toolbar";
 import { api } from "@/lib/api";
 import {
 	type AcceptancesResponse,
@@ -261,6 +267,9 @@ function Overview() {
 	const workers = useWorkers(workplace?.id);
 	const pilot = usePilotStatus(workplace?.id);
 	const [focusLocationId, setFocusLocationId] = useState<string | null>(null);
+	const [constraintSearch, setConstraintSearch] = useState("");
+	const [myAcceptanceSearch, setMyAcceptanceSearch] = useState("");
+	const [acceptanceSearch, setAcceptanceSearch] = useState("");
 	const focusLocation =
 		locations.data?.find((location) => location.id === focusLocationId) ??
 		locations.data?.[0];
@@ -452,6 +461,43 @@ function Overview() {
 		constrainedStaff.length > 0 ||
 		outstandingAcceptances.length > 0 ||
 		myPendingAcceptances.length > 0;
+
+	const filteredConstraints = useMemo(() => {
+		const term = constraintSearch.trim().toLowerCase();
+		if (!term) return constrainedStaff;
+		return constrainedStaff.filter((member) =>
+			`${member.name} ${staffConstraintText(member, formatMinute)}`
+				.toLowerCase()
+				.includes(term),
+		);
+	}, [constrainedStaff, constraintSearch, formatMinute]);
+	const constraintPagination = useTablePagination(filteredConstraints, {
+		resetKey: constraintSearch,
+	});
+	const filteredMyAcceptances = useMemo(() => {
+		const term = myAcceptanceSearch.trim().toLowerCase();
+		if (!term) return myPendingAcceptances;
+		return myPendingAcceptances.filter((row) =>
+			`${row.positionName ?? ""} ${row.changeSummary ?? ""} ${formatDay(row.date)}`
+				.toLowerCase()
+				.includes(term),
+		);
+	}, [myPendingAcceptances, myAcceptanceSearch]);
+	const myAcceptancePagination = useTablePagination(filteredMyAcceptances, {
+		resetKey: myAcceptanceSearch,
+	});
+	const filteredAcceptances = useMemo(() => {
+		const term = acceptanceSearch.trim().toLowerCase();
+		if (!term) return outstandingAcceptances;
+		return outstandingAcceptances.filter((row) =>
+			`${row.workerName} ${row.changeSummary} ${row.status}`
+				.toLowerCase()
+				.includes(term),
+		);
+	}, [outstandingAcceptances, acceptanceSearch]);
+	const acceptancePagination = useTablePagination(filteredAcceptances, {
+		resetKey: acceptanceSearch,
+	});
 
 	return (
 		<AppDocument widthClassName="max-w-5xl">
@@ -654,12 +700,28 @@ function Overview() {
 								</h3>
 								<Badge variant="secondary">{constrainedStaff.length}</Badge>
 							</div>
+							<TableToolbar
+								embedded
+								left={
+									<TableSearch
+										value={constraintSearch}
+										onValueChange={setConstraintSearch}
+										placeholder="Search workers"
+									/>
+								}
+								right={<TablePagination {...constraintPagination} />}
+							/>
 							<DataTable
 								fill={false}
 								bounded
 								columns={staffColumns}
-								data={constrainedStaff.slice(0, 6)}
+								data={constraintPagination.pageRows}
 								getRowId={(row) => row.employmentId}
+								empty={
+									<p className="py-6 text-center text-muted-foreground text-sm">
+										No constraints match your search.
+									</p>
+								}
 							/>
 						</section>
 					) : null}
@@ -683,12 +745,28 @@ function Overview() {
 								A late material change touched your own shifts. Accept or
 								decline each one.
 							</p>
+							<TableToolbar
+								embedded
+								left={
+									<TableSearch
+										value={myAcceptanceSearch}
+										onValueChange={setMyAcceptanceSearch}
+										placeholder="Search changes"
+									/>
+								}
+								right={<TablePagination {...myAcceptancePagination} />}
+							/>
 							<DataTable
 								fill={false}
 								bounded
 								columns={myAcceptanceColumns}
-								data={myPendingAcceptances}
+								data={myAcceptancePagination.pageRows}
 								getRowId={(row) => row.id}
+								empty={
+									<p className="py-6 text-center text-muted-foreground text-sm">
+										No changes match your search.
+									</p>
+								}
 							/>
 						</section>
 					) : null}
@@ -700,12 +778,28 @@ function Overview() {
 							>
 								Shift acceptances
 							</h3>
+							<TableToolbar
+								embedded
+								left={
+									<TableSearch
+										value={acceptanceSearch}
+										onValueChange={setAcceptanceSearch}
+										placeholder="Search workers"
+									/>
+								}
+								right={<TablePagination {...acceptancePagination} />}
+							/>
 							<DataTable
 								fill={false}
 								bounded
 								columns={overviewAcceptanceColumns}
-								data={outstandingAcceptances.slice(0, 6)}
+								data={acceptancePagination.pageRows}
 								getRowId={(row) => row.id}
+								empty={
+									<p className="py-6 text-center text-muted-foreground text-sm">
+										No acceptances match your search.
+									</p>
+								}
 							/>
 						</section>
 					) : null}

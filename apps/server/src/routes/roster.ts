@@ -18,7 +18,7 @@ import { requireSubscriptionCapability } from "../billing";
 
 import {
 	locationScopeFor,
-	requireManager,
+	requirePrivilege,
 	requireSession,
 	requireWorkplaceMember,
 	weekStartDayFor,
@@ -284,7 +284,7 @@ export const rosterRoutes = new Elysia({
 		"/workplaces/:workplaceId/version-shifts/:versionShiftId/attendance",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
 			await requireSubscriptionCapability(params.workplaceId, "attendance");
 			return withIdempotency({
 				actorProfileId: profile.id,

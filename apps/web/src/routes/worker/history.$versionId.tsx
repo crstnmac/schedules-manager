@@ -10,9 +10,15 @@ import {
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeftIcon, CalendarDaysIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import {
+	TablePagination,
+	TableSearch,
+	TableToolbar,
+	useTablePagination,
+} from "@/components/table-toolbar";
 import { usePublishedVersion } from "@/lib/queries";
 import { formatDay } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
@@ -32,6 +38,18 @@ function WorkerHistory() {
 	const { formatShiftRange } = useDisplayPrefs();
 	const version = usePublishedVersion(versionId);
 	const data = version.data;
+	const [search, setSearch] = useState("");
+	const filteredShifts = useMemo(() => {
+		const shifts = data?.shifts ?? [];
+		const term = search.trim().toLowerCase();
+		if (!term) return shifts;
+		return shifts.filter((shift) =>
+			`${formatDay(shift.date)} ${shift.positionName} ${shift.note ?? ""}`
+				.toLowerCase()
+				.includes(term),
+		);
+	}, [data, search]);
+	const pagination = useTablePagination(filteredShifts, { resetKey: search });
 	const historyShiftColumns = useMemo(
 		() =>
 			historyShiftHelper.columns([
@@ -69,12 +87,12 @@ function WorkerHistory() {
 			<AppPageHeader
 				title="Published version"
 				badge={
-					data ? (
+					data?.version ? (
 						<Badge variant="secondary">v{data.version.versionNumber}</Badge>
 					) : null
 				}
 				description={
-					data
+					data?.version
 						? `Week of ${formatDay(data.weekStart)} · published ${new Date(
 								data.version.publishedAt,
 							).toLocaleString()}`
@@ -116,27 +134,45 @@ function WorkerHistory() {
 				) : null}
 
 				{data ? (
-					<div className="min-h-0 flex-1 overflow-auto">
-						<DataTable
-							stacked
-							fill={false}
-							columns={historyShiftColumns}
-							data={data.shifts}
-							getRowId={(row) => row.id}
-							empty={
-								<div className="p-4 md:p-6">
-									<Empty className="border border-dashed">
-										<EmptyHeader>
-											<EmptyTitle>No shifts</EmptyTitle>
-											<EmptyDescription>
-												You had no shifts on this published version.
-											</EmptyDescription>
-										</EmptyHeader>
-									</Empty>
-								</div>
+					<>
+						<TableToolbar
+							left={
+								<TableSearch
+									value={search}
+									onValueChange={setSearch}
+									placeholder="Search shifts"
+								/>
 							}
+							right={<TablePagination {...pagination} />}
 						/>
-					</div>
+						<div className="min-h-0 flex-1 overflow-auto">
+							<DataTable
+								stacked
+								fill={false}
+								columns={historyShiftColumns}
+								data={pagination.pageRows}
+								getRowId={(row) => row.id}
+								empty={
+									<div className="p-4 md:p-6">
+										<Empty className="border border-dashed">
+											<EmptyHeader>
+												<EmptyTitle>
+													{data.shifts.length === 0
+														? "No shifts"
+														: "No matching shifts"}
+												</EmptyTitle>
+												<EmptyDescription>
+													{data.shifts.length === 0
+														? "You had no shifts on this published version."
+														: "No shifts match your search."}
+												</EmptyDescription>
+											</EmptyHeader>
+										</Empty>
+									</div>
+								}
+							/>
+						</div>
+					</>
 				) : null}
 			</AppPageBody>
 		</AppPage>

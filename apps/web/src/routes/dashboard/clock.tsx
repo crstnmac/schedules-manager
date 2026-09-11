@@ -23,10 +23,17 @@ import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TimerIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { AppDocument, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import {
+	TableFilter,
+	TablePagination,
+	TableSearch,
+	TableToolbar,
+	useTablePagination,
+} from "@/components/table-toolbar";
 import { TimeClockCard } from "@/components/time-clock-card";
 import {
 	type TimecardEntry,
@@ -57,6 +64,9 @@ function ManagerClockPage() {
 	const currentWeek = schedule.data?.currentWeek ?? null;
 	const assignedShifts = currentWeek?.shifts ?? [];
 	const entries = timecard.data?.timeEntries ?? [];
+	const [shiftSearch, setShiftSearch] = useState("");
+	const [shiftDay, setShiftDay] = useState("all");
+	const [punchSearch, setPunchSearch] = useState("");
 	const onClock =
 		nextShift?.timeEntry != null && nextShift.timeEntry.clockedOutAt === null;
 
@@ -136,6 +146,41 @@ function ManagerClockPage() {
 		[formatClockTime],
 	);
 
+	const shiftDayItems = useMemo(() => {
+		const dates = Array.from(
+			new Set(assignedShifts.map((shift) => shift.date)),
+		).sort();
+		return [
+			{ label: "All days", value: "all" },
+			...dates.map((date) => ({ label: formatDay(date), value: date })),
+		];
+	}, [assignedShifts]);
+	const filteredShifts = useMemo(() => {
+		const term = shiftSearch.trim().toLowerCase();
+		return assignedShifts.filter((shift) => {
+			if (shiftDay !== "all" && shift.date !== shiftDay) return false;
+			if (!term) return true;
+			return `${shift.positionName} ${shift.note ?? ""}`
+				.toLowerCase()
+				.includes(term);
+		});
+	}, [assignedShifts, shiftDay, shiftSearch]);
+	const shiftPagination = useTablePagination(filteredShifts, {
+		resetKey: `${currentWeek?.weekStart ?? ""}|${shiftDay}|${shiftSearch}`,
+	});
+	const filteredEntries = useMemo(() => {
+		const term = punchSearch.trim().toLowerCase();
+		if (!term) return entries;
+		return entries.filter((entry) =>
+			`${entry.positionName} ${formatDay(entry.clockedInAt)}`
+				.toLowerCase()
+				.includes(term),
+		);
+	}, [entries, punchSearch]);
+	const punchPagination = useTablePagination(filteredEntries, {
+		resetKey: punchSearch,
+	});
+
 	return (
 		<AppDocument widthClassName="max-w-5xl" className="gap-5">
 			<AppPageHeader
@@ -208,18 +253,46 @@ function ManagerClockPage() {
 								Published Shifts assigned to you.
 							</CardDescription>
 						</CardHeader>
-						<CardContent>
+						<CardContent className="flex flex-col">
 							{assignedShifts.length === 0 ? (
 								<p className="text-muted-foreground text-sm">
 									No assigned shifts this week.
 								</p>
 							) : (
-								<DataTable
-									fill={false}
-									columns={shiftColumns}
-									data={assignedShifts}
-									getRowId={(row) => row.id}
-								/>
+								<>
+									<TableToolbar
+										embedded
+										left={
+											<>
+												<TableSearch
+													value={shiftSearch}
+													onValueChange={setShiftSearch}
+													placeholder="Search shifts"
+												/>
+												{shiftDayItems.length > 1 ? (
+													<TableFilter
+														value={shiftDay}
+														onValueChange={setShiftDay}
+														items={shiftDayItems}
+														ariaLabel="Filter by day"
+													/>
+												) : null}
+											</>
+										}
+										right={<TablePagination {...shiftPagination} />}
+									/>
+									<DataTable
+										fill={false}
+										columns={shiftColumns}
+										data={shiftPagination.pageRows}
+										getRowId={(row) => row.id}
+										empty={
+											<p className="py-6 text-center text-muted-foreground text-sm">
+												No shifts match your search or day filter.
+											</p>
+										}
+									/>
+								</>
 							)}
 						</CardContent>
 					</Card>
@@ -258,12 +331,30 @@ function ManagerClockPage() {
 								</p>
 							) : null}
 							{entries.length > 0 ? (
-								<DataTable
-									fill={false}
-									columns={punchColumns}
-									data={entries}
-									getRowId={(row) => row.id}
-								/>
+								<>
+									<TableToolbar
+										embedded
+										left={
+											<TableSearch
+												value={punchSearch}
+												onValueChange={setPunchSearch}
+												placeholder="Search punches"
+											/>
+										}
+										right={<TablePagination {...punchPagination} />}
+									/>
+									<DataTable
+										fill={false}
+										columns={punchColumns}
+										data={punchPagination.pageRows}
+										getRowId={(row) => row.id}
+										empty={
+											<p className="py-6 text-center text-muted-foreground text-sm">
+												No punches match your search.
+											</p>
+										}
+									/>
+								</>
 							) : null}
 						</CardContent>
 					</Card>

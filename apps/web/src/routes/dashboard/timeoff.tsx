@@ -73,14 +73,15 @@ import {
 	todayIsoDate,
 } from "@/lib/leave";
 import {
+	type PendingUnavailabilityDto,
 	type TimeOffRequestDto,
 	useLeaveTypes,
 	useLocations,
-	useTimeOff,
+	useTimeOffBoard,
 	useWorkers,
 	useWorkplacePto,
 } from "@/lib/queries";
-import { shiftDays } from "@/lib/time";
+import { formatDay, shiftDays, WEEKDAY_NAMES } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -89,14 +90,20 @@ export const Route = createFileRoute("/dashboard/timeoff")({
 });
 
 type Decision = "approved" | "declined";
-type LeaveTab = "decision" | "out" | "history" | "balances" | "types";
+type LeaveTab =
+	| "decision"
+	| "availability"
+	| "out"
+	| "history"
+	| "balances"
+	| "types";
 
 const historyHelper = createDataColumnHelper<TimeOffRequestDto>();
 
 type TeamMember = {
 	employmentId: string;
 	name: string;
-	kind: "manager" | "worker";
+	kind: "manager" | "worker" | "viewer";
 };
 
 function TimeOffPage() {
@@ -104,7 +111,7 @@ function TimeOffPage() {
 	const { formatLeaveRange, formatPerson } = useDisplayPrefs();
 	const posthog = usePostHog();
 	const workplaceId = workplace?.id;
-	const timeOff = useTimeOff(workplaceId);
+	const timeOff = useTimeOffBoard(workplaceId);
 	const leaveTypes = useLeaveTypes(workplaceId);
 	const workers = useWorkers(workplaceId);
 	const pto = useWorkplacePto(workplaceId);
@@ -148,7 +155,8 @@ function TimeOffPage() {
 		},
 	});
 
-	const requests = timeOff.data ?? [];
+	const requests = timeOff.data?.requests ?? [];
+	const pendingUnavailability = timeOff.data?.pendingUnavailability ?? [];
 	const pending = requests.filter((request) => request.status === "pending");
 	const selectedPending = pending.filter((request) =>
 		selectedRequestIds.has(request.id),
@@ -197,10 +205,37 @@ function TimeOffPage() {
 		queryClient.invalidateQueries({
 			queryKey: ["workplaces", workplaceId, "time-off"],
 		});
+		queryClient.invalidateQueries({
+			queryKey: ["workplaces", workplaceId, "time-off-board"],
+		});
 		queryClient.invalidateQueries({ queryKey: ["pto", workplaceId] });
 		queryClient.invalidateQueries({ queryKey: ["schedule"] });
+		queryClient.invalidateQueries({ queryKey: ["constraints"] });
 		queryClient.invalidateQueries({ queryKey: ["leave-types", workplaceId] });
 	}
+
+	const decideUnavailability = useMutation({
+		mutationFn: (input: {
+			unavailabilityId: string;
+			decision: "approved" | "declined";
+		}) =>
+			api(
+				`/v1/workplaces/${workplaceId}/unavailability/${input.unavailabilityId}/decision`,
+				{
+					method: "POST",
+					body: { decision: input.decision },
+				},
+			),
+		onSuccess: (_, input) => {
+			invalidateLeave();
+			toast.success(
+				input.decision === "approved"
+					? "Availability approved. It now blocks scheduling."
+					: "Availability request declined.",
+			);
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
 
 	const decide = useMutation({
 		mutationFn: (input: {
@@ -393,6 +428,14 @@ function TimeOffPage() {
 									<Badge variant="secondary">{pending.length}</Badge>
 								) : null}
 							</TabsTrigger>
+							<TabsTrigger value="availability">
+								Pending availability
+								{pendingUnavailability.length > 0 ? (
+									<Badge variant="secondary">
+										{pendingUnavailability.length}
+									</Badge>
+								) : null}
+							</TabsTrigger>
 							<TabsTrigger value="out">Who’s out</TabsTrigger>
 							<TabsTrigger value="history">History</TabsTrigger>
 							<TabsTrigger value="balances">Balances</TabsTrigger>
@@ -504,6 +547,17 @@ function TimeOffPage() {
 								</ul>
 							</>
 						)}
+					</TabsContent>
+
+					<TabsContent value="availability" className="min-h-0 overflow-y-auto">
+						<PendingUnavailabilityPanel
+							items={pendingUnavailability}
+							loading={timeOff.isLoading}
+							busy={decideUnavailability.isPending}
+							onDecide={(unavailabilityId, decision) =>
+								decideUnavailability.mutate({ unavailabilityId, decision })
+							}
+						/>
 					</TabsContent>
 
 					<TabsContent value="out" className="min-h-0 overflow-y-auto">
@@ -687,6 +741,96 @@ function TimeOffPage() {
 				</AlertDialogContent>
 			</AlertDialog>
 		</AppPage>
+	);
+}
+
+function PendingUnavailabilityPanel({
+	items,
+	loading,
+	busy,
+	onDecide,
+}: {
+	items: PendingUnavailabilityDto[];
+	loading: boolean;
+	busy: boolean;
+	onDecide: (
+		unavailabilityId: string,
+		decision: "approved" | "declined",
+	) => void;
+}) {
+	const { formatMinute, formatPerson } = useDisplayPrefs();
+
+	if (loading) {
+		return (
+			<div className="flex flex-col gap-3 p-4">
+				<Skeleton className="h-16" />
+				<Skeleton className="h-16" />
+			</div>
+		);
+	}
+
+	if (items.length === 0) {
+		return (
+			<Empty className="border-0">
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<CalendarOffIcon />
+					</EmptyMedia>
+					<EmptyTitle>No availability requests waiting</EmptyTitle>
+					<EmptyDescription>
+						Worker Unavailability that needs approval will show here.
+					</EmptyDescription>
+				</EmptyHeader>
+			</Empty>
+		);
+	}
+
+	return (
+		<ul className="divide-y">
+			{items.map((item) => {
+				const window =
+					item.kind === "recurring" && item.weekday !== null
+						? `Every ${WEEKDAY_NAMES[item.weekday]} · ${formatMinute(item.startMinute)}–${formatMinute(item.endMinute)}`
+						: `${item.date ? formatDay(item.date) : "Date"} · ${formatMinute(item.startMinute)}–${formatMinute(item.endMinute)}`;
+				return (
+					<li
+						key={item.id}
+						className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+					>
+						<div className="min-w-0">
+							<p className="font-medium text-sm">
+								{formatPerson(item.worker.fullName, item.worker.email)}
+							</p>
+							<p className="text-sm tabular-nums">{window}</p>
+							{item.note ? (
+								<p className="text-muted-foreground text-xs">{item.note}</p>
+							) : null}
+						</div>
+						<div className="flex flex-wrap items-center gap-2">
+							<ConfirmAction
+								trigger="Approve"
+								triggerVariant="default"
+								title="Approve this unavailability?"
+								description="It becomes a hard constraint that blocks scheduling during this window."
+								confirmLabel="Approve"
+								disabled={busy}
+								onConfirm={() => onDecide(item.id, "approved")}
+							/>
+							<ConfirmAction
+								trigger="Decline"
+								triggerVariant="outline"
+								title="Decline this unavailability?"
+								description="The window is removed and the worker can be scheduled then."
+								confirmLabel="Decline"
+								destructive
+								disabled={busy}
+								onConfirm={() => onDecide(item.id, "declined")}
+							/>
+						</div>
+					</li>
+				);
+			})}
+		</ul>
 	);
 }
 

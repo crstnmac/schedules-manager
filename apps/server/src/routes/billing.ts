@@ -24,7 +24,7 @@ import {
 	planAllows,
 	polarClient,
 } from "../billing";
-import { requireManager, requireSession } from "../context";
+import { requirePrivilege, requireSession } from "../context";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../errors";
 
 function clientIp(request: Request) {
@@ -94,7 +94,7 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
 			const [subscription] = await db
 				.select()
 				.from(workplaceSubscriptions)
@@ -137,7 +137,7 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing/checkout",
 		async ({ headers, params, body, request }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
 			const [existing] = await db
 				.select()
 				.from(workplaceSubscriptions)
@@ -214,7 +214,7 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing/portal",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
 			const [subscription] = await db
 				.select({ id: workplaceSubscriptions.id })
 				.from(workplaceSubscriptions)

@@ -1,4 +1,8 @@
-import type { Employment, Profile } from "@SchedulesManager/db";
+import type {
+	Employment,
+	EmploymentPrivilege,
+	Profile,
+} from "@SchedulesManager/db";
 import {
 	db,
 	employmentLocations,
@@ -10,11 +14,7 @@ import {
 } from "@SchedulesManager/db";
 import { and, eq } from "drizzle-orm";
 
-import {
-	type AuthenticatedUser,
-	auth,
-	AuthenticationError,
-} from "./auth";
+import { type AuthenticatedUser, AuthenticationError, auth } from "./auth";
 import { ForbiddenError, NotFoundError } from "./errors";
 
 export interface SessionContext {
@@ -134,6 +134,37 @@ export async function requireManager(
 		.limit(1);
 
 	if (!employment) throw new ForbiddenError("Manager access required");
+	return employment;
+}
+
+/**
+ * A manager with no explicit privileges keeps full access. A viewer only ever
+ * receives the capabilities listed explicitly; other kinds never hold them.
+ */
+export function hasPrivilege(
+	employment: Employment,
+	privilege: EmploymentPrivilege,
+): boolean {
+	if (employment.kind === "viewer") {
+		return (employment.privileges ?? []).includes(privilege);
+	}
+	if (employment.kind !== "manager") return false;
+	const explicit = employment.privileges;
+	if (!explicit || explicit.length === 0) return true;
+	return explicit.includes(privilege);
+}
+
+export async function requirePrivilege(
+	profileId: string,
+	workplaceId: string,
+	privilege: EmploymentPrivilege,
+): Promise<Employment> {
+	const employment = await requireWorkplaceMember(profileId, workplaceId);
+	if (!hasPrivilege(employment, privilege)) {
+		throw new ForbiddenError(
+			`This action requires the ${privilege} capability`,
+		);
+	}
 	return employment;
 }
 

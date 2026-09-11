@@ -61,7 +61,7 @@ const ICONS = {
 
 export default function MoreScreen() {
 	const { theme } = useAppTheme();
-	const { employment, isManager, me } = useCurrentEmployment();
+	const { employment, canManage, me } = useCurrentEmployment();
 	const { select } = useSelectedWorkplaceId();
 	const { signOut } = useAuth();
 	const profile = me.data?.profile;
@@ -99,7 +99,7 @@ export default function MoreScreen() {
 			icon: ICONS.timecard,
 			path: "/timecard",
 		},
-		...(isManager
+		...(canManage
 			? [
 					{
 						label: "Team",
@@ -114,14 +114,16 @@ export default function MoreScreen() {
 						path: "/kiosk" as const,
 					},
 				]
-			: [
-					{
-						label: "Time off",
-						detail: "Requests, blocked times, and preferences",
-						icon: ICONS.timeOff,
-						path: "/worker-availability" as const,
-					},
-				]),
+			: employment?.kind === "viewer"
+				? []
+				: [
+						{
+							label: "Time off",
+							detail: "Requests, blocked times, and preferences",
+							icon: ICONS.timeOff,
+							path: "/worker-availability" as const,
+						},
+					]),
 	];
 
 	function confirmSignOut() {
@@ -171,7 +173,13 @@ export default function MoreScreen() {
 						) : null}
 					</View>
 					<Badge
-						label={isManager ? "Manager" : "Team member"}
+						label={
+							employment?.kind === "viewer"
+								? "Viewer"
+								: canManage
+									? "Manager"
+									: "Team member"
+						}
 						variant="default"
 					/>
 				</View>

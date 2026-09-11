@@ -4,12 +4,18 @@ import {
 	employments,
 	locationSales,
 	locations,
+	openShifts,
 	positions,
 	profiles,
 	schedules,
 	scheduleVersions,
+	shiftPickups,
+	shiftReleases,
+	shiftSwaps,
+	shifts,
 	timeEntries,
 	timeEntryBreaks,
+	timeOffRequests,
 	versionShifts,
 	workplaces,
 } from "@SchedulesManager/db";
@@ -17,7 +23,7 @@ import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
 import { requireSubscriptionCapability } from "../billing";
-import { requireManager, requireSession } from "../context";
+import { requirePrivilege, requireSession } from "../context";
 import { laborPercent } from "../labor";
 import { computeLaborByEntry, distributeByWeight } from "../reports-labor";
 import { minutesByZonedDate } from "../time";
@@ -171,6 +177,100 @@ function dateKeys(from: string, to: string): string[] {
 	return keys;
 }
 
+type CoverageShiftRow = {
+	id: string;
+	employmentId: string | null;
+	startsAt: Date;
+	endsAt: Date;
+	locationId: string;
+	locationName: string;
+};
+
+/** Scheduled vs assigned shift counts, minutes, fill rate, and utilization. */
+function coverageMetrics(rows: CoverageShiftRow[], openCount: number) {
+	let scheduledShifts = 0;
+	let assignedShifts = 0;
+	let scheduledMinutes = 0;
+	let assignedMinutes = 0;
+	for (const row of rows) {
+		const minutes = Math.max(
+			0,
+			Math.round((row.endsAt.getTime() - row.startsAt.getTime()) / 60_000),
+		);
+		scheduledShifts += 1;
+		scheduledMinutes += minutes;
+		if (row.employmentId) {
+			assignedShifts += 1;
+			assignedMinutes += minutes;
+		}
+	}
+	return {
+		scheduledShifts,
+		assignedShifts,
+		openShifts: openCount,
+		fillRate: scheduledShifts > 0 ? assignedShifts / scheduledShifts : 0,
+		scheduledMinutes,
+		assignedMinutes,
+		utilization: scheduledMinutes > 0 ? assignedMinutes / scheduledMinutes : 0,
+	};
+}
+
+type RequestStatusKind = "approved" | "declined" | "pending" | "other";
+
+type RequestRow = {
+	status: string;
+	createdAt: Date;
+	decidedAt: Date | null;
+};
+
+/** Counts by outcome plus approval rate and average decision cycle time. */
+function requestMetrics(
+	rows: RequestRow[],
+	classify: (status: string) => RequestStatusKind,
+) {
+	let approved = 0;
+	let declined = 0;
+	let pending = 0;
+	let decisionHours = 0;
+	let decidedCount = 0;
+	for (const row of rows) {
+		const kind = classify(row.status);
+		if (kind === "approved") approved += 1;
+		else if (kind === "declined") declined += 1;
+		else if (kind === "pending") pending += 1;
+		if (row.decidedAt) {
+			decisionHours +=
+				(row.decidedAt.getTime() - row.createdAt.getTime()) / 3_600_000;
+			decidedCount += 1;
+		}
+	}
+	const decided = approved + declined;
+	return {
+		total: rows.length,
+		approved,
+		declined,
+		pending,
+		approvalRate: decided > 0 ? approved / decided : 0,
+		averageDecisionHours: decidedCount > 0 ? decisionHours / decidedCount : 0,
+	};
+}
+
+function coverageStatusKind(status: string): RequestStatusKind {
+	if (status === "approved") return "approved";
+	if (status === "declined") return "declined";
+	if (status === "pending") return "pending";
+	return "other";
+}
+
+function swapStatusKind(status: string): RequestStatusKind {
+	if (status === "approved") return "approved";
+	if (status === "declined_by_counterparty" || status === "declined_by_manager")
+		return "declined";
+	if (status === "pending_counterpart" || status === "pending_manager")
+		return "pending";
+	return "other";
+}
+
 export const reportRoutes = new Elysia({
 	prefix: "/v1",
 	tags: ["Reports"],
@@ -179,7 +279,7 @@ export const reportRoutes = new Elysia({
 		"/workplaces/:workplaceId/reports/hours.csv",
 		async ({ headers, params, query, set }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
 			await requireSubscriptionCapability(params.workplaceId, "labor_reports");
 			const from = new Date(`${query.from}T00:00:00Z`);
 			const to = new Date(`${query.to}T23:59:59Z`);
@@ -234,7 +334,7 @@ export const reportRoutes = new Elysia({
 		"/workplaces/:workplaceId/reports/summary",
 		async ({ headers, params, query }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
 			await requireSubscriptionCapability(params.workplaceId, "labor_reports");
 			const from = new Date(`${query.from}T00:00:00Z`);
 			const to = new Date(`${query.to}T23:59:59Z`);
@@ -371,6 +471,229 @@ export const reportRoutes = new Elysia({
 			}),
 			detail: {
 				summary: "Hours, labor, sales, and labor % summary (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/reports/coverage",
+		async ({ headers, params, query }) => {
+			const { profile } = await requireSession(headers);
+			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
+
+			const from = new Date(`${query.from}T00:00:00Z`);
+			const to = new Date(`${query.to}T23:59:59Z`);
+			const locationId = query.locationId;
+
+			const [shiftRows, openRows] = await Promise.all([
+				db
+					.select({
+						id: shifts.id,
+						employmentId: shifts.employmentId,
+						startsAt: shifts.startsAt,
+						endsAt: shifts.endsAt,
+						locationId: locations.id,
+						locationName: locations.name,
+					})
+					.from(shifts)
+					.innerJoin(schedules, eq(schedules.id, shifts.scheduleId))
+					.innerJoin(locations, eq(locations.id, schedules.locationId))
+					.where(
+						and(
+							eq(locations.workplaceId, params.workplaceId),
+							gte(shifts.startsAt, from),
+							lte(shifts.startsAt, to),
+							...(locationId ? [eq(locations.id, locationId)] : []),
+						),
+					),
+				db
+					.select({
+						shiftId: openShifts.shiftId,
+						locationId: openShifts.locationId,
+						startsAt: shifts.startsAt,
+					})
+					.from(openShifts)
+					.innerJoin(shifts, eq(shifts.id, openShifts.shiftId))
+					.innerJoin(locations, eq(locations.id, openShifts.locationId))
+					.where(
+						and(
+							eq(locations.workplaceId, params.workplaceId),
+							eq(openShifts.status, "open"),
+							gte(shifts.startsAt, from),
+							lte(shifts.startsAt, to),
+							...(locationId ? [eq(openShifts.locationId, locationId)] : []),
+						),
+					),
+			]);
+
+			const openByDate = new Map<string, number>();
+			const openByLocation = new Map<string, number>();
+			for (const row of openRows) {
+				const date = row.startsAt.toISOString().slice(0, 10);
+				openByDate.set(date, (openByDate.get(date) ?? 0) + 1);
+				openByLocation.set(
+					row.locationId,
+					(openByLocation.get(row.locationId) ?? 0) + 1,
+				);
+			}
+
+			const byDate = dateKeys(query.from, query.to).map((date) => {
+				const dayRows = shiftRows.filter(
+					(row) => row.startsAt.toISOString().slice(0, 10) === date,
+				);
+				return {
+					date,
+					...coverageMetrics(dayRows, openByDate.get(date) ?? 0),
+				};
+			});
+
+			const locationNames = new Map<string, string>();
+			for (const row of shiftRows) {
+				locationNames.set(row.locationId, row.locationName);
+			}
+			const locationIds = new Set([
+				...shiftRows.map((row) => row.locationId),
+				...openRows.map((row) => row.locationId),
+			]);
+			const byLocation = [...locationIds].map((id) => ({
+				locationId: id,
+				name: locationNames.get(id) ?? "Unknown",
+				...coverageMetrics(
+					shiftRows.filter((row) => row.locationId === id),
+					openByLocation.get(id) ?? 0,
+				),
+			}));
+
+			return {
+				range: { from: query.from, to: query.to },
+				totals: coverageMetrics(shiftRows, openRows.length),
+				byDate,
+				byLocation,
+			};
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			query: t.Object({
+				from: t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+				to: t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+				locationId: t.Optional(t.String({ format: "uuid" })),
+			}),
+			detail: {
+				summary: "Coverage, fill rate, and utilization (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/reports/requests",
+		async ({ headers, params, query }) => {
+			const { profile } = await requireSession(headers);
+			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
+
+			const from = new Date(`${query.from}T00:00:00Z`);
+			const to = new Date(`${query.to}T23:59:59Z`);
+
+			const [timeOff, releases, pickups, swaps] = await Promise.all([
+				db
+					.select({
+						status: timeOffRequests.status,
+						createdAt: timeOffRequests.createdAt,
+						decidedAt: timeOffRequests.decidedAt,
+					})
+					.from(timeOffRequests)
+					.innerJoin(
+						employments,
+						eq(employments.id, timeOffRequests.employmentId),
+					)
+					.where(
+						and(
+							eq(employments.workplaceId, params.workplaceId),
+							gte(timeOffRequests.createdAt, from),
+							lte(timeOffRequests.createdAt, to),
+						),
+					),
+				db
+					.select({
+						status: shiftReleases.status,
+						createdAt: shiftReleases.createdAt,
+						decidedAt: shiftReleases.decidedAt,
+					})
+					.from(shiftReleases)
+					.innerJoin(employments, eq(employments.id, shiftReleases.requestedBy))
+					.where(
+						and(
+							eq(employments.workplaceId, params.workplaceId),
+							gte(shiftReleases.createdAt, from),
+							lte(shiftReleases.createdAt, to),
+						),
+					),
+				db
+					.select({
+						status: shiftPickups.status,
+						createdAt: shiftPickups.createdAt,
+						decidedAt: shiftPickups.decidedAt,
+					})
+					.from(shiftPickups)
+					.innerJoin(employments, eq(employments.id, shiftPickups.requestedBy))
+					.where(
+						and(
+							eq(employments.workplaceId, params.workplaceId),
+							gte(shiftPickups.createdAt, from),
+							lte(shiftPickups.createdAt, to),
+						),
+					),
+				db
+					.select({
+						status: shiftSwaps.status,
+						createdAt: shiftSwaps.requestedAt,
+						decidedAt: shiftSwaps.decidedAt,
+					})
+					.from(shiftSwaps)
+					.innerJoin(
+						employments,
+						eq(employments.id, shiftSwaps.requesterEmploymentId),
+					)
+					.where(
+						and(
+							eq(employments.workplaceId, params.workplaceId),
+							gte(shiftSwaps.requestedAt, from),
+							lte(shiftSwaps.requestedAt, to),
+						),
+					),
+			]);
+
+			return {
+				range: { from: query.from, to: query.to },
+				requests: [
+					{ type: "time_off", ...requestMetrics(timeOff, coverageStatusKind) },
+					{
+						type: "shift_release",
+						...requestMetrics(releases, coverageStatusKind),
+					},
+					{
+						type: "shift_pickup",
+						...requestMetrics(pickups, coverageStatusKind),
+					},
+					{ type: "shift_swap", ...requestMetrics(swaps, swapStatusKind) },
+				],
+			};
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			query: t.Object({
+				from: t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+				to: t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+			}),
+			detail: {
+				summary: "Request volume, approval rate, and cycle time (Manager)",
 				security: [{ bearerAuth: [] }],
 			},
 		},

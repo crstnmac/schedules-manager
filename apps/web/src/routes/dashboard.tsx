@@ -62,6 +62,7 @@ import { PilotFeedback } from "@/components/pilot-feedback";
 import { settingsSectionLabel } from "@/components/settings/nav";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
+import { hasCapability } from "@/lib/privileges";
 import { useBilling, useMe, useNotifications } from "@/lib/queries";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
@@ -83,37 +84,86 @@ const navigation = [
 		icon: AlarmClockIcon,
 		operations: true,
 	},
-	{ to: "/dashboard/schedule", label: "Schedule", icon: CalendarDaysIcon },
+	{
+		to: "/dashboard/schedule",
+		label: "Schedule",
+		icon: CalendarDaysIcon,
+		capability: "schedule.view",
+	},
 	{ to: "/dashboard/roster", label: "Roster", icon: ClipboardListIcon },
-	{ to: "/dashboard/workers", label: "Workers", icon: UsersIcon },
-	{ to: "/dashboard/timeoff", label: "Time off", icon: Clock3Icon },
+	{
+		to: "/dashboard/workers",
+		label: "Workers",
+		icon: UsersIcon,
+		capability: "workers.manage",
+	},
+	{
+		to: "/dashboard/timeoff",
+		label: "Time off",
+		icon: Clock3Icon,
+		capability: "approvals.review",
+	},
 	{
 		to: "/dashboard/timesheets",
 		label: "Timesheets",
 		icon: TimerIcon,
 		operations: true,
+		capability: "approvals.review",
 	},
-	{ to: "/dashboard/coverage", label: "Coverage", icon: WorkflowIcon },
+	{
+		to: "/dashboard/coverage",
+		label: "Coverage",
+		icon: WorkflowIcon,
+		capability: "approvals.review",
+	},
 	{ to: "/dashboard/messages", label: "Messages", icon: MessageSquareIcon },
 	{
 		to: "/dashboard/announcements",
 		label: "Announcements",
 		icon: MegaphoneIcon,
+		capability: "settings.manage",
 	},
 	{
 		to: "/dashboard/reports",
 		label: "Reports",
 		icon: BarChart3Icon,
 		operations: true,
+		capability: "reports.view",
 	},
-	{ to: "/dashboard/activity", label: "Activity", icon: BellIcon },
+	{
+		to: "/dashboard/activity",
+		label: "Activity",
+		icon: BellIcon,
+		capability: "reports.view",
+	},
 	{
 		to: "/dashboard/settings/workplace",
 		label: "Settings",
 		icon: Settings2Icon,
 		match: "/dashboard/settings",
+		anyCapability: [
+			"settings.manage",
+			"policies.manage",
+			"integrations.manage",
+			"schedule.manage",
+			"workers.manage",
+		],
 	},
 ] as const;
+
+function navigationVisibleFor(
+	item: (typeof navigation)[number],
+	subject: {
+		kind: "manager" | "worker" | "viewer";
+		privileges: string[] | null;
+	},
+): boolean {
+	if (!("capability" in item) || !item.capability) {
+		if (!("anyCapability" in item) || !item.anyCapability) return true;
+		return item.anyCapability.some((key) => hasCapability(subject, key));
+	}
+	return hasCapability(subject, item.capability);
+}
 
 function DashboardLayout() {
 	const posthog = usePostHog();
@@ -121,8 +171,10 @@ function DashboardLayout() {
 	const { setTheme } = useTheme();
 	const me = useMe(Boolean(user));
 	const { formatPerson } = useDisplayPrefs();
-	const { isLoading, workplace, kind } = useWorkplace();
-	const billing = useBilling(kind === "manager" ? workplace?.id : undefined);
+	const { isLoading, workplace, kind, privileges } = useWorkplace();
+	const billing = useBilling(
+		kind === "manager" || kind === "viewer" ? workplace?.id : undefined,
+	);
 	const inbox = useNotifications(workplace?.id);
 	const unreadCount = inbox.data?.unreadCount ?? 0;
 	const profile = me.data?.profile;
@@ -152,6 +204,10 @@ function DashboardLayout() {
 		})?.label ?? "Overview";
 	const headerLabel =
 		isSettings && settingsLabel ? `Settings / ${settingsLabel}` : activePage;
+	const subject = kind ? { kind, privileges: privileges ?? null } : null;
+	const visibleNavigation = subject
+		? navigation.filter((item) => navigationVisibleFor(item, subject))
+		: navigation;
 
 	useEffect(() => {
 		document.title = `${headerLabel} · jooling`;
@@ -236,7 +292,7 @@ function DashboardLayout() {
 						<SidebarGroupContent>
 							<nav aria-label="Manager navigation">
 								<SidebarMenu>
-									{navigation.map((item) => {
+									{visibleNavigation.map((item) => {
 										const locked =
 											"operations" in item &&
 											item.operations &&

@@ -212,10 +212,21 @@ export function registerMocks() {
 		useAuth: () => state.auth,
 	}));
 
+	const inertMutation = {
+		mutate: () => {},
+		mutateAsync: async () => {},
+		isPending: false,
+		isError: false,
+		error: null,
+	};
+
 	mock.module("@/lib/queries", () => ({
 		useBilling: () => state.billing,
 		useMe: () => state.me,
 		useNotifications: () => state.inbox,
+		useMySchedule: () => ({ data: undefined, isLoading: false, isError: false }),
+		useClockIn: () => inertMutation,
+		useClockOut: () => inertMutation,
 	}));
 
 	mock.module("@/lib/use-workplace", () => ({

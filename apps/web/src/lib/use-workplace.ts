@@ -10,6 +10,7 @@ export function useWorkplace() {
 		workplace: employment?.workplace ?? null,
 		kind: employment?.kind ?? null,
 		employmentId: employment?.id ?? null,
+		privileges: employment?.privileges ?? null,
 		capabilities: employment?.capabilities ?? {
 			scheduling: false,
 			operations: false,

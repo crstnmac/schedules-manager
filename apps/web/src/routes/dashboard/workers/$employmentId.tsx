@@ -27,6 +27,12 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppDocument } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import {
+	TablePagination,
+	TableSearch,
+	TableToolbar,
+	useTablePagination,
+} from "@/components/table-toolbar";
 import { api } from "@/lib/api";
 import { useLeaveTypes, usePtoBalances, useWorkers } from "@/lib/queries";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
@@ -85,6 +91,8 @@ function EmploymentPage() {
 	const [documentTitle, setDocumentTitle] = useState("");
 	const [documentUrl, setDocumentUrl] = useState("");
 	const [documentNote, setDocumentNote] = useState("");
+	const [ptoSearch, setPtoSearch] = useState("");
+	const [documentSearch, setDocumentSearch] = useState("");
 
 	useEffect(() => {
 		if (!worker) return;
@@ -277,6 +285,27 @@ function EmploymentPage() {
 		[],
 	);
 
+	const filteredPto = useMemo(() => {
+		const term = ptoSearch.trim().toLowerCase();
+		if (!term) return leaveTypeRows;
+		return leaveTypeRows.filter((row) => row.name.toLowerCase().includes(term));
+	}, [leaveTypeRows, ptoSearch]);
+	const ptoPagination = useTablePagination(filteredPto, {
+		resetKey: ptoSearch,
+	});
+	const filteredDocuments = useMemo(() => {
+		const term = documentSearch.trim().toLowerCase();
+		if (!term) return documentRows;
+		return documentRows.filter((row) =>
+			`${row.title} ${row.url ?? ""} ${row.note ?? ""}`
+				.toLowerCase()
+				.includes(term),
+		);
+	}, [documentRows, documentSearch]);
+	const documentPagination = useTablePagination(filteredDocuments, {
+		resetKey: documentSearch,
+	});
+
 	return (
 		<AppDocument>
 			<div className="flex flex-col gap-3">
@@ -410,16 +439,31 @@ function EmploymentPage() {
 								Hours remaining. Approving time off deducts from these.
 							</CardDescription>
 						</CardHeader>
-						<CardContent>
+						<CardContent className="flex flex-col">
+							{leaveTypeRows.length > 0 ? (
+								<TableToolbar
+									embedded
+									left={
+										<TableSearch
+											value={ptoSearch}
+											onValueChange={setPtoSearch}
+											placeholder="Search leave types"
+										/>
+									}
+									right={<TablePagination {...ptoPagination} />}
+								/>
+							) : null}
 							<DataTable
 								bounded
 								fill={false}
 								columns={ptoColumns}
-								data={leaveTypeRows}
+								data={ptoPagination.pageRows}
 								getRowId={(row) => row.id}
 								empty={
 									<p className="text-muted-foreground text-sm">
-										Add leave types in settings to track PTO here.
+										{leaveTypeRows.length === 0
+											? "Add leave types in settings to track PTO here."
+											: "No leave types match your search."}
 									</p>
 								}
 							/>
@@ -434,18 +478,35 @@ function EmploymentPage() {
 							</CardDescription>
 						</CardHeader>
 						<CardContent className="flex flex-col gap-4">
-							<DataTable
-								bounded
-								fill={false}
-								columns={documentColumns}
-								data={documentRows}
-								getRowId={(row) => row.id}
-								empty={
-									<p className="text-muted-foreground text-sm">
-										No documents yet.
-									</p>
-								}
-							/>
+							<div className="flex flex-col">
+								{documentRows.length > 0 ? (
+									<TableToolbar
+										embedded
+										left={
+											<TableSearch
+												value={documentSearch}
+												onValueChange={setDocumentSearch}
+												placeholder="Search documents"
+											/>
+										}
+										right={<TablePagination {...documentPagination} />}
+									/>
+								) : null}
+								<DataTable
+									bounded
+									fill={false}
+									columns={documentColumns}
+									data={documentPagination.pageRows}
+									getRowId={(row) => row.id}
+									empty={
+										<p className="text-muted-foreground text-sm">
+											{documentRows.length === 0
+												? "No documents yet."
+												: "No documents match your search."}
+										</p>
+									}
+								/>
+							</div>
 							<FieldGroup>
 								<Field>
 									<FieldLabel htmlFor="document-title">Title</FieldLabel>

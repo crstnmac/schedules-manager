@@ -18,8 +18,9 @@ import {
 } from "@SchedulesManager/db";
 import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { Elysia, t } from "elysia";
+import { resolveScheduleApprovalPolicy } from "../approval-policy";
 import {
-	requireManager,
+	requirePrivilege,
 	requireSession,
 	requireWorkplaceMember,
 } from "../context";
@@ -244,6 +245,25 @@ export const coverageRoutes = new Elysia({
 						.where(eq(employments.id, shift.employmentId ?? ""))
 						.limit(1);
 					if (employment) {
+						// The week's Approval Policy Group may auto-approve releases,
+						// skipping the manager queue. Reuse the manager decision path so
+						// open-shift creation, notifications, and audit stay identical.
+						const rules = await resolveScheduleApprovalPolicy(
+							(await scheduleIdForVersionShift(shift.id)) ??
+								"00000000-0000-0000-0000-000000000000",
+						);
+						if (!rules.shift_release) {
+							await decideRelease(
+								profile.id,
+								employment.workplaceId,
+								release.id,
+								{ decision: "approved" },
+								{ autoApproved: true },
+							);
+							return {
+								release: { id: release.id, status: "approved" as const },
+							};
+						}
 						await notifyEmployments(
 							await managerEmploymentIds(employment.workplaceId),
 							{
@@ -259,12 +279,15 @@ export const coverageRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			body: t.Object({
 				versionShiftId: t.String({ format: "uuid" }),
 				reason: t.Optional(t.String({ maxLength: 300 })),
@@ -360,7 +383,10 @@ export const coverageRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "List open shifts the caller could pick up (Worker)",
@@ -429,6 +455,24 @@ export const coverageRoutes = new Elysia({
 						throw new ConflictError("You already requested this shift");
 					}
 
+					// The week's Approval Policy Group may auto-approve pickups. Reuse
+					// the manager decision path so assignment, notifications, audit, and
+					// the successor Schedule Version publication all still happen.
+					const rules = await resolveScheduleApprovalPolicy(shift.scheduleId);
+					if (!rules.shift_pickup) {
+						const decided = await decidePickup(
+							profile.id,
+							openShift.workplaceId,
+							pickup.id,
+							{ decision: "approved" },
+							{ autoApproved: true },
+						);
+						return {
+							pickup: { id: pickup.id, status: "approved" as const },
+							publishedVersion: decided.publishedVersion,
+						};
+					}
+
 					await notifyEmployments(
 						await managerEmploymentIds(openShift.workplaceId),
 						{
@@ -443,12 +487,15 @@ export const coverageRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({ openShiftId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -461,7 +508,7 @@ export const coverageRoutes = new Elysia({
 		"/workplaces/:workplaceId/coverage",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
 
 			const releaseRows = await db
 				.select({
@@ -538,7 +585,10 @@ export const coverageRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Coverage queue: releases and pickups (Manager)",
@@ -550,191 +600,26 @@ export const coverageRoutes = new Elysia({
 		"/workplaces/:workplaceId/releases/:releaseId/decision",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `release.decision:${params.releaseId}`,
 				key: headers["idempotency-key"],
 				request: body,
-				execute: async () => {
-					const [releaseRow] = await db
-						.select({
-							release: shiftReleases,
-							workplaceId: employments.workplaceId,
-						})
-						.from(shiftReleases)
-						.innerJoin(
-							employments,
-							eq(employments.id, shiftReleases.requestedBy),
-						)
-						.where(eq(shiftReleases.id, params.releaseId))
-						.limit(1);
-					if (!releaseRow || releaseRow.workplaceId !== params.workplaceId) {
-						throw new NotFoundError("Release request not found");
-					}
-					const release = releaseRow.release;
-					if (release.status !== "pending") {
-						throw new ConflictError("This request was already decided");
-					}
-
-					if (body.decision === "declined") {
-						await db.transaction(async (tx) => {
-							const declined = await tx
-								.update(shiftReleases)
-								.set({
-									status: "declined",
-									decidedBy: profile.id,
-									decidedAt: new Date(),
-								})
-								.where(
-									and(
-										eq(shiftReleases.id, release.id),
-										eq(shiftReleases.status, "pending"),
-									),
-								)
-								.returning({ id: shiftReleases.id });
-							if (declined.length === 0) {
-								throw new ConflictError("This request was already decided");
-							}
-							await notifyEmployments(
-								[release.requestedBy],
-								{
-									kind: "release_declined",
-									title: "Release declined",
-									body: "Your manager declined the release request. You remain responsible for the shift.",
-								},
-								tx,
-							);
-							await writeAudit(
-								{
-									workplaceId: params.workplaceId,
-									actorProfileId: profile.id,
-									action: "coverage.release_declined",
-									entityType: "shift_release",
-									entityId: release.id,
-									summary: "Declined a shift release request",
-								},
-								tx,
-							);
-						});
-						return { status: "declined" as const };
-					}
-
-					const [versionShift] = await db
-						.select()
-						.from(versionShifts)
-						.where(eq(versionShifts.id, release.versionShiftId))
-						.limit(1);
-					if (!versionShift || versionShift.shiftId === null) {
-						throw new NotFoundError("The original shift could not be found");
-					}
-					const draftShiftId = versionShift.shiftId;
-
-					const draftLocationId = await locationIdForDraftShift(draftShiftId);
-					const openShiftWorkers = (
-						await workerEmploymentIds(params.workplaceId)
-					).filter((id) => id !== release.requestedBy);
-					await db.transaction(async (tx) => {
-						const approved = await tx
-							.update(shiftReleases)
-							.set({
-								status: "approved",
-								decidedBy: profile.id,
-								decidedAt: new Date(),
-							})
-							.where(
-								and(
-									eq(shiftReleases.id, release.id),
-									eq(shiftReleases.status, "pending"),
-								),
-							)
-							.returning({ id: shiftReleases.id });
-						if (approved.length === 0) {
-							throw new ConflictError("This request was already decided");
-						}
-
-						// Lock the draft and only unassign the worker who asked for the
-						// release — a manager may have reassigned the shift meanwhile.
-						const [draft] = await tx
-							.select()
-							.from(shiftsTable)
-							.where(eq(shiftsTable.id, draftShiftId))
-							.for("update");
-						if (!draft) {
-							throw new NotFoundError("The original shift could not be found");
-						}
-						if (draft.employmentId !== release.requestedBy) {
-							throw new ConflictError(
-								"This shift was reassigned after the release request. Decline the request instead.",
-							);
-						}
-
-						const unassigned = await tx
-							.update(shiftsTable)
-							.set({ employmentId: null, updatedAt: new Date() })
-							.where(
-								and(
-									eq(shiftsTable.id, draftShiftId),
-									eq(shiftsTable.employmentId, release.requestedBy),
-								),
-							)
-							.returning({ id: shiftsTable.id });
-						if (unassigned.length === 0) {
-							throw new ConflictError(
-								"This shift was reassigned after the release request. Decline the request instead.",
-							);
-						}
-
-						await tx.insert(openShifts).values({
-							shiftId: draftShiftId,
-							locationId: draftLocationId,
-							positionId: draft.positionId,
-							releasedFrom: release.requestedBy,
-							note: draft.note,
-						});
-						await notifyEmployments(
-							[release.requestedBy],
-							{
-								kind: "release_approved",
-								title: "Release approved",
-								body: "Your manager approved the release. The shift is now open for pickup. You remain responsible until someone is assigned.",
-							},
-							tx,
-						);
-						await notifyEmployments(
-							openShiftWorkers,
-							{
-								kind: "open_shift",
-								title: "An open shift is available",
-								body: "A shift was released and is open for pickup.",
-							},
-							tx,
-						);
-						await writeAudit(
-							{
-								workplaceId: params.workplaceId,
-								actorProfileId: profile.id,
-								action: "coverage.release_approved",
-								entityType: "shift_release",
-								entityId: release.id,
-								summary:
-									"Approved a shift release and opened the shift for pickup",
-							},
-							tx,
-						);
-					});
-
-					return { status: "approved" as const };
-				},
+				execute: () =>
+					decideRelease(profile.id, params.workplaceId, params.releaseId, body),
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				releaseId: t.String({ format: "uuid" }),
@@ -753,7 +638,7 @@ export const coverageRoutes = new Elysia({
 		"/workplaces/:workplaceId/pickups/:pickupId/decision",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `pickup.decision:${params.pickupId}`,
@@ -764,12 +649,15 @@ export const coverageRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				pickupId: t.String({ format: "uuid" }),
@@ -783,13 +671,395 @@ export const coverageRoutes = new Elysia({
 				security: [{ bearerAuth: [] }],
 			},
 		},
+	)
+	.get(
+		"/workplaces/:workplaceId/my/releases",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers);
+			const employment = await requireWorkplaceMember(
+				profile.id,
+				params.workplaceId,
+			);
+
+			const rows = await db
+				.select({
+					release: shiftReleases,
+					shift: versionShifts,
+					positionName: positions.name,
+					timezone: locations.timezone,
+				})
+				.from(shiftReleases)
+				.innerJoin(
+					versionShifts,
+					eq(versionShifts.id, shiftReleases.versionShiftId),
+				)
+				.innerJoin(positions, eq(positions.id, versionShifts.positionId))
+				.innerJoin(
+					scheduleVersions,
+					eq(scheduleVersions.id, versionShifts.versionId),
+				)
+				.innerJoin(
+					schedulesTable,
+					eq(schedulesTable.id, scheduleVersions.scheduleId),
+				)
+				.innerJoin(locations, eq(locations.id, schedulesTable.locationId))
+				.where(eq(shiftReleases.requestedBy, employment.id))
+				.orderBy(desc(shiftReleases.createdAt))
+				.limit(100);
+
+			return {
+				releases: rows.map((row) => {
+					const start = zonedDayInfo(row.shift.startsAt, row.timezone);
+					const end = zonedDayInfo(row.shift.endsAt, row.timezone);
+					return {
+						id: row.release.id,
+						versionShiftId: row.release.versionShiftId,
+						positionName: row.positionName,
+						startsAt: row.shift.startsAt.toISOString(),
+						endsAt: row.shift.endsAt.toISOString(),
+						date: start.dateKey,
+						startMinute: start.minuteOfDay,
+						endMinute: end.minuteOfDay,
+						overnight: start.dateKey !== end.dateKey,
+						status: row.release.status,
+						reason: row.release.reason,
+						decidedAt: row.release.decidedAt?.toISOString() ?? null,
+						createdAt: row.release.createdAt.toISOString(),
+					};
+				}),
+			};
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			detail: {
+				summary: "Release requests made by the caller, with status (Worker)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/my/pickups",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers);
+			const employment = await requireWorkplaceMember(
+				profile.id,
+				params.workplaceId,
+			);
+
+			const rows = await db
+				.select({
+					pickup: shiftPickups,
+					openShift: openShifts,
+					locationName: locations.name,
+					positionName: positions.name,
+					timezone: locations.timezone,
+				})
+				.from(shiftPickups)
+				.innerJoin(openShifts, eq(openShifts.id, shiftPickups.openShiftId))
+				.innerJoin(locations, eq(locations.id, openShifts.locationId))
+				.innerJoin(positions, eq(positions.id, openShifts.positionId))
+				.where(
+					and(
+						eq(shiftPickups.requestedBy, employment.id),
+						eq(locations.workplaceId, params.workplaceId),
+					),
+				)
+				.orderBy(desc(shiftPickups.createdAt))
+				.limit(100);
+
+			const shiftRows = rows.length
+				? await queryDraftShifts(rows.map((row) => row.openShift.shiftId))
+				: [];
+
+			return {
+				pickups: rows.map((row) => {
+					const shift = shiftRows.find(
+						(candidate) => candidate.id === row.openShift.shiftId,
+					);
+					const start = shift
+						? zonedDayInfo(shift.startsAt, row.timezone)
+						: null;
+					const end = shift ? zonedDayInfo(shift.endsAt, row.timezone) : null;
+					return {
+						id: row.pickup.id,
+						openShiftId: row.pickup.openShiftId,
+						openShiftStatus: row.openShift.status,
+						locationName: row.locationName,
+						positionName: row.positionName,
+						startsAt: shift ? shift.startsAt.toISOString() : null,
+						endsAt: shift ? shift.endsAt.toISOString() : null,
+						date: start?.dateKey ?? null,
+						startMinute: start?.minuteOfDay ?? null,
+						endMinute: end?.minuteOfDay ?? null,
+						overnight:
+							start !== null && end !== null && start.dateKey !== end.dateKey,
+						status: row.pickup.status,
+						requestedAt: row.pickup.createdAt.toISOString(),
+						decidedAt: row.pickup.decidedAt?.toISOString() ?? null,
+					};
+				}),
+			};
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			detail: {
+				summary:
+					"Pickup requests made by the caller, with open-shift details (Worker)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.delete(
+		"/my/releases/:releaseId",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers);
+			const [row] = await db
+				.select({ release: shiftReleases })
+				.from(shiftReleases)
+				.where(eq(shiftReleases.id, params.releaseId))
+				.limit(1);
+			if (!row) throw new NotFoundError("Release request not found");
+
+			const mine = await activeEmploymentsOf(profile.id);
+			if (!mine.includes(row.release.requestedBy)) {
+				throw new NotFoundError("Release request not found");
+			}
+			if (row.release.status !== "pending") {
+				throw new ConflictError(
+					"Only a pending release request can be withdrawn",
+				);
+			}
+
+			await db
+				.delete(shiftReleases)
+				.where(
+					and(
+						eq(shiftReleases.id, row.release.id),
+						eq(shiftReleases.status, "pending"),
+					),
+				);
+
+			return { ok: true as const };
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ releaseId: t.String({ format: "uuid" }) }),
+			detail: {
+				summary: "Withdraw a pending release request you made (Worker)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
 	);
+
+async function decideRelease(
+	profileId: string,
+	workplaceId: string,
+	releaseId: string,
+	body: { decision: "approved" | "declined" },
+	options?: { autoApproved?: boolean },
+) {
+	const [releaseRow] = await db
+		.select({
+			release: shiftReleases,
+			workplaceId: employments.workplaceId,
+		})
+		.from(shiftReleases)
+		.innerJoin(employments, eq(employments.id, shiftReleases.requestedBy))
+		.where(eq(shiftReleases.id, releaseId))
+		.limit(1);
+	if (!releaseRow || releaseRow.workplaceId !== workplaceId) {
+		throw new NotFoundError("Release request not found");
+	}
+	const release = releaseRow.release;
+	if (release.status !== "pending") {
+		throw new ConflictError("This request was already decided");
+	}
+
+	if (body.decision === "declined") {
+		await db.transaction(async (tx) => {
+			const declined = await tx
+				.update(shiftReleases)
+				.set({
+					status: "declined",
+					decidedBy: profileId,
+					decidedAt: new Date(),
+				})
+				.where(
+					and(
+						eq(shiftReleases.id, release.id),
+						eq(shiftReleases.status, "pending"),
+					),
+				)
+				.returning({ id: shiftReleases.id });
+			if (declined.length === 0) {
+				throw new ConflictError("This request was already decided");
+			}
+			await notifyEmployments(
+				[release.requestedBy],
+				{
+					kind: "release_declined",
+					title: "Release declined",
+					body: "Your manager declined the release request. You remain responsible for the shift.",
+				},
+				tx,
+			);
+			await writeAudit(
+				{
+					workplaceId,
+					actorProfileId: profileId,
+					action: "coverage.release_declined",
+					entityType: "shift_release",
+					entityId: release.id,
+					summary: "Declined a shift release request",
+				},
+				tx,
+			);
+		});
+		return { status: "declined" as const };
+	}
+
+	const [versionShift] = await db
+		.select()
+		.from(versionShifts)
+		.where(eq(versionShifts.id, release.versionShiftId))
+		.limit(1);
+	if (!versionShift || versionShift.shiftId === null) {
+		throw new NotFoundError("The original shift could not be found");
+	}
+	const draftShiftId = versionShift.shiftId;
+
+	const draftLocationId = await locationIdForDraftShift(draftShiftId);
+	const openShiftWorkers = (await workerEmploymentIds(workplaceId)).filter(
+		(id) => id !== release.requestedBy,
+	);
+	await db.transaction(async (tx) => {
+		const approved = await tx
+			.update(shiftReleases)
+			.set({
+				status: "approved",
+				decidedBy: profileId,
+				decidedAt: new Date(),
+			})
+			.where(
+				and(
+					eq(shiftReleases.id, release.id),
+					eq(shiftReleases.status, "pending"),
+				),
+			)
+			.returning({ id: shiftReleases.id });
+		if (approved.length === 0) {
+			throw new ConflictError("This request was already decided");
+		}
+
+		// Lock the draft and only unassign the worker who asked for the
+		// release — a manager may have reassigned the shift meanwhile.
+		const [draft] = await tx
+			.select()
+			.from(shiftsTable)
+			.where(eq(shiftsTable.id, draftShiftId))
+			.for("update");
+		if (!draft) {
+			throw new NotFoundError("The original shift could not be found");
+		}
+		if (draft.employmentId !== release.requestedBy) {
+			throw new ConflictError(
+				"This shift was reassigned after the release request. Decline the request instead.",
+			);
+		}
+
+		const unassigned = await tx
+			.update(shiftsTable)
+			.set({ employmentId: null, updatedAt: new Date() })
+			.where(
+				and(
+					eq(shiftsTable.id, draftShiftId),
+					eq(shiftsTable.employmentId, release.requestedBy),
+				),
+			)
+			.returning({ id: shiftsTable.id });
+		if (unassigned.length === 0) {
+			throw new ConflictError(
+				"This shift was reassigned after the release request. Decline the request instead.",
+			);
+		}
+
+		await tx.insert(openShifts).values({
+			shiftId: draftShiftId,
+			locationId: draftLocationId,
+			positionId: draft.positionId,
+			releasedFrom: release.requestedBy,
+			note: draft.note,
+		});
+		await notifyEmployments(
+			[release.requestedBy],
+			{
+				kind: "release_approved",
+				title: "Release approved",
+				body: options?.autoApproved
+					? "Your release was approved automatically. The shift is now open for pickup. You remain responsible until someone is assigned."
+					: "Your manager approved the release. The shift is now open for pickup. You remain responsible until someone is assigned.",
+			},
+			tx,
+		);
+		await notifyEmployments(
+			openShiftWorkers,
+			{
+				kind: "open_shift",
+				title: "An open shift is available",
+				body: "A shift was released and is open for pickup.",
+			},
+			tx,
+		);
+		await writeAudit(
+			{
+				workplaceId,
+				actorProfileId: profileId,
+				action: options?.autoApproved
+					? "coverage.release_auto_approved"
+					: "coverage.release_approved",
+				entityType: "shift_release",
+				entityId: release.id,
+				summary: options?.autoApproved
+					? "Auto-approved a shift release and opened the shift for pickup"
+					: "Approved a shift release and opened the shift for pickup",
+			},
+			tx,
+		);
+	});
+
+	return { status: "approved" as const };
+}
+
+async function scheduleIdForVersionShift(versionShiftId: string) {
+	const [row] = await db
+		.select({ scheduleId: scheduleVersions.scheduleId })
+		.from(versionShifts)
+		.innerJoin(
+			scheduleVersions,
+			eq(scheduleVersions.id, versionShifts.versionId),
+		)
+		.where(eq(versionShifts.id, versionShiftId))
+		.limit(1);
+	return row?.scheduleId ?? null;
+}
 
 async function decidePickup(
 	profileId: string,
 	workplaceId: string,
 	pickupId: string,
 	body: { decision: "approved" | "declined" },
+	options?: { autoApproved?: boolean },
 ) {
 	const [pickup] = await db
 		.select()
@@ -939,7 +1209,9 @@ async function decidePickup(
 				{
 					kind: "pickup_approved",
 					title: "Pickup approved",
-					body: "Your manager assigned you the open shift and published a new schedule version.",
+					body: options?.autoApproved
+						? "Your pickup was approved automatically and a new schedule version was published."
+						: "Your manager assigned you the open shift and published a new schedule version.",
 				},
 				tx,
 			);
@@ -961,10 +1233,14 @@ async function decidePickup(
 				{
 					workplaceId,
 					actorProfileId: profileId,
-					action: "coverage.pickup_approved",
+					action: options?.autoApproved
+						? "coverage.pickup_auto_approved"
+						: "coverage.pickup_approved",
 					entityType: "shift_pickup",
 					entityId: pickup.id,
-					summary: "Approved a pickup and published a successor schedule",
+					summary: options?.autoApproved
+						? "Auto-approved a pickup and published a successor schedule"
+						: "Approved a pickup and published a successor schedule",
 				},
 				tx,
 			);

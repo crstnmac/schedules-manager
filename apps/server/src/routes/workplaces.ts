@@ -13,7 +13,7 @@ import { Elysia, t } from "elysia";
 import { requireSubscriptionCapability } from "../billing";
 import {
 	listActiveEmployments,
-	requireManager,
+	requirePrivilege,
 	requireSession,
 } from "../context";
 import { BadRequestError, ForbiddenError } from "../errors";
@@ -52,7 +52,10 @@ export const workplacesRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			detail: {
 				summary: "List workplaces connected through active Employments",
 				security: [{ bearerAuth: [] }],
@@ -157,7 +160,10 @@ export const workplacesRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 120 }),
 				location: t.Object({
@@ -182,13 +188,16 @@ export const workplacesRoutes = new Elysia({
 		"/workplaces/:workplaceId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "schedule.view");
 
 			const workplace = await loadWorkplace(params.workplaceId);
 			return { workplace: workplaceSettingsPayload(workplace) };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Return Workplace settings (Manager)",
@@ -200,7 +209,7 @@ export const workplacesRoutes = new Elysia({
 		"/workplaces/:workplaceId",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
 			if (
 				body.earlyClockInMinutes !== undefined ||
 				body.clockRoundMinutes !== undefined ||
@@ -279,6 +288,12 @@ export const workplacesRoutes = new Elysia({
 							existing.workerScheduleVisibility,
 						workerTimeOffVisibility:
 							body.workerTimeOffVisibility ?? existing.workerTimeOffVisibility,
+						plannedShiftsVisibility:
+							body.plannedShiftsVisibility ?? existing.plannedShiftsVisibility,
+						plannedShiftLeadDays:
+							body.plannedShiftLeadDays === undefined
+								? existing.plannedShiftLeadDays
+								: Math.min(60, Math.max(0, body.plannedShiftLeadDays)),
 						breaksEnabled: body.breaksEnabled ?? existing.breaksEnabled,
 						shiftExchangesEnabled:
 							body.shiftExchangesEnabled ?? existing.shiftExchangesEnabled,
@@ -309,7 +324,10 @@ export const workplacesRoutes = new Elysia({
 			return { workplace: workplaceSettingsPayload(updated) };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
@@ -351,6 +369,16 @@ export const workplacesRoutes = new Elysia({
 					t.Union([t.Literal("own"), t.Literal("full")]),
 				),
 				workerTimeOffVisibility: t.Optional(t.Boolean()),
+				plannedShiftsVisibility: t.Optional(
+					t.Union([
+						t.Literal("never"),
+						t.Literal("always"),
+						t.Literal("within_days"),
+					]),
+				),
+				plannedShiftLeadDays: t.Optional(
+					t.Integer({ minimum: 0, maximum: 60 }),
+				),
 				breaksEnabled: t.Optional(t.Boolean()),
 				shiftExchangesEnabled: t.Optional(t.Boolean()),
 				unavailabilityRequiresApproval: t.Optional(t.Boolean()),

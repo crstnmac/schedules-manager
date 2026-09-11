@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
 	Alert,
@@ -202,7 +202,31 @@ function WorkerSchedule() {
 	const respond = useRespondToAcceptance();
 	const clockIn = useClockIn();
 	const clockOut = useClockOut();
-	useShiftStartNotifications(workplaceId, schedule.data);
+	// Planned (unpublished) shifts are visible to the worker but must not raise
+	// shift-start notifications, which belong to the Published Schedule.
+	const publishedSchedule = useMemo(() => {
+		if (!schedule.data) return schedule.data;
+		return {
+			...schedule.data,
+			currentWeek: schedule.data.currentWeek
+				? {
+						...schedule.data.currentWeek,
+						shifts: schedule.data.currentWeek.shifts.filter(
+							(shift) => shift.isMine && !shift.planned,
+						),
+					}
+				: null,
+			nextWeek: schedule.data.nextWeek
+				? {
+						...schedule.data.nextWeek,
+						shifts: schedule.data.nextWeek.shifts.filter(
+							(shift) => shift.isMine && !shift.planned,
+						),
+					}
+				: null,
+		};
+	}, [schedule.data]);
+	useShiftStartNotifications(workplaceId, publishedSchedule);
 	useShiftStartResponseHandler();
 	const [historyVersionId, setHistoryVersionId] = useState<string | null>(null);
 	const historyVersion = usePublishedVersion(historyVersionId);
@@ -224,14 +248,18 @@ function WorkerSchedule() {
 	const history = schedule.data?.history ?? [];
 	const needsAcknowledgement =
 		currentWeek !== null &&
-		currentWeek.shifts.length > 0 &&
+		currentWeek.version !== null &&
+		currentWeek.shifts.some((shift) => shift.isMine && !shift.planned) &&
 		currentWeek.deliveryStatus !== "acknowledged";
-	const currentCount = currentWeek?.shifts.length ?? 0;
+	const currentMineShifts = (currentWeek?.shifts ?? []).filter(
+		(shift) => shift.isMine,
+	);
+	const currentCount = currentMineShifts.length;
 	const currentHours =
-		(currentWeek?.shifts.reduce((sum, shift) => {
+		currentMineShifts.reduce((sum, shift) => {
 			const end = shift.overnight ? shift.endMinute + 1440 : shift.endMinute;
 			return sum + end - shift.startMinute;
-		}, 0) ?? 0) / 60;
+		}, 0) / 60;
 
 	// Group this week's shifts by date for scannable day sections
 	const shiftsByDay = new Map<
@@ -420,7 +448,7 @@ function WorkerSchedule() {
 					<PrimaryButton
 						label="I saw this"
 						loading={acknowledge.isPending}
-						onPress={() => acknowledge.mutate(currentWeek.version.id)}
+						onPress={() => acknowledge.mutate(currentWeek.version?.id ?? "")}
 						style={{ minWidth: 110 }}
 					/>
 				</NoticeRow>
@@ -477,12 +505,18 @@ function WorkerSchedule() {
 								{shifts.map((shift) => {
 									const past = new Date(shift.endsAt).getTime() < Date.now();
 									const entry = shift.timeEntry;
+									const planned = shift.planned;
 									const accent = positionColor(shift.positionName);
 									return (
 										<Pressable
 											key={shift.id}
 											accessibilityRole="button"
-											accessibilityLabel={`Open details for ${shift.positionName} shift`}
+											accessibilityLabel={
+												planned
+													? `Planned ${shift.positionName} shift, not yet published`
+													: `Open details for ${shift.positionName} shift`
+											}
+											disabled={planned}
 											onPress={() => {
 												router.push({
 													pathname: "/shift-detail",
@@ -495,9 +529,9 @@ function WorkerSchedule() {
 											style={[
 												s.shiftRow,
 												{
-													borderColor: theme.border,
+													borderColor: planned ? theme.muted : theme.border,
 													backgroundColor: theme.background,
-													opacity: past && !entry ? 0.55 : 1,
+													opacity: planned ? 0.7 : past && !entry ? 0.55 : 1,
 													overflow: "hidden",
 												},
 											]}
@@ -519,6 +553,9 @@ function WorkerSchedule() {
 														style={[s.positionDot, { backgroundColor: accent }]}
 													/>
 													<Text style={[s.shiftMeta, { color: theme.muted }]}>
+														{!shift.isMine
+															? `${shift.workerName ?? "Coworker"} · `
+															: ""}
 														{shift.positionName}
 														{currentWeek?.locationName
 															? ` · ${currentWeek.locationName}`
@@ -528,6 +565,23 @@ function WorkerSchedule() {
 												</View>
 											</View>
 											<View style={s.shiftSideColumn}>
+												{planned ? (
+													<View
+														style={[
+															s.plannedBadge,
+															{ borderColor: theme.muted },
+														]}
+													>
+														<Text
+															style={[
+																s.plannedBadgeText,
+																{ color: theme.muted },
+															]}
+														>
+															PLANNED
+														</Text>
+													</View>
+												) : null}
 												{entry && entry.clockedOutAt === null ? (
 													<Text style={[s.punchChip, { color: theme.primary }]}>
 														On clock
@@ -549,7 +603,11 @@ function WorkerSchedule() {
 														Release pending
 													</Text>
 												) : null}
-												{!past && shift.releaseStatus === null && !entry ? (
+												{!planned &&
+												shift.isMine &&
+												!past &&
+												shift.releaseStatus === null &&
+												!entry ? (
 													<Text style={[s.releaseText, { color: theme.muted }]}>
 														Swap or release
 													</Text>
@@ -561,6 +619,11 @@ function WorkerSchedule() {
 							</View>
 						);
 					})}
+					{currentWeek.shifts.some((shift) => shift.planned) ? (
+						<Text style={[s.hint, { color: theme.muted }]}>
+							Planned shifts aren’t published yet and are subject to change.
+						</Text>
+					) : null}
 					<Text style={[s.hint, { color: theme.muted }]}>
 						You remain responsible for a released Shift until a Manager approves
 						the hand-off.
@@ -577,11 +640,17 @@ function WorkerSchedule() {
 					</Text>
 					{nextWeek.shifts.map((sh) => {
 						const accent = positionColor(sh.positionName);
+						const planned = sh.planned;
 						return (
 							<Pressable
 								key={sh.id}
 								accessibilityRole="button"
-								accessibilityLabel={`Open details for ${sh.positionName} shift`}
+								accessibilityLabel={
+									planned
+										? `Planned ${sh.positionName} shift, not yet published`
+										: `Open details for ${sh.positionName} shift`
+								}
+								disabled={planned}
 								onPress={() => {
 									router.push({
 										pathname: "/shift-detail",
@@ -594,8 +663,9 @@ function WorkerSchedule() {
 								style={[
 									s.shiftRow,
 									{
-										borderColor: theme.border,
+										borderColor: planned ? theme.muted : theme.border,
 										backgroundColor: theme.background,
+										opacity: planned ? 0.7 : 1,
 										overflow: "hidden",
 									},
 								]}
@@ -618,6 +688,7 @@ function WorkerSchedule() {
 											style={[s.positionDot, { backgroundColor: accent }]}
 										/>
 										<Text style={[s.shiftMeta, { color: theme.muted }]}>
+											{!sh.isMine ? `${sh.workerName ?? "Coworker"} · ` : ""}
 											{sh.positionName}
 											{nextWeek?.locationName
 												? ` · ${nextWeek.locationName}`
@@ -625,9 +696,21 @@ function WorkerSchedule() {
 										</Text>
 									</View>
 								</View>
+								{planned ? (
+									<View style={[s.plannedBadge, { borderColor: theme.muted }]}>
+										<Text style={[s.plannedBadgeText, { color: theme.muted }]}>
+											PLANNED
+										</Text>
+									</View>
+								) : null}
 							</Pressable>
 						);
 					})}
+					{nextWeek.shifts.some((shift) => shift.planned) ? (
+						<Text style={[s.hint, { color: theme.muted }]}>
+							Planned shifts aren’t published yet and are subject to change.
+						</Text>
+					) : null}
 				</Card>
 			) : null}
 
@@ -729,7 +812,10 @@ function TimeClockControls({
 	const endsAt = new Date(shift.endsAt).getTime();
 	const worked = entry !== null && entry.clockedOutAt !== null;
 	const canStart =
-		entry === null && nowMs >= startsAt - CLOCK_IN_EARLY_MS && nowMs <= endsAt;
+		!shift.planned &&
+		entry === null &&
+		nowMs >= startsAt - CLOCK_IN_EARLY_MS &&
+		nowMs <= endsAt;
 
 	function confirmClockIn() {
 		tapMedium();
@@ -812,13 +898,19 @@ function TimeClockControls({
 				</>
 			) : null}
 
-			{!canStart && entry === null ? (
+			{!canStart && entry === null && !shift.planned ? (
 				<Text style={[s.hint, { color: theme.onPrimary }]}>
 					Clock-in opens at{" "}
 					{formatClockTime(
 						new Date(startsAt - CLOCK_IN_EARLY_MS).toISOString(),
 					)}{" "}
 					— 15 minutes before your shift.
+				</Text>
+			) : null}
+
+			{shift.planned ? (
+				<Text style={[s.hint, { color: theme.onPrimary }]}>
+					Planned — not yet published. You can clock in once it is published.
 				</Text>
 			) : null}
 
@@ -976,7 +1068,14 @@ const s = StyleSheet.create({
 		gap: 5,
 	},
 	positionDot: { width: 7, height: 7, borderRadius: 4 },
-	shiftSideColumn: { alignItems: "flex-end", justifyContent: "center" },
+	shiftSideColumn: { alignItems: "flex-end", justifyContent: "center", gap: 4 },
 	punchChip: { fontSize: 12, fontWeight: "700" },
+	plannedBadge: {
+		borderWidth: 1,
+		borderRadius: 999,
+		paddingHorizontal: 8,
+		paddingVertical: 2,
+	},
+	plannedBadgeText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.8 },
 	error: { fontSize: 13, marginTop: 4 },
 });

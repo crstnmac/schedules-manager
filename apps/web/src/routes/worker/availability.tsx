@@ -13,6 +13,7 @@ import {
 	FieldGroup,
 	FieldLabel,
 } from "@SchedulesManager/ui/components/field";
+import { Input } from "@SchedulesManager/ui/components/input";
 import {
 	Select,
 	SelectContent,
@@ -52,6 +53,13 @@ import {
 	LeaveWindowFields,
 	leaveChargeMinutes,
 } from "@/components/leave-window-fields";
+import {
+	TableFilter,
+	TablePagination,
+	TableSearch,
+	TableToolbar,
+	useTablePagination,
+} from "@/components/table-toolbar";
 import { TimePicker } from "@/components/time-picker";
 import { UnsavedChangesGuard } from "@/components/unsaved-changes";
 import { api } from "@/lib/api";
@@ -82,6 +90,7 @@ interface RecurringWindow {
 	startMinute: number;
 	endMinute: number;
 	note?: string;
+	status?: "pending" | "approved";
 }
 
 interface DateWindow {
@@ -90,12 +99,19 @@ interface DateWindow {
 	startMinute: number;
 	endMinute: number;
 	note?: string;
+	status?: "pending" | "approved";
 }
+
+type ServerUnavailability = WorkerConstraints["unavailability"][number] & {
+	status?: "pending" | "approved";
+};
 
 type UnavailabilityRow = {
 	id: string;
 	kind: "weekly" | "date";
 	window: string;
+	status: "pending" | "approved";
+	note: string | null;
 };
 
 const unavailabilityHelper = createDataColumnHelper<UnavailabilityRow>();
@@ -127,9 +143,14 @@ function AvailabilityPage() {
 	const [weekday, setWeekday] = useState(0);
 	const [recurringStart, setRecurringStart] = useState(8 * 60);
 	const [recurringEnd, setRecurringEnd] = useState(14 * 60);
+	const [recurringNote, setRecurringNote] = useState("");
+	const [timeOffSearch, setTimeOffSearch] = useState("");
+	const [timeOffStatus, setTimeOffStatus] = useState("all");
+	const [unavailabilitySearch, setUnavailabilitySearch] = useState("");
 	const [date, setDate] = useState("");
 	const [dateStart, setDateStart] = useState(8 * 60);
 	const [dateEnd, setDateEnd] = useState(14 * 60);
+	const [dateNote, setDateNote] = useState("");
 	const [offStartDate, setOffStartDate] = useState(todayIsoDate);
 	const [offEndDate, setOffEndDate] = useState(todayIsoDate);
 	const [offAllDay, setOffAllDay] = useState(true);
@@ -147,7 +168,8 @@ function AvailabilityPage() {
 	useEffect(() => {
 		const data = constraints.data;
 		if (!data) return;
-		const nextRecurring = data.unavailability
+		const windows = data.unavailability as ServerUnavailability[];
+		const nextRecurring = windows
 			.filter((row) => row.kind === "recurring")
 			.map((row) => ({
 				id: row.id,
@@ -155,8 +177,9 @@ function AvailabilityPage() {
 				startMinute: row.startMinute,
 				endMinute: row.endMinute,
 				note: row.note ?? undefined,
+				status: row.status,
 			}));
-		const nextDates = data.unavailability
+		const nextDates = windows
 			.filter((row) => row.kind === "date")
 			.map((row) => ({
 				id: row.id,
@@ -164,6 +187,7 @@ function AvailabilityPage() {
 				startMinute: row.startMinute,
 				endMinute: row.endMinute,
 				note: row.note ?? undefined,
+				status: row.status,
 			}));
 		const nextPreference = data.preference ?? "";
 		setRecurring(nextRecurring);
@@ -272,11 +296,15 @@ function AvailabilityPage() {
 				id: item.id,
 				kind: "weekly" as const,
 				window: `Every ${WEEKDAY_NAMES[item.weekday]} · ${formatMinute(item.startMinute)}–${formatMinute(item.endMinute)}`,
+				status: item.status ?? ("pending" as const),
+				note: item.note ?? null,
 			})),
 			...dates.map((item) => ({
 				id: item.id,
 				kind: "date" as const,
 				window: `${formatDay(item.date)} · ${formatMinute(item.startMinute)}–${formatMinute(item.endMinute)}`,
+				status: item.status ?? ("pending" as const),
+				note: item.note ?? null,
 			})),
 		],
 		[dates, formatMinute, recurring],
@@ -292,6 +320,26 @@ function AvailabilityPage() {
 					header: "Window",
 					cell: ({ getValue }) => (
 						<span className="font-medium">{getValue()}</span>
+					),
+				}),
+				unavailabilityHelper.accessor("status", {
+					header: "Status",
+					cell: ({ getValue }) => {
+						const status = getValue();
+						return (
+							<Badge
+								className="uppercase"
+								variant={status === "approved" ? "default" : "secondary"}
+							>
+								{status}
+							</Badge>
+						);
+					},
+				}),
+				unavailabilityHelper.accessor("note", {
+					header: "Note",
+					cell: ({ getValue }) => (
+						<span className="text-muted-foreground">{getValue() || "—"}</span>
 					),
 				}),
 				unavailabilityHelper.display({
@@ -419,8 +467,11 @@ function AvailabilityPage() {
 				weekday,
 				startMinute: recurringStart,
 				endMinute: recurringEnd,
+				note: recurringNote.trim() || undefined,
+				status: "pending",
 			},
 		]);
+		setRecurringNote("");
 	}
 
 	function addDate() {
@@ -439,14 +490,56 @@ function AvailabilityPage() {
 				date,
 				startMinute: dateStart,
 				endMinute: dateEnd,
+				note: dateNote.trim() || undefined,
+				status: "pending",
 			},
 		]);
 		setDate("");
+		setDateNote("");
 	}
 
 	const remainingForType = pto.data?.balances.find(
 		(balance) => balance.leaveTypeId === leaveTypeId,
 	)?.minutes;
+
+	const timeOffRows = constraints.data?.timeOff ?? [];
+	const filteredTimeOff = useMemo(() => {
+		const term = timeOffSearch.trim().toLowerCase();
+		return timeOffRows.filter((row) => {
+			if (timeOffStatus !== "all" && row.status !== timeOffStatus) return false;
+			if (!term) return true;
+			const type = leaveTypes.data?.leaveTypes.find(
+				(entry) => entry.id === row.leaveTypeId,
+			)?.name;
+			return `${formatLeaveRange(row)} ${type ?? ""} ${row.reason ?? ""} ${
+				row.decisionReason ?? ""
+			}`
+				.toLowerCase()
+				.includes(term);
+		});
+	}, [
+		timeOffRows,
+		timeOffSearch,
+		timeOffStatus,
+		formatLeaveRange,
+		leaveTypes.data,
+	]);
+	const timeOffPagination = useTablePagination(filteredTimeOff, {
+		resetKey: `${timeOffSearch}|${timeOffStatus}`,
+	});
+
+	const filteredUnavailability = useMemo(() => {
+		const term = unavailabilitySearch.trim().toLowerCase();
+		if (!term) return unavailabilityRows;
+		return unavailabilityRows.filter((row) =>
+			`${row.kind} ${row.window} ${row.status} ${row.note ?? ""}`
+				.toLowerCase()
+				.includes(term),
+		);
+	}, [unavailabilityRows, unavailabilitySearch]);
+	const unavailabilityPagination = useTablePagination(filteredUnavailability, {
+		resetKey: unavailabilitySearch,
+	});
 
 	return (
 		<AppPage>
@@ -463,211 +556,280 @@ function AvailabilityPage() {
 					) : null
 				}
 			/>
-			<AppPageBody className="gap-4 p-4 md:p-6">
+			<AppPageBody scroll={false} className="gap-0">
 				{constraints.isLoading ? (
-					<Skeleton className="h-40" />
+					<div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+						<Skeleton className="h-40" />
+					</div>
 				) : (
-					<Tabs defaultValue="time-off">
-						<TabsList variant="line">
-							<TabsTrigger value="time-off">Time off</TabsTrigger>
-							<TabsTrigger value="unavailable">When I can't work</TabsTrigger>
-							<TabsTrigger value="preferences">Preferences</TabsTrigger>
-						</TabsList>
+					<Tabs
+						defaultValue="time-off"
+						className="min-h-0 flex-1 flex-col gap-0"
+					>
+						<div className="shrink-0 border-b px-4 md:px-6">
+							<TabsList variant="line">
+								<TabsTrigger value="time-off">Time off</TabsTrigger>
+								<TabsTrigger value="unavailable">When I can't work</TabsTrigger>
+								<TabsTrigger value="preferences">Preferences</TabsTrigger>
+							</TabsList>
+						</div>
 
-						<TabsContent value="time-off" className="pt-4">
-							<Card>
-								<CardHeader>
-									<CardTitle>Your requests</CardTitle>
-									<CardDescription>
-										{canRequestTimeOff
-											? "All-day by default. Your manager reviews every request before it blocks the schedule."
-											: "This Workplace is not accepting Time-off Requests from workers. Ask a manager to record time off."}
-									</CardDescription>
-								</CardHeader>
-								<CardContent className="flex flex-col gap-4">
-									{(pto.data?.balances.length ?? 0) > 0 ? (
-										<div className="flex flex-wrap gap-2">
-											{pto.data?.balances.map((balance) => (
-												<Badge key={balance.leaveTypeId} variant="outline">
-													{balance.name}: {formatLeaveHours(balance.minutes)}
-												</Badge>
-											))}
-										</div>
-									) : null}
-									<DataTable
-										stacked
-										bounded
-										fill={false}
-										columns={timeOffColumns}
-										data={constraints.data?.timeOff ?? []}
-										getRowId={(row) => row.id}
-										empty={
-											<p className="text-muted-foreground text-sm">
-												No time-off requests yet.
-											</p>
-										}
-									/>
-								</CardContent>
-							</Card>
-						</TabsContent>
-
-						<TabsContent value="unavailable" className="pt-4">
-							<Card>
-								<CardHeader>
-									<CardTitle>When you can't work</CardTitle>
-									<CardDescription>
-										A hard constraint. Your manager should not schedule you
-										during these times unless they record an override.
-									</CardDescription>
-								</CardHeader>
-								<CardContent className="flex flex-col gap-4">
-									<DataTable
-										stacked
-										bounded
-										fill={false}
-										columns={unavailabilityColumns}
-										data={unavailabilityRows}
-										getRowId={(row) => `${row.kind}-${row.id}`}
-										empty={
-											<p className="text-muted-foreground text-sm">
-												No unavailability added.
-											</p>
-										}
-									/>
-									<FieldGroup className="grid gap-3 sm:grid-cols-4">
-										<Field>
-											<FieldLabel htmlFor="weekly-day">Every</FieldLabel>
-											<Select
-												items={WEEKDAY_ITEMS}
-												value={String(weekday)}
-												onValueChange={(value) => {
-													if (value == null) return;
-													setWeekday(Number(value));
-												}}
-											>
-												<SelectTrigger id="weekly-day" className="w-full">
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent alignItemWithTrigger={false}>
-													<SelectGroup>
-														{WEEKDAY_ITEMS.map((item) => (
-															<SelectItem key={item.value} value={item.value}>
-																{item.label}
-															</SelectItem>
-														))}
-													</SelectGroup>
-												</SelectContent>
-											</Select>
-										</Field>
-										<Field>
-											<FieldLabel htmlFor="weekly-start">From</FieldLabel>
-											<TimePicker
-												id="weekly-start"
-												value={recurringStart}
-												onValueChange={setRecurringStart}
-											/>
-										</Field>
-										<Field>
-											<FieldLabel htmlFor="weekly-end">Until</FieldLabel>
-											<TimePicker
-												id="weekly-end"
-												value={recurringEnd}
-												onValueChange={setRecurringEnd}
-											/>
-										</Field>
-										<Button
-											type="button"
-											variant="outline"
-											onClick={addRecurring}
-										>
-											Add weekly window
-										</Button>
-									</FieldGroup>
-									<FieldGroup className="grid gap-3 sm:grid-cols-4">
-										<Field>
-											<FieldLabel htmlFor="date-exception">Date</FieldLabel>
-											<DatePicker
-												id="date-exception"
-												value={date}
-												onValueChange={setDate}
-											/>
-										</Field>
-										<Field>
-											<FieldLabel htmlFor="date-start">From</FieldLabel>
-											<TimePicker
-												id="date-start"
-												value={dateStart}
-												onValueChange={setDateStart}
-											/>
-										</Field>
-										<Field>
-											<FieldLabel htmlFor="date-end">Until</FieldLabel>
-											<TimePicker
-												id="date-end"
-												value={dateEnd}
-												onValueChange={setDateEnd}
-											/>
-										</Field>
-										<Button type="button" variant="outline" onClick={addDate}>
-											Add date exception
-										</Button>
-									</FieldGroup>
-								</CardContent>
-								<CardFooter>
-									<div className="flex items-center gap-2">
-										<Button
-											disabled={
-												saveUnavailability.isPending || !unavailabilityDirty
+						<div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+							<TabsContent value="time-off">
+								<Card>
+									<CardHeader>
+										<CardTitle>Your requests</CardTitle>
+										<CardDescription>
+											{canRequestTimeOff
+												? "All-day by default. Your manager reviews every request before it blocks the schedule."
+												: "This Workplace is not accepting Time-off Requests from workers. Ask a manager to record time off."}
+										</CardDescription>
+									</CardHeader>
+									<CardContent className="flex flex-col gap-4">
+										{(pto.data?.balances.length ?? 0) > 0 ? (
+											<div className="flex flex-wrap gap-2">
+												{pto.data?.balances.map((balance) => (
+													<Badge key={balance.leaveTypeId} variant="outline">
+														{balance.name}: {formatLeaveHours(balance.minutes)}
+													</Badge>
+												))}
+											</div>
+										) : null}
+										<TableToolbar
+											embedded
+											left={
+												<>
+													<TableSearch
+														value={timeOffSearch}
+														onValueChange={setTimeOffSearch}
+														placeholder="Search requests"
+													/>
+													<TableFilter
+														value={timeOffStatus}
+														onValueChange={setTimeOffStatus}
+														ariaLabel="Filter by status"
+														items={[
+															{ label: "All statuses", value: "all" },
+															{ label: "Pending", value: "pending" },
+															{ label: "Approved", value: "approved" },
+															{ label: "Declined", value: "declined" },
+														]}
+													/>
+												</>
 											}
-											onClick={() => saveUnavailability.mutate()}
+											right={<TablePagination {...timeOffPagination} />}
+										/>
+										<DataTable
+											stacked
+											bounded
+											fill={false}
+											columns={timeOffColumns}
+											data={timeOffPagination.pageRows}
+											getRowId={(row) => row.id}
+											empty={
+												<p className="text-muted-foreground text-sm">
+													{timeOffRows.length === 0
+														? "No time-off requests yet."
+														: "No requests match your search or filter."}
+												</p>
+											}
+										/>
+									</CardContent>
+								</Card>
+							</TabsContent>
+
+							<TabsContent value="unavailable">
+								<Card>
+									<CardHeader>
+										<CardTitle>When you can't work</CardTitle>
+										<CardDescription>
+											A hard constraint. Your manager should not schedule you
+											during these times unless they record an override.
+										</CardDescription>
+									</CardHeader>
+									<CardContent className="flex flex-col gap-4">
+										<TableToolbar
+											embedded
+											left={
+												<TableSearch
+													value={unavailabilitySearch}
+													onValueChange={setUnavailabilitySearch}
+													placeholder="Search windows"
+												/>
+											}
+											right={<TablePagination {...unavailabilityPagination} />}
+										/>
+										<DataTable
+											stacked
+											bounded
+											fill={false}
+											columns={unavailabilityColumns}
+											data={unavailabilityPagination.pageRows}
+											getRowId={(row) => `${row.kind}-${row.id}`}
+											empty={
+												<p className="text-muted-foreground text-sm">
+													{unavailabilityRows.length === 0
+														? "No unavailability added."
+														: "No windows match your search."}
+												</p>
+											}
+										/>
+										<FieldGroup className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+											<Field>
+												<FieldLabel htmlFor="weekly-day">Every</FieldLabel>
+												<Select
+													items={WEEKDAY_ITEMS}
+													value={String(weekday)}
+													onValueChange={(value) => {
+														if (value == null) return;
+														setWeekday(Number(value));
+													}}
+												>
+													<SelectTrigger id="weekly-day" className="w-full">
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent alignItemWithTrigger={false}>
+														<SelectGroup>
+															{WEEKDAY_ITEMS.map((item) => (
+																<SelectItem key={item.value} value={item.value}>
+																	{item.label}
+																</SelectItem>
+															))}
+														</SelectGroup>
+													</SelectContent>
+												</Select>
+											</Field>
+											<Field>
+												<FieldLabel htmlFor="weekly-start">From</FieldLabel>
+												<TimePicker
+													id="weekly-start"
+													value={recurringStart}
+													onValueChange={setRecurringStart}
+												/>
+											</Field>
+											<Field>
+												<FieldLabel htmlFor="weekly-end">Until</FieldLabel>
+												<TimePicker
+													id="weekly-end"
+													value={recurringEnd}
+													onValueChange={setRecurringEnd}
+												/>
+											</Field>
+											<Field>
+												<FieldLabel htmlFor="weekly-note">Note</FieldLabel>
+												<Input
+													id="weekly-note"
+													value={recurringNote}
+													onChange={(event) =>
+														setRecurringNote(event.target.value)
+													}
+													placeholder="Optional"
+												/>
+											</Field>
+											<Button
+												type="button"
+												variant="outline"
+												onClick={addRecurring}
+											>
+												Add weekly window
+											</Button>
+										</FieldGroup>
+										<FieldGroup className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+											<Field>
+												<FieldLabel htmlFor="date-exception">Date</FieldLabel>
+												<DatePicker
+													id="date-exception"
+													value={date}
+													onValueChange={setDate}
+												/>
+											</Field>
+											<Field>
+												<FieldLabel htmlFor="date-start">From</FieldLabel>
+												<TimePicker
+													id="date-start"
+													value={dateStart}
+													onValueChange={setDateStart}
+												/>
+											</Field>
+											<Field>
+												<FieldLabel htmlFor="date-end">Until</FieldLabel>
+												<TimePicker
+													id="date-end"
+													value={dateEnd}
+													onValueChange={setDateEnd}
+												/>
+											</Field>
+											<Field>
+												<FieldLabel htmlFor="date-note">Note</FieldLabel>
+												<Input
+													id="date-note"
+													value={dateNote}
+													onChange={(event) => setDateNote(event.target.value)}
+													placeholder="Optional"
+												/>
+											</Field>
+											<Button type="button" variant="outline" onClick={addDate}>
+												Add date exception
+											</Button>
+										</FieldGroup>
+									</CardContent>
+									<CardFooter>
+										<div className="flex items-center gap-2">
+											<Button
+												disabled={
+													saveUnavailability.isPending || !unavailabilityDirty
+												}
+												onClick={() => saveUnavailability.mutate()}
+											>
+												{saveUnavailability.isPending ? (
+													<Spinner data-icon="inline-start" />
+												) : null}
+												Save unavailability
+											</Button>
+											{unavailabilityDirty ? (
+												<Badge variant="secondary">Unsaved changes</Badge>
+											) : null}
+										</div>
+									</CardFooter>
+								</Card>
+							</TabsContent>
+
+							<TabsContent value="preferences">
+								<Card>
+									<CardHeader>
+										<CardTitle>Preferences</CardTitle>
+										<CardDescription>
+											A note for your manager. Preferences never block
+											scheduling.
+										</CardDescription>
+									</CardHeader>
+									<CardContent>
+										<Field>
+											<FieldLabel htmlFor="preference">
+												What you prefer
+											</FieldLabel>
+											<Textarea
+												id="preference"
+												value={preference}
+												onChange={(event) => setPreference(event.target.value)}
+												placeholder="I prefer mornings and Sundays."
+											/>
+										</Field>
+									</CardContent>
+									<CardFooter>
+										<Button
+											disabled={savePreference.isPending}
+											onClick={() => savePreference.mutate()}
 										>
-											{saveUnavailability.isPending ? (
+											{savePreference.isPending ? (
 												<Spinner data-icon="inline-start" />
 											) : null}
-											Save unavailability
+											Save preference
 										</Button>
-										{unavailabilityDirty ? (
-											<Badge variant="secondary">Unsaved changes</Badge>
-										) : null}
-									</div>
-								</CardFooter>
-							</Card>
-						</TabsContent>
-
-						<TabsContent value="preferences" className="pt-4">
-							<Card>
-								<CardHeader>
-									<CardTitle>Preferences</CardTitle>
-									<CardDescription>
-										A note for your manager. Preferences never block scheduling.
-									</CardDescription>
-								</CardHeader>
-								<CardContent>
-									<Field>
-										<FieldLabel htmlFor="preference">
-											What you prefer
-										</FieldLabel>
-										<Textarea
-											id="preference"
-											value={preference}
-											onChange={(event) => setPreference(event.target.value)}
-											placeholder="I prefer mornings and Sundays."
-										/>
-									</Field>
-								</CardContent>
-								<CardFooter>
-									<Button
-										disabled={savePreference.isPending}
-										onClick={() => savePreference.mutate()}
-									>
-										{savePreference.isPending ? (
-											<Spinner data-icon="inline-start" />
-										) : null}
-										Save preference
-									</Button>
-								</CardFooter>
-							</Card>
-						</TabsContent>
+									</CardFooter>
+								</Card>
+							</TabsContent>
+						</div>
 					</Tabs>
 				)}
 				<FormSheet

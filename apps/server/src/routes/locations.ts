@@ -2,7 +2,7 @@ import { db, locations, schedules } from "@SchedulesManager/db";
 import { eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { requireSubscriptionCapability } from "../billing";
-import { requireManager, requireSession } from "../context";
+import { requirePrivilege, requireSession } from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { fillPlaceFromAddress } from "../geocode";
 import { hashPin } from "../pin";
@@ -56,7 +56,7 @@ export const locationsRoutes = new Elysia({
 		"/workplaces/:workplaceId/locations",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "schedule.view");
 
 			const rows = await db
 				.select()
@@ -80,7 +80,7 @@ export const locationsRoutes = new Elysia({
 		"/workplaces/:workplaceId/locations",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
 			if (body.geofenceRadiusMeters != null) {
 				await requireSubscriptionCapability(params.workplaceId, "kiosk");
 			}
@@ -158,7 +158,7 @@ export const locationsRoutes = new Elysia({
 				.limit(1);
 
 			if (!existing) throw new NotFoundError("Location not found");
-			await requireManager(profile.id, existing.workplaceId);
+			await requirePrivilege(profile.id, existing.workplaceId, "settings.manage");
 			if (
 				body.geofenceRadiusMeters !== undefined ||
 				body.kioskPin !== undefined
@@ -264,7 +264,7 @@ export const locationsRoutes = new Elysia({
 				.limit(1);
 
 			if (!existing) throw new NotFoundError("Location not found");
-			await requireManager(profile.id, existing.workplaceId);
+			await requirePrivilege(profile.id, existing.workplaceId, "settings.manage");
 
 			const [schedule] = await db
 				.select({ id: schedules.id })

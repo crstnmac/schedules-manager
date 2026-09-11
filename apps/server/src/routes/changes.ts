@@ -14,7 +14,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import {
 	listActiveEmployments,
-	requireManager,
+	requirePrivilege,
 	requireSession,
 } from "../context";
 import { NotFoundError } from "../errors";
@@ -308,7 +308,7 @@ export const changesRoutes = new Elysia({
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
 			const { location, workplace } = await scheduleContext(params.scheduleId);
-			await requireManager(profile.id, location.workplaceId);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.view");
 
 			const previous = await latestVersionWithShifts(params.scheduleId);
 			const draftRows = await db
@@ -371,7 +371,7 @@ export const changesRoutes = new Elysia({
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
 			const { location } = await scheduleContext(params.scheduleId);
-			await requireManager(profile.id, location.workplaceId);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.view");
 
 			const versionRows = await db
 				.select()

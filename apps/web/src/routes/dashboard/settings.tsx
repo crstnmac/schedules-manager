@@ -9,6 +9,8 @@ import {
 
 import { settingsGroups } from "@/components/settings/nav";
 import { UnsavedChangesProvider } from "@/components/unsaved-changes";
+import { hasCapability } from "@/lib/privileges";
+import { useWorkplace } from "@/lib/use-workplace";
 
 export const Route = createFileRoute("/dashboard/settings")({
 	component: SettingsLayout,
@@ -18,6 +20,16 @@ function SettingsLayout() {
 	const pathname = useRouterState({
 		select: (state) => state.location.pathname,
 	});
+	const { kind, privileges } = useWorkplace();
+	const subject = kind ? { kind, privileges } : null;
+	const visibleGroups = settingsGroups
+		.map((group) => ({
+			...group,
+			items: group.items.filter(
+				(item) => !item.capability || hasCapability(subject, item.capability),
+			),
+		}))
+		.filter((group) => group.items.length > 0);
 
 	return (
 		<UnsavedChangesProvider>
@@ -27,7 +39,7 @@ function SettingsLayout() {
 						aria-label="Settings sections"
 						className="flex gap-3 overflow-x-auto overscroll-x-contain p-3 md:flex-col md:gap-4 md:overflow-visible"
 					>
-						{settingsGroups.map((group, index) => (
+						{visibleGroups.map((group, index) => (
 							<div key={group.label} className="grid shrink-0 gap-1">
 								{index > 0 ? (
 									<Separator className="mb-2 hidden md:block" />

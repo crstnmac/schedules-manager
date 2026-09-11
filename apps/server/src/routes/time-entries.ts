@@ -15,7 +15,7 @@ import { Elysia, t } from "elysia";
 import { requireSubscriptionCapability } from "../billing";
 
 import {
-	requireManager,
+	requirePrivilege,
 	requireSession,
 	requireWorkplaceMember,
 } from "../context";
@@ -420,7 +420,7 @@ export const timeEntryRoutes = new Elysia({
 		"/workplaces/:workplaceId/version-shifts/:versionShiftId/time-entry",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
 			await requireSubscriptionCapability(params.workplaceId, "timesheets");
 			return withIdempotency({
 				actorProfileId: profile.id,

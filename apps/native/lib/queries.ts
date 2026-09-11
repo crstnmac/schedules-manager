@@ -20,7 +20,8 @@ export interface MeResponse {
 	};
 	employments: {
 		id: string;
-		kind: "manager" | "worker";
+		kind: "manager" | "worker" | "viewer";
+		privileges?: string[];
 		workplace: {
 			id: string;
 			name: string;
@@ -77,6 +78,7 @@ export interface MyScheduleResponse {
 		startMinute: number;
 		endMinute: number;
 		overnight: boolean;
+		planned: boolean;
 		timeEntry: {
 			clockedInAt: string;
 			clockedOutAt: string | null;
@@ -107,10 +109,13 @@ export interface PublishedWeek {
 		id: string;
 		versionNumber: number;
 		publishedAt: string;
-	};
+	} | null;
 	deliveryStatus: "sent" | "delivered" | "acknowledged" | null;
 	shifts: {
 		id: string;
+		employmentId: string | null;
+		workerName: string | null;
+		isMine: boolean;
 		positionName: string;
 		startsAt: string;
 		endsAt: string;
@@ -119,6 +124,7 @@ export interface PublishedWeek {
 		endMinute: number;
 		overnight: boolean;
 		note: string | null;
+		planned?: boolean;
 		releaseStatus: "pending" | null;
 		timeEntry: {
 			clockedInAt: string;
@@ -771,14 +777,14 @@ export function useMarkAllNotificationsRead(workplaceId: string | undefined) {
 export interface ManagerWorkersResponse {
 	workers: {
 		employmentId: string;
-		kind: "manager" | "worker";
+		kind: "manager" | "worker" | "viewer";
 		status: "active" | "inactive";
 		profile: { email: string; fullName: string | null };
 	}[];
 	invitations: {
 		id: string;
 		email: string;
-		kind: "manager" | "worker";
+		kind: "manager" | "worker" | "viewer";
 		status: string;
 		expiresAt: string;
 	}[];
@@ -789,7 +795,7 @@ export interface ManagerTimeOffResponse {
 	requests: {
 		id: string;
 		employmentId?: string;
-		kind?: "manager" | "worker";
+		kind?: "manager" | "worker" | "viewer";
 		worker: { email: string; fullName: string | null };
 		startsAt: string;
 		endsAt: string;
@@ -869,16 +875,39 @@ export function useMarkAttendance(workplaceId: string | undefined) {
 	});
 }
 
+function hasCapability(
+	employment:
+		| { kind: "manager" | "worker" | "viewer"; privileges?: string[] }
+		| undefined,
+	key: string,
+): boolean {
+	if (!employment) return false;
+	if (employment.kind === "viewer") {
+		return (employment.privileges ?? []).includes(key);
+	}
+	if (employment.kind !== "manager") return false;
+	const explicit = employment.privileges;
+	if (!explicit || explicit.length === 0) return true;
+	return explicit.includes(key);
+}
+
 export function useCurrentEmployment() {
 	const me = useMe();
 	const { selected } = useSelectedWorkplaceId();
 	const employment =
 		me.data?.employments.find((item) => item.workplace.id === selected) ??
 		me.data?.employments[0];
+	const kind = employment?.kind;
 	return {
 		me,
 		employment,
 		workplaceId: employment?.workplace.id,
-		isManager: employment?.kind === "manager",
+		// Viewers browse the manager read surfaces but cannot perform writes.
+		isManager: kind === "manager" || kind === "viewer",
+		canManage: kind === "manager",
+		canReview: hasCapability(employment, "approvals.review"),
+		canManageSchedule: hasCapability(employment, "schedule.manage"),
+		canPublish: hasCapability(employment, "schedule.publish"),
+		canManageWorkers: hasCapability(employment, "workers.manage"),
 	};
 }

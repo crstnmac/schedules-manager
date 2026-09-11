@@ -15,7 +15,27 @@ import { locations, positions, workplaces } from "./workplaces";
 export const employmentKindEnum = pgEnum("employment_kind", [
 	"manager",
 	"worker",
+	"viewer",
 ]);
+
+/**
+ * Granular manager capabilities. A manager with no explicit privileges keeps
+ * full access for backward compatibility; a viewer only ever receives the
+ * capabilities listed explicitly.
+ */
+export const EMPLOYMENT_PRIVILEGES = [
+	"schedule.view",
+	"schedule.manage",
+	"schedule.publish",
+	"approvals.review",
+	"policies.manage",
+	"reports.view",
+	"workers.manage",
+	"settings.manage",
+	"integrations.manage",
+] as const;
+
+export type EmploymentPrivilege = (typeof EMPLOYMENT_PRIVILEGES)[number];
 
 export const employmentStatusEnum = pgEnum("employment_status", [
 	"active",
@@ -32,6 +52,8 @@ export const employments = pgTable(
 		profileId: uuid("profile_id").notNull(),
 		kind: employmentKindEnum("kind").notNull().default("worker"),
 		status: employmentStatusEnum("status").notNull().default("active"),
+		/** Explicit capabilities. Null or empty for a manager means full access. */
+		privileges: text("privileges").array(),
 		hourlyWageCents: integer("hourly_wage_cents"),
 		kioskPinHash: text("kiosk_pin_hash"),
 		emergencyContactName: text("emergency_contact_name"),

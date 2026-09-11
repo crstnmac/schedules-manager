@@ -32,7 +32,7 @@ import { Elysia, t } from "elysia";
 import { requireSubscriptionCapability } from "../billing";
 
 import {
-	requireManager,
+	requirePrivilege,
 	requireSession,
 	requireWorkplaceMember,
 } from "../context";
@@ -46,14 +46,18 @@ import { assertWorkplaceEnabled, loadWorkplace } from "../workplace-policy";
 const uuid = t.String({ format: "uuid" });
 const minuteSchema = t.Integer({ minimum: 0, maximum: 1440 });
 
-async function locationForManager(profileId: string, locationId: string) {
+async function locationForManager(
+	profileId: string,
+	locationId: string,
+	privilege: "schedule.manage" | "settings.manage" = "schedule.manage",
+) {
 	const [location] = await db
 		.select()
 		.from(locations)
 		.where(eq(locations.id, locationId))
 		.limit(1);
 	if (!location) throw new NotFoundError("Location not found");
-	await requireManager(profileId, location.workplaceId);
+	await requirePrivilege(profileId, location.workplaceId, privilege);
 	return location;
 }
 
@@ -131,7 +135,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/groups",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
 			const group = firstRow(
 				await db
 					.insert(workerGroups)
@@ -164,7 +168,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/groups/:groupId",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
 			const [group] = await db
 				.update(workerGroups)
 				.set({ name: body.name.trim() })
@@ -202,7 +206,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/groups/:groupId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
 			await db
 				.delete(workerGroups)
 				.where(
@@ -238,7 +242,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/tags",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "schedule.manage");
 			const tag = firstRow(
 				await db
 					.insert(shiftTags)
@@ -257,7 +261,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/tags/:tagId",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "schedule.manage");
 			const [tag] = await db
 				.update(shiftTags)
 				.set({ name: body.name.trim() })
@@ -281,7 +285,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/tags/:tagId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "schedule.manage");
 			await db
 				.delete(shiftTags)
 				.where(
@@ -323,7 +327,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/leave-types",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
 			const created = firstRow(
 				await db
 					.insert(leaveTypes)
@@ -351,7 +355,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/leave-types/:leaveTypeId",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
 			const [existing] = await db
 				.select()
 				.from(leaveTypes)
@@ -394,7 +398,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/leave-types/:leaveTypeId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
 			const [deleted] = await db
 				.delete(leaveTypes)
 				.where(
@@ -416,7 +420,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/employments/:employmentId/pto",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
 			// Both the employment and the leave type must belong to this
 			// workplace, or the upsert could mutate another workplace's balances.
 			const [employment] = await db
@@ -468,7 +472,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/pto",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
 			const rows = await db
 				.select({
 					employmentId: ptoBalances.employmentId,
@@ -938,7 +942,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/locations/:locationId/sales/:saleDate",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await locationForManager(profile.id, params.locationId);
+			await locationForManager(profile.id, params.locationId, "settings.manage");
 			await db
 				.insert(locationSales)
 				.values({
@@ -997,7 +1001,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/announcements",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
 			await assertWorkplaceEnabled(
 				params.workplaceId,
 				"announcementsEnabled",
@@ -1478,7 +1482,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/employments/:employmentId/documents",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
 			const [employment] = await db
 				.select({ id: employments.id })
 				.from(employments)
@@ -1513,7 +1517,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/employments/:employmentId/documents",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
 			const [employment] = await db
 				.select({ id: employments.id })
 				.from(employments)
@@ -1552,7 +1556,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/employments/:employmentId/profile",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
 			const values: {
 				hourlyWageCents?: number | null;
 				emergencyContactName?: string | null;
@@ -1630,7 +1634,11 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/shifts/:shiftId/tags",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, await workplaceForShift(params.shiftId));
+			await requirePrivilege(
+				profile.id,
+				await workplaceForShift(params.shiftId),
+				"schedule.manage",
+			);
 			await db
 				.delete(shiftTagAssignments)
 				.where(eq(shiftTagAssignments.shiftId, params.shiftId));
@@ -1655,7 +1663,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
 			const workplaceId = await workplaceForShift(params.shiftId);
-			await requireManager(profile.id, workplaceId);
+			await requirePrivilege(profile.id, workplaceId, "schedule.manage");
 			await assertWorkplaceEnabled(
 				workplaceId,
 				"tasksEnabled",
@@ -1870,7 +1878,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/time-entries/:timeEntryId/approval",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
 			await requireSubscriptionCapability(params.workplaceId, "timesheets");
 			// The entry must belong to an employment of the caller's workplace.
 			const [target] = await db
@@ -1922,7 +1930,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/timesheets",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
 			await requireSubscriptionCapability(params.workplaceId, "timesheets");
 			const rows = await db
 				.select({

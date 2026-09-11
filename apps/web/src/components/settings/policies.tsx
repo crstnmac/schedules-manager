@@ -42,12 +42,29 @@ const LEAVE_CAP_RESET_ITEMS = [
 	{ label: "Custom date", value: "custom_date" },
 ] as const;
 
-function usePolicyDraft(
-	settings: WorkplaceSettings | undefined,
+const PLANNED_VISIBILITY_ITEMS = [
+	{ label: "Never show planned shifts", value: "never" },
+	{ label: "Always show planned shifts", value: "always" },
+	{ label: "Only within a number of days", value: "within_days" },
+] as const;
+
+type PlannedShiftsVisibility = "never" | "always" | "within_days";
+
+/**
+ * Local extension of the shared settings type until the generated query type
+ * carries the planned-shift policy fields.
+ */
+type PlannedShiftSettings = WorkplaceSettings & {
+	plannedShiftsVisibility: PlannedShiftsVisibility;
+	plannedShiftLeadDays: number;
+};
+
+function usePolicyDraft<T extends WorkplaceSettings>(
+	settings: T | undefined,
 	onChange: () => void,
 ) {
 	const queryClient = useQueryClient();
-	const [draft, setDraft] = useState<Partial<WorkplaceSettings>>({});
+	const [draft, setDraft] = useState<Partial<T>>({});
 	const save = useMutation({
 		mutationFn: () =>
 			api(`/v1/workplaces/${settings?.id}`, {
@@ -63,22 +80,20 @@ function usePolicyDraft(
 		onError: (error) => toast.error((error as Error).message),
 	});
 
-	function value<K extends keyof WorkplaceSettings>(
-		key: K,
-	): WorkplaceSettings[K] {
+	function value<K extends keyof T>(key: K): T[K] {
 		const override = draft[key];
-		if (override !== undefined) return override as WorkplaceSettings[K];
+		if (override !== undefined) return override as T[K];
 		if (!settings) {
 			throw new Error("Workplace settings are not loaded");
 		}
 		return settings[key];
 	}
 
-	function patch(partial: Partial<WorkplaceSettings>) {
+	function patch(partial: Partial<T>) {
 		setDraft((current) => {
 			if (!settings) return { ...current, ...partial };
 			const next = { ...current, ...partial };
-			for (const key of Object.keys(partial) as (keyof WorkplaceSettings)[]) {
+			for (const key of Object.keys(partial) as (keyof T)[]) {
 				if (next[key] === settings[key]) {
 					delete next[key];
 				}
@@ -96,18 +111,18 @@ function usePolicyDraft(
 	};
 }
 
-function PolicyCard({
+function PolicyCard<T extends WorkplaceSettings>({
 	settings,
 	isLoading,
 	onChange,
 	idleMessage,
 	children,
 }: {
-	settings: WorkplaceSettings | undefined;
+	settings: T | undefined;
 	isLoading: boolean;
 	onChange: () => void;
 	idleMessage: string;
-	children: (form: ReturnType<typeof usePolicyDraft>) => ReactNode;
+	children: (form: ReturnType<typeof usePolicyDraft<T>>) => ReactNode;
 }) {
 	const form = usePolicyDraft(settings, onChange);
 	useRegisterUnsavedChanges("policies", form.dirty);
@@ -226,9 +241,10 @@ export function SchedulePoliciesCard({
 	isLoading: boolean;
 	onChange: () => void;
 }) {
+	const plannedSettings = settings as PlannedShiftSettings | undefined;
 	return (
 		<PolicyCard
-			settings={settings}
+			settings={plannedSettings}
 			isLoading={isLoading}
 			onChange={onChange}
 			idleMessage="These policies apply to published schedules at this workplace."
@@ -277,6 +293,64 @@ export function SchedulePoliciesCard({
 									form.patch({ workerTimeOffVisibility: checked })
 								}
 							/>
+							<SettingsField
+								id="planned-shifts-visibility"
+								label="Planned shift visibility"
+								description="Whether workers can see unpublished draft shifts. Planned shifts are always marked as not yet published."
+							>
+								<Select
+									items={[...PLANNED_VISIBILITY_ITEMS]}
+									value={form.value("plannedShiftsVisibility")}
+									onValueChange={(value) => {
+										if (
+											value === "never" ||
+											value === "always" ||
+											value === "within_days"
+										) {
+											form.patch({ plannedShiftsVisibility: value });
+										}
+									}}
+								>
+									<SelectTrigger
+										id="planned-shifts-visibility"
+										className="w-full"
+									>
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent alignItemWithTrigger={false}>
+										<SelectGroup>
+											{PLANNED_VISIBILITY_ITEMS.map((item) => (
+												<SelectItem key={item.value} value={item.value}>
+													{item.label}
+												</SelectItem>
+											))}
+										</SelectGroup>
+									</SelectContent>
+								</Select>
+							</SettingsField>
+							{form.value("plannedShiftsVisibility") === "within_days" ? (
+								<SettingsField
+									id="planned-shift-lead-days"
+									label="Days ahead to show planned shifts"
+									description="Planned shifts that start within this many days. 0–60."
+								>
+									<InputGroup>
+										<InputGroupInput
+											id="planned-shift-lead-days"
+											type="number"
+											min={0}
+											max={60}
+											value={form.value("plannedShiftLeadDays")}
+											onChange={(event) =>
+												form.patch({
+													plannedShiftLeadDays: Number(event.target.value),
+												})
+											}
+										/>
+										<InputGroupAddon align="inline-end">days</InputGroupAddon>
+									</InputGroup>
+								</SettingsField>
+							) : null}
 						</FieldGroup>
 					</SettingsSection>
 					<SettingsSection

@@ -102,13 +102,17 @@ import {
 	ChevronRightIcon,
 	CopyIcon,
 	EllipsisIcon,
+	LayoutTemplateIcon,
 	ListFilterIcon,
 	MapPinIcon,
 	PlusIcon,
 	SearchIcon,
+	SendIcon,
+	StarIcon,
 	TagsIcon,
 	Trash2Icon,
 	UserPlusIcon,
+	UsersIcon,
 	XIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -117,10 +121,14 @@ import { toast } from "sonner";
 import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { DatePicker } from "@/components/date-picker";
+import { BulkEditDialog } from "@/components/schedule/bulk-edit-dialog";
+import { PatternApplyDialog } from "@/components/schedule/pattern-apply-dialog";
+import { PublishSelectionDialog } from "@/components/schedule/publish-selection-dialog";
 import { ScheduleMonthGrid } from "@/components/schedule-month-grid";
 import { ShiftTile } from "@/components/schedule-shift-tile";
 import { TimePicker } from "@/components/time-picker";
 import { api } from "@/lib/api";
+import { hasCapability } from "@/lib/privileges";
 import type {
 	AcceptancesResponse,
 	ChangePreviewResponse,
@@ -131,8 +139,10 @@ import type {
 import {
 	useAcceptances,
 	useApplyScheduleTemplate,
+	useApprovalPolicyGroups,
 	useEditTimeEntry,
 	useGroups,
+	useHolidays,
 	useLocations,
 	useMarkAttendance,
 	useMySchedule,
@@ -141,8 +151,11 @@ import {
 	useSchedule,
 	useScheduleCalendar,
 	useScheduleLabor,
+	useScheduleTeams,
 	useScheduleTemplates,
 	useScheduleTimeclock,
+	useSetSchedulePolicyGroup,
+	useShiftPatterns,
 	useTags,
 	useTimeBlocks,
 	useWorkplaceSettings,
@@ -178,6 +191,12 @@ const DAY_HEADERS = [
 	"Saturday",
 	"Sunday",
 ];
+
+/** Sentinel for "no policy group override" in the approval policy Select. */
+const WORKPLACE_DEFAULT_POLICY = "__workplace_default__";
+
+/** Sentinel for the Location's primary (team-less) schedule in the team Select. */
+const PRIMARY_TEAM = "__primary_team__";
 
 type StaffRow = ScheduleResponse["staff"][number];
 type HoursRow = ScheduleResponse["hours"][number];
@@ -847,7 +866,11 @@ function ScheduleMetric({
 }
 
 function SchedulePage() {
-	const { workplace } = useWorkplace();
+	const { workplace, kind, privileges } = useWorkplace();
+	const subject = kind ? { kind, privileges: privileges ?? null } : null;
+	const canManage = hasCapability(subject, "schedule.manage");
+	const canPublish = hasCapability(subject, "schedule.publish");
+	const canManagePolicies = hasCapability(subject, "policies.manage");
 	const { formatMinute } = useDisplayPrefs();
 	const posthog = usePostHog();
 	const scheduleStaffColumns = useMemo(
@@ -879,6 +902,9 @@ function SchedulePage() {
 	const [tagFilter, setTagFilter] = useState("all");
 	const [dayPartFilter, setDayPartFilter] = useState("all");
 	const [selectedShiftIds, setSelectedShiftIds] = useState<string[]>([]);
+	const [patternOpen, setPatternOpen] = useState(false);
+	const [publishSelectionOpen, setPublishSelectionOpen] = useState(false);
+	const [bulkEditOpen, setBulkEditOpen] = useState(false);
 	const [copiedShifts, setCopiedShifts] = useState<
 		{
 			positionId: string;
@@ -900,13 +926,20 @@ function SchedulePage() {
 	const [gridDensity, setGridDensity] = useState<GridDensity>("comfortable");
 	const locations = useLocations(workplace?.id);
 	const [locationId, setLocationId] = useState<string | undefined>(undefined);
+	const [teamId, setTeamId] = useState<string | null>(null);
 
 	const activeLocationId = locationId ?? locations.data?.[0]?.id;
-	const schedule = useSchedule(activeLocationId, weekStart);
+	const teams = useScheduleTeams(activeLocationId);
+	const activeTeamId =
+		teamId && (teams.data ?? []).some((team) => team.id === teamId)
+			? teamId
+			: null;
+	const schedule = useSchedule(activeLocationId, weekStart, activeTeamId);
 	const calendar = useScheduleCalendar(
 		activeLocationId,
 		monthAnchor,
 		viewMode === "month",
+		activeTeamId,
 	);
 	const templates = useScheduleTemplates(activeLocationId);
 	const saveTemplate = useSaveScheduleTemplate(activeLocationId);
@@ -914,6 +947,21 @@ function SchedulePage() {
 	const groups = useGroups(workplace?.id);
 	const tags = useTags(workplace?.id);
 	const timeBlocks = useTimeBlocks(activeLocationId);
+	const patterns = useShiftPatterns(workplace?.id);
+	const approvalGroups = useApprovalPolicyGroups(workplace?.id);
+	const setPolicyGroup = useSetSchedulePolicyGroup(activeLocationId, weekStart);
+	const holidays = useHolidays(workplace?.id, {
+		from: weekStart,
+		to: addDays(weekStart, 6),
+		locationId: activeLocationId,
+	});
+	const holidayByDate = useMemo(() => {
+		const map = new Map<string, { id: string; name: string }>();
+		for (const holiday of holidays.data?.holidays ?? []) {
+			map.set(holiday.date, { id: holiday.id, name: holiday.name });
+		}
+		return map;
+	}, [holidays.data?.holidays]);
 	const markAttendance = useMarkAttendance(workplace?.id);
 	const editTimeEntry = useEditTimeEntry(workplace?.id);
 	const acceptances = useAcceptances(schedule.data?.schedule.id);
@@ -952,16 +1000,35 @@ function SchedulePage() {
 		// stale and refetch them on visit. Shift edits change labor, but not
 		// time-clock state (punches live on published versions).
 		await queryClient.invalidateQueries({
-			queryKey: ["schedule", activeLocationId, weekStart],
+			queryKey: ["schedule", activeLocationId, weekStart, activeTeamId],
 		});
 		await queryClient.invalidateQueries({
-			queryKey: ["schedule-labor", activeLocationId, weekStart],
+			queryKey: ["schedule-labor", activeLocationId, weekStart, activeTeamId],
 		});
 		await queryClient.invalidateQueries({
-			queryKey: ["schedule-calendar", activeLocationId],
+			queryKey: ["schedule-calendar", activeLocationId, activeTeamId],
 		});
 		await queryClient.refetchQueries({
-			queryKey: ["schedule", activeLocationId, weekStart],
+			queryKey: ["schedule", activeLocationId, weekStart, activeTeamId],
+		});
+	}
+
+	function handlePatternApplied() {
+		void queryClient.invalidateQueries({
+			queryKey: ["schedule", activeLocationId, weekStart, activeTeamId],
+		});
+		toast.success("Shift pattern applied.");
+	}
+
+	function handleBulkEdited() {
+		setSelectedShiftIds([]);
+		void invalidate();
+	}
+
+	function handlePolicyGroupChange(value: string) {
+		setPolicyGroup.mutate(value === WORKPLACE_DEFAULT_POLICY ? null : value, {
+			onSuccess: () => toast.success("Approval policy updated."),
+			onError: (error) => toast.error((error as Error).message),
 		});
 	}
 
@@ -1024,6 +1091,7 @@ function SchedulePage() {
 									unavailabilityOverrideReason:
 										state.unavailabilityOverrideReason.trim() || undefined,
 									...(approvePosition ? { approvePosition: true } : {}),
+									teamId: activeTeamId,
 								},
 							},
 						),
@@ -1125,7 +1193,7 @@ function SchedulePage() {
 		mutationFn: () =>
 			api(
 				`/v1/locations/${activeLocationId}/schedules/${weekStart}/copy-previous`,
-				{ method: "POST" },
+				{ method: "POST", body: { teamId: activeTeamId } },
 			),
 		onSuccess: async () => {
 			await invalidate();
@@ -1138,7 +1206,7 @@ function SchedulePage() {
 		mutationFn: () =>
 			api<{ assigned: number }>(
 				`/v1/locations/${activeLocationId}/schedules/${weekStart}/auto-assign`,
-				{ method: "POST" },
+				{ method: "POST", body: { teamId: activeTeamId } },
 			),
 		onSuccess: async (result) => {
 			await invalidate();
@@ -1159,7 +1227,7 @@ function SchedulePage() {
 		}) =>
 			api(`/v1/locations/${activeLocationId}/schedules/${weekStart}/bulk`, {
 				method: "POST",
-				body,
+				body: { ...body, teamId: activeTeamId },
 			}),
 		onSuccess: async () => {
 			setSelectedShiftIds([]);
@@ -1175,7 +1243,7 @@ function SchedulePage() {
 				`/v1/locations/${activeLocationId}/schedules/${weekStart}/paste`,
 				{
 					method: "POST",
-					body: { date, shifts: copiedShifts },
+					body: { date, shifts: copiedShifts, teamId: activeTeamId },
 				},
 			),
 		onSuccess: async (result: { pasted: number }) => {
@@ -1248,10 +1316,15 @@ function SchedulePage() {
 			});
 			// A new version re-links punches and republishes rollups.
 			await queryClient.invalidateQueries({
-				queryKey: ["schedule-timeclock", activeLocationId, weekStart],
+				queryKey: [
+					"schedule-timeclock",
+					activeLocationId,
+					weekStart,
+					activeTeamId,
+				],
 			});
 			await queryClient.invalidateQueries({
-				queryKey: ["schedule-labor", activeLocationId, weekStart],
+				queryKey: ["schedule-labor", activeLocationId, weekStart, activeTeamId],
 			});
 			await queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 			await queryClient.invalidateQueries({ queryKey: ["notifications"] });
@@ -1308,8 +1381,16 @@ function SchedulePage() {
 		(sum, shift) => sum + shift.conflicts.length,
 		0,
 	);
-	const timeclockQuery = useScheduleTimeclock(activeLocationId, weekStart);
-	const laborQuery = useScheduleLabor(activeLocationId, weekStart);
+	const timeclockQuery = useScheduleTimeclock(
+		activeLocationId,
+		weekStart,
+		activeTeamId,
+	);
+	const laborQuery = useScheduleLabor(
+		activeLocationId,
+		weekStart,
+		activeTeamId,
+	);
 	const timeclockByShiftId = useMemo(() => {
 		const map = new Map<string, ScheduleTimeclockEntry>();
 		for (const entry of timeclockQuery.data ?? []) {
@@ -1773,12 +1854,14 @@ function SchedulePage() {
 			);
 		});
 	const pendingAddCount = form ? createShiftCount(form) : 0;
-	const canSave = Boolean(
-		form?.positionId &&
-			(form.shiftId || addDates.length > 0) &&
-			form.startMinute !== form.endMinute &&
-			(!needsOverride || form.unavailabilityOverrideReason.trim()),
-	);
+	const canSave =
+		canManage &&
+		Boolean(
+			form?.positionId &&
+				(form.shiftId || addDates.length > 0) &&
+				form.startMinute !== form.endMinute &&
+				(!needsOverride || form.unavailabilityOverrideReason.trim()),
+		);
 
 	const selectedShiftTimeclock = form?.shiftId
 		? timeclockByShiftId.get(form.shiftId)
@@ -1839,6 +1922,7 @@ function SchedulePage() {
 										onValueChange={(value) => {
 											if (!value) return;
 											setLocationId(value);
+											setTeamId(null);
 											setForm(null);
 										}}
 									>
@@ -1860,6 +1944,43 @@ function SchedulePage() {
 											</SelectGroup>
 										</SelectContent>
 									</Select>
+									{(teams.data ?? []).length > 0 ? (
+										<Select
+											items={[
+												{ label: "Primary", value: PRIMARY_TEAM },
+												...(teams.data ?? []).map((team) => ({
+													label: team.name,
+													value: team.id,
+												})),
+											]}
+											value={activeTeamId ?? PRIMARY_TEAM}
+											onValueChange={(value) => {
+												setTeamId(
+													value && value !== PRIMARY_TEAM ? value : null,
+												);
+												setForm(null);
+											}}
+										>
+											<SelectTrigger
+												aria-label="Schedule team"
+												size="sm"
+												className="min-w-0 max-w-36 border-transparent bg-transparent font-medium shadow-none hover:bg-muted"
+											>
+												<UsersIcon />
+												<SelectValue placeholder="Primary" />
+											</SelectTrigger>
+											<SelectContent alignItemWithTrigger={false}>
+												<SelectGroup>
+													<SelectItem value={PRIMARY_TEAM}>Primary</SelectItem>
+													{(teams.data ?? []).map((team) => (
+														<SelectItem key={team.id} value={team.id}>
+															{team.name}
+														</SelectItem>
+													))}
+												</SelectGroup>
+											</SelectContent>
+										</Select>
+									) : null}
 									<div className="flex shrink-0 items-center">
 										<Button
 											variant="ghost"
@@ -1950,6 +2071,51 @@ function SchedulePage() {
 									) : null}
 									<Select
 										items={[
+											{
+												label: "Workplace default",
+												value: WORKPLACE_DEFAULT_POLICY,
+											},
+											...(approvalGroups.data?.groups ?? []).map((group) => ({
+												label: group.name,
+												value: group.id,
+											})),
+										]}
+										value={
+											schedule.data?.schedule.policyGroupId ??
+											WORKPLACE_DEFAULT_POLICY
+										}
+										onValueChange={(value) => {
+											if (value) handlePolicyGroupChange(value);
+										}}
+									>
+										<SelectTrigger
+											aria-label="Approval policy"
+											size="sm"
+											disabled={
+												!canManagePolicies ||
+												!schedule.data ||
+												setPolicyGroup.isPending
+											}
+											className="w-auto max-w-52"
+										>
+											<span className="text-muted-foreground">Approvals:</span>
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent alignItemWithTrigger={false}>
+											<SelectGroup>
+												<SelectItem value={WORKPLACE_DEFAULT_POLICY}>
+													Workplace default
+												</SelectItem>
+												{(approvalGroups.data?.groups ?? []).map((group) => (
+													<SelectItem key={group.id} value={group.id}>
+														{group.name}
+													</SelectItem>
+												))}
+											</SelectGroup>
+										</SelectContent>
+									</Select>
+									<Select
+										items={[
 											{ label: "Week", value: "week" },
 											{ label: "Day", value: "day" },
 											{ label: "Month", value: "month" },
@@ -2003,7 +2169,11 @@ function SchedulePage() {
 										<DropdownMenuContent align="end" className="min-w-56">
 											<DropdownMenuGroup>
 												<DropdownMenuItem
-													disabled={copyPrevious.isPending || !activeLocationId}
+													disabled={
+														!canManage ||
+														copyPrevious.isPending ||
+														!activeLocationId
+													}
 													onClick={() => {
 														if (data && data.shifts.length > 0) {
 															setCopyPreviousConfirmOpen(true);
@@ -2017,6 +2187,7 @@ function SchedulePage() {
 												</DropdownMenuItem>
 												<DropdownMenuItem
 													disabled={
+														!canManage ||
 														saveTemplate.isPending ||
 														!data ||
 														data.shifts.length === 0
@@ -2030,6 +2201,18 @@ function SchedulePage() {
 												</DropdownMenuItem>
 												<DropdownMenuItem
 													disabled={
+														!canManage ||
+														!activeLocationId ||
+														(patterns.data ?? []).length === 0
+													}
+													onClick={() => setPatternOpen(true)}
+												>
+													<LayoutTemplateIcon />
+													Apply pattern
+												</DropdownMenuItem>
+												<DropdownMenuItem
+													disabled={
+														!canManage ||
 														autoAssign.isPending ||
 														!data ||
 														openShiftCount === 0
@@ -2039,6 +2222,17 @@ function SchedulePage() {
 													Auto-assign open shifts
 												</DropdownMenuItem>
 											</DropdownMenuGroup>
+											<DropdownMenuSeparator />
+											<DropdownMenuGroup>
+												<DropdownMenuItem
+													render={
+														<Link to="/dashboard/settings/schedule-teams" />
+													}
+												>
+													<UsersIcon />
+													Manage teams
+												</DropdownMenuItem>
+											</DropdownMenuGroup>
 											{(templates.data ?? []).length > 0 ? (
 												<>
 													<DropdownMenuSeparator />
@@ -2046,12 +2240,13 @@ function SchedulePage() {
 														{(templates.data ?? []).map((template) => (
 															<DropdownMenuItem
 																key={template.id}
-																disabled={applyTemplate.isPending}
+																disabled={!canManage || applyTemplate.isPending}
 																onClick={() =>
 																	applyTemplate.mutate(
 																		{
 																			weekStart,
 																			templateId: template.id,
+																			teamId: activeTeamId,
 																		},
 																		{
 																			onSuccess: () =>
@@ -2079,6 +2274,7 @@ function SchedulePage() {
 													<Button
 														size="sm"
 														disabled={
+															!canPublish ||
 															previewPublish.isPending ||
 															!schedule.data ||
 															(publicationState?.latestVersionNumber != null &&
@@ -2105,7 +2301,9 @@ function SchedulePage() {
 									<Button
 										size="sm"
 										variant="outline"
-										disabled={!data || data.positions.length === 0}
+										disabled={
+											!canManage || !data || data.positions.length === 0
+										}
 										onClick={() => openCreate(defaultAddDate(weekStart))}
 									>
 										<PlusIcon data-icon="inline-start" />
@@ -3464,6 +3662,14 @@ function SchedulePage() {
 							<Button
 								size="sm"
 								variant="outline"
+								disabled={!canManage || !data || bulkShifts.isPending}
+								onClick={() => setBulkEditOpen(true)}
+							>
+								Bulk edit
+							</Button>
+							<Button
+								size="sm"
+								variant="outline"
 								onClick={() => {
 									const picked = (data?.shifts ?? []).filter((shift) =>
 										selectedShiftIds.includes(shift.id),
@@ -3488,7 +3694,7 @@ function SchedulePage() {
 								title={`Delete ${selectedShiftIds.length} selected ${selectedShiftIds.length === 1 ? "shift" : "shifts"}?`}
 								description="This removes them from the draft. Publish to let the team see the change."
 								confirmLabel="Delete shifts"
-								disabled={bulkShifts.isPending}
+								disabled={!canManage || bulkShifts.isPending}
 								onConfirm={() =>
 									bulkShifts.mutate({
 										shiftIds: selectedShiftIds,
@@ -3496,6 +3702,15 @@ function SchedulePage() {
 									})
 								}
 							/>
+							<Button
+								size="sm"
+								variant="outline"
+								disabled={!canPublish || !schedule.data}
+								onClick={() => setPublishSelectionOpen(true)}
+							>
+								<SendIcon data-icon="inline-start" />
+								Publish selected
+							</Button>
 							<Button
 								size="sm"
 								variant="ghost"
@@ -3578,6 +3793,7 @@ function SchedulePage() {
 											const isWeekend = isWeekendDate(day);
 											const summary = daySummaries.get(day);
 											const daySalesCents = salesByDate.get(day) ?? 0;
+											const holiday = holidayByDate.get(day);
 											const hoursLabel =
 												summary && summary.minutes > 0
 													? `${(summary.minutes / 60).toFixed(1)}h`
@@ -3613,6 +3829,23 @@ function SchedulePage() {
 														<span className="text-[10px] text-muted-foreground/80 tabular-nums leading-none">
 															{hoursLabel}
 														</span>
+													) : null}
+													{holiday ? (
+														<Tooltip>
+															<TooltipTrigger
+																render={
+																	<span className="flex max-w-full items-center gap-0.5 rounded bg-amber-500/10 px-1 py-0.5 font-medium text-[10px] text-amber-700 leading-none dark:text-amber-400">
+																		<StarIcon className="size-2.5 shrink-0" />
+																		<span className="truncate">
+																			{holiday.name}
+																		</span>
+																	</span>
+																}
+															/>
+															<TooltipContent>
+																Holiday · {holiday.name}
+															</TooltipContent>
+														</Tooltip>
 													) : null}
 													<Popover
 														onOpenChange={(open) => {
@@ -4313,7 +4546,11 @@ function SchedulePage() {
 							onClick={(event) => {
 								event.preventDefault();
 								saveTemplate.mutate(
-									{ weekStart, name: templateName.trim() },
+									{
+										weekStart,
+										name: templateName.trim(),
+										teamId: activeTeamId,
+									},
 									{
 										onSuccess: () => {
 											setSaveTemplateOpen(false);
@@ -4332,6 +4569,38 @@ function SchedulePage() {
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
+			<PatternApplyDialog
+				open={patternOpen}
+				onOpenChange={setPatternOpen}
+				locationId={activeLocationId}
+				weekStart={weekStart}
+				patterns={patterns.data ?? []}
+				teamId={activeTeamId}
+				onApplied={handlePatternApplied}
+			/>
+			<PublishSelectionDialog
+				open={publishSelectionOpen}
+				onOpenChange={setPublishSelectionOpen}
+				scheduleId={schedule.data?.schedule.id ?? ""}
+				shiftIds={selectedShiftIds}
+				onPublished={() => {
+					setSelectedShiftIds([]);
+					void invalidate();
+				}}
+			/>
+			<BulkEditDialog
+				open={bulkEditOpen}
+				onOpenChange={setBulkEditOpen}
+				locationId={activeLocationId}
+				weekStart={weekStart}
+				shiftIds={selectedShiftIds}
+				workers={(data?.staff ?? []).map((member) => ({
+					employmentId: member.employmentId,
+					name: member.name || member.email,
+				}))}
+				teamId={activeTeamId}
+				onEdited={handleBulkEdited}
+			/>
 		</section>
 	);
 }

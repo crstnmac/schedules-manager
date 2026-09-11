@@ -13,7 +13,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import {
-	requireManager,
+	requirePrivilege,
 	requireSession,
 	requireWorkplaceMember,
 } from "../context";
@@ -448,7 +448,7 @@ export const constraintsRoutes = new Elysia({
 		"/workplaces/:workplaceId/unavailability/:unavailabilityId/decision",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
 
 			const [row] = await db
 				.select({
@@ -647,7 +647,7 @@ export const constraintsRoutes = new Elysia({
 		"/workplaces/:workplaceId/time-off",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
 			const timeZone = await workplaceTimeZone(params.workplaceId);
 
 			const rows = await db
@@ -771,7 +771,7 @@ export const constraintsRoutes = new Elysia({
 		"/workplaces/:workplaceId/time-off",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
 
 			const [member] = await db
 				.select({
@@ -872,7 +872,7 @@ export const constraintsRoutes = new Elysia({
 		"/workplaces/:workplaceId/time-off/:requestId/decision",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
 
 			const [request] = await db
 				.select({
@@ -990,7 +990,7 @@ export const constraintsRoutes = new Elysia({
 		"/workplaces/:workplaceId/time-off/:requestId",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
 			const existing = await loadWorkplaceTimeOff(
 				params.workplaceId,
 				params.requestId,
@@ -1111,7 +1111,7 @@ export const constraintsRoutes = new Elysia({
 		"/workplaces/:workplaceId/time-off/:requestId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
 			const existing = await loadWorkplaceTimeOff(
 				params.workplaceId,
 				params.requestId,

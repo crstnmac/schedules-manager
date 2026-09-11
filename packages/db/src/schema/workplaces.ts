@@ -30,6 +30,17 @@ export const leaveCapResetEnum = pgEnum("leave_cap_reset", [
 	"custom_date",
 ]);
 
+/**
+ * When Workers may see planned (unpublished) Shifts. `never` keeps drafts
+ * invisible until publication; `always` exposes the current draft; `within_days`
+ * exposes only Shifts within `plannedShiftLeadDays` of their start.
+ */
+export const plannedShiftsVisibilityEnum = pgEnum("planned_shifts_visibility", [
+	"never",
+	"always",
+	"within_days",
+]);
+
 export const workplaces = pgTable("workplaces", {
 	id: uuid("id").defaultRandom().primaryKey(),
 	name: text("name").notNull(),
@@ -64,6 +75,13 @@ export const workplaces = pgTable("workplaces", {
 	workerTimeOffVisibility: boolean("worker_time_off_visibility")
 		.notNull()
 		.default(true),
+	plannedShiftsVisibility: plannedShiftsVisibilityEnum(
+		"planned_shifts_visibility",
+	)
+		.notNull()
+		.default("never"),
+	/** Used when plannedShiftsVisibility is within_days. */
+	plannedShiftLeadDays: integer("planned_shift_lead_days").notNull().default(7),
 	breaksEnabled: boolean("breaks_enabled").notNull().default(true),
 	shiftExchangesEnabled: boolean("shift_exchanges_enabled")
 		.notNull()

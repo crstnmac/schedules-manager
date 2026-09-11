@@ -3,7 +3,7 @@ import { cors } from "@elysiajs/cors";
 import { openapi } from "@elysiajs/openapi";
 import { Elysia, t } from "elysia";
 
-import { auth, AuthenticationError } from "./auth";
+import { AuthenticationError, auth } from "./auth";
 import {
 	BadRequestError,
 	ConflictError,
@@ -13,22 +13,27 @@ import {
 } from "./errors";
 import { getReadinessReport, type ReadinessReport } from "./readiness";
 import { newRequestId, writeRequestLog } from "./request-log";
-import { changesRoutes } from "./routes/changes";
+import { approvalPolicyRoutes } from "./routes/approval-policies";
 import { billingRoutes } from "./routes/billing";
+import { changesRoutes } from "./routes/changes";
 import { constraintsRoutes } from "./routes/constraints";
 import { coverageRoutes } from "./routes/coverage";
 import { emailDeliveryRoutes } from "./routes/email-delivery";
+import { holidayRoutes } from "./routes/holidays";
+import { integrationRoutes } from "./routes/integrations";
 import { invitationsRoutes } from "./routes/invitations";
 import { kioskRoutes } from "./routes/kiosk";
 import { locationsRoutes } from "./routes/locations";
 import { meRoutes } from "./routes/me";
 import { notificationsRoutes } from "./routes/notifications";
+import { patternRoutes } from "./routes/patterns";
 import { pilotRoutes } from "./routes/pilot";
 import { placesRoutes } from "./routes/places";
 import { positionsRoutes } from "./routes/positions";
 import { publicationRoutes } from "./routes/publication";
 import { reportRoutes } from "./routes/reports";
 import { rosterRoutes } from "./routes/roster";
+import { scheduleTeamRoutes } from "./routes/schedule-teams";
 import { schedulesRoutes } from "./routes/schedules";
 import { surfaceRoutes } from "./routes/surface";
 import { swapRoutes } from "./routes/swaps";
@@ -194,11 +199,16 @@ export function createApp(options: CreateAppOptions = {}) {
 		.use(invitationsRoutes)
 		.use(constraintsRoutes)
 		.use(schedulesRoutes)
+		.use(scheduleTeamRoutes)
+		.use(holidayRoutes)
+		.use(patternRoutes)
 		.use(templateRoutes)
+		.use(approvalPolicyRoutes)
 		.use(publicationRoutes)
 		.use(changesRoutes)
 		.use(coverageRoutes)
 		.use(emailDeliveryRoutes)
+		.use(integrationRoutes)
 		.use(notificationsRoutes)
 		.use(timeEntryRoutes)
 		.use(swapRoutes)

@@ -17,22 +17,27 @@ import {
 	workerDeliveries,
 	workplaces,
 } from "@SchedulesManager/db";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import {
 	listActiveEmployments,
-	requireManager,
+	requirePrivilege,
 	requireSession,
 	requireWorkplaceMember,
 	weekStartDayFor,
 } from "../context";
-import { NotFoundError } from "../errors";
+import { BadRequestError, NotFoundError } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { isWithinNoticeWindow } from "../notice-window";
 import { notifyEmployments, writeAudit } from "../notify";
 import { firstRow } from "../rows";
 import { publicWorkerName } from "../schedule-conflicts";
-import { weekStartOfDateKey, zonedDayInfo } from "../time";
+import {
+	shiftDays,
+	wallToInstant,
+	weekStartOfDateKey,
+	zonedDayInfo,
+} from "../time";
 import { loadWorkplace } from "../workplace-policy";
 import { diffShiftSets } from "./changes";
 
@@ -199,13 +204,39 @@ async function accessibleLocationIds(
 	return rows.map((row) => row.id);
 }
 
+export interface PublishScheduleResult {
+	version: {
+		id: string;
+		versionNumber: number;
+		publishedAt: string;
+		workers: number;
+	};
+	changes: {
+		total: number;
+		material: number;
+		acceptancesRequired: number;
+	};
+}
+
+export interface PublishSelectionResult {
+	publishedShiftIds: string[];
+	version: PublishScheduleResult["version"];
+	changes: PublishScheduleResult["changes"];
+}
+
 export async function publishScheduleNow(
 	scheduleId: string,
 	publishedBy: string,
 	options?: {
 		beforePublish?: (tx: PublicationTransaction) => Promise<void>;
+		/**
+		 * When set, only these draft Shift ids are published. The successor
+		 * version still carries forward every shift from the previous version,
+		 * so unlisted draft changes remain unpublished.
+		 */
+		publishShiftIds?: string[];
 	},
-) {
+): Promise<PublishScheduleResult> {
 	const { schedule, location } = await scheduleContext(scheduleId);
 
 	const [workplace] = await db
@@ -223,11 +254,19 @@ export async function publishScheduleNow(
 			.where(eq(schedules.id, schedule.id))
 			.for("update");
 		await options?.beforePublish?.(tx);
-		const draftShifts = await tx
+		const allDraftShifts = await tx
 			.select()
 			.from(shifts)
 			.where(eq(shifts.scheduleId, schedule.id))
 			.for("update");
+		const publishShiftIds = options?.publishShiftIds;
+		// Partial publish: only the named draft shifts are incorporated, and all
+		// other draft changes stay invisible. The emitted version is still a
+		// complete weekly snapshot because previous version shifts are carried
+		// forward below; see the merge step.
+		const draftShifts = publishShiftIds
+			? allDraftShifts.filter((shift) => publishShiftIds.includes(shift.id))
+			: allDraftShifts;
 
 		const [previousVersion] = await tx
 			.select()
@@ -264,26 +303,86 @@ export async function publishScheduleNow(
 				.returning(),
 		);
 
+		// Build the version's shift set and the set diffed against the previous
+		// version. A selection publish starts from the previous version's shifts
+		// and lets the named drafts replace or add to that base, so unselected
+		// draft shifts are never leaked into the published Schedule.
+		const versionShiftInputs: Array<{
+			shiftId: string | null;
+			employmentId: string | null;
+			positionId: string;
+			startsAt: Date;
+			endsAt: Date;
+			note: string | null;
+		}> = [];
+		const diffNext: Array<{
+			id: string;
+			shiftId: string | null;
+			employmentId: string | null;
+			positionId: string;
+			startsAt: Date;
+			endsAt: Date;
+			note: string | null;
+		}> = [];
+
+		if (publishShiftIds) {
+			const selectedDraftIds = new Set(draftShifts.map((shift) => shift.id));
+			for (const base of previousShifts) {
+				if (base.shiftId && selectedDraftIds.has(base.shiftId)) continue;
+				versionShiftInputs.push({
+					shiftId: base.shiftId,
+					employmentId: base.employmentId,
+					positionId: base.positionId,
+					startsAt: base.startsAt,
+					endsAt: base.endsAt,
+					note: base.note,
+				});
+				diffNext.push({
+					id: base.id,
+					shiftId: base.shiftId,
+					employmentId: base.employmentId,
+					positionId: base.positionId,
+					startsAt: base.startsAt,
+					endsAt: base.endsAt,
+					note: base.note,
+				});
+			}
+		}
+		for (const shift of draftShifts) {
+			versionShiftInputs.push({
+				shiftId: shift.id,
+				employmentId: shift.employmentId,
+				positionId: shift.positionId,
+				startsAt: shift.startsAt,
+				endsAt: shift.endsAt,
+				note: shift.note,
+			});
+			diffNext.push({
+				id: shift.id,
+				shiftId: shift.id,
+				employmentId: shift.employmentId,
+				positionId: shift.positionId,
+				startsAt: shift.startsAt,
+				endsAt: shift.endsAt,
+				note: shift.note,
+			});
+		}
+
 		const insertedVersionShifts =
-			draftShifts.length > 0
+			versionShiftInputs.length > 0
 				? await tx
 						.insert(versionShifts)
 						.values(
-							draftShifts.map((shift) => ({
+							versionShiftInputs.map((shift) => ({
 								versionId: version.id,
-								shiftId: shift.id,
-								employmentId: shift.employmentId,
-								positionId: shift.positionId,
-								startsAt: shift.startsAt,
-								endsAt: shift.endsAt,
-								note: shift.note,
+								...shift,
 							})),
 						)
 						.returning()
 				: [];
 
 		const changes =
-			previousShifts.length + draftShifts.length > 0
+			previousShifts.length + diffNext.length > 0
 				? diffShiftSets(
 						previousShifts.map((shift) => ({
 							id: shift.id,
@@ -294,15 +393,7 @@ export async function publishScheduleNow(
 							endsAt: shift.endsAt,
 							note: shift.note,
 						})),
-						draftShifts.map((shift) => ({
-							id: shift.id,
-							shiftId: shift.id,
-							employmentId: shift.employmentId,
-							positionId: shift.positionId,
-							startsAt: shift.startsAt,
-							endsAt: shift.endsAt,
-							note: shift.note,
-						})),
+						diffNext,
 						location.timezone,
 					)
 				: [];
@@ -539,7 +630,7 @@ export const publicationRoutes = new Elysia({
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
 			const { schedule, location } = await scheduleContext(params.scheduleId);
-			await requireManager(profile.id, location.workplaceId);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.publish");
 
 			return withIdempotency({
 				actorProfileId: profile.id,
@@ -550,16 +641,83 @@ export const publicationRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({ scheduleId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
 					"Atomically snapshot the draft into a new immutable Schedule Version and mark affected workers as Sent (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.post(
+		"/schedules/:scheduleId/publish-selection",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers);
+			const { schedule, location } = await scheduleContext(params.scheduleId);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.publish");
+
+			const shiftIds = [...new Set(body.shiftIds)];
+			if (shiftIds.length === 0) {
+				throw new BadRequestError("Select at least one draft Shift to publish");
+			}
+
+			// Every named Shift must belong to this Schedule. Anything else is a
+			// client bug, not a silent partial publish of someone else's week.
+			const owned = await db
+				.select({ id: shifts.id })
+				.from(shifts)
+				.where(
+					and(eq(shifts.scheduleId, schedule.id), inArray(shifts.id, shiftIds)),
+				);
+			if (owned.length !== shiftIds.length) {
+				throw new BadRequestError(
+					"Every published Shift must belong to this Schedule",
+				);
+			}
+
+			return withIdempotency({
+				actorProfileId: profile.id,
+				scope: `schedule.publish-selection:${schedule.id}`,
+				key: headers["idempotency-key"],
+				request: { scheduleId: schedule.id, shiftIds },
+				execute: async (): Promise<PublishSelectionResult> => {
+					const result = await publishScheduleNow(schedule.id, profile.id, {
+						publishShiftIds: shiftIds,
+					});
+					return {
+						publishedShiftIds: shiftIds,
+						version: result.version,
+						changes: result.changes,
+					};
+				},
+			});
+		},
+		{
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
+			params: t.Object({ scheduleId: t.String({ format: "uuid" }) }),
+			body: t.Object({
+				shiftIds: t.Array(t.String({ format: "uuid" }), { minItems: 1 }),
+			}),
+			detail: {
+				summary:
+					"Publish only the selected draft Shifts as a successor Schedule Version, leaving other draft changes unpublished (Manager)",
 				security: [{ bearerAuth: [] }],
 			},
 		},
@@ -569,12 +727,15 @@ export const publicationRoutes = new Elysia({
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
 			const { schedule, location } = await scheduleContext(params.scheduleId);
-			await requireManager(profile.id, location.workplaceId);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.view");
 
 			return { versions: await loadPublicationVersions(schedule.id) };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ scheduleId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -618,7 +779,17 @@ export const publicationRoutes = new Elysia({
 				locationRows.map((location) => [location.id, location.timezone]),
 			);
 
+			const workplace = await loadWorkplace(params.workplaceId);
+			const plannedVisibility = workplace.plannedShiftsVisibility;
+			const plannedLeadDays = workplace.plannedShiftLeadDays;
+			const showTeam =
+				employment.kind === "manager" ||
+				workplace.workerScheduleVisibility === "full";
+			const showContacts =
+				employment.kind === "manager" || workplace.contactDetailsVisible;
+
 			const now = new Date();
+			const nowMs = now.getTime();
 			const thisWeek = weekStartOfDateKey(
 				zonedDayInfo(now, locationRows[0]?.timezone ?? "America/Chicago")
 					.dateKey,
@@ -628,54 +799,134 @@ export const publicationRoutes = new Elysia({
 			nextWeekDate.setUTCDate(nextWeekDate.getUTCDate() + 7);
 			const nextWeek = nextWeekDate.toISOString().slice(0, 10);
 
-			const versionRows = await db
-				.select({ version: scheduleVersions, schedule: schedules })
-				.from(scheduleVersions)
-				.innerJoin(schedules, eq(schedules.id, scheduleVersions.scheduleId))
+			const scheduleRows = await db
+				.select()
+				.from(schedules)
 				.where(
 					and(
 						inArray(schedules.locationId, locationIds),
 						inArray(schedules.weekStartDate, [thisWeek, nextWeek]),
 					),
-				)
-				.orderBy(desc(scheduleVersions.versionNumber));
-
-			if (versionRows.length === 0) {
-				return {
-					weekStartDay,
-					currentWeek: null,
-					nextWeek: null,
-					nextShift: null,
-					currentChanges: [],
-					pendingAcceptances: [],
-					history: [],
-				};
-			}
+				);
+			const scheduleIds = scheduleRows.map((schedule) => schedule.id);
+			const versionRows =
+				scheduleIds.length === 0
+					? []
+					: await db
+							.select({ version: scheduleVersions, schedule: schedules })
+							.from(scheduleVersions)
+							.innerJoin(
+								schedules,
+								eq(schedules.id, scheduleVersions.scheduleId),
+							)
+							.where(inArray(scheduleVersions.scheduleId, scheduleIds))
+							.orderBy(desc(scheduleVersions.versionNumber));
 
 			const versionIds = versionRows.map((row) => row.version.id);
 			await markDelivered(versionIds, employment.id);
-			const [myShiftRows, myDeliveries] = await Promise.all([
-				db
-					.select()
-					.from(versionShifts)
-					.where(
-						and(
-							inArray(versionShifts.versionId, versionIds),
-							eq(versionShifts.employmentId, employment.id),
-						),
-					),
-				db
-					.select()
-					.from(workerDeliveries)
-					.where(
-						and(
-							inArray(workerDeliveries.versionId, versionIds),
-							eq(workerDeliveries.employmentId, employment.id),
-						),
-					),
-			]);
+			const draftShiftRows =
+				scheduleIds.length === 0
+					? []
+					: await db
+							.select()
+							.from(shifts)
+							.where(
+								and(
+									inArray(shifts.scheduleId, scheduleIds),
+									eq(shifts.employmentId, employment.id),
+								),
+							);
+
+			// Drafts visible to the caller's scope: every draft when the Workplace
+			// shows the full team, otherwise only the caller's own.
+			const visibleDraftRows =
+				showTeam && scheduleIds.length > 0
+					? await db
+							.select()
+							.from(shifts)
+							.where(inArray(shifts.scheduleId, scheduleIds))
+					: draftShiftRows;
+
+			const employmentNameRows = await db
+				.select({
+					id: employments.id,
+					name: profiles.fullName,
+					email: profiles.email,
+				})
+				.from(employments)
+				.leftJoin(profiles, eq(profiles.id, employments.profileId))
+				.where(eq(employments.workplaceId, params.workplaceId));
+			const employmentNameById = new Map(
+				employmentNameRows.map((row) => [row.id, row]),
+			);
+
+			// The latest published version per schedule (primary or team). versionRows
+			// is ordered by descending versionNumber, so the first row per schedule wins.
+			const latestVersionBySchedule = new Map<
+				string,
+				{
+					version: (typeof versionRows)[number]["version"];
+					schedule: (typeof versionRows)[number]["schedule"];
+				}
+			>();
+			for (const row of versionRows) {
+				if (!latestVersionBySchedule.has(row.schedule.id)) {
+					latestVersionBySchedule.set(row.schedule.id, {
+						version: row.version,
+						schedule: row.schedule,
+					});
+				}
+			}
+			const latestVersionIds = [...latestVersionBySchedule.values()].map(
+				(entry) => entry.version.id,
+			);
+			const scheduleIdByVersionId = new Map<string, string>();
+			for (const [scheduleId, entry] of latestVersionBySchedule) {
+				scheduleIdByVersionId.set(entry.version.id, scheduleId);
+			}
+
+			const publishedShiftRows =
+				latestVersionIds.length === 0
+					? []
+					: await db
+							.select({
+								shift: versionShifts,
+								name: profiles.fullName,
+								email: profiles.email,
+							})
+							.from(versionShifts)
+							.leftJoin(
+								employments,
+								eq(employments.id, versionShifts.employmentId),
+							)
+							.leftJoin(profiles, eq(profiles.id, employments.profileId))
+							.where(
+								showTeam
+									? inArray(versionShifts.versionId, latestVersionIds)
+									: and(
+											inArray(versionShifts.versionId, latestVersionIds),
+											eq(versionShifts.employmentId, employment.id),
+										),
+							);
+
+			const ownPublishedShifts = publishedShiftRows.filter(
+				(row) => row.shift.employmentId === employment.id,
+			);
+
+			const myDeliveries =
+				versionIds.length === 0
+					? []
+					: await db
+							.select()
+							.from(workerDeliveries)
+							.where(
+								and(
+									inArray(workerDeliveries.versionId, versionIds),
+									eq(workerDeliveries.employmentId, employment.id),
+								),
+							);
 			const myTimeEntries =
-				myShiftRows.length === 0
+				ownPublishedShifts.length === 0
 					? []
 					: await db
 							.select()
@@ -684,7 +935,7 @@ export const publicationRoutes = new Elysia({
 								and(
 									inArray(
 										timeEntries.versionShiftId,
-										myShiftRows.map((shift) => shift.id),
+										ownPublishedShifts.map((row) => row.shift.id),
 									),
 									eq(timeEntries.employmentId, employment.id),
 								),
@@ -693,7 +944,7 @@ export const publicationRoutes = new Elysia({
 				myTimeEntries.map((entry) => [entry.versionShiftId, entry]),
 			);
 			const pendingReleaseRows =
-				myShiftRows.length === 0
+				ownPublishedShifts.length === 0
 					? []
 					: await db
 							.select({ versionShiftId: shiftReleases.versionShiftId })
@@ -702,7 +953,7 @@ export const publicationRoutes = new Elysia({
 								and(
 									inArray(
 										shiftReleases.versionShiftId,
-										myShiftRows.map((shift) => shift.id),
+										ownPublishedShifts.map((row) => row.shift.id),
 									),
 									eq(shiftReleases.requestedBy, employment.id),
 									eq(shiftReleases.status, "pending"),
@@ -720,92 +971,224 @@ export const publicationRoutes = new Elysia({
 				positionRows.map((position) => [position.id, position.name]),
 			);
 
+			const scheduleById = new Map(
+				scheduleRows.map((schedule) => [schedule.id, schedule]),
+			);
+			const locationTzByScheduleId = new Map(
+				scheduleRows.map((schedule) => [
+					schedule.id,
+					tzByLocation.get(schedule.locationId) ?? "America/Chicago",
+				]),
+			);
+
+			// Draft shifts the worker may see before publication. The published
+			// payload above stays authoritative: a draft whose underlying Shift is
+			// already in the week's version is dropped, and planned entries never
+			// carry delivery, acceptance, release, or time-entry state.
+			const plannedCutoffMs = nowMs + plannedLeadDays * 86_400_000;
+			function draftIsVisible(
+				shift: (typeof draftShiftRows)[number],
+				timezone: string,
+			) {
+				if (plannedVisibility === "never") return false;
+				if (plannedVisibility === "always") return true;
+				const todayKey = zonedDayInfo(new Date(nowMs), timezone).dateKey;
+				const todayStartMs = wallToInstant(todayKey, 0, timezone).getTime();
+				const startsAtMs = shift.startsAt.getTime();
+				return startsAtMs >= todayStartMs && startsAtMs <= plannedCutoffMs;
+			}
+
 			function weekPayload(weekStart: string) {
-				const row = versionRows.find(
-					(candidate) => candidate.schedule.weekStartDate === weekStart,
+				const weekSchedules = scheduleRows.filter(
+					(schedule) => schedule.weekStartDate === weekStart,
 				);
-				if (!row) return null;
-				const locationTz =
-					tzByLocation.get(row.schedule.locationId) ?? "America/Chicago";
-				const delivery = myDeliveries.find(
-					(candidate) => candidate.versionId === row.version.id,
+				const weekScheduleIds = new Set(
+					weekSchedules.map((schedule) => schedule.id),
 				);
-				return {
-					weekStart,
-					locationId: row.schedule.locationId,
-					locationName:
-						locationRows.find((l) => l.id === row.schedule.locationId)?.name ??
-						"Location",
-					timezone: locationTz,
-					version: {
-						id: row.version.id,
-						versionNumber: row.version.versionNumber,
-						publishedAt: row.version.publishedAt.toISOString(),
-					},
-					deliveryStatus: delivery?.status ?? null,
-					shifts: myShiftRows
-						.filter((shift) => shift.versionId === row.version.id)
-						.map((shift) => {
-							const startInfo = zonedDayInfo(shift.startsAt, locationTz);
-							const endInfo = zonedDayInfo(shift.endsAt, locationTz);
-							const entry = timeEntryByShiftId.get(shift.id);
-							return {
-								id: shift.id,
-								positionName:
-									positionNamesById.get(shift.positionId) ?? "Shift",
-								startsAt: shift.startsAt.toISOString(),
-								endsAt: shift.endsAt.toISOString(),
-								date: startInfo.dateKey,
-								startMinute: startInfo.minuteOfDay,
-								endMinute: endInfo.minuteOfDay,
-								overnight: startInfo.dateKey !== endInfo.dateKey,
-								note: shift.note,
-								releaseStatus: pendingReleaseShiftIds.has(shift.id)
+				const weekLatest = weekSchedules
+					.map((schedule) => latestVersionBySchedule.get(schedule.id))
+					.filter((entry): entry is NonNullable<typeof entry> =>
+						Boolean(entry),
+					);
+				// Primary (team-less) schedule's latest version when present, else the
+				// first available team version.
+				const primaryEntry =
+					weekLatest.find((entry) => entry.schedule.teamId === null) ??
+					weekLatest[0];
+				const weekLatestVersionIds = new Set(
+					weekLatest.map((entry) => entry.version.id),
+				);
+				const publishedShifts = publishedShiftRows.filter((row) =>
+					weekLatestVersionIds.has(row.shift.versionId),
+				);
+				// A draft already represented by ANY published shift of the week must
+				// never be double-listed, regardless of which schedule published it.
+				const publishedDraftIds = new Set(
+					publishedShifts
+						.map((row) => row.shift.shiftId)
+						.filter((id): id is string => id !== null),
+				);
+				const plannedShifts = visibleDraftRows.filter(
+					(shift) =>
+						weekScheduleIds.has(shift.scheduleId) &&
+						!publishedDraftIds.has(shift.id) &&
+						draftIsVisible(
+							shift,
+							locationTzByScheduleId.get(shift.scheduleId) ?? "America/Chicago",
+						),
+				);
+				if (!primaryEntry && plannedShifts.length === 0) return null;
+				const locationId =
+					primaryEntry?.schedule.locationId ?? weekSchedules[0]?.locationId;
+				if (!locationId) return null;
+				const locationTz = tzByLocation.get(locationId) ?? "America/Chicago";
+				const delivery = primaryEntry
+					? myDeliveries.find(
+							(candidate) => candidate.versionId === primaryEntry.version.id,
+						)
+					: undefined;
+				const shifts = [
+					...publishedShifts.map((row) => {
+						const shift = row.shift;
+						const startInfo = zonedDayInfo(shift.startsAt, locationTz);
+						const endInfo = zonedDayInfo(shift.endsAt, locationTz);
+						const isMine = shift.employmentId === employment.id;
+						const entry = isMine ? timeEntryByShiftId.get(shift.id) : undefined;
+						return {
+							id: shift.id,
+							employmentId: shift.employmentId,
+							workerName: shift.employmentId
+								? publicWorkerName(row.name, row.email ?? "", showContacts)
+								: "Open shift",
+							isMine,
+							positionName: positionNamesById.get(shift.positionId) ?? "Shift",
+							startsAt: shift.startsAt.toISOString(),
+							endsAt: shift.endsAt.toISOString(),
+							date: startInfo.dateKey,
+							startMinute: startInfo.minuteOfDay,
+							endMinute: endInfo.minuteOfDay,
+							overnight: startInfo.dateKey !== endInfo.dateKey,
+							note: shift.note,
+							planned: false,
+							releaseStatus:
+								isMine && pendingReleaseShiftIds.has(shift.id)
 									? ("pending" as const)
 									: null,
-								timeEntry: entry
+							timeEntry:
+								isMine && entry
 									? {
 											clockedInAt: entry.clockedInAt.toISOString(),
 											clockedOutAt: entry.clockedOutAt?.toISOString() ?? null,
 										}
 									: null,
-							};
-						})
-						.sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
+						};
+					}),
+					...plannedShifts.map((shift) => {
+						const startInfo = zonedDayInfo(shift.startsAt, locationTz);
+						const endInfo = zonedDayInfo(shift.endsAt, locationTz);
+						const plannedWorker = shift.employmentId
+							? employmentNameById.get(shift.employmentId)
+							: undefined;
+						return {
+							id: shift.id,
+							employmentId: shift.employmentId,
+							workerName: shift.employmentId
+								? publicWorkerName(
+										plannedWorker?.name ?? null,
+										plannedWorker?.email ?? "",
+										showContacts,
+									)
+								: "Open shift",
+							isMine: shift.employmentId === employment.id,
+							positionName: positionNamesById.get(shift.positionId) ?? "Shift",
+							startsAt: shift.startsAt.toISOString(),
+							endsAt: shift.endsAt.toISOString(),
+							date: startInfo.dateKey,
+							startMinute: startInfo.minuteOfDay,
+							endMinute: endInfo.minuteOfDay,
+							overnight: startInfo.dateKey !== endInfo.dateKey,
+							note: shift.note,
+							planned: true,
+							releaseStatus: null,
+							timeEntry: null,
+						};
+					}),
+				].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+				return {
+					weekStart,
+					locationId,
+					locationName:
+						locationRows.find((l) => l.id === locationId)?.name ?? "Location",
+					timezone: locationTz,
+					version: primaryEntry
+						? {
+								id: primaryEntry.version.id,
+								versionNumber: primaryEntry.version.versionNumber,
+								publishedAt: primaryEntry.version.publishedAt.toISOString(),
+							}
+						: null,
+					deliveryStatus: delivery?.status ?? null,
+					shifts,
 				};
 			}
 
-			const latestVersionIdBySchedule = new Map<string, string>();
-			for (const row of versionRows) {
-				if (!latestVersionIdBySchedule.has(row.schedule.id)) {
-					latestVersionIdBySchedule.set(row.schedule.id, row.version.id);
-				}
-			}
-			const latestVersionIds = [...latestVersionIdBySchedule.values()];
-
-			const upcoming = myShiftRows
-				.filter(
-					(shift) =>
-						latestVersionIds.includes(shift.versionId) &&
-						shift.endsAt.getTime() >= now.getTime(),
-				)
-				.filter((shift) => {
-					const entry = timeEntryByShiftId.get(shift.id);
-					return entry == null || entry.clockedOutAt === null;
-				})
-				.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
-			const nextShiftRaw = upcoming[0] ?? null;
+			// nextShift candidates: the worker's own published shifts from the latest
+			// version of every applicable schedule, plus their own visible planned
+			// drafts. A draft already represented by any published shift is excluded.
+			const publishedDraftIdsAll = new Set(
+				publishedShiftRows
+					.map((row) => row.shift.shiftId)
+					.filter((id): id is string => id !== null),
+			);
+			const ownVisibleDrafts = draftShiftRows.filter(
+				(shift) =>
+					!publishedDraftIdsAll.has(shift.id) &&
+					draftIsVisible(
+						shift,
+						locationTzByScheduleId.get(shift.scheduleId) ?? "America/Chicago",
+					),
+			);
+			const nextShiftCandidates = [
+				...ownPublishedShifts
+					.filter((row) => row.shift.endsAt.getTime() >= nowMs)
+					.filter((row) => {
+						const entry = timeEntryByShiftId.get(row.shift.id);
+						return entry == null || entry.clockedOutAt === null;
+					})
+					.map((row) => {
+						const scheduleId = scheduleIdByVersionId.get(row.shift.versionId);
+						return {
+							id: row.shift.id,
+							positionId: row.shift.positionId,
+							startsAt: row.shift.startsAt,
+							endsAt: row.shift.endsAt,
+							locationId: scheduleId
+								? (scheduleById.get(scheduleId)?.locationId ?? "")
+								: "",
+							planned: false,
+						};
+					}),
+				...ownVisibleDrafts
+					.filter((shift) => shift.endsAt.getTime() >= nowMs)
+					.map((shift) => ({
+						id: shift.id,
+						positionId: shift.positionId,
+						startsAt: shift.startsAt,
+						endsAt: shift.endsAt,
+						locationId: scheduleById.get(shift.scheduleId)?.locationId ?? "",
+						planned: true,
+					})),
+			].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+			const nextShiftRaw = nextShiftCandidates[0] ?? null;
 			const nextShift = nextShiftRaw
 				? (() => {
 						const locationTz =
-							tzByLocation.get(
-								versionRows.find(
-									(row) => row.version.id === nextShiftRaw.versionId,
-								)?.schedule.locationId ?? "",
-							) ?? "America/Chicago";
+							tzByLocation.get(nextShiftRaw.locationId) ?? "America/Chicago";
 						const info = zonedDayInfo(nextShiftRaw.startsAt, locationTz);
 						const endInfo = zonedDayInfo(nextShiftRaw.endsAt, locationTz);
-						const entry = timeEntryByShiftId.get(nextShiftRaw.id);
+						const entry = nextShiftRaw.planned
+							? undefined
+							: timeEntryByShiftId.get(nextShiftRaw.id);
 						return {
 							id: nextShiftRaw.id,
 							positionName:
@@ -816,6 +1199,7 @@ export const publicationRoutes = new Elysia({
 							startMinute: info.minuteOfDay,
 							endMinute: endInfo.minuteOfDay,
 							overnight: endInfo.dateKey !== info.dateKey,
+							planned: nextShiftRaw.planned,
 							timeEntry: entry
 								? {
 										clockedInAt: entry.clockedInAt.toISOString(),
@@ -859,64 +1243,67 @@ export const publicationRoutes = new Elysia({
 					),
 				);
 
-			const currentWeekRow = versionRows.find(
-				(candidate) => candidate.schedule.weekStartDate === thisWeek,
+			// Aggregate material changes across every schedule for the current week
+			// (primary + teams), each diffed against its own previous version.
+			const currentWeekSchedules = scheduleRows.filter(
+				(schedule) => schedule.weekStartDate === thisWeek,
 			);
-			let currentChanges: string[] = [];
-			if (currentWeekRow && currentWeekRow.version.versionNumber > 1) {
+			const changeSummaries = new Set<string>();
+			for (const schedule of currentWeekSchedules) {
+				const latest = latestVersionBySchedule.get(schedule.id);
+				if (!latest || latest.version.versionNumber <= 1) continue;
 				const [previousVersion] = await db
 					.select()
 					.from(scheduleVersions)
 					.where(
 						and(
-							eq(scheduleVersions.scheduleId, currentWeekRow.schedule.id),
+							eq(scheduleVersions.scheduleId, schedule.id),
 							eq(
 								scheduleVersions.versionNumber,
-								currentWeekRow.version.versionNumber - 1,
+								latest.version.versionNumber - 1,
 							),
 						),
 					)
 					.limit(1);
-				if (previousVersion) {
-					const [previousMyShifts, currentMyShifts] = await Promise.all([
-						db
-							.select()
-							.from(versionShifts)
-							.where(
-								and(
-									eq(versionShifts.versionId, previousVersion.id),
-									eq(versionShifts.employmentId, employment.id),
-								),
+				if (!previousVersion) continue;
+				const [previousMyShifts, currentMyShifts] = await Promise.all([
+					db
+						.select()
+						.from(versionShifts)
+						.where(
+							and(
+								eq(versionShifts.versionId, previousVersion.id),
+								eq(versionShifts.employmentId, employment.id),
 							),
-						db
-							.select()
-							.from(versionShifts)
-							.where(
-								and(
-									eq(versionShifts.versionId, currentWeekRow.version.id),
-									eq(versionShifts.employmentId, employment.id),
-								),
+						),
+					db
+						.select()
+						.from(versionShifts)
+						.where(
+							and(
+								eq(versionShifts.versionId, latest.version.id),
+								eq(versionShifts.employmentId, employment.id),
 							),
-					]);
-					const toDiffable = (shift: (typeof currentMyShifts)[number]) => ({
-						id: shift.id,
-						shiftId: shift.shiftId,
-						employmentId: shift.employmentId,
-						positionId: shift.positionId,
-						startsAt: shift.startsAt,
-						endsAt: shift.endsAt,
-						note: shift.note,
-					});
-					currentChanges = diffShiftSets(
-						previousMyShifts.map(toDiffable),
-						currentMyShifts.map(toDiffable),
-						tzByLocation.get(currentWeekRow.schedule.locationId) ??
-							"America/Chicago",
-					)
-						.filter((change) => change.material)
-						.map((change) => change.summary);
+						),
+				]);
+				const toDiffable = (shift: (typeof currentMyShifts)[number]) => ({
+					id: shift.id,
+					shiftId: shift.shiftId,
+					employmentId: shift.employmentId,
+					positionId: shift.positionId,
+					startsAt: shift.startsAt,
+					endsAt: shift.endsAt,
+					note: shift.note,
+				});
+				for (const change of diffShiftSets(
+					previousMyShifts.map(toDiffable),
+					currentMyShifts.map(toDiffable),
+					tzByLocation.get(schedule.locationId) ?? "America/Chicago",
+				)) {
+					if (change.material) changeSummaries.add(change.summary);
 				}
 			}
+			const currentChanges = [...changeSummaries];
 
 			return {
 				weekStartDay,
@@ -955,7 +1342,10 @@ export const publicationRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			query: t.Object({
 				scope: t.Optional(t.Union([t.Literal("home"), t.Literal("full")])),
@@ -963,6 +1353,198 @@ export const publicationRoutes = new Elysia({
 			detail: {
 				summary:
 					"Return the worker's published schedule for this and next week, their next Shift, and version history (scope=home skips history)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/my/calendar/:monthStart",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers);
+			const employment = await requireWorkplaceMember(
+				profile.id,
+				params.workplaceId,
+			);
+			const weekStartDay = await weekStartDayFor(params.workplaceId);
+			const empty = {
+				monthStart: params.monthStart,
+				weekStartDay,
+				shifts: [] as {
+					id: string;
+					positionName: string;
+					startsAt: string;
+					endsAt: string;
+					date: string;
+					startMinute: number;
+					endMinute: number;
+					overnight: boolean;
+					note: string | null;
+				}[],
+			};
+
+			const locationIds = await accessibleLocationIds(
+				employment.id,
+				params.workplaceId,
+			);
+			if (locationIds.length === 0) return empty;
+
+			const gridStart = weekStartOfDateKey(params.monthStart, weekStartDay);
+			const gridEnd = shiftDays(gridStart, 41);
+
+			const workplace = await loadWorkplace(params.workplaceId);
+			const plannedVisibility = workplace.plannedShiftsVisibility;
+			const plannedLeadDays = workplace.plannedShiftLeadDays;
+			const nowMs = Date.now();
+			const plannedCutoffMs = nowMs + plannedLeadDays * 86_400_000;
+
+			const gridSchedules = await db
+				.select()
+				.from(schedules)
+				.where(
+					and(
+						inArray(schedules.locationId, locationIds),
+						gte(schedules.weekStartDate, gridStart),
+						lte(schedules.weekStartDate, gridEnd),
+					),
+				);
+			if (gridSchedules.length === 0) return empty;
+			const scheduleIds = gridSchedules.map((schedule) => schedule.id);
+
+			const versionRows = await db
+				.select()
+				.from(scheduleVersions)
+				.where(inArray(scheduleVersions.scheduleId, scheduleIds))
+				.orderBy(desc(scheduleVersions.versionNumber));
+			const latestVersionIdBySchedule = new Map<string, string>();
+			const scheduleIdByVersionId = new Map<string, string>();
+			for (const version of versionRows) {
+				if (!latestVersionIdBySchedule.has(version.scheduleId)) {
+					latestVersionIdBySchedule.set(version.scheduleId, version.id);
+					scheduleIdByVersionId.set(version.id, version.scheduleId);
+				}
+			}
+			const versionIds = [...latestVersionIdBySchedule.values()];
+
+			const [myShiftRows, positionRows, locationRows, draftShiftRows] =
+				await Promise.all([
+					versionIds.length === 0
+						? Promise.resolve([] as (typeof versionShifts.$inferSelect)[])
+						: db
+								.select()
+								.from(versionShifts)
+								.where(
+									and(
+										inArray(versionShifts.versionId, versionIds),
+										eq(versionShifts.employmentId, employment.id),
+									),
+								),
+					db
+						.select({ id: positions.id, name: positions.name })
+						.from(positions)
+						.where(eq(positions.workplaceId, params.workplaceId)),
+					db
+						.select({ id: locations.id, timezone: locations.timezone })
+						.from(locations)
+						.where(inArray(locations.id, locationIds)),
+					db
+						.select()
+						.from(shifts)
+						.where(
+							and(
+								inArray(shifts.scheduleId, scheduleIds),
+								eq(shifts.employmentId, employment.id),
+							),
+						),
+				]);
+			const positionNamesById = new Map(
+				positionRows.map((position) => [position.id, position.name]),
+			);
+			const timezoneByLocation = new Map(
+				locationRows.map((location) => [location.id, location.timezone]),
+			);
+			const timezoneBySchedule = new Map(
+				gridSchedules.map((schedule) => [
+					schedule.id,
+					timezoneByLocation.get(schedule.locationId) ?? "America/Chicago",
+				]),
+			);
+
+			const draftsRepresented = new Set(
+				myShiftRows
+					.map((shift) => shift.shiftId)
+					.filter((id): id is string => id !== null),
+			);
+			const plannedShifts = draftShiftRows.filter((shift) => {
+				if (draftsRepresented.has(shift.id)) return false;
+				if (plannedVisibility === "never") return false;
+				if (plannedVisibility === "always") return true;
+				const timezone =
+					timezoneBySchedule.get(shift.scheduleId) ?? "America/Chicago";
+				const todayKey = zonedDayInfo(new Date(nowMs), timezone).dateKey;
+				const todayStartMs = wallToInstant(todayKey, 0, timezone).getTime();
+				const startsAtMs = shift.startsAt.getTime();
+				return startsAtMs >= todayStartMs && startsAtMs <= plannedCutoffMs;
+			});
+
+			const published = myShiftRows.map((shift) => {
+				const scheduleId = scheduleIdByVersionId.get(shift.versionId);
+				const timezone =
+					(scheduleId ? timezoneBySchedule.get(scheduleId) : undefined) ??
+					"America/Chicago";
+				const start = zonedDayInfo(shift.startsAt, timezone);
+				const end = zonedDayInfo(shift.endsAt, timezone);
+				return {
+					id: shift.id,
+					positionName: positionNamesById.get(shift.positionId) ?? "Shift",
+					startsAt: shift.startsAt.toISOString(),
+					endsAt: shift.endsAt.toISOString(),
+					date: start.dateKey,
+					startMinute: start.minuteOfDay,
+					endMinute: end.minuteOfDay,
+					overnight: start.dateKey !== end.dateKey,
+					note: shift.note,
+					planned: false,
+				};
+			});
+			const planned = plannedShifts.map((shift) => {
+				const timezone =
+					timezoneBySchedule.get(shift.scheduleId) ?? "America/Chicago";
+				const start = zonedDayInfo(shift.startsAt, timezone);
+				const end = zonedDayInfo(shift.endsAt, timezone);
+				return {
+					id: shift.id,
+					positionName: positionNamesById.get(shift.positionId) ?? "Shift",
+					startsAt: shift.startsAt.toISOString(),
+					endsAt: shift.endsAt.toISOString(),
+					date: start.dateKey,
+					startMinute: start.minuteOfDay,
+					endMinute: end.minuteOfDay,
+					overnight: start.dateKey !== end.dateKey,
+					note: shift.note,
+					planned: true,
+				};
+			});
+
+			return {
+				monthStart: params.monthStart,
+				weekStartDay,
+				shifts: [...published, ...planned].sort((a, b) =>
+					a.startsAt.localeCompare(b.startsAt),
+				),
+			};
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({
+				workplaceId: t.String({ format: "uuid" }),
+				monthStart: t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+			}),
+			detail: {
+				summary:
+					"Read the caller's own published Shifts across a calendar month (Worker)",
 				security: [{ bearerAuth: [] }],
 			},
 		},
@@ -1066,7 +1648,7 @@ export const publicationRoutes = new Elysia({
 						return {
 							id: shift.id,
 							employmentId: shift.employmentId,
-							mine: shift.employmentId === employment.employment.id,
+							isMine: shift.employmentId === employment.employment.id,
 							workerName: shift.employmentId
 								? publicWorkerName(item.name, item.email ?? "", showContacts)
 								: "Open shift",
@@ -1084,7 +1666,10 @@ export const publicationRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ versionId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:
@@ -1106,12 +1691,15 @@ export const publicationRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({ versionId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary:

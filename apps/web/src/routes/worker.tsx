@@ -50,6 +50,7 @@ import { toast } from "sonner";
 
 import { profileInitials } from "@/components/current-profile";
 import { LogoMark } from "@/components/logo-mark";
+import { NextShiftBar } from "@/components/next-shift-bar";
 import { PilotFeedback } from "@/components/pilot-feedback";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
@@ -343,6 +344,11 @@ function WorkerLayout() {
 				<header className="sticky top-0 z-40 flex h-14 min-h-14 shrink-0 items-center gap-2 border-b bg-background px-3 shadow-xs">
 					<SidebarTrigger className="-ml-1 shrink-0" />
 					<span className="shrink-0 font-medium text-sm">{activePage}</span>
+					{pathname === "/worker" ? (
+						<div className="ml-auto min-w-0">
+							<NextShiftBar />
+						</div>
+					) : null}
 				</header>
 				<main
 					id="main-content"

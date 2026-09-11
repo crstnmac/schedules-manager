@@ -7,13 +7,14 @@ import {
 	shifts,
 	templateShifts,
 } from "@SchedulesManager/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
-import { requireManager, requireSession, weekStartDayFor } from "../context";
+import { requirePrivilege, requireSession, weekStartDayFor } from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { writeAudit } from "../notify";
+import { resolveScheduleTeam } from "../schedule-teams";
 import {
 	assertWeekStartDay,
 	shiftDays,
@@ -27,18 +28,31 @@ function daysBetween(fromDateKey: string, toDateKey: string): number {
 	return Math.round((to.getTime() - from.getTime()) / 86_400_000);
 }
 
-async function locationForManager(profileId: string, locationId: string) {
+async function locationForManager(
+	profileId: string,
+	locationId: string,
+	privilege: "schedule.manage" | "schedule.view" = "schedule.manage",
+) {
 	const [location] = await db
 		.select()
 		.from(locations)
 		.where(eq(locations.id, locationId))
 		.limit(1);
 	if (!location) throw new NotFoundError("Location not found");
-	await requireManager(profileId, location.workplaceId);
+	await requirePrivilege(profileId, location.workplaceId, privilege);
 	return location;
 }
 
-async function getOrCreateSchedule(locationId: string, weekStart: string) {
+function scheduleTeamMatch(teamId: string | null | undefined) {
+	return teamId ? eq(schedules.teamId, teamId) : isNull(schedules.teamId);
+}
+
+async function getOrCreateSchedule(
+	locationId: string,
+	weekStart: string,
+	teamId: string | null = null,
+) {
+	const match = scheduleTeamMatch(teamId);
 	const [existing] = await db
 		.select()
 		.from(schedules)
@@ -46,6 +60,7 @@ async function getOrCreateSchedule(locationId: string, weekStart: string) {
 			and(
 				eq(schedules.locationId, locationId),
 				eq(schedules.weekStartDate, weekStart),
+				match,
 			),
 		)
 		.limit(1);
@@ -53,7 +68,7 @@ async function getOrCreateSchedule(locationId: string, weekStart: string) {
 
 	await db
 		.insert(schedules)
-		.values({ locationId, weekStartDate: weekStart })
+		.values({ locationId, weekStartDate: weekStart, teamId })
 		.onConflictDoNothing();
 
 	const [created] = await db
@@ -63,6 +78,7 @@ async function getOrCreateSchedule(locationId: string, weekStart: string) {
 			and(
 				eq(schedules.locationId, locationId),
 				eq(schedules.weekStartDate, weekStart),
+				match,
 			),
 		)
 		.limit(1);
@@ -91,7 +107,7 @@ export const templateRoutes = new Elysia({
 		"/locations/:locationId/schedule-templates",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await locationForManager(profile.id, params.locationId);
+			await locationForManager(profile.id, params.locationId, "schedule.view");
 
 			const templates = await db
 				.select()
@@ -120,7 +136,10 @@ export const templateRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ locationId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "List named Schedule Templates for a Location (Manager)",
@@ -140,10 +159,11 @@ export const templateRoutes = new Elysia({
 
 			return withIdempotency({
 				actorProfileId: profile.id,
-				scope: `template.save:${params.locationId}:${params.weekStart}:${body.name}`,
+				scope: `template.save:${params.locationId}:${params.weekStart}:${body.name}:${body.teamId ?? "primary"}`,
 				key: headers["idempotency-key"],
 				request: body,
 				execute: async () => {
+					const teamId = await resolveScheduleTeam(location.id, body.teamId);
 					const [schedule] = await db
 						.select()
 						.from(schedules)
@@ -151,6 +171,7 @@ export const templateRoutes = new Elysia({
 							and(
 								eq(schedules.locationId, location.id),
 								eq(schedules.weekStartDate, params.weekStart),
+								scheduleTeamMatch(teamId),
 							),
 						)
 						.limit(1);
@@ -229,18 +250,22 @@ export const templateRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: t.String(),
 			}),
 			body: t.Object({
 				name: t.String({ minLength: 1, maxLength: 80 }),
+				teamId: t.Optional(t.Union([t.String({ format: "uuid" }), t.Null()])),
 			}),
 			detail: {
 				summary:
@@ -251,7 +276,7 @@ export const templateRoutes = new Elysia({
 	)
 	.post(
 		"/locations/:locationId/schedules/:weekStart/templates/:templateId/apply",
-		async ({ headers, params }) => {
+		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
 			const location = await locationForManager(profile.id, params.locationId);
 			assertWeekStartDay(
@@ -261,10 +286,15 @@ export const templateRoutes = new Elysia({
 
 			return withIdempotency({
 				actorProfileId: profile.id,
-				scope: `template.apply:${params.templateId}:${params.weekStart}`,
+				scope: `template.apply:${params.templateId}:${params.weekStart}:${body?.teamId ?? "primary"}`,
 				key: headers["idempotency-key"],
-				request: { templateId: params.templateId, weekStart: params.weekStart },
+				request: {
+					templateId: params.templateId,
+					weekStart: params.weekStart,
+					teamId: body?.teamId ?? null,
+				},
 				execute: async () => {
+					const teamId = await resolveScheduleTeam(location.id, body?.teamId);
 					const [template] = await db
 						.select()
 						.from(scheduleTemplates)
@@ -288,6 +318,7 @@ export const templateRoutes = new Elysia({
 					const target = await getOrCreateSchedule(
 						location.id,
 						params.weekStart,
+						teamId,
 					);
 					await db.transaction(async (tx) => {
 						const activeIds = new Set(
@@ -349,17 +380,25 @@ export const templateRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: t.String(),
 				templateId: t.String({ format: "uuid" }),
 			}),
+			body: t.Optional(
+				t.Object({
+					teamId: t.Optional(t.Union([t.String({ format: "uuid" }), t.Null()])),
+				}),
+			),
 			detail: {
 				summary:
 					"Replace this week's draft with a named Schedule Template (Manager)",

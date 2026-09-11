@@ -154,15 +154,22 @@ export function TableToolbar({
 	left,
 	right,
 	className,
+	embedded = false,
 }: {
 	left?: ReactNode;
 	right?: ReactNode;
 	className?: string;
+	/**
+	 * Removes the page-level chrome (border, background, gutter) so the action
+	 * bar can sit flush inside a `CardContent` directly above a table.
+	 */
+	embedded?: boolean;
 }) {
 	return (
 		<div
 			className={cn(
-				"flex shrink-0 flex-wrap items-center gap-2 border-b bg-card/40 px-4 py-2",
+				"flex shrink-0 flex-wrap items-center gap-2",
+				embedded ? "py-2" : "border-b bg-card/40 px-4 py-2",
 				className,
 			)}
 		>

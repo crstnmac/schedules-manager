@@ -9,7 +9,10 @@ import {
 	Text,
 	View,
 } from "react-native";
-
+import {
+	ManagerCoverageSection,
+	useManagerCoverage,
+} from "@/components/manager-coverage";
 import {
 	AppScreen,
 	Badge,
@@ -178,7 +181,7 @@ function attendanceLabel(kind: TimeclockRow["attendance"]) {
 export function ManagerSchedule() {
 	const { theme } = useAppTheme();
 	const { formatMinute } = useDisplayPrefs();
-	const { workplaceId } = useCurrentEmployment();
+	const { workplaceId, canReview } = useCurrentEmployment();
 	const locations = useQuery({
 		queryKey: ["manager", workplaceId, "locations"],
 		queryFn: () =>
@@ -415,7 +418,9 @@ export function ManagerSchedule() {
 												) : null}
 												{mark ? <Badge label={mark} variant="danger" /> : null}
 											</View>
-											{timeclock?.versionShiftId && sh.workerName ? (
+											{canReview &&
+											timeclock?.versionShiftId &&
+											sh.workerName ? (
 												<SecondaryButton
 													label="Mark attendance"
 													disabled={markAttendance.isPending}
@@ -518,6 +523,7 @@ export function ManagerRequests() {
 	const workers = useManagerWorkers(workplaceId);
 	const leaveTypes = useLeaveTypes(workplaceId);
 	const swaps = useCoverageSwaps(workplaceId);
+	const coverage = useManagerCoverage(workplaceId);
 	const client = useQueryClient();
 	const [employmentId, setEmploymentId] = useState("");
 	const [leaveTypeId, setLeaveTypeId] = useState("");
@@ -649,17 +655,23 @@ export function ManagerRequests() {
 				(r.endDate ?? r.endsAt.slice(0, 10)) >= todayIsoDate(),
 		) ?? [];
 	const pendingSwaps = swaps.data ?? [];
+	const pendingCoverage =
+		(coverage.data?.releases.filter((r) => r.status === "pending").length ??
+			0) +
+		(coverage.data?.pickups.filter((p) => p.status === "pending").length ?? 0);
 	const activePeople =
 		workers.data?.workers.filter((member) => member.status === "active") ?? [];
 	const empty =
 		!requests.isLoading &&
 		!swaps.isLoading &&
+		!coverage.isLoading &&
 		pendingTimeOff.length === 0 &&
-		pendingSwaps.length === 0;
+		pendingSwaps.length === 0 &&
+		pendingCoverage === 0;
 
 	return (
 		<AppScreen>
-			<PageHeader title="Time off" />
+			<PageHeader title="Requests" />
 			{editingId ? (
 				<Card>
 					<Text style={[s.cardTitle, { color: theme.text }]}>
@@ -887,10 +899,12 @@ export function ManagerRequests() {
 						No requests waiting
 					</Text>
 					<Text style={[s.body, { color: theme.muted }]}>
-						Request your leave, record time off, or wait for a request or swap.
+						Request your leave, record time off, or wait for a release, pickup,
+						request, or swap.
 					</Text>
 				</Card>
 			) : null}
+			<ManagerCoverageSection workplaceId={workplaceId} />
 			{pendingSwaps.map((swap) => (
 				<Card key={swap.id}>
 					<View style={s.rowBetween}>

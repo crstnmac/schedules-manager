@@ -11,6 +11,7 @@ import {
 	positions,
 	profiles,
 	schedules,
+	scheduleTeams,
 	scheduleVersions,
 	shifts,
 	shiftTagAssignments,
@@ -21,10 +22,10 @@ import {
 	versionShifts,
 	workPreferences,
 } from "@SchedulesManager/db";
-import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { requireSubscriptionCapability } from "../billing";
-import { requireManager, requireSession, weekStartDayFor } from "../context";
+import { requirePrivilege, requireSession, weekStartDayFor } from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { laborCents, laborPercent } from "../labor";
 import { firstRow } from "../rows";
@@ -33,6 +34,7 @@ import {
 	consecutiveWorkDayConflicts,
 	isLateArrival,
 } from "../schedule-conflicts";
+import { resolveScheduleTeam } from "../schedule-teams";
 import {
 	assertWeekStartDay,
 	minutesByZonedDate,
@@ -65,7 +67,16 @@ export interface Conflict {
 const dateSchema = t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" });
 const minuteSchema = t.Integer({ minimum: 0, maximum: 1440 });
 
-async function getOrCreateSchedule(locationId: string, weekStart: string) {
+function scheduleTeamMatch(teamId: string | null | undefined) {
+	return teamId ? eq(schedules.teamId, teamId) : isNull(schedules.teamId);
+}
+
+async function getOrCreateSchedule(
+	locationId: string,
+	weekStart: string,
+	teamId: string | null = null,
+) {
+	const match = scheduleTeamMatch(teamId);
 	const [existing] = await db
 		.select()
 		.from(schedules)
@@ -73,6 +84,7 @@ async function getOrCreateSchedule(locationId: string, weekStart: string) {
 			and(
 				eq(schedules.locationId, locationId),
 				eq(schedules.weekStartDate, weekStart),
+				match,
 			),
 		)
 		.limit(1);
@@ -80,7 +92,7 @@ async function getOrCreateSchedule(locationId: string, weekStart: string) {
 
 	await db
 		.insert(schedules)
-		.values({ locationId, weekStartDate: weekStart })
+		.values({ locationId, weekStartDate: weekStart, teamId })
 		.onConflictDoNothing();
 
 	const [created] = await db
@@ -90,6 +102,7 @@ async function getOrCreateSchedule(locationId: string, weekStart: string) {
 			and(
 				eq(schedules.locationId, locationId),
 				eq(schedules.weekStartDate, weekStart),
+				match,
 			),
 		)
 		.limit(1);
@@ -470,8 +483,18 @@ async function loadSchedulePayload(
 	location: Location,
 	weekStart: string,
 	exclude: { labor?: boolean; timeclock?: boolean } = {},
+	teamId: string | null = null,
 ) {
-	const schedule = await getOrCreateSchedule(location.id, weekStart);
+	const schedule = await getOrCreateSchedule(location.id, weekStart, teamId);
+	const scheduleTeam = schedule.teamId
+		? ((
+				await db
+					.select({ name: scheduleTeams.name })
+					.from(scheduleTeams)
+					.where(eq(scheduleTeams.id, schedule.teamId))
+					.limit(1)
+			)[0] ?? null)
+		: null;
 
 	const [shiftRows, positionRows, workforce, workplace] = await Promise.all([
 		db.select().from(shifts).where(eq(shifts.scheduleId, schedule.id)),
@@ -669,6 +692,9 @@ async function loadSchedulePayload(
 			id: schedule.id,
 			locationId: location.id,
 			weekStartDate: schedule.weekStartDate,
+			policyGroupId: schedule.policyGroupId,
+			teamId: schedule.teamId,
+			teamName: scheduleTeam?.name ?? null,
 			timezone: location.timezone,
 			weekStartDay: await weekStartDayFor(location.workplaceId),
 			openMinute: location.openMinute,
@@ -1077,7 +1103,11 @@ function calendarMonthKeys(monthStart: string, weekStartDay: number): string[] {
 	return Array.from({ length: 42 }, (_, index) => shiftDays(start, index));
 }
 
-async function loadCalendarPayload(location: Location, monthStart: string) {
+async function loadCalendarPayload(
+	location: Location,
+	monthStart: string,
+	teamId: string | null = null,
+) {
 	if (!/^\d{4}-\d{2}-01$/.test(monthStart)) {
 		throw new BadRequestError("Month must be the first day, like 2026-09-01");
 	}
@@ -1094,6 +1124,7 @@ async function loadCalendarPayload(location: Location, monthStart: string) {
 			and(
 				eq(schedules.locationId, location.id),
 				inArray(schedules.weekStartDate, weekStarts),
+				scheduleTeamMatch(teamId),
 			),
 		);
 	if (existing.length === 0) {
@@ -1229,7 +1260,7 @@ export const schedulesRoutes = new Elysia({
 })
 	.get(
 		"/locations/:locationId/calendar/:monthStart",
-		async ({ headers, params }) => {
+		async ({ headers, params, query }) => {
 			const { profile } = await requireSession(headers);
 			const [location] = await db
 				.select()
@@ -1237,15 +1268,22 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requireManager(profile.id, location.workplaceId);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.view");
 
-			return loadCalendarPayload(location, params.monthStart);
+			const teamId = await resolveScheduleTeam(location.id, query.teamId);
+			return loadCalendarPayload(location, params.monthStart, teamId);
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				monthStart: dateSchema,
+			}),
+			query: t.Object({
+				teamId: t.Optional(t.String({ format: "uuid" })),
 			}),
 			detail: {
 				summary:
@@ -1264,26 +1302,35 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requireManager(profile.id, location.workplaceId);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.view");
 			assertWeekStartDay(
 				params.weekStart,
 				await weekStartDayFor(location.workplaceId),
 			);
 
 			const parts = (query.exclude ?? "").split(",").map((part) => part.trim());
-			return loadSchedulePayload(location, params.weekStart, {
-				labor: parts.includes("labor"),
-				timeclock: parts.includes("timeclock"),
-			});
+			return loadSchedulePayload(
+				location,
+				params.weekStart,
+				{
+					labor: parts.includes("labor"),
+					timeclock: parts.includes("timeclock"),
+				},
+				await resolveScheduleTeam(location.id, query.teamId),
+			);
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: dateSchema,
 			}),
 			query: t.Object({
 				exclude: t.Optional(t.String({ maxLength: 60 })),
+				teamId: t.Optional(t.String({ format: "uuid" })),
 			}),
 			detail: {
 				summary:
@@ -1294,7 +1341,7 @@ export const schedulesRoutes = new Elysia({
 	)
 	.get(
 		"/locations/:locationId/schedules/:weekStart/timeclock",
-		async ({ headers, params }) => {
+		async ({ headers, params, query }) => {
 			const { profile } = await requireSession(headers);
 			const [location] = await db
 				.select()
@@ -1302,8 +1349,9 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requireManager(profile.id, location.workplaceId);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.view");
 			await requireSubscriptionCapability(location.workplaceId, "time_clock");
+			const teamId = await resolveScheduleTeam(location.id, query.teamId);
 			const [schedule] = await db
 				.select()
 				.from(schedules)
@@ -1311,6 +1359,7 @@ export const schedulesRoutes = new Elysia({
 					and(
 						eq(schedules.locationId, location.id),
 						eq(schedules.weekStartDate, params.weekStart),
+						scheduleTeamMatch(teamId),
 					),
 				)
 				.limit(1);
@@ -1324,10 +1373,16 @@ export const schedulesRoutes = new Elysia({
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: dateSchema,
+			}),
+			query: t.Object({
+				teamId: t.Optional(t.String({ format: "uuid" })),
 			}),
 			detail: {
 				summary:
@@ -1338,7 +1393,7 @@ export const schedulesRoutes = new Elysia({
 	)
 	.get(
 		"/locations/:locationId/schedules/:weekStart/labor",
-		async ({ headers, params }) => {
+		async ({ headers, params, query }) => {
 			const { profile } = await requireSession(headers);
 			const [location] = await db
 				.select()
@@ -1346,17 +1401,28 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requireManager(profile.id, location.workplaceId);
-			const schedule = await getOrCreateSchedule(location.id, params.weekStart);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.view");
+			const teamId = await resolveScheduleTeam(location.id, query.teamId);
+			const schedule = await getOrCreateSchedule(
+				location.id,
+				params.weekStart,
+				teamId,
+			);
 			return {
 				labor: await loadLaborObject(location, schedule, params.weekStart),
 			};
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: dateSchema,
+			}),
+			query: t.Object({
+				teamId: t.Optional(t.String({ format: "uuid" })),
 			}),
 			detail: {
 				summary: "Labor cost and sales rollup for one schedule week (Manager)",
@@ -1379,9 +1445,13 @@ export const schedulesRoutes = new Elysia({
 				params.weekStart,
 				await weekStartDayFor(location.workplaceId),
 			);
-			await requireManager(profile.id, location.workplaceId);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.manage");
 
-			const schedule = await getOrCreateSchedule(location.id, params.weekStart);
+			const schedule = await getOrCreateSchedule(
+				location.id,
+				params.weekStart,
+				await resolveScheduleTeam(location.id, body.teamId),
+			);
 			assertDateInWeek(body.date, params.weekStart);
 			const { startsAt, endsAt } = resolveShiftTimes(body, location.timezone);
 			const unavailabilityOverrideReason = await overrideReasonIfNeeded(
@@ -1420,7 +1490,10 @@ export const schedulesRoutes = new Elysia({
 			return { shiftId: shift.id };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: dateSchema,
@@ -1438,6 +1511,7 @@ export const schedulesRoutes = new Elysia({
 					t.String({ minLength: 1, maxLength: 300 }),
 				),
 				approvePosition: t.Optional(t.Boolean()),
+				teamId: t.Optional(t.Union([t.String({ format: "uuid" }), t.Null()])),
 			}),
 			detail: {
 				summary: "Add a Shift to the draft Schedule (Manager)",
@@ -1450,7 +1524,7 @@ export const schedulesRoutes = new Elysia({
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
 			const { location, schedule } = await shiftContext(params.shiftId);
-			await requireManager(profile.id, location.workplaceId);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.manage");
 
 			const [existing] = await db
 				.select()
@@ -1517,7 +1591,10 @@ export const schedulesRoutes = new Elysia({
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ shiftId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				employmentId: t.Optional(
@@ -1544,13 +1621,16 @@ export const schedulesRoutes = new Elysia({
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
 			const location = await locationForShift(params.shiftId);
-			await requireManager(profile.id, location.workplaceId);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.manage");
 
 			await db.delete(shifts).where(eq(shifts.id, params.shiftId));
 			return { ok: true as const };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ shiftId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Remove a Shift from the draft Schedule (Manager)",
@@ -1560,7 +1640,7 @@ export const schedulesRoutes = new Elysia({
 	)
 	.post(
 		"/locations/:locationId/schedules/:weekStart/copy-previous",
-		async ({ headers, params }) => {
+		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
 
 			const [location] = await db
@@ -1569,12 +1649,13 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requireManager(profile.id, location.workplaceId);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.manage");
 			assertWeekStartDay(
 				params.weekStart,
 				await weekStartDayFor(location.workplaceId),
 			);
 
+			const teamId = await resolveScheduleTeam(location.id, body?.teamId);
 			const previousWeek = shiftDays(params.weekStart, -7);
 			const [source] = await db
 				.select()
@@ -1583,6 +1664,7 @@ export const schedulesRoutes = new Elysia({
 					and(
 						eq(schedules.locationId, location.id),
 						eq(schedules.weekStartDate, previousWeek),
+						scheduleTeamMatch(teamId),
 					),
 				)
 				.limit(1);
@@ -1590,7 +1672,11 @@ export const schedulesRoutes = new Elysia({
 				throw new NotFoundError("The previous week has no schedule to copy");
 			}
 
-			const target = await getOrCreateSchedule(location.id, params.weekStart);
+			const target = await getOrCreateSchedule(
+				location.id,
+				params.weekStart,
+				teamId,
+			);
 			const sourceShifts = await db
 				.select()
 				.from(shifts)
@@ -1629,11 +1715,19 @@ export const schedulesRoutes = new Elysia({
 			return { copied: sourceShifts.length };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: dateSchema,
 			}),
+			body: t.Optional(
+				t.Object({
+					teamId: t.Optional(t.Union([t.String({ format: "uuid" }), t.Null()])),
+				}),
+			),
 			detail: {
 				summary:
 					"Copy the previous week's Shifts into this week's draft (Manager)",
@@ -1643,7 +1737,7 @@ export const schedulesRoutes = new Elysia({
 	)
 	.post(
 		"/locations/:locationId/schedules/:weekStart/auto-assign",
-		async ({ headers, params }) => {
+		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
 			const [location] = await db
 				.select()
@@ -1651,8 +1745,9 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requireManager(profile.id, location.workplaceId);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.manage");
 			await requireSubscriptionCapability(location.workplaceId, "auto_assign");
+			const teamId = await resolveScheduleTeam(location.id, body?.teamId);
 			const [schedule] = await db
 				.select()
 				.from(schedules)
@@ -1660,6 +1755,7 @@ export const schedulesRoutes = new Elysia({
 					and(
 						eq(schedules.locationId, location.id),
 						eq(schedules.weekStartDate, params.weekStart),
+						scheduleTeamMatch(teamId),
 					),
 				)
 				.limit(1);
@@ -1713,11 +1809,19 @@ export const schedulesRoutes = new Elysia({
 			return { assigned };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: dateSchema,
 			}),
+			body: t.Optional(
+				t.Object({
+					teamId: t.Optional(t.Union([t.String({ format: "uuid" }), t.Null()])),
+				}),
+			),
 			detail: {
 				summary: "Auto-assign unassigned draft Shifts (Manager)",
 				security: [{ bearerAuth: [] }],
@@ -1734,10 +1838,11 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requireManager(profile.id, location.workplaceId);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.manage");
 			if (body.shiftIds.length === 0) return { updated: 0 };
 			// Every mutation below is scoped to this location's week, so shift ids
 			// from another schedule are ignored rather than wiped or retimed.
+			const teamId = await resolveScheduleTeam(location.id, body.teamId);
 			const [schedule] = await db
 				.select()
 				.from(schedules)
@@ -1745,6 +1850,7 @@ export const schedulesRoutes = new Elysia({
 					and(
 						eq(schedules.locationId, location.id),
 						eq(schedules.weekStartDate, params.weekStart),
+						scheduleTeamMatch(teamId),
 					),
 				)
 				.limit(1);
@@ -1789,7 +1895,10 @@ export const schedulesRoutes = new Elysia({
 			return { updated: rows.length };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: dateSchema,
@@ -1802,6 +1911,7 @@ export const schedulesRoutes = new Elysia({
 				employmentId: t.Optional(
 					t.Union([t.String({ format: "uuid" }), t.Null()]),
 				),
+				teamId: t.Optional(t.Union([t.String({ format: "uuid" }), t.Null()])),
 			}),
 			detail: {
 				summary: "Bulk edit or delete draft Shifts (Manager)",
@@ -1819,9 +1929,13 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requireManager(profile.id, location.workplaceId);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.manage");
 			assertDateInWeek(body.date, params.weekStart);
-			const schedule = await getOrCreateSchedule(location.id, params.weekStart);
+			const schedule = await getOrCreateSchedule(
+				location.id,
+				params.weekStart,
+				await resolveScheduleTeam(location.id, body.teamId),
+			);
 			const created = [];
 			for (const item of body.shifts) {
 				const { startsAt, endsAt } = resolveShiftTimes(
@@ -1845,7 +1959,10 @@ export const schedulesRoutes = new Elysia({
 			return { pasted: created.length };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				locationId: t.String({ format: "uuid" }),
 				weekStart: dateSchema,
@@ -1863,6 +1980,7 @@ export const schedulesRoutes = new Elysia({
 						note: t.Optional(t.String({ maxLength: 200 })),
 					}),
 				),
+				teamId: t.Optional(t.Union([t.String({ format: "uuid" }), t.Null()])),
 			}),
 			detail: {
 				summary: "Paste copied Shift skeletons onto a day (Manager)",
@@ -1875,7 +1993,7 @@ export const schedulesRoutes = new Elysia({
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
 			const { location, schedule } = await shiftContext(params.shiftId);
-			await requireManager(profile.id, location.workplaceId);
+			await requirePrivilege(profile.id, location.workplaceId, "schedule.manage");
 			const [existing] = await db
 				.select()
 				.from(shifts)
@@ -1887,7 +2005,11 @@ export const schedulesRoutes = new Elysia({
 			let copied = 0;
 			for (let week = 1; week <= body.weeks; week++) {
 				const weekStart = shiftDays(schedule.weekStartDate, week * 7);
-				const target = await getOrCreateSchedule(location.id, weekStart);
+				const target = await getOrCreateSchedule(
+					location.id,
+					weekStart,
+					schedule.teamId,
+				);
 				await db.insert(shifts).values({
 					scheduleId: target.id,
 					employmentId: existing.employmentId,
@@ -1909,7 +2031,10 @@ export const schedulesRoutes = new Elysia({
 			return { copied };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ shiftId: t.String({ format: "uuid" }) }),
 			body: t.Object({ weeks: t.Integer({ minimum: 1, maximum: 12 }) }),
 			detail: {

@@ -15,7 +15,7 @@ import { Elysia, t } from "elysia";
 
 import {
 	listActiveEmployments,
-	requireManager,
+	requirePrivilege,
 	requireSession,
 } from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
@@ -377,12 +377,15 @@ export const swapRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			body: t.Object({
 				requesterShiftId: t.String({ format: "uuid" }),
 				counterpartEmploymentId: t.String({ format: "uuid" }),
@@ -396,8 +399,9 @@ export const swapRoutes = new Elysia({
 	)
 	.get(
 		"/workplaces/:workplaceId/my/swaps",
-		async ({ headers, params }) => {
+		async ({ headers, params, query }) => {
 			const { profile } = await requireSession(headers);
+			const includeResolved = query.includeResolved ?? true;
 			const mine = await myEmploymentIds(profile.id);
 
 			const swaps = mine.length
@@ -443,7 +447,13 @@ export const swapRoutes = new Elysia({
 					const swap = details.get(id);
 					return swap ? { direction, swap } : null;
 				})
-				.filter((row) => row !== null);
+				.filter((row) => row !== null)
+				.filter(
+					(row) =>
+						includeResolved ||
+						row.swap.status === "pending_counterpart" ||
+						row.swap.status === "pending_manager",
+				);
 			detailed.sort((a, b) =>
 				b.swap.requestedAt.localeCompare(a.swap.requestedAt),
 			);
@@ -451,8 +461,14 @@ export const swapRoutes = new Elysia({
 			return { swaps: detailed };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			query: t.Object({
+				includeResolved: t.Optional(t.Boolean()),
+			}),
 			detail: {
 				summary: "Shift swaps you proposed or received",
 				security: [{ bearerAuth: [] }],
@@ -547,12 +563,15 @@ export const swapRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({ swapId: t.String({ format: "uuid" }) }),
 			body: t.Object({
 				decision: t.Union([t.Literal("accept"), t.Literal("decline")]),
@@ -615,12 +634,15 @@ export const swapRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({ swapId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Cancel a swap you proposed",
@@ -632,7 +654,7 @@ export const swapRoutes = new Elysia({
 		"/workplaces/:workplaceId/coverage/swaps",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
 
 			const rows = await db
 				.select({ id: shiftSwaps.id })
@@ -656,7 +678,10 @@ export const swapRoutes = new Elysia({
 			return { swaps };
 		},
 		{
-			headers: t.Object({ authorization: t.Optional(t.String()) }, { additionalProperties: true }),
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Agreed swaps awaiting manager approval",
@@ -668,7 +693,7 @@ export const swapRoutes = new Elysia({
 		"/workplaces/:workplaceId/swaps/:swapId/decision",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requireManager(profile.id, params.workplaceId);
+			await requirePrivilege(profile.id, params.workplaceId, "approvals.review");
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `swap.decision:${params.swapId}`,
@@ -1026,12 +1051,15 @@ export const swapRoutes = new Elysia({
 			});
 		},
 		{
-			headers: t.Object({
-				authorization: t.Optional(t.String()),
-				"idempotency-key": t.Optional(
-					t.String({ minLength: 8, maxLength: 200 }),
-				),
-			}, { additionalProperties: true }),
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
 			params: t.Object({
 				workplaceId: t.String({ format: "uuid" }),
 				swapId: t.String({ format: "uuid" }),
