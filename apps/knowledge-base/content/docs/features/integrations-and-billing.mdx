@@ -1,0 +1,30 @@
+---
+title: Connected services and billing
+description: API keys, webhooks, and workplace subscriptions.
+---
+
+## Integrations
+
+Managers with the appropriate access can open **Settings → Integrations** to connect their own tooling to the Workplace:
+
+- **API keys** — scoped keys for reading schedules, workers, reports, and requests, with optional expiry. The key is shown once when created.
+- **Webhook endpoints** — receive signed events at your own URL, filtered by event type. The signing secret is shown once, and deliveries are logged with their response status.
+
+![Integrations with API keys and webhooks](/screenshots/settings-integrations.png)
+
+![Creating a scoped API key](/screenshots/settings-integrations-key.png)
+
+![Creating a signed webhook endpoint](/screenshots/settings-integrations-webhook.png)
+
+Only connect a service you recognize, and ask the person responsible for your Workplace technology before changing credentials or endpoints.
+
+## What jooling handles for you
+
+| Capability | Where you notice it |
+| --- | --- |
+| Email delivery | Invitations and their sent or delivered status in Workers |
+| Mobile notifications | Push alerts for schedules and actions |
+| Place search | Address suggestions while setting up Locations |
+| Subscription billing | Plan and checkout information under Subscription |
+
+jooling does not run payroll or send SMS. Employment documents are saved as titles, links, and notes rather than uploaded files. Daily Sales are entered manually unless your Workplace has arranged a separate integration.

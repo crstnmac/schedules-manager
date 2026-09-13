@@ -1,0 +1,21 @@
+---
+title: Schedule lifecycle
+description: How drafts, versions, delivery, and acceptance fit together.
+---
+
+| Record | Worker visible? | Mutable? |
+| --- | --- | --- |
+| Initial Draft | No | Yes |
+| Published Schedule Version | Yes | No |
+| Successor Draft | No | Yes |
+| Schedule Change | After publication | No |
+| Acknowledgement | Yes | Append-only event |
+| Shift Acceptance | Yes | Explicit response workflow |
+
+Publication is the boundary between planning and communicated responsibility. jooling publishes the complete selection together, makes the new version current, summarizes Worker-facing differences, and prepares notifications.
+
+![Publish confirmation dialog](/screenshots/publish-review.png)
+
+A material change adds work or substantially changes when or where a Worker is expected. Inside the Notice Window, it can require Shift Acceptance. A Worker may acknowledge seeing it and still decline it.
+
+Approved pickup, release, and swap decisions never rewrite the old snapshot; they publish a successor version.
