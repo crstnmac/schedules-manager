@@ -14,7 +14,7 @@ export default defineConfig({
     tailwindcss(),
     tanstackStart({
       prerender: {
-        enabled: true,
+        enabled: process.env.NITRO_PRESET !== 'node-server',
       },
     }),
     react(),

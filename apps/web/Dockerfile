@@ -16,6 +16,7 @@ COPY apps/native/package.json apps/native/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 COPY apps/landing/package.json apps/landing/
+COPY apps/knowledge-base/package.json apps/knowledge-base/
 COPY packages/auth/package.json packages/auth/
 COPY packages/config/package.json packages/config/
 COPY packages/config/tsconfig.base.json packages/config/
