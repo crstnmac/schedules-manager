@@ -50,6 +50,7 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { profileInitials } from "@/components/current-profile";
+import { DocsLink } from "@/components/docs-link";
 import { LogoMark } from "@/components/logo-mark";
 import { NextShiftBar } from "@/components/next-shift-bar";
 import { PilotFeedback } from "@/components/pilot-feedback";
@@ -348,11 +349,14 @@ function WorkerLayout() {
 				<header className="sticky top-0 z-40 flex h-14 min-h-14 shrink-0 items-center gap-2 border-b bg-background px-3 shadow-xs">
 					<SidebarTrigger className="-ml-1 shrink-0" />
 					<span className="shrink-0 font-medium text-sm">{activePage}</span>
-					{pathname === "/worker" ? (
-						<div className="ml-auto min-w-0">
-							<NextShiftBar />
-						</div>
-					) : null}
+					<div className="ml-auto flex min-w-0 items-center gap-2">
+						{pathname === "/worker" ? (
+							<div className="min-w-0">
+								<NextShiftBar />
+							</div>
+						) : null}
+						<DocsLink />
+					</div>
 				</header>
 				<main
 					id="main-content"

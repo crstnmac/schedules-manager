@@ -3,6 +3,7 @@
 # Build context must be the repository root:
 #   docker build -f apps/web/Dockerfile \
 #     --build-arg VITE_SERVER_URL=https://api.example.com \
+#     --build-arg VITE_DOCS_URL=https://docs.jooling.com \
 #     --build-arg VITE_PUBLIC_POSTHOG_PROJECT_TOKEN=... \
 #     -t schedules-manager-web .
 
@@ -37,9 +38,11 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 # ---- Build the SPA (Vite bakes VITE_* args into the bundle) ----
 FROM deps AS build
 ARG VITE_SERVER_URL=http://localhost:3000
+ARG VITE_DOCS_URL=https://docs.jooling.com
 ARG VITE_PUBLIC_POSTHOG_PROJECT_TOKEN
 ARG VITE_PUBLIC_POSTHOG_HOST=https://eu.posthog.com
 ENV VITE_SERVER_URL=${VITE_SERVER_URL} \
+	VITE_DOCS_URL=${VITE_DOCS_URL} \
 	VITE_PUBLIC_POSTHOG_PROJECT_TOKEN=${VITE_PUBLIC_POSTHOG_PROJECT_TOKEN} \
 	VITE_PUBLIC_POSTHOG_HOST=${VITE_PUBLIC_POSTHOG_HOST}
 COPY . .

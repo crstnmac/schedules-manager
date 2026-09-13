@@ -58,6 +58,7 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { profileInitials } from "@/components/current-profile";
+import { DocsLink } from "@/components/docs-link";
 import { LogoMark } from "@/components/logo-mark";
 import { PilotFeedback } from "@/components/pilot-feedback";
 import { settingsSectionLabel } from "@/components/settings/nav";
@@ -439,6 +440,7 @@ function DashboardLayout() {
 							className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto overscroll-x-contain"
 						/>
 					) : null}
+					<DocsLink className={isSchedule ? undefined : "ml-auto"} />
 				</header>
 				<main
 					id="main-content"

@@ -5,6 +5,7 @@ export const env = createEnv({
 	clientPrefix: "VITE_",
 	client: {
 		VITE_SERVER_URL: z.url(),
+		VITE_DOCS_URL: z.url().default("https://docs.jooling.com"),
 		VITE_PUBLIC_POSTHOG_PROJECT_TOKEN: z.string().min(1).optional(),
 		VITE_PUBLIC_POSTHOG_HOST: z.url().optional(),
 	},

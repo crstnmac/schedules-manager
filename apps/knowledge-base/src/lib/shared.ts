@@ -1,7 +1,7 @@
 import { createGetUrl } from 'fumadocs-core/source';
 
 export const appName = 'jooling Knowledge Base';
-export const docsRoute = '/docs';
+export const docsRoute = '/';
 export const docsImageRoute = '/og/docs';
 
 // fill this with your actual GitHub info, for example:

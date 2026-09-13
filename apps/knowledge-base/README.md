@@ -9,5 +9,5 @@ Run development server:
 bun run dev
 ```
 
-The site is available at `http://localhost:3002`; documentation lives under
-`/docs`. Run `bun run build` and `bun run check-types` before publishing changes.
+The documentation site is available at `http://localhost:3002`. Run
+`bun run build` and `bun run check-types` before publishing changes.

@@ -6,10 +6,11 @@ import {
 import { docs } from '@/lib/source';
 import { createFileRoute } from '@tanstack/react-router';
 
-export const Route = createFileRoute('/')({
+export const Route = createFileRoute('/$')({
   component: Page,
-  loader: async () => {
-    const data = await loadDocsPage({ data: [] });
+  loader: async ({ params }) => {
+    const slugs = params._splat?.split('/') ?? [];
+    const data = await loadDocsPage({ data: slugs });
     await docs.getPage(data.path)?.preload();
     return data;
   },
