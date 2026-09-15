@@ -11,7 +11,7 @@ From the repository root:
 
 Open http://localhost:3002. Build with `bun run build` and preview with `bun run preview`.
 
-Set `VITE_APP_URL` in `.env.local` to your deployed application URL. It defaults to http://localhost:3001 for local development. All get-started and log-in links open that application.
+Set `VITE_APP_URL` in `.env.local` to your deployed application URL. It defaults to http://localhost:3001 for local development. All get-started and log-in links open that application. The documentation links use `VITE_DOCS_URL`, which defaults to https://docs.jooling.com.
 
 The landing page packages high-resolution WebP captures of the seeded web and mobile product in `apps/landing/public`. The layout adapts to desktop and mobile viewports while respecting reduced-motion preferences.
 
@@ -21,6 +21,7 @@ Build from the repository root:
 
     docker build -f apps/landing/Dockerfile \
       --build-arg VITE_APP_URL=https://app.example.com \
+      --build-arg VITE_DOCS_URL=https://docs.example.com \
       -t jooling-landing .
 
 Run the non-root image on port 8080:

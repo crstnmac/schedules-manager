@@ -7,7 +7,8 @@ import { nitro } from 'nitro/vite';
 
 export default defineConfig({
   server: {
-    port: 3002,
+    port: 3003,
+    strictPort: true,
   },
   plugins: [
     fumadocsMdx(),

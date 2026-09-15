@@ -26,6 +26,7 @@
 		"dev:native": "turbo run dev -F native --",
 		"dev:web": "turbo run dev -F web --",
 		"dev:server": "turbo run dev -F server --",
+		"dev:landing": "turbo run dev -F jooling-landing --",
 		"dev:knowledge-base": "turbo run dev -F knowledge-base --",
 		"db:push": "turbo run db:push -F @SchedulesManager/db --",
 		"db:studio": "turbo run db:studio -F @SchedulesManager/db --",

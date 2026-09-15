@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => {
 	return {
 		server: {
 			port: 3001,
+			strictPort: true,
 			proxy: {
 				"/ingest/static": {
 					target: posthogAssetsHost,

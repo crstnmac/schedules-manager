@@ -4,6 +4,7 @@
 # @SchedulesManager/ui workspace package):
 #   docker build -f apps/landing/Dockerfile \
 #     --build-arg VITE_APP_URL=https://app.example.com \
+#     --build-arg VITE_DOCS_URL=https://docs.example.com \
 #     -t jooling-landing .
 
 FROM oven/bun:1.3.11-alpine AS dependencies
@@ -29,7 +30,9 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 # ---- Build the static site (Vite bakes VITE_APP_URL into the bundle) ----
 FROM dependencies AS build
 ARG VITE_APP_URL=http://localhost:3001
+ARG VITE_DOCS_URL=https://docs.jooling.com
 ENV VITE_APP_URL=${VITE_APP_URL}
+ENV VITE_DOCS_URL=${VITE_DOCS_URL}
 
 COPY . .
 

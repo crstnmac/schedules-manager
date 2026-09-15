@@ -59,6 +59,7 @@ import { usePathname } from "./router";
 import "./styles.css";
 
 const appUrl = import.meta.env.VITE_APP_URL || "http://localhost:3001";
+const docsUrl = import.meta.env.VITE_DOCS_URL || "https://docs.jooling.com";
 const signUpUrl = new URL(appUrl);
 signUpUrl.searchParams.set("mode", "sign-up");
 const people = [
@@ -633,6 +634,9 @@ function HomePage() {
 						<LandingLink href="#faq" onClick={() => setMenuOpen(false)}>
 							FAQs
 						</LandingLink>
+						<LandingLink href={docsUrl} onClick={() => setMenuOpen(false)}>
+							Docs
+						</LandingLink>
 					</nav>
 					<div className="nav-actions">
 						<LandingLink className="login-link" href={appUrl}>
@@ -970,6 +974,7 @@ function HomePage() {
 						<LandingLink href="#how-it-works">How it works</LandingLink>
 						<LandingLink href="#pricing">Pricing</LandingLink>
 						<LandingLink href="#faq">FAQs</LandingLink>
+						<LandingLink href={docsUrl}>Docs</LandingLink>
 					</div>
 					<div className="footer-column">
 						<strong>For teams</strong>
@@ -994,16 +999,48 @@ function HomePage() {
 		</div>
 	);
 }
-const titles: Record<string, string> = {
-	"/privacy": "Privacy Policy — jooling",
-	"/terms": "Terms & Conditions — jooling",
+const siteUrl = "https://jooling.com";
+const defaultDescription =
+	"A calmer way to schedule hourly teams. Build shifts, handle changes, and keep everyone in sync with jooling. Start your 30-day free trial.";
+const routeSeo: Record<string, { title: string; description: string }> = {
+	"/": {
+		title: "jooling — Shift scheduling for hourly teams",
+		description: defaultDescription,
+	},
+	"/privacy": {
+		title: "Privacy Policy — jooling",
+		description:
+			"Learn how jooling collects, uses, shares, and protects information when you use its scheduling products and services.",
+	},
+	"/terms": {
+		title: "Terms & Conditions — jooling",
+		description:
+			"Read the terms and conditions that govern access to and use of jooling's scheduling products and services.",
+	},
 };
+
+function setMeta(selector: string, value: string) {
+	const element = document.head.querySelector<HTMLMetaElement>(selector);
+	if (element) element.content = value;
+}
 
 function App() {
 	const pathname = usePathname();
 
 	useEffect(() => {
-		document.title = titles[pathname] ?? "jooling — Good weeks start here.";
+		const seo = routeSeo[pathname] ?? routeSeo["/"];
+		const canonicalUrl = `${siteUrl}${pathname === "/" ? "/" : pathname}`;
+
+		document.title = seo.title;
+		setMeta('meta[name="description"]', seo.description);
+		setMeta('meta[property="og:title"]', seo.title);
+		setMeta('meta[property="og:description"]', seo.description);
+		setMeta('meta[property="og:url"]', canonicalUrl);
+		setMeta('meta[name="twitter:title"]', seo.title);
+		setMeta('meta[name="twitter:description"]', seo.description);
+		document
+			.querySelector<HTMLLinkElement>('link[rel="canonical"]')
+			?.setAttribute("href", canonicalUrl);
 	}, [pathname]);
 
 	if (pathname === "/privacy") return <PrivacyPolicyPage />;

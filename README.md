@@ -113,6 +113,8 @@ Or start an individual application:
 bun run dev:web
 bun run dev:server
 bun run dev:native
+bun run dev:landing
+bun run dev:knowledge-base
 ```
 
 | Service | Local address |
@@ -120,6 +122,9 @@ bun run dev:native
 | Manager web | `http://localhost:3001` |
 | API | `http://localhost:3000` |
 | OpenAPI reference | `http://localhost:3000/openapi` |
+| Landing page | `http://localhost:3002` |
+| Knowledge base | `http://localhost:3003` |
+| Expo dev server | `http://localhost:8081` |
 
 The protected `GET /v1/me` endpoint is an authentication smoke test. Sign in through
 Better Auth and call it with the resulting session cookie to verify a session.
