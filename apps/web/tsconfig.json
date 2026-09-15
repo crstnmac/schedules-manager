@@ -13,6 +13,7 @@
 		"paths": {
 			"@/*": ["./src/*"],
 			"@SchedulesManager/auth": ["../../packages/auth/src/index.ts"],
+			"@SchedulesManager/ui/components": ["../../packages/ui/src/components"],
 			"@SchedulesManager/ui/components/*": [
 				"../../packages/ui/src/components/*.tsx"
 			],

@@ -7,6 +7,7 @@
 		"lib": ["ESNext", "DOM", "DOM.Iterable"],
 		"types": [],
 		"paths": {
+			"@SchedulesManager/ui/components": ["./src/components"],
 			"@SchedulesManager/ui/components/*": ["./src/components/*.tsx"],
 			"@SchedulesManager/ui/lib/*": ["./src/lib/*.ts"],
 			"@SchedulesManager/ui/hooks/*": ["./src/hooks/*.ts"]

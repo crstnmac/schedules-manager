@@ -1,0 +1,33 @@
+{
+	"jsPlugins": ["@shadcn/lint"],
+	"settings": {
+		"shadcn": {
+			"componentImports": ["^@SchedulesManager/ui/components(/|$)"],
+			"note": "Use components and design tokens from packages/ui. Add intentional exceptions to this config instead of bypassing rules inline."
+		}
+	},
+	"overrides": [
+		{
+			"files": ["apps/web/src/**/*.{js,jsx,ts,tsx}"],
+			"rules": {
+				"shadcn/no-arbitrary-values": ["warn", { "allow": ["layout"] }],
+				"shadcn/no-inline-styles": "warn",
+				"shadcn/no-raw-colors": "warn",
+				"shadcn/no-restyle": ["warn", { "allow": ["layout"] }],
+				"shadcn/no-unknown-classes": "warn",
+				"shadcn/require-static-classes": "warn"
+			}
+		},
+		{
+			"files": ["packages/ui/src/**/*.{js,jsx,ts,tsx}"],
+			"rules": {
+				"shadcn/no-arbitrary-values": "off",
+				"shadcn/no-inline-styles": "warn",
+				"shadcn/no-raw-colors": "warn",
+				"shadcn/no-restyle": "off",
+				"shadcn/no-unknown-classes": "warn",
+				"shadcn/require-static-classes": "off"
+			}
+		}
+	]
+}

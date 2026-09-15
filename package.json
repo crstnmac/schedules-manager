@@ -34,7 +34,8 @@
 		"db:generate": "turbo run db:generate -F @SchedulesManager/db --",
 		"db:migrate": "bun --cwd packages/db db:migrate:deploy",
 		"check": "biome check .",
-		"check:write": "biome check --write ."
+		"check:write": "biome check --write .",
+		"lint": "oxlint . --max-warnings 517"
 	},
 	"dependencies": {
 		"@SchedulesManager/env": "workspace:*",
@@ -44,7 +45,9 @@
 	"devDependencies": {
 		"@SchedulesManager/config": "workspace:*",
 		"@biomejs/biome": "^2.5.6",
+		"@shadcn/lint": "^0.1.0",
 		"@types/bun": "catalog:",
+		"oxlint": "^1.83.0",
 		"turbo": "^2.10.7",
 		"typescript": "^6.0.3"
 	},
