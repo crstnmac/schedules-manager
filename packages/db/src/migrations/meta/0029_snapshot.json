@@ -67,12 +67,8 @@
           "name": "shift_acceptances_version_id_schedule_versions_id_fk",
           "tableFrom": "shift_acceptances",
           "tableTo": "schedule_versions",
-          "columnsFrom": [
-            "version_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["version_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -80,12 +76,8 @@
           "name": "shift_acceptances_version_shift_id_version_shifts_id_fk",
           "tableFrom": "shift_acceptances",
           "tableTo": "version_shifts",
-          "columnsFrom": [
-            "version_shift_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["version_shift_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -93,12 +85,8 @@
           "name": "shift_acceptances_employment_id_employments_id_fk",
           "tableFrom": "shift_acceptances",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -108,11 +96,7 @@
         "shift_acceptances_unique": {
           "name": "shift_acceptances_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "version_id",
-            "version_shift_id",
-            "employment_id"
-          ]
+          "columns": ["version_id", "version_shift_id", "employment_id"]
         }
       },
       "policies": {},
@@ -169,12 +153,8 @@
           "name": "approval_policy_groups_workplace_id_workplaces_id_fk",
           "tableFrom": "approval_policy_groups",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -184,10 +164,7 @@
         "approval_policy_groups_workplace_name_unique": {
           "name": "approval_policy_groups_workplace_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "workplace_id",
-            "name"
-          ]
+          "columns": ["workplace_id", "name"]
         }
       },
       "policies": {},
@@ -232,12 +209,8 @@
           "name": "approval_policy_rules_group_id_approval_policy_groups_id_fk",
           "tableFrom": "approval_policy_rules",
           "tableTo": "approval_policy_groups",
-          "columnsFrom": [
-            "group_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["group_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -247,10 +220,7 @@
         "approval_policy_rules_group_type_unique": {
           "name": "approval_policy_rules_group_type_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "group_id",
-            "request_type"
-          ]
+          "columns": ["group_id", "request_type"]
         }
       },
       "policies": {},
@@ -314,12 +284,8 @@
           "name": "attendance_marks_version_shift_id_version_shifts_id_fk",
           "tableFrom": "attendance_marks",
           "tableTo": "version_shifts",
-          "columnsFrom": [
-            "version_shift_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["version_shift_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -327,12 +293,8 @@
           "name": "attendance_marks_marked_by_profile_id_profiles_id_fk",
           "tableFrom": "attendance_marks",
           "tableTo": "profiles",
-          "columnsFrom": [
-            "marked_by_profile_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["marked_by_profile_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -342,9 +304,7 @@
         "attendance_marks_version_shift_unique": {
           "name": "attendance_marks_version_shift_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "version_shift_id"
-          ]
+          "columns": ["version_shift_id"]
         }
       },
       "policies": {},
@@ -459,12 +419,8 @@
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -553,12 +509,8 @@
           "name": "session_user_id_user_id_fk",
           "tableFrom": "session",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -568,9 +520,7 @@
         "session_token_unique": {
           "name": "session_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -635,9 +585,7 @@
         "user_email_unique": {
           "name": "user_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -840,12 +788,8 @@
           "name": "workplace_subscriptions_workplace_id_workplaces_id_fk",
           "tableFrom": "workplace_subscriptions",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -855,16 +799,12 @@
         "workplace_subscriptions_workplace_unique": {
           "name": "workplace_subscriptions_workplace_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "workplace_id"
-          ]
+          "columns": ["workplace_id"]
         },
         "workplace_subscriptions_polar_unique": {
           "name": "workplace_subscriptions_polar_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "polar_subscription_id"
-          ]
+          "columns": ["polar_subscription_id"]
         }
       },
       "policies": {},
@@ -954,12 +894,8 @@
           "name": "calendar_feed_tokens_workplace_id_workplaces_id_fk",
           "tableFrom": "calendar_feed_tokens",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -967,12 +903,8 @@
           "name": "calendar_feed_tokens_employment_id_employments_id_fk",
           "tableFrom": "calendar_feed_tokens",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -982,9 +914,7 @@
         "calendar_feed_tokens_token_unique": {
           "name": "calendar_feed_tokens_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -1048,12 +978,8 @@
           "name": "leave_approval_chains_workplace_id_workplaces_id_fk",
           "tableFrom": "leave_approval_chains",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1063,10 +989,7 @@
         "leave_approval_chains_workplace_name_unique": {
           "name": "leave_approval_chains_workplace_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "workplace_id",
-            "name"
-          ]
+          "columns": ["workplace_id", "name"]
         }
       },
       "policies": {},
@@ -1174,12 +1097,8 @@
           "name": "leave_approval_delegations_workplace_id_workplaces_id_fk",
           "tableFrom": "leave_approval_delegations",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1187,12 +1106,8 @@
           "name": "leave_approval_delegations_delegator_employment_id_employments_id_fk",
           "tableFrom": "leave_approval_delegations",
           "tableTo": "employments",
-          "columnsFrom": [
-            "delegator_employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["delegator_employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1200,12 +1115,8 @@
           "name": "leave_approval_delegations_delegate_employment_id_employments_id_fk",
           "tableFrom": "leave_approval_delegations",
           "tableTo": "employments",
-          "columnsFrom": [
-            "delegate_employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["delegate_employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1291,12 +1202,8 @@
           "name": "leave_approval_steps_chain_id_leave_approval_chains_id_fk",
           "tableFrom": "leave_approval_steps",
           "tableTo": "leave_approval_chains",
-          "columnsFrom": [
-            "chain_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chain_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1304,12 +1211,8 @@
           "name": "leave_approval_steps_approver_employment_id_employments_id_fk",
           "tableFrom": "leave_approval_steps",
           "tableTo": "employments",
-          "columnsFrom": [
-            "approver_employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["approver_employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -1317,12 +1220,8 @@
           "name": "leave_approval_steps_escalation_employment_id_employments_id_fk",
           "tableFrom": "leave_approval_steps",
           "tableTo": "employments",
-          "columnsFrom": [
-            "escalation_employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["escalation_employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1332,10 +1231,7 @@
         "leave_approval_steps_chain_order_unique": {
           "name": "leave_approval_steps_chain_order_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "chain_id",
-            "step_order"
-          ]
+          "columns": ["chain_id", "step_order"]
         }
       },
       "policies": {},
@@ -1409,12 +1305,8 @@
           "name": "leave_balance_transfers_workplace_id_workplaces_id_fk",
           "tableFrom": "leave_balance_transfers",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1422,12 +1314,8 @@
           "name": "leave_balance_transfers_employment_id_employments_id_fk",
           "tableFrom": "leave_balance_transfers",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1435,12 +1323,8 @@
           "name": "leave_balance_transfers_from_leave_type_id_leave_types_id_fk",
           "tableFrom": "leave_balance_transfers",
           "tableTo": "leave_types",
-          "columnsFrom": [
-            "from_leave_type_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["from_leave_type_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1448,12 +1332,8 @@
           "name": "leave_balance_transfers_to_leave_type_id_leave_types_id_fk",
           "tableFrom": "leave_balance_transfers",
           "tableTo": "leave_types",
-          "columnsFrom": [
-            "to_leave_type_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["to_leave_type_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1599,12 +1479,8 @@
           "name": "leave_encashments_workplace_id_workplaces_id_fk",
           "tableFrom": "leave_encashments",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1612,12 +1488,8 @@
           "name": "leave_encashments_employment_id_employments_id_fk",
           "tableFrom": "leave_encashments",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1625,12 +1497,8 @@
           "name": "leave_encashments_leave_type_id_leave_types_id_fk",
           "tableFrom": "leave_encashments",
           "tableTo": "leave_types",
-          "columnsFrom": [
-            "leave_type_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["leave_type_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1806,12 +1674,8 @@
           "name": "leave_ledger_entries_workplace_id_workplaces_id_fk",
           "tableFrom": "leave_ledger_entries",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1819,12 +1683,8 @@
           "name": "leave_ledger_entries_employment_id_employments_id_fk",
           "tableFrom": "leave_ledger_entries",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1832,12 +1692,8 @@
           "name": "leave_ledger_entries_leave_type_id_leave_types_id_fk",
           "tableFrom": "leave_ledger_entries",
           "tableTo": "leave_types",
-          "columnsFrom": [
-            "leave_type_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["leave_type_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1845,12 +1701,8 @@
           "name": "leave_ledger_entries_request_id_time_off_requests_id_fk",
           "tableFrom": "leave_ledger_entries",
           "tableTo": "time_off_requests",
-          "columnsFrom": [
-            "request_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["request_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1860,9 +1712,7 @@
         "leave_ledger_entries_idempotency_unique": {
           "name": "leave_ledger_entries_idempotency_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "idempotency_key"
-          ]
+          "columns": ["idempotency_key"]
         }
       },
       "policies": {},
@@ -2054,12 +1904,8 @@
           "name": "leave_policies_leave_type_id_leave_types_id_fk",
           "tableFrom": "leave_policies",
           "tableTo": "leave_types",
-          "columnsFrom": [
-            "leave_type_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["leave_type_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2067,12 +1913,8 @@
           "name": "leave_policies_workplace_id_workplaces_id_fk",
           "tableFrom": "leave_policies",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2218,12 +2060,8 @@
           "name": "leave_request_approvals_request_id_time_off_requests_id_fk",
           "tableFrom": "leave_request_approvals",
           "tableTo": "time_off_requests",
-          "columnsFrom": [
-            "request_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["request_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2231,12 +2069,8 @@
           "name": "leave_request_approvals_approver_employment_id_employments_id_fk",
           "tableFrom": "leave_request_approvals",
           "tableTo": "employments",
-          "columnsFrom": [
-            "approver_employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["approver_employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -2244,12 +2078,8 @@
           "name": "leave_request_approvals_escalation_employment_id_employments_id_fk",
           "tableFrom": "leave_request_approvals",
           "tableTo": "employments",
-          "columnsFrom": [
-            "escalation_employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["escalation_employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -2259,10 +2089,7 @@
         "leave_request_approvals_request_step_unique": {
           "name": "leave_request_approvals_request_step_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "request_id",
-            "step_order"
-          ]
+          "columns": ["request_id", "step_order"]
         }
       },
       "policies": {},
@@ -2352,12 +2179,8 @@
           "name": "leave_request_documents_workplace_id_workplaces_id_fk",
           "tableFrom": "leave_request_documents",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2365,12 +2188,8 @@
           "name": "leave_request_documents_request_id_time_off_requests_id_fk",
           "tableFrom": "leave_request_documents",
           "tableTo": "time_off_requests",
-          "columnsFrom": [
-            "request_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["request_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2465,12 +2284,8 @@
           "name": "leave_types_workplace_id_workplaces_id_fk",
           "tableFrom": "leave_types",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2478,12 +2293,8 @@
           "name": "leave_types_approval_chain_id_leave_approval_chains_id_fk",
           "tableFrom": "leave_types",
           "tableTo": "leave_approval_chains",
-          "columnsFrom": [
-            "approval_chain_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["approval_chain_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -2493,10 +2304,7 @@
         "leave_types_workplace_name_unique": {
           "name": "leave_types_workplace_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "workplace_id",
-            "name"
-          ]
+          "columns": ["workplace_id", "name"]
         }
       },
       "policies": {},
@@ -2540,12 +2348,8 @@
           "name": "pto_balances_employment_id_employments_id_fk",
           "tableFrom": "pto_balances",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2553,12 +2357,8 @@
           "name": "pto_balances_leave_type_id_leave_types_id_fk",
           "tableFrom": "pto_balances",
           "tableTo": "leave_types",
-          "columnsFrom": [
-            "leave_type_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["leave_type_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2566,10 +2366,7 @@
       "compositePrimaryKeys": {
         "pto_balances_employment_id_leave_type_id_pk": {
           "name": "pto_balances_employment_id_leave_type_id_pk",
-          "columns": [
-            "employment_id",
-            "leave_type_id"
-          ]
+          "columns": ["employment_id", "leave_type_id"]
         }
       },
       "uniqueConstraints": {},
@@ -2740,12 +2537,8 @@
           "name": "time_off_requests_employment_id_employments_id_fk",
           "tableFrom": "time_off_requests",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2753,12 +2546,8 @@
           "name": "time_off_requests_leave_type_id_leave_types_id_fk",
           "tableFrom": "time_off_requests",
           "tableTo": "leave_types",
-          "columnsFrom": [
-            "leave_type_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["leave_type_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -2845,12 +2634,8 @@
           "name": "unavailability_employment_id_employments_id_fk",
           "tableFrom": "unavailability",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2910,12 +2695,8 @@
           "name": "work_preferences_employment_id_employments_id_fk",
           "tableFrom": "work_preferences",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3006,12 +2787,8 @@
           "name": "open_shifts_shift_id_shifts_id_fk",
           "tableFrom": "open_shifts",
           "tableTo": "shifts",
-          "columnsFrom": [
-            "shift_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["shift_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3019,12 +2796,8 @@
           "name": "open_shifts_location_id_locations_id_fk",
           "tableFrom": "open_shifts",
           "tableTo": "locations",
-          "columnsFrom": [
-            "location_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["location_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3032,12 +2805,8 @@
           "name": "open_shifts_position_id_positions_id_fk",
           "tableFrom": "open_shifts",
           "tableTo": "positions",
-          "columnsFrom": [
-            "position_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["position_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3045,12 +2814,8 @@
           "name": "open_shifts_released_from_employments_id_fk",
           "tableFrom": "open_shifts",
           "tableTo": "employments",
-          "columnsFrom": [
-            "released_from"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["released_from"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -3118,12 +2883,8 @@
           "name": "shift_pickups_open_shift_id_open_shifts_id_fk",
           "tableFrom": "shift_pickups",
           "tableTo": "open_shifts",
-          "columnsFrom": [
-            "open_shift_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["open_shift_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3131,12 +2892,8 @@
           "name": "shift_pickups_requested_by_employments_id_fk",
           "tableFrom": "shift_pickups",
           "tableTo": "employments",
-          "columnsFrom": [
-            "requested_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["requested_by"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3146,10 +2903,7 @@
         "shift_pickups_open_shift_requester_unique": {
           "name": "shift_pickups_open_shift_requester_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "open_shift_id",
-            "requested_by"
-          ]
+          "columns": ["open_shift_id", "requested_by"]
         }
       },
       "policies": {},
@@ -3219,12 +2973,8 @@
           "name": "shift_releases_version_shift_id_version_shifts_id_fk",
           "tableFrom": "shift_releases",
           "tableTo": "version_shifts",
-          "columnsFrom": [
-            "version_shift_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["version_shift_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3232,12 +2982,8 @@
           "name": "shift_releases_requested_by_employments_id_fk",
           "tableFrom": "shift_releases",
           "tableTo": "employments",
-          "columnsFrom": [
-            "requested_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["requested_by"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3425,12 +3171,8 @@
           "name": "email_deliveries_workplace_id_workplaces_id_fk",
           "tableFrom": "email_deliveries",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3438,12 +3180,8 @@
           "name": "email_deliveries_invitation_id_invitations_id_fk",
           "tableFrom": "email_deliveries",
           "tableTo": "invitations",
-          "columnsFrom": [
-            "invitation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["invitation_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3453,9 +3191,7 @@
         "email_deliveries_token_unique": {
           "name": "email_deliveries_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -3511,12 +3247,8 @@
           "name": "employment_locations_employment_id_employments_id_fk",
           "tableFrom": "employment_locations",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3524,12 +3256,8 @@
           "name": "employment_locations_location_id_locations_id_fk",
           "tableFrom": "employment_locations",
           "tableTo": "locations",
-          "columnsFrom": [
-            "location_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["location_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3537,10 +3265,7 @@
       "compositePrimaryKeys": {
         "employment_locations_employment_id_location_id_pk": {
           "name": "employment_locations_employment_id_location_id_pk",
-          "columns": [
-            "employment_id",
-            "location_id"
-          ]
+          "columns": ["employment_id", "location_id"]
         }
       },
       "uniqueConstraints": {},
@@ -3571,12 +3296,8 @@
           "name": "employment_positions_employment_id_employments_id_fk",
           "tableFrom": "employment_positions",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3584,12 +3305,8 @@
           "name": "employment_positions_position_id_positions_id_fk",
           "tableFrom": "employment_positions",
           "tableTo": "positions",
-          "columnsFrom": [
-            "position_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["position_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3597,10 +3314,7 @@
       "compositePrimaryKeys": {
         "employment_positions_employment_id_position_id_pk": {
           "name": "employment_positions_employment_id_position_id_pk",
-          "columns": [
-            "employment_id",
-            "position_id"
-          ]
+          "columns": ["employment_id", "position_id"]
         }
       },
       "uniqueConstraints": {},
@@ -3703,12 +3417,8 @@
           "name": "employments_workplace_id_workplaces_id_fk",
           "tableFrom": "employments",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3718,10 +3428,7 @@
         "employments_workplace_profile_unique": {
           "name": "employments_workplace_profile_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "workplace_id",
-            "profile_id"
-          ]
+          "columns": ["workplace_id", "profile_id"]
         }
       },
       "policies": {},
@@ -3791,12 +3498,8 @@
           "name": "holidays_workplace_id_workplaces_id_fk",
           "tableFrom": "holidays",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3804,12 +3507,8 @@
           "name": "holidays_location_id_locations_id_fk",
           "tableFrom": "holidays",
           "tableTo": "locations",
-          "columnsFrom": [
-            "location_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["location_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3819,11 +3518,7 @@
         "holidays_workplace_date_name_unique": {
           "name": "holidays_workplace_date_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "workplace_id",
-            "date",
-            "name"
-          ]
+          "columns": ["workplace_id", "date", "name"]
         }
       },
       "policies": {},
@@ -3885,12 +3580,8 @@
           "name": "idempotency_records_actor_profile_id_profiles_id_fk",
           "tableFrom": "idempotency_records",
           "tableTo": "profiles",
-          "columnsFrom": [
-            "actor_profile_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_profile_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3900,11 +3591,7 @@
         "idempotency_records_actor_scope_key_unique": {
           "name": "idempotency_records_actor_scope_key_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "actor_profile_id",
-            "scope",
-            "key"
-          ]
+          "columns": ["actor_profile_id", "scope", "key"]
         }
       },
       "policies": {},
@@ -3960,12 +3647,8 @@
           "name": "announcements_workplace_id_workplaces_id_fk",
           "tableFrom": "announcements",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3973,12 +3656,8 @@
           "name": "announcements_author_profile_id_profiles_id_fk",
           "tableFrom": "announcements",
           "tableTo": "profiles",
-          "columnsFrom": [
-            "author_profile_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_profile_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -4070,12 +3749,8 @@
           "name": "api_keys_workplace_id_workplaces_id_fk",
           "tableFrom": "api_keys",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4085,9 +3760,7 @@
         "api_keys_key_hash_unique": {
           "name": "api_keys_key_hash_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "key_hash"
-          ]
+          "columns": ["key_hash"]
         }
       },
       "policies": {},
@@ -4171,12 +3844,8 @@
           "name": "audit_events_workplace_id_workplaces_id_fk",
           "tableFrom": "audit_events",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4184,12 +3853,8 @@
           "name": "audit_events_actor_profile_id_profiles_id_fk",
           "tableFrom": "audit_events",
           "tableTo": "profiles",
-          "columnsFrom": [
-            "actor_profile_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_profile_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -4223,12 +3888,8 @@
           "name": "conversation_members_conversation_id_conversations_id_fk",
           "tableFrom": "conversation_members",
           "tableTo": "conversations",
-          "columnsFrom": [
-            "conversation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["conversation_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4236,12 +3897,8 @@
           "name": "conversation_members_employment_id_employments_id_fk",
           "tableFrom": "conversation_members",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4249,10 +3906,7 @@
       "compositePrimaryKeys": {
         "conversation_members_conversation_id_employment_id_pk": {
           "name": "conversation_members_conversation_id_employment_id_pk",
-          "columns": [
-            "conversation_id",
-            "employment_id"
-          ]
+          "columns": ["conversation_id", "employment_id"]
         }
       },
       "uniqueConstraints": {},
@@ -4298,12 +3952,8 @@
           "name": "conversations_workplace_id_workplaces_id_fk",
           "tableFrom": "conversations",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4356,12 +4006,8 @@
           "name": "day_parts_location_id_locations_id_fk",
           "tableFrom": "day_parts",
           "tableTo": "locations",
-          "columnsFrom": [
-            "location_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["location_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4371,10 +4017,7 @@
         "day_parts_location_name_unique": {
           "name": "day_parts_location_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "location_id",
-            "name"
-          ]
+          "columns": ["location_id", "name"]
         }
       },
       "policies": {},
@@ -4430,12 +4073,8 @@
           "name": "employment_documents_employment_id_employments_id_fk",
           "tableFrom": "employment_documents",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4469,12 +4108,8 @@
           "name": "employment_groups_employment_id_employments_id_fk",
           "tableFrom": "employment_groups",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4482,12 +4117,8 @@
           "name": "employment_groups_group_id_worker_groups_id_fk",
           "tableFrom": "employment_groups",
           "tableTo": "worker_groups",
-          "columnsFrom": [
-            "group_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["group_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4495,10 +4126,7 @@
       "compositePrimaryKeys": {
         "employment_groups_employment_id_group_id_pk": {
           "name": "employment_groups_employment_id_group_id_pk",
-          "columns": [
-            "employment_id",
-            "group_id"
-          ]
+          "columns": ["employment_id", "group_id"]
         }
       },
       "uniqueConstraints": {},
@@ -4529,12 +4157,8 @@
           "name": "invitation_locations_invitation_id_invitations_id_fk",
           "tableFrom": "invitation_locations",
           "tableTo": "invitations",
-          "columnsFrom": [
-            "invitation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["invitation_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4542,12 +4166,8 @@
           "name": "invitation_locations_location_id_locations_id_fk",
           "tableFrom": "invitation_locations",
           "tableTo": "locations",
-          "columnsFrom": [
-            "location_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["location_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4555,10 +4175,7 @@
       "compositePrimaryKeys": {
         "invitation_locations_pk": {
           "name": "invitation_locations_pk",
-          "columns": [
-            "invitation_id",
-            "location_id"
-          ]
+          "columns": ["invitation_id", "location_id"]
         }
       },
       "uniqueConstraints": {},
@@ -4589,12 +4206,8 @@
           "name": "invitation_positions_invitation_id_invitations_id_fk",
           "tableFrom": "invitation_positions",
           "tableTo": "invitations",
-          "columnsFrom": [
-            "invitation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["invitation_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -4602,12 +4215,8 @@
           "name": "invitation_positions_position_id_positions_id_fk",
           "tableFrom": "invitation_positions",
           "tableTo": "positions",
-          "columnsFrom": [
-            "position_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["position_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4615,10 +4224,7 @@
       "compositePrimaryKeys": {
         "invitation_positions_pk": {
           "name": "invitation_positions_pk",
-          "columns": [
-            "invitation_id",
-            "position_id"
-          ]
+          "columns": ["invitation_id", "position_id"]
         }
       },
       "uniqueConstraints": {},
@@ -4753,12 +4359,8 @@
           "name": "invitations_workplace_id_workplaces_id_fk",
           "tableFrom": "invitations",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4768,9 +4370,7 @@
         "invitations_token_unique": {
           "name": "invitations_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -4813,12 +4413,8 @@
           "name": "location_sales_location_id_locations_id_fk",
           "tableFrom": "location_sales",
           "tableTo": "locations",
-          "columnsFrom": [
-            "location_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["location_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4826,10 +4422,7 @@
       "compositePrimaryKeys": {
         "location_sales_location_id_sale_date_pk": {
           "name": "location_sales_location_id_sale_date_pk",
-          "columns": [
-            "location_id",
-            "sale_date"
-          ]
+          "columns": ["location_id", "sale_date"]
         }
       },
       "uniqueConstraints": {},
@@ -4930,12 +4523,8 @@
           "name": "locations_workplace_id_workplaces_id_fk",
           "tableFrom": "locations",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -4945,10 +4534,7 @@
         "locations_workplace_name_unique": {
           "name": "locations_workplace_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "workplace_id",
-            "name"
-          ]
+          "columns": ["workplace_id", "name"]
         }
       },
       "policies": {},
@@ -5040,12 +4626,8 @@
           "name": "notification_outbox_notification_id_notifications_id_fk",
           "tableFrom": "notification_outbox",
           "tableTo": "notifications",
-          "columnsFrom": [
-            "notification_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["notification_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5055,9 +4637,7 @@
         "notification_outbox_notification_unique": {
           "name": "notification_outbox_notification_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "notification_id"
-          ]
+          "columns": ["notification_id"]
         }
       },
       "policies": {},
@@ -5135,12 +4715,8 @@
           "name": "notifications_employment_id_employments_id_fk",
           "tableFrom": "notifications",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5222,12 +4798,8 @@
           "name": "pilot_feedback_workplace_id_workplaces_id_fk",
           "tableFrom": "pilot_feedback",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5235,12 +4807,8 @@
           "name": "pilot_feedback_profile_id_profiles_id_fk",
           "tableFrom": "pilot_feedback",
           "tableTo": "profiles",
-          "columnsFrom": [
-            "profile_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["profile_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -5295,12 +4863,8 @@
           "name": "positions_workplace_id_workplaces_id_fk",
           "tableFrom": "positions",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5310,10 +4874,7 @@
         "positions_workplace_name_unique": {
           "name": "positions_workplace_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "workplace_id",
-            "name"
-          ]
+          "columns": ["workplace_id", "name"]
         }
       },
       "policies": {},
@@ -5387,9 +4948,7 @@
         "profiles_email_unique": {
           "name": "profiles_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -5493,12 +5052,8 @@
           "name": "push_deliveries_outbox_id_notification_outbox_id_fk",
           "tableFrom": "push_deliveries",
           "tableTo": "notification_outbox",
-          "columnsFrom": [
-            "outbox_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["outbox_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5508,9 +5063,7 @@
         "push_delivery_ticket_unique": {
           "name": "push_delivery_ticket_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "ticket_id"
-          ]
+          "columns": ["ticket_id"]
         }
       },
       "policies": {},
@@ -5584,12 +5137,8 @@
           "name": "push_tokens_employment_id_employments_id_fk",
           "tableFrom": "push_tokens",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5599,10 +5148,7 @@
         "push_tokens_employment_token_unique": {
           "name": "push_tokens_employment_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "employment_id",
-            "expo_push_token"
-          ]
+          "columns": ["employment_id", "expo_push_token"]
         }
       },
       "policies": {},
@@ -5665,12 +5211,8 @@
           "name": "schedule_teams_workplace_id_workplaces_id_fk",
           "tableFrom": "schedule_teams",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5678,12 +5220,8 @@
           "name": "schedule_teams_location_id_locations_id_fk",
           "tableFrom": "schedule_teams",
           "tableTo": "locations",
-          "columnsFrom": [
-            "location_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["location_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5693,10 +5231,7 @@
         "schedule_teams_location_name_unique": {
           "name": "schedule_teams_location_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "location_id",
-            "name"
-          ]
+          "columns": ["location_id", "name"]
         }
       },
       "policies": {},
@@ -5747,12 +5282,8 @@
           "name": "schedule_templates_location_id_locations_id_fk",
           "tableFrom": "schedule_templates",
           "tableTo": "locations",
-          "columnsFrom": [
-            "location_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["location_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5762,10 +5293,7 @@
         "schedule_templates_location_name_unique": {
           "name": "schedule_templates_location_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "location_id",
-            "name"
-          ]
+          "columns": ["location_id", "name"]
         }
       },
       "policies": {},
@@ -5821,12 +5349,8 @@
           "name": "schedule_versions_schedule_id_schedules_id_fk",
           "tableFrom": "schedule_versions",
           "tableTo": "schedules",
-          "columnsFrom": [
-            "schedule_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["schedule_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -5836,10 +5360,7 @@
         "schedule_versions_schedule_number_unique": {
           "name": "schedule_versions_schedule_number_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "schedule_id",
-            "version_number"
-          ]
+          "columns": ["schedule_id", "version_number"]
         }
       },
       "policies": {},
@@ -5953,12 +5474,8 @@
           "name": "schedules_location_id_locations_id_fk",
           "tableFrom": "schedules",
           "tableTo": "locations",
-          "columnsFrom": [
-            "location_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["location_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5966,12 +5483,8 @@
           "name": "schedules_team_id_schedule_teams_id_fk",
           "tableFrom": "schedules",
           "tableTo": "schedule_teams",
-          "columnsFrom": [
-            "team_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["team_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5979,12 +5492,8 @@
           "name": "schedules_policy_group_id_approval_policy_groups_id_fk",
           "tableFrom": "schedules",
           "tableTo": "approval_policy_groups",
-          "columnsFrom": [
-            "policy_group_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["policy_group_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -6032,12 +5541,8 @@
           "name": "shift_pattern_members_pattern_id_shift_patterns_id_fk",
           "tableFrom": "shift_pattern_members",
           "tableTo": "shift_patterns",
-          "columnsFrom": [
-            "pattern_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["pattern_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6045,12 +5550,8 @@
           "name": "shift_pattern_members_employment_id_employments_id_fk",
           "tableFrom": "shift_pattern_members",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6060,10 +5561,7 @@
         "shift_pattern_members_pattern_employment_unique": {
           "name": "shift_pattern_members_pattern_employment_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "pattern_id",
-            "employment_id"
-          ]
+          "columns": ["pattern_id", "employment_id"]
         }
       },
       "policies": {},
@@ -6145,12 +5643,8 @@
           "name": "shift_pattern_shifts_pattern_id_shift_patterns_id_fk",
           "tableFrom": "shift_pattern_shifts",
           "tableTo": "shift_patterns",
-          "columnsFrom": [
-            "pattern_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["pattern_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6158,12 +5652,8 @@
           "name": "shift_pattern_shifts_position_id_positions_id_fk",
           "tableFrom": "shift_pattern_shifts",
           "tableTo": "positions",
-          "columnsFrom": [
-            "position_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["position_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -6237,12 +5727,8 @@
           "name": "shift_patterns_workplace_id_workplaces_id_fk",
           "tableFrom": "shift_patterns",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6250,12 +5736,8 @@
           "name": "shift_patterns_location_id_locations_id_fk",
           "tableFrom": "shift_patterns",
           "tableTo": "locations",
-          "columnsFrom": [
-            "location_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["location_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6265,10 +5747,7 @@
         "shift_patterns_workplace_name_unique": {
           "name": "shift_patterns_workplace_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "workplace_id",
-            "name"
-          ]
+          "columns": ["workplace_id", "name"]
         }
       },
       "policies": {},
@@ -6381,12 +5860,8 @@
           "name": "shift_swaps_requester_employment_id_employments_id_fk",
           "tableFrom": "shift_swaps",
           "tableTo": "employments",
-          "columnsFrom": [
-            "requester_employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["requester_employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6394,12 +5869,8 @@
           "name": "shift_swaps_requester_shift_id_version_shifts_id_fk",
           "tableFrom": "shift_swaps",
           "tableTo": "version_shifts",
-          "columnsFrom": [
-            "requester_shift_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["requester_shift_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6407,12 +5878,8 @@
           "name": "shift_swaps_counterpart_employment_id_employments_id_fk",
           "tableFrom": "shift_swaps",
           "tableTo": "employments",
-          "columnsFrom": [
-            "counterpart_employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["counterpart_employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6420,12 +5887,8 @@
           "name": "shift_swaps_counterpart_shift_id_version_shifts_id_fk",
           "tableFrom": "shift_swaps",
           "tableTo": "version_shifts",
-          "columnsFrom": [
-            "counterpart_shift_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["counterpart_shift_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6433,12 +5896,8 @@
           "name": "shift_swaps_decided_by_profile_id_profiles_id_fk",
           "tableFrom": "shift_swaps",
           "tableTo": "profiles",
-          "columnsFrom": [
-            "decided_by_profile_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["decided_by_profile_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -6472,12 +5931,8 @@
           "name": "shift_tag_assignments_shift_id_shifts_id_fk",
           "tableFrom": "shift_tag_assignments",
           "tableTo": "shifts",
-          "columnsFrom": [
-            "shift_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["shift_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6485,12 +5940,8 @@
           "name": "shift_tag_assignments_tag_id_shift_tags_id_fk",
           "tableFrom": "shift_tag_assignments",
           "tableTo": "shift_tags",
-          "columnsFrom": [
-            "tag_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tag_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6498,10 +5949,7 @@
       "compositePrimaryKeys": {
         "shift_tag_assignments_shift_id_tag_id_pk": {
           "name": "shift_tag_assignments_shift_id_tag_id_pk",
-          "columns": [
-            "shift_id",
-            "tag_id"
-          ]
+          "columns": ["shift_id", "tag_id"]
         }
       },
       "uniqueConstraints": {},
@@ -6546,12 +5994,8 @@
           "name": "shift_tags_workplace_id_workplaces_id_fk",
           "tableFrom": "shift_tags",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6561,10 +6005,7 @@
         "shift_tags_workplace_name_unique": {
           "name": "shift_tags_workplace_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "workplace_id",
-            "name"
-          ]
+          "columns": ["workplace_id", "name"]
         }
       },
       "policies": {},
@@ -6607,12 +6048,8 @@
           "name": "shift_task_completions_task_id_shift_tasks_id_fk",
           "tableFrom": "shift_task_completions",
           "tableTo": "shift_tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["task_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6620,12 +6057,8 @@
           "name": "shift_task_completions_version_shift_id_version_shifts_id_fk",
           "tableFrom": "shift_task_completions",
           "tableTo": "version_shifts",
-          "columnsFrom": [
-            "version_shift_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["version_shift_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6633,12 +6066,8 @@
           "name": "shift_task_completions_completed_by_profile_id_profiles_id_fk",
           "tableFrom": "shift_task_completions",
           "tableTo": "profiles",
-          "columnsFrom": [
-            "completed_by_profile_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["completed_by_profile_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -6646,10 +6075,7 @@
       "compositePrimaryKeys": {
         "shift_task_completions_task_id_version_shift_id_pk": {
           "name": "shift_task_completions_task_id_version_shift_id_pk",
-          "columns": [
-            "task_id",
-            "version_shift_id"
-          ]
+          "columns": ["task_id", "version_shift_id"]
         }
       },
       "uniqueConstraints": {},
@@ -6694,12 +6120,8 @@
           "name": "shift_tasks_shift_id_shifts_id_fk",
           "tableFrom": "shift_tasks",
           "tableTo": "shifts",
-          "columnsFrom": [
-            "shift_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["shift_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -6771,12 +6193,8 @@
           "name": "shift_templates_location_id_locations_id_fk",
           "tableFrom": "shift_templates",
           "tableTo": "locations",
-          "columnsFrom": [
-            "location_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["location_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6784,12 +6202,8 @@
           "name": "shift_templates_position_id_positions_id_fk",
           "tableFrom": "shift_templates",
           "tableTo": "positions",
-          "columnsFrom": [
-            "position_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["position_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -6799,10 +6213,7 @@
         "shift_templates_location_name_unique": {
           "name": "shift_templates_location_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "location_id",
-            "name"
-          ]
+          "columns": ["location_id", "name"]
         }
       },
       "policies": {},
@@ -6883,12 +6294,8 @@
           "name": "shifts_schedule_id_schedules_id_fk",
           "tableFrom": "shifts",
           "tableTo": "schedules",
-          "columnsFrom": [
-            "schedule_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["schedule_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -6896,12 +6303,8 @@
           "name": "shifts_employment_id_employments_id_fk",
           "tableFrom": "shifts",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -6909,12 +6312,8 @@
           "name": "shifts_position_id_positions_id_fk",
           "tableFrom": "shifts",
           "tableTo": "positions",
-          "columnsFrom": [
-            "position_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["position_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -6997,12 +6396,8 @@
           "name": "template_shifts_template_id_schedule_templates_id_fk",
           "tableFrom": "template_shifts",
           "tableTo": "schedule_templates",
-          "columnsFrom": [
-            "template_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["template_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -7010,12 +6405,8 @@
           "name": "template_shifts_employment_id_employments_id_fk",
           "tableFrom": "template_shifts",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -7023,12 +6414,8 @@
           "name": "template_shifts_position_id_positions_id_fk",
           "tableFrom": "template_shifts",
           "tableTo": "positions",
-          "columnsFrom": [
-            "position_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["position_id"],
+          "columnsTo": ["id"],
           "onDelete": "restrict",
           "onUpdate": "no action"
         }
@@ -7081,12 +6468,8 @@
           "name": "time_blocks_location_id_locations_id_fk",
           "tableFrom": "time_blocks",
           "tableTo": "locations",
-          "columnsFrom": [
-            "location_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["location_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7096,10 +6479,7 @@
         "time_blocks_location_name_unique": {
           "name": "time_blocks_location_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "location_id",
-            "name"
-          ]
+          "columns": ["location_id", "name"]
         }
       },
       "policies": {},
@@ -7230,12 +6610,8 @@
           "name": "time_entries_version_shift_id_version_shifts_id_fk",
           "tableFrom": "time_entries",
           "tableTo": "version_shifts",
-          "columnsFrom": [
-            "version_shift_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["version_shift_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -7243,12 +6619,8 @@
           "name": "time_entries_employment_id_employments_id_fk",
           "tableFrom": "time_entries",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -7256,12 +6628,8 @@
           "name": "time_entries_approved_by_profile_id_profiles_id_fk",
           "tableFrom": "time_entries",
           "tableTo": "profiles",
-          "columnsFrom": [
-            "approved_by_profile_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["approved_by_profile_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -7269,12 +6637,8 @@
           "name": "time_entries_edited_by_profile_id_profiles_id_fk",
           "tableFrom": "time_entries",
           "tableTo": "profiles",
-          "columnsFrom": [
-            "edited_by_profile_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["edited_by_profile_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -7284,9 +6648,7 @@
         "time_entries_version_shift_unique": {
           "name": "time_entries_version_shift_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "version_shift_id"
-          ]
+          "columns": ["version_shift_id"]
         }
       },
       "policies": {},
@@ -7345,12 +6707,8 @@
           "name": "time_entry_breaks_time_entry_id_time_entries_id_fk",
           "tableFrom": "time_entry_breaks",
           "tableTo": "time_entries",
-          "columnsFrom": [
-            "time_entry_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["time_entry_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7421,12 +6779,8 @@
           "name": "version_shifts_version_id_schedule_versions_id_fk",
           "tableFrom": "version_shifts",
           "tableTo": "schedule_versions",
-          "columnsFrom": [
-            "version_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["version_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7519,12 +6873,8 @@
           "name": "webhook_deliveries_endpoint_id_webhook_endpoints_id_fk",
           "tableFrom": "webhook_deliveries",
           "tableTo": "webhook_endpoints",
-          "columnsFrom": [
-            "endpoint_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["endpoint_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7605,12 +6955,8 @@
           "name": "webhook_endpoints_workplace_id_workplaces_id_fk",
           "tableFrom": "webhook_endpoints",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7687,12 +7033,8 @@
           "name": "worker_deliveries_version_id_schedule_versions_id_fk",
           "tableFrom": "worker_deliveries",
           "tableTo": "schedule_versions",
-          "columnsFrom": [
-            "version_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["version_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -7700,12 +7042,8 @@
           "name": "worker_deliveries_employment_id_employments_id_fk",
           "tableFrom": "worker_deliveries",
           "tableTo": "employments",
-          "columnsFrom": [
-            "employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7715,10 +7053,7 @@
         "worker_deliveries_version_employment_unique": {
           "name": "worker_deliveries_version_employment_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "version_id",
-            "employment_id"
-          ]
+          "columns": ["version_id", "employment_id"]
         }
       },
       "policies": {},
@@ -7762,12 +7097,8 @@
           "name": "worker_groups_workplace_id_workplaces_id_fk",
           "tableFrom": "worker_groups",
           "tableTo": "workplaces",
-          "columnsFrom": [
-            "workplace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workplace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7777,10 +7108,7 @@
         "worker_groups_workplace_name_unique": {
           "name": "worker_groups_workplace_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "workplace_id",
-            "name"
-          ]
+          "columns": ["workplace_id", "name"]
         }
       },
       "policies": {},
@@ -7830,12 +7158,8 @@
           "name": "workplace_messages_conversation_id_conversations_id_fk",
           "tableFrom": "workplace_messages",
           "tableTo": "conversations",
-          "columnsFrom": [
-            "conversation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["conversation_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -7843,12 +7167,8 @@
           "name": "workplace_messages_author_employment_id_employments_id_fk",
           "tableFrom": "workplace_messages",
           "tableTo": "employments",
-          "columnsFrom": [
-            "author_employment_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["author_employment_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -8150,11 +7470,7 @@
     "public.shift_acceptance_status": {
       "name": "shift_acceptance_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "accepted",
-        "declined"
-      ]
+      "values": ["pending", "accepted", "declined"]
     },
     "public.approval_request_type": {
       "name": "approval_request_type",
@@ -8170,27 +7486,17 @@
     "public.attendance_mark_kind": {
       "name": "attendance_mark_kind",
       "schema": "public",
-      "values": [
-        "late",
-        "no_show",
-        "sick"
-      ]
+      "values": ["late", "no_show", "sick"]
     },
     "public.billing_interval": {
       "name": "billing_interval",
       "schema": "public",
-      "values": [
-        "month",
-        "year"
-      ]
+      "values": ["month", "year"]
     },
     "public.subscription_plan": {
       "name": "subscription_plan",
       "schema": "public",
-      "values": [
-        "schedule",
-        "operations"
-      ]
+      "values": ["schedule", "operations"]
     },
     "public.leave_accrual_method": {
       "name": "leave_accrual_method",
@@ -8208,43 +7514,22 @@
     "public.leave_approval_step_status": {
       "name": "leave_approval_step_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "approved",
-        "declined",
-        "skipped",
-        "escalated"
-      ]
+      "values": ["pending", "approved", "declined", "skipped", "escalated"]
     },
     "public.leave_approval_step_kind": {
       "name": "leave_approval_step_kind",
       "schema": "public",
-      "values": [
-        "workplace_managers",
-        "specific_employment",
-        "privilege"
-      ]
+      "values": ["workplace_managers", "specific_employment", "privilege"]
     },
     "public.leave_classification": {
       "name": "leave_classification",
       "schema": "public",
-      "values": [
-        "standard",
-        "floating_holiday",
-        "working_away",
-        "special"
-      ]
+      "values": ["standard", "floating_holiday", "working_away", "special"]
     },
     "public.leave_encashment_status": {
       "name": "leave_encashment_status",
       "schema": "public",
-      "values": [
-        "requested",
-        "approved",
-        "declined",
-        "paid",
-        "cancelled"
-      ]
+      "values": ["requested", "approved", "declined", "paid", "cancelled"]
     },
     "public.leave_ledger_kind": {
       "name": "leave_ledger_kind",
@@ -8265,46 +7550,27 @@
     "public.time_off_status": {
       "name": "time_off_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "approved",
-        "declined",
-        "cancelled"
-      ]
+      "values": ["pending", "approved", "declined", "cancelled"]
     },
     "public.unavailability_kind": {
       "name": "unavailability_kind",
       "schema": "public",
-      "values": [
-        "recurring",
-        "date"
-      ]
+      "values": ["recurring", "date"]
     },
     "public.unavailability_status": {
       "name": "unavailability_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "approved"
-      ]
+      "values": ["pending", "approved"]
     },
     "public.coverage_request_status": {
       "name": "coverage_request_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "approved",
-        "declined"
-      ]
+      "values": ["pending", "approved", "declined"]
     },
     "public.open_shift_status": {
       "name": "open_shift_status",
       "schema": "public",
-      "values": [
-        "open",
-        "filled",
-        "closed"
-      ]
+      "values": ["open", "filled", "closed"]
     },
     "public.email_delivery_status": {
       "name": "email_delivery_status",
@@ -8322,19 +7588,12 @@
     "public.employment_kind": {
       "name": "employment_kind",
       "schema": "public",
-      "values": [
-        "manager",
-        "worker",
-        "viewer"
-      ]
+      "values": ["manager", "worker", "viewer"]
     },
     "public.employment_status": {
       "name": "employment_status",
       "schema": "public",
-      "values": [
-        "active",
-        "deactivated"
-      ]
+      "values": ["active", "deactivated"]
     },
     "public.api_key_scope": {
       "name": "api_key_scope",
@@ -8351,74 +7610,42 @@
     "public.conversation_kind": {
       "name": "conversation_kind",
       "schema": "public",
-      "values": [
-        "workplace",
-        "direct"
-      ]
+      "values": ["workplace", "direct"]
     },
     "public.delivery_status": {
       "name": "delivery_status",
       "schema": "public",
-      "values": [
-        "sent",
-        "delivered",
-        "acknowledged"
-      ]
+      "values": ["sent", "delivered", "acknowledged"]
     },
     "public.invitation_status": {
       "name": "invitation_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "accepted",
-        "revoked"
-      ]
+      "values": ["pending", "accepted", "revoked"]
     },
     "public.leave_cap_reset": {
       "name": "leave_cap_reset",
       "schema": "public",
-      "values": [
-        "none",
-        "calendar_year",
-        "hire_date",
-        "custom_date"
-      ]
+      "values": ["none", "calendar_year", "hire_date", "custom_date"]
     },
     "public.name_format": {
       "name": "name_format",
       "schema": "public",
-      "values": [
-        "full",
-        "first_last_initial",
-        "first"
-      ]
+      "values": ["full", "first_last_initial", "first"]
     },
     "public.pay_period_type": {
       "name": "pay_period_type",
       "schema": "public",
-      "values": [
-        "weekly",
-        "biweekly",
-        "semimonthly",
-        "monthly"
-      ]
+      "values": ["weekly", "biweekly", "semimonthly", "monthly"]
     },
     "public.planned_shifts_visibility": {
       "name": "planned_shifts_visibility",
       "schema": "public",
-      "values": [
-        "never",
-        "always",
-        "within_days"
-      ]
+      "values": ["never", "always", "within_days"]
     },
     "public.push_token_platform": {
       "name": "push_token_platform",
       "schema": "public",
-      "values": [
-        "ios",
-        "android"
-      ]
+      "values": ["ios", "android"]
     },
     "public.swap_status": {
       "name": "swap_status",
@@ -8435,36 +7662,22 @@
     "public.time_format": {
       "name": "time_format",
       "schema": "public",
-      "values": [
-        "12h",
-        "24h"
-      ]
+      "values": ["12h", "24h"]
     },
     "public.timesheet_approval_status": {
       "name": "timesheet_approval_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "approved",
-        "declined"
-      ]
+      "values": ["pending", "approved", "declined"]
     },
     "public.webhook_delivery_status": {
       "name": "webhook_delivery_status",
       "schema": "public",
-      "values": [
-        "pending",
-        "delivered",
-        "failed"
-      ]
+      "values": ["pending", "delivered", "failed"]
     },
     "public.worker_schedule_visibility": {
       "name": "worker_schedule_visibility",
       "schema": "public",
-      "values": [
-        "own",
-        "full"
-      ]
+      "values": ["own", "full"]
     }
   },
   "schemas": {},

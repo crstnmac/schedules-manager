@@ -1,6 +1,10 @@
-import { createMiddleware, createCsrfMiddleware, createStart } from '@tanstack/react-start';
-import { isMarkdownPreferred } from 'fumadocs-core/negotiation';
 import { redirect } from '@tanstack/react-router';
+import {
+  createCsrfMiddleware,
+  createMiddleware,
+  createStart,
+} from '@tanstack/react-start';
+import { isMarkdownPreferred } from 'fumadocs-core/negotiation';
 import { docsRoute, getPageMarkdownUrl } from '@/lib/shared';
 import { source } from '@/lib/source';
 

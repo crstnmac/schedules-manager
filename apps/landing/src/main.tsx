@@ -43,7 +43,6 @@ import {
 	MessageSquare,
 	Plus,
 	Send,
-	Settings2,
 	ShieldCheck,
 	ShoppingBag,
 	Smartphone,
@@ -492,14 +491,22 @@ function SchedulePreview() {
 											<small>{p.role} · 32h</small>
 										</div>
 									</div>
-									{p.shifts.map((s, i) => (
+									{[
+										"monday",
+										"tuesday",
+										"wednesday",
+										"thursday",
+										"friday",
+										"saturday",
+										"sunday",
+									].map((day, i) => (
 										<div
 											className={`shift-cell${i === 1 ? "today" : ""}`}
-											key={p.initials + i}
+											key={`${p.initials}-${day}`}
 										>
-											{s ? (
+											{p.shifts[i] ? (
 												<div className={`shift ${p.color}`}>
-													<strong>{s}</strong>
+													<strong>{p.shifts[i]}</strong>
 													<span>{p.role}</span>
 												</div>
 											) : (
@@ -515,11 +522,19 @@ function SchedulePreview() {
 								</span>
 								<strong>Open shifts</strong>
 							</div>
-							{["", "", "", "12:00 – 18:00", "", "", ""].map((s, i) => (
-								<div className="shift-cell" key={"open" + i}>
-									{s && (
+							{[
+								["monday", ""],
+								["tuesday", ""],
+								["wednesday", ""],
+								["thursday", "12:00 – 18:00"],
+								["friday", ""],
+								["saturday", ""],
+								["sunday", ""],
+							].map(([day, shift]) => (
+								<div className="shift-cell" key={`open-${day}`}>
+									{shift && (
 										<div className="shift amber">
-											<strong>{s}</strong>
+											<strong>{shift}</strong>
 											<span>Barista · Open</span>
 										</div>
 									)}
@@ -864,10 +879,18 @@ function HomePage() {
 								<span>32 hours</span>
 							</div>
 							<div className="phone-days">
-								{["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-									<div key={"day" + i} className={i === 1 ? "active" : ""}>
-										{d}
-										<b>{7 + i}</b>
+								{[
+									["monday", "M", 7],
+									["tuesday", "T", 8],
+									["wednesday", "W", 9],
+									["thursday", "T", 10],
+									["friday", "F", 11],
+									["saturday", "S", 12],
+									["sunday", "S", 13],
+								].map(([day, label, date], i) => (
+									<div key={day} className={i === 1 ? "active" : ""}>
+										{label}
+										<b>{date}</b>
 										<i />
 									</div>
 								))}
@@ -1048,7 +1071,10 @@ function App() {
 	return <HomePage />;
 }
 
-createRoot(document.getElementById("root")!).render(
+const root = document.getElementById("root");
+if (!root) throw new Error("Root element not found");
+
+createRoot(root).render(
 	<React.StrictMode>
 		<MotionRoot>
 			<App />

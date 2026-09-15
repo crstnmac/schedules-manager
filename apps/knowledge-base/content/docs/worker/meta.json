@@ -1,1 +1,11 @@
-{"title":"Worker guide","icon":"UserRound","pages":["worker-journey","schedules-and-changes","availability-and-time-off","coverage-and-swaps","time-clock-and-communication"]}
+{
+  "title": "Worker guide",
+  "icon": "UserRound",
+  "pages": [
+    "worker-journey",
+    "schedules-and-changes",
+    "availability-and-time-off",
+    "coverage-and-swaps",
+    "time-clock-and-communication"
+  ]
+}

@@ -1,1 +1,9 @@
-{"title":"Feature guides","icon":"Blocks","pages":["schedule-lifecycle","leave-and-policies","integrations-and-billing"]}
+{
+  "title": "Feature guides",
+  "icon": "Blocks",
+  "pages": [
+    "schedule-lifecycle",
+    "leave-and-policies",
+    "integrations-and-billing"
+  ]
+}

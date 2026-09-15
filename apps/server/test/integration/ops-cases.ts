@@ -1953,6 +1953,10 @@ export function registerOpsTests(getContext: () => Context) {
 		const { database: d, app, token } = getContext();
 		const seed = await seedWorkplace(d, "Delete Settings Cafe");
 		const access = await token(seed.managerProfileId, seed.managerEmail);
+		await d.db
+			.update(d.workplaceSubscriptions)
+			.set({ locationCount: 2 })
+			.where(eq(d.workplaceSubscriptions.workplaceId, seed.workplace.id));
 
 		const blockedLocation = await authJson(
 			app,

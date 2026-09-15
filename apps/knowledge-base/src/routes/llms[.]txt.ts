@@ -1,5 +1,5 @@
-import { docsLlms } from '@/lib/source';
 import { createFileRoute } from '@tanstack/react-router';
+import { docsLlms } from '@/lib/source';
 
 export const Route = createFileRoute('/llms.txt')({
   server: {

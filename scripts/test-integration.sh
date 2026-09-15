@@ -11,8 +11,18 @@ trap cleanup EXIT INT TERM
 
 docker compose -f "$compose_file" up --detach --wait
 
+integration_db_port="$(
+	docker compose -f "$compose_file" port postgres-integration 5432 \
+		| awk -F: 'NR == 1 { print $NF }'
+)"
+
+if [ -z "$integration_db_port" ]; then
+	echo "Could not resolve the integration PostgreSQL port" >&2
+	exit 1
+fi
+
 RUN_INTEGRATION_TESTS=1 \
-DATABASE_URL="postgresql://schedules_manager_test:schedules_manager_test@127.0.0.1:55432/schedules_manager_test" \
+DATABASE_URL="postgresql://schedules_manager_test:schedules_manager_test@127.0.0.1:${integration_db_port}/schedules_manager_test" \
 CORS_ORIGIN="http://localhost:3001" \
 APP_URL="http://localhost:3001" \
 BETTER_AUTH_URL="http://localhost:3000" \

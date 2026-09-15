@@ -79,6 +79,11 @@ export type RouteState = {
 		capture: () => void;
 		reset: () => void;
 	};
+	pendingInvitations: {
+		data: { invitations: Record<string, unknown>[] } | undefined;
+		isLoading: boolean;
+	};
+	acceptInvitation: Record<string, unknown>;
 };
 
 const managerUser = { id: "u1", email: "boss@test" };
@@ -140,6 +145,15 @@ export const state: RouteState = {
 		capture: () => {},
 		reset: () => {},
 	},
+	pendingInvitations: { data: { invitations: [] }, isLoading: false },
+	acceptInvitation: {
+		isPending: false,
+		isSuccess: false,
+		isError: false,
+		error: null,
+		variables: undefined,
+		mutate: () => {},
+	},
 };
 
 export const defaults = { managerUser, managerWorkplace, meData };
@@ -177,6 +191,15 @@ export function resetState(pathname: string) {
 		capture: () => {},
 		reset: () => {},
 	};
+	state.pendingInvitations = { data: { invitations: [] }, isLoading: false };
+	state.acceptInvitation = {
+		isPending: false,
+		isSuccess: false,
+		isError: false,
+		error: null,
+		variables: undefined,
+		mutate: () => {},
+	};
 }
 
 let registered = false;
@@ -201,7 +224,10 @@ export function registerMocks() {
 			createElement("a", { href: to, ...rest }, children),
 		Outlet: () => createElement("div", { "data-testid": "outlet" }),
 		useRouterState: ({ select }: { select: (s: unknown) => unknown }) =>
-			select({ location: { pathname: state.pathname } }),
+			select({
+				location: { pathname: state.pathname },
+				matches: [{ routeId: state.pathname }],
+			}),
 	}));
 
 	mock.module("@posthog/react", () => ({
@@ -221,9 +247,11 @@ export function registerMocks() {
 	};
 
 	mock.module("@/lib/queries", () => ({
+		useAcceptInvitation: () => state.acceptInvitation,
 		useBilling: () => state.billing,
 		useMe: () => state.me,
 		useNotifications: () => state.inbox,
+		usePendingInvitations: () => state.pendingInvitations,
 		useMySchedule: () => ({
 			data: undefined,
 			isLoading: false,

@@ -747,9 +747,9 @@ export function registerLeaveTests(getContext: () => Context) {
 		]);
 
 		// A dry run writes nothing.
-		expect(
-			await balanceFor(app, seed, managerAccess, type.leaveType.id),
-		).toBe(960);
+		expect(await balanceFor(app, seed, managerAccess, type.leaveType.id)).toBe(
+			960,
+		);
 		const before = await authJson(
 			app,
 			`/v1/workplaces/${seed.workplace.id}/time-off`,
@@ -771,9 +771,9 @@ export function registerLeaveTests(getContext: () => Context) {
 		};
 		expect(commitBody.import.imported).toBe(2);
 		expect(commitBody.import.failed).toHaveLength(2);
-		expect(
-			await balanceFor(app, seed, managerAccess, type.leaveType.id),
-		).toBe(480);
+		expect(await balanceFor(app, seed, managerAccess, type.leaveType.id)).toBe(
+			480,
+		);
 
 		const listed = await authJson(
 			app,
@@ -781,7 +781,11 @@ export function registerLeaveTests(getContext: () => Context) {
 			managerAccess,
 		);
 		const listedBody = (await listed.json()) as {
-			requests: { status: string; approvals: unknown[]; chargeMinutes: number }[];
+			requests: {
+				status: string;
+				approvals: unknown[];
+				chargeMinutes: number;
+			}[];
 		};
 		expect(listedBody.requests).toHaveLength(2);
 		const pending = listedBody.requests.find(
@@ -827,9 +831,9 @@ export function registerLeaveTests(getContext: () => Context) {
 			((await preview.json()) as { import: { imported: number } }).import
 				.imported,
 		).toBe(1);
-		expect(
-			await balanceFor(app, seed, managerAccess, type.leaveType.id),
-		).toBe(0);
+		expect(await balanceFor(app, seed, managerAccess, type.leaveType.id)).toBe(
+			0,
+		);
 
 		const commit = await authJson(
 			app,
@@ -838,9 +842,9 @@ export function registerLeaveTests(getContext: () => Context) {
 			{ method: "POST", body: { csv: setCsv } },
 		);
 		expect(commit.status).toBe(200);
-		expect(
-			await balanceFor(app, seed, managerAccess, type.leaveType.id),
-		).toBe(2400);
+		expect(await balanceFor(app, seed, managerAccess, type.leaveType.id)).toBe(
+			2400,
+		);
 
 		// Re-importing the same set leaves the balance untouched.
 		await authJson(
@@ -849,9 +853,9 @@ export function registerLeaveTests(getContext: () => Context) {
 			managerAccess,
 			{ method: "POST", body: { csv: setCsv } },
 		);
-		expect(
-			await balanceFor(app, seed, managerAccess, type.leaveType.id),
-		).toBe(2400);
+		expect(await balanceFor(app, seed, managerAccess, type.leaveType.id)).toBe(
+			2400,
+		);
 
 		const addCsv = [
 			"worker_email,leave_type,hours,mode,effective_date",
@@ -864,9 +868,9 @@ export function registerLeaveTests(getContext: () => Context) {
 			{ method: "POST", body: { csv: addCsv } },
 		);
 		expect(add.status).toBe(200);
-		expect(
-			await balanceFor(app, seed, managerAccess, type.leaveType.id),
-		).toBe(1920);
+		expect(await balanceFor(app, seed, managerAccess, type.leaveType.id)).toBe(
+			1920,
+		);
 
 		const badCsv = [
 			"worker_email,leave_type,hours",
@@ -883,6 +887,8 @@ export function registerLeaveTests(getContext: () => Context) {
 			import: { imported: number; failed: { line: number }[] };
 		};
 		expect(badBody.import.imported).toBe(0);
-		expect(badBody.import.failed.map((failure) => failure.line)).toEqual([2, 3]);
+		expect(badBody.import.failed.map((failure) => failure.line)).toEqual([
+			2, 3,
+		]);
 	});
 }

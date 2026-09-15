@@ -1,1 +1,5 @@
-{"title":"Getting started","icon":"Rocket","pages":["overview","manager-onboarding","worker-onboarding"]}
+{
+  "title": "Getting started",
+  "icon": "Rocket",
+  "pages": ["overview", "manager-onboarding", "worker-onboarding"]
+}

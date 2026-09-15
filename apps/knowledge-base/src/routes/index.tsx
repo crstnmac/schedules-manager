@@ -1,10 +1,6 @@
-import {
-  DocsRoutePage,
-  docsHead,
-  loadDocsPage,
-} from '@/components/docs-page';
-import { docs } from '@/lib/source';
 import { createFileRoute } from '@tanstack/react-router';
+import { DocsRoutePage, docsHead, loadDocsPage } from '@/components/docs-page';
+import { docs } from '@/lib/source';
 
 export const Route = createFileRoute('/')({
   component: Page,

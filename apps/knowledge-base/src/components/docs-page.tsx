@@ -1,7 +1,3 @@
-import { useMDXComponents } from '@/components/mdx';
-import { baseOptions } from '@/lib/layout.shared';
-import { getPageMarkdownUrl } from '@/lib/shared';
-import { docs, source } from '@/lib/source';
 import { notFound } from '@tanstack/react-router';
 import { createServerFn } from '@tanstack/react-start';
 import { useFumadocsLoader } from 'fumadocs-core/source/client';
@@ -14,6 +10,10 @@ import {
   MarkdownCopyButton,
 } from 'fumadocs-ui/layouts/docs/page';
 import { Suspense, use } from 'react';
+import { useMDXComponents } from '@/components/mdx';
+import { baseOptions } from '@/lib/layout.shared';
+import { getPageMarkdownUrl } from '@/lib/shared';
+import { docs, source } from '@/lib/source';
 
 export const loadDocsPage = createServerFn({ method: 'GET' })
   .validator((slugs: string[]) => slugs)
@@ -40,7 +40,8 @@ export function docsHead(loaderData?: {
       {
         name: 'description',
         content:
-          loaderData?.description ?? 'End-user guides for managers and workers.',
+          loaderData?.description ??
+          'End-user guides for managers and workers.',
       },
     ],
   };
@@ -57,7 +58,7 @@ function Content({ path, markdownUrl }: { path: string; markdownUrl: string }) {
     <DocsPage toc={toc}>
       <DocsTitle>{page.title}</DocsTitle>
       <DocsDescription>{page.description}</DocsDescription>
-      <div className="flex flex-row gap-2 items-center border-b -mt-4 pb-6">
+      <div className="-mt-4 flex flex-row items-center gap-2 border-b pb-6">
         <MarkdownCopyButton markdownUrl={markdownUrl} />
       </div>
       <DocsBody>

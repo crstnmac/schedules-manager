@@ -1,1 +1,15 @@
-{"title":"Settings guide","icon":"Settings","pages":["settings-overview","workplace-and-company","locations-and-positions","schedule-policies","team-organization","schedule-catalog","time-off-and-leave","time-clock","personal-notifications-and-billing"]}
+{
+  "title": "Settings guide",
+  "icon": "Settings",
+  "pages": [
+    "settings-overview",
+    "workplace-and-company",
+    "locations-and-positions",
+    "schedule-policies",
+    "team-organization",
+    "schedule-catalog",
+    "time-off-and-leave",
+    "time-clock",
+    "personal-notifications-and-billing"
+  ]
+}

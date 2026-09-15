@@ -9,6 +9,10 @@
 		"ignoreUnknown": false,
 		"includes": [
 			"**",
+			"!**/.output",
+			"!**/.vercel",
+			"!**/.impeccable",
+			"!**/Pods",
 			"!**/.next",
 			"!**/dist",
 			"!**/.turbo",
@@ -17,6 +21,7 @@
 			"!**/.zed",
 			"!**/.vscode",
 			"!**/routeTree.gen.ts",
+			"!packages/db/src/migrations/meta",
 			"!**/src-tauri",
 			"!**/.nuxt",
 			"!bts.jsonc",
@@ -70,6 +75,15 @@
 		}
 	},
 	"overrides": [
+		{
+			"includes": ["apps/knowledge-base/**"],
+			"formatter": { "indentStyle": "space", "indentWidth": 2 },
+			"javascript": { "formatter": { "quoteStyle": "single" } }
+		},
+		{
+			"includes": ["packages/db/src/migrations/meta/**"],
+			"formatter": { "indentStyle": "space", "indentWidth": 2 }
+		},
 		{
 			"includes": ["packages/ui/src/components/**"],
 			"linter": {

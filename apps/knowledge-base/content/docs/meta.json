@@ -1,1 +1,15 @@
-{"title":"jooling","pages":["index","getting-started","using-jooling","manager","worker","settings","features","concepts","account-and-access","troubleshooting"]}
+{
+  "title": "jooling",
+  "pages": [
+    "index",
+    "getting-started",
+    "using-jooling",
+    "manager",
+    "worker",
+    "settings",
+    "features",
+    "concepts",
+    "account-and-access",
+    "troubleshooting"
+  ]
+}

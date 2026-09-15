@@ -1,1 +1,5 @@
-{"title":"Concepts","icon":"Library","pages":["glossary","permissions-and-safety"]}
+{
+  "title": "Concepts",
+  "icon": "Library",
+  "pages": ["glossary", "permissions-and-safety"]
+}
