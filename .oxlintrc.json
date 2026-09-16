@@ -54,7 +54,7 @@
 							},
 							{
 								"pattern": "^Card$",
-								"allow": ["layout", "color", "effects", "shape"]
+								"allow": ["layout", "color", "effects", "shape", "spacing"]
 							},
 							{
 								"pattern": "^CardContent$",
@@ -126,6 +126,18 @@
 							},
 							{ "pattern": "^SidebarInset$", "allow": ["layout", "color"] },
 							{ "pattern": "^Skeleton$", "allow": ["layout", "shape"] },
+							{
+								"pattern": "^TableCell$",
+								"allow": ["layout", "color", "shape", "spacing", "typography"]
+							},
+							{
+								"pattern": "^TableHead$",
+								"allow": ["layout", "color", "shape", "spacing", "typography"]
+							},
+							{
+								"pattern": "^TableHeader$",
+								"allow": ["layout", "color", "effects"]
+							},
 							{ "pattern": "^TableRow$", "allow": ["layout", "color"] },
 							{ "pattern": "^Tabs$", "allow": ["layout", "spacing"] },
 							{ "pattern": "^TabsContent$", "allow": ["layout", "spacing"] }

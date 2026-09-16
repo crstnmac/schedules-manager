@@ -35,6 +35,8 @@
 			"!**/build",
 			"!**/.agents",
 			"!**/.claude",
+			"!**/.mimosa",
+			"!**/expo-env.d.ts",
 			"!**/.cursor",
 			"!**/.opencode"
 		]
@@ -47,7 +49,7 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"recommended": true,
+			"preset": "recommended",
 			"correctness": {
 				"useExhaustiveDependencies": "info"
 			},
