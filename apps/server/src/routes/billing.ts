@@ -584,10 +584,20 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 					return { accepted: true };
 			}
 			const subscription = event.data;
-			const workplaceId = subscription.customer.externalId;
+			const metadataWorkplaceId = subscription.metadata.workplace_id;
+			const workplaceId =
+				typeof metadataWorkplaceId === "string" && metadataWorkplaceId
+					? metadataWorkplaceId
+					: subscription.customer.externalId;
 			if (!workplaceId || !subscription.productId) return { accepted: true };
 			const product = billingProduct(subscription.productId);
 			if (!product) return { accepted: true };
+			const [knownWorkplace] = await db
+				.select({ id: workplaces.id })
+				.from(workplaces)
+				.where(eq(workplaces.id, workplaceId))
+				.limit(1);
+			if (!knownWorkplace) return { accepted: true };
 			const rawTimestamp = event.timestamp as unknown;
 			const eventTimestamp =
 				rawTimestamp instanceof Date
