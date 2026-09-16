@@ -526,8 +526,15 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 				.limit(1);
 			if (!subscription)
 				throw new BadRequestError("This Workplace has no subscription yet");
+			const members = await polarClient().members.listMembers({
+				customerId: subscription.polarCustomerId,
+			});
+			const member =
+				members.result.items.find((item) => item.email === profile.email) ??
+				members.result.items[0];
 			const session = await polarClient().customerSessions.create({
 				customerId: subscription.polarCustomerId,
+				memberId: member?.id,
 				returnUrl: `${env.APP_URL}/dashboard/settings/subscription`,
 			});
 			return { url: session.customerPortalUrl };
