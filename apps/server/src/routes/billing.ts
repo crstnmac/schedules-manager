@@ -101,8 +101,7 @@ function normalizeWebhookEvent(raw: {
 			productId: data.productId ?? data.product_id,
 			customerId: data.customerId ?? data.customer_id,
 			currentPeriodEnd: data.currentPeriodEnd ?? data.current_period_end,
-			cancelAtPeriodEnd:
-				data.cancelAtPeriodEnd ?? data.cancel_at_period_end,
+			cancelAtPeriodEnd: data.cancelAtPeriodEnd ?? data.cancel_at_period_end,
 			customer: {
 				...customer,
 				externalId: customer.externalId ?? customer.external_id,
@@ -518,14 +517,17 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 			const { profile } = await requireSession(headers);
 			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
 			const [subscription] = await db
-				.select({ id: workplaceSubscriptions.id })
+				.select({
+					id: workplaceSubscriptions.id,
+					polarCustomerId: workplaceSubscriptions.polarCustomerId,
+				})
 				.from(workplaceSubscriptions)
 				.where(eq(workplaceSubscriptions.workplaceId, params.workplaceId))
 				.limit(1);
 			if (!subscription)
 				throw new BadRequestError("This Workplace has no subscription yet");
 			const session = await polarClient().customerSessions.create({
-				externalCustomerId: params.workplaceId,
+				customerId: subscription.polarCustomerId,
 				returnUrl: `${env.APP_URL}/dashboard/settings/subscription`,
 			});
 			return { url: session.customerPortalUrl };
@@ -568,7 +570,9 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 					set.status = 403;
 					return { accepted: false };
 				}
-				event = normalizeWebhookEvent(JSON.parse(rawBody));
+				event = normalizeWebhookEvent(JSON.parse(rawBody)) as ReturnType<
+					typeof validateEvent
+				>;
 			}
 
 			switch (event.type) {
