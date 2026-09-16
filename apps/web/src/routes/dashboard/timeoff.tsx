@@ -141,8 +141,7 @@ const APPROVAL_STATUS_CLASS: Record<string, string> = {
 	declined: "border-transparent bg-destructive/15 text-destructive",
 	pending: "border-transparent bg-blue-500/15 text-blue-700 dark:text-blue-400",
 	skipped: "border-transparent bg-muted text-muted-foreground",
-	escalated:
-		"border-transparent bg-amber-500/15 text-amber-700 dark:text-amber-400",
+	escalated: "border-transparent bg-warning/40 text-warning-foreground",
 };
 
 function formatDateTime(value: string): string {

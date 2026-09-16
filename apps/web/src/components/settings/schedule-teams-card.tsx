@@ -16,7 +16,7 @@ import {
 } from "@SchedulesManager/ui/components/select";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { UsersIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type CSSProperties, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { createDataColumnHelper } from "@/components/data-table";
 import {
@@ -112,8 +112,8 @@ export function ScheduleTeamsCard({ locations }: { locations: LocationDto[] }) {
 						return (
 							<span className="flex items-center gap-2">
 								<span
-									className="size-3 rounded-full border"
-									style={{ backgroundColor: value }}
+									className="size-3 rounded-full border bg-(--team-color)"
+									style={{ "--team-color": value } as CSSProperties}
 								/>
 								<span className="text-muted-foreground text-xs">{value}</span>
 							</span>

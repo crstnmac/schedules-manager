@@ -89,7 +89,7 @@ export function ShiftTile({
 				onOpen(shift);
 			}}
 			className={cn(
-				"h-auto w-full cursor-grab touch-none flex-col items-stretch gap-1 overflow-hidden whitespace-normal rounded-md border px-2 py-1.5 text-left shadow-xs transition-[background-color,border-color,box-shadow,opacity] hover:shadow-sm active:cursor-grabbing motion-reduce:transition-none",
+				"h-auto w-full cursor-grab touch-none flex-col items-stretch gap-1 overflow-hidden whitespace-normal rounded-md border px-2 py-1.5 text-left shadow-xs transition hover:shadow-sm active:cursor-grabbing motion-reduce:transition-none",
 				compact ? "min-h-9 gap-0.5 py-1" : "min-h-11",
 				(isDragging || isDropping) && "opacity-45 ring-2 ring-primary/30",
 				selected && "ring-2 ring-primary",
@@ -104,14 +104,14 @@ export function ShiftTile({
 				{timeLabel}
 			</span>
 			<span className="flex w-full min-w-0 items-center gap-1">
-				<span className="min-w-0 truncate text-[11px] leading-tight">
+				<span className="min-w-0 truncate text-xs leading-tight">
 					{showWorker ? workerLabel : shift.positionName}
 				</span>
 				{status ? (
 					<Badge
 						variant={statusVariant(status.tone)}
 						className={cn(
-							"ml-auto h-4 shrink-0 px-1.5 font-medium text-[10px]",
+							"ml-auto h-4 shrink-0 px-1.5 font-medium text-xs",
 							hasConflicts && "border-transparent",
 							status.tone === "warning" &&
 								"border-warning-border bg-background/70 text-warning-foreground",
@@ -125,7 +125,7 @@ export function ShiftTile({
 				) : null}
 			</span>
 			{showWorker ? (
-				<span className="w-full truncate text-[10px] leading-tight opacity-80">
+				<span className="w-full truncate text-xs leading-tight opacity-80">
 					{shift.positionName}
 				</span>
 			) : null}

@@ -13,6 +13,7 @@ import { registerEnsureProfileCollisionTests } from "./ensure-profile-collision-
 import { registerJoinPolicyTests } from "./join-policy-cases";
 import { registerKioskRateLimitTests } from "./kiosk-rate-limit-cases";
 import { registerLeaveTests } from "./leave-cases";
+import { registerLocationBillingTests } from "./location-billing-cases";
 import { registerMyScheduleTests } from "./my-schedule-cases";
 import { registerOpsTests } from "./ops-cases";
 import { registerOwnReleaseTests } from "./own-release-cases";
@@ -129,6 +130,7 @@ integrationDescribe("Schedule publication", () => {
 	registerReportsTests(() => ({ database, app, token: managerToken }));
 	registerStalePositionTests(() => ({ database, app, token: managerToken }));
 	registerLeaveTests(() => ({ database, app, token: managerToken }));
+	registerLocationBillingTests(() => ({ database, app, token: managerToken }));
 	registerOwnReleaseTests(() => ({ database, app, token: managerToken }));
 	registerAcceptanceRaceTests(() => ({ database, app, token: managerToken }));
 	registerAutoClockOutBreaksTests(() => ({

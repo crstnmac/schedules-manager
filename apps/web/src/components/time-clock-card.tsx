@@ -85,7 +85,7 @@ export function TimeClockCard({
 								? "Planned shift"
 								: "Next shift"}
 					</p>
-					<h1 className="font-semibold text-2xl tracking-[-0.025em]">
+					<h1 className="font-semibold text-2xl tracking-tight">
 						{formatDay(shift.startsAt)}
 					</h1>
 					<p className="mt-1 font-medium text-lg tabular-nums">

@@ -35,7 +35,7 @@
 		"db:migrate": "bun --cwd packages/db db:migrate:deploy",
 		"check": "biome check .",
 		"check:write": "biome check --write .",
-		"lint": "oxlint . --max-warnings 517"
+		"lint": "oxlint . --max-warnings 0"
 	},
 	"dependencies": {
 		"@SchedulesManager/env": "workspace:*",

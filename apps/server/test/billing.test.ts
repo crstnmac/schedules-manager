@@ -4,8 +4,11 @@ import {
 	billingCatalog,
 	billingProduct,
 	hasActiveSubscription,
+	hasPaidLocationCapacity,
+	locationSeatPurchaseTarget,
 	planAllows,
-	seatsForLocationChange,
+	planChangeTiming,
+	seatsAfterLocationRemoval,
 } from "../src/billing";
 
 describe("billing catalog", () => {
@@ -23,6 +26,33 @@ describe("billing catalog", () => {
 		);
 		expect(billingCatalog.operations.year.unitAmount).toBeLessThanOrEqual(
 			billingCatalog.operations.month.unitAmount * 12 * 0.8,
+		);
+	});
+
+	test("plan changes preserve the paid term for downgrades and interval switches", () => {
+		for (const interval of ["month", "year"] as const) {
+			expect(
+				planChangeTiming("schedule", interval, "operations", interval),
+			).toBe("now");
+			expect(
+				planChangeTiming("operations", interval, "schedule", interval),
+			).toBe("renewal");
+			expect(
+				planChangeTiming("schedule", interval, "schedule", interval),
+			).toBeNull();
+			expect(
+				planChangeTiming("operations", interval, "operations", interval),
+			).toBeNull();
+		}
+		for (const plan of ["schedule", "operations"] as const) {
+			expect(planChangeTiming(plan, "month", plan, "year")).toBe("renewal");
+			expect(planChangeTiming(plan, "year", plan, "month")).toBe("renewal");
+		}
+		expect(planChangeTiming("schedule", "year", "operations", "month")).toBe(
+			"renewal",
+		);
+		expect(planChangeTiming("operations", "month", "schedule", "year")).toBe(
+			"renewal",
 		);
 	});
 
@@ -46,17 +76,25 @@ describe("billing catalog", () => {
 		expect(planAllows("operations", "auto_assign")).toBe(true);
 	});
 
-	test("adding a Location raises seats only once paid capacity is exceeded", () => {
-		expect(seatsForLocationChange("add", 1, 1)).toBe(1);
-		expect(seatsForLocationChange("add", 1, 2)).toBe(2);
-		expect(seatsForLocationChange("add", 3, 2)).toBe(3);
-		expect(seatsForLocationChange("add", 3, 5)).toBe(5);
+	test("location creation consumes only already purchased seats", () => {
+		expect(hasPaidLocationCapacity(1, 0)).toBe(true);
+		expect(hasPaidLocationCapacity(1, 1)).toBe(false);
+		expect(hasPaidLocationCapacity(3, 2)).toBe(true);
+		expect(hasPaidLocationCapacity(3, 3)).toBe(false);
+	});
+
+	test("purchases multiple seats in a single seat update", () => {
+		expect(locationSeatPurchaseTarget(1, 5)).toBe(6);
+		expect(locationSeatPurchaseTarget(4, 1)).toBe(5);
+		expect(() => locationSeatPurchaseTarget(1, 0)).toThrow();
+		expect(() => locationSeatPurchaseTarget(1, 1.5)).toThrow();
+		expect(() => locationSeatPurchaseTarget(1, 1001)).toThrow();
 	});
 
 	test("removing a Location lowers seats but never below one", () => {
-		expect(seatsForLocationChange("remove", 3, 2)).toBe(2);
-		expect(seatsForLocationChange("remove", 3, 5)).toBe(3);
-		expect(seatsForLocationChange("remove", 2, 1)).toBe(1);
-		expect(seatsForLocationChange("remove", 1, 0)).toBe(1);
+		expect(seatsAfterLocationRemoval(3, 2)).toBe(2);
+		expect(seatsAfterLocationRemoval(3, 5)).toBe(3);
+		expect(seatsAfterLocationRemoval(2, 1)).toBe(1);
+		expect(seatsAfterLocationRemoval(1, 0)).toBe(1);
 	});
 });

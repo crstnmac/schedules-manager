@@ -123,7 +123,7 @@ export function LocationGeoFields({
 			{hasPoint ? (
 				<Field className="sm:col-span-2">
 					<FieldLabel>Map</FieldLabel>
-					<div className="h-56 overflow-hidden rounded-lg border [&_.leaflet-container]:z-0 [&_.leaflet-container]:h-full [&_.leaflet-container]:w-full [&_.leaflet-container]:font-[inherit] [&_.leaflet-control-attribution]:text-[10px]">
+					<div className="h-56 overflow-hidden rounded-lg border [&_.leaflet-container]:z-0 [&_.leaflet-container]:h-full [&_.leaflet-container]:w-full [&_.leaflet-container]:font-sans [&_.leaflet-control-attribution]:text-xs">
 						{mapReady ? (
 							<Suspense fallback={<Skeleton className="h-full" />}>
 								<LocationMap

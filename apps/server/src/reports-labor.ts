@@ -22,7 +22,7 @@ export type ReportRow = {
  */
 export function distributeByWeight(total: number, weights: number[]): number[] {
 	const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
-	const shares = new Array<number>(weights.length).fill(0);
+	const shares = Array.from({ length: weights.length }, () => 0);
 	if (totalWeight <= 0 || total <= 0) return shares;
 	let cumulativeWeight = 0;
 	let cumulativeShare = 0;

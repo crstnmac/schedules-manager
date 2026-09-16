@@ -124,7 +124,7 @@ export function ScheduleMonthGrid({
 									{new Date(`${day}T12:00:00`).getDate()}
 								</span>
 								{dayShifts.length > 0 ? (
-									<p className="min-w-0 truncate text-[10px] text-muted-foreground tabular-nums">
+									<p className="min-w-0 truncate text-muted-foreground text-xs tabular-nums">
 										{dayShifts.length} · {(minutes / 60).toFixed(1)}h
 										{openCount > 0 ? ` · ${openCount} open` : ""}
 									</p>
@@ -183,16 +183,14 @@ export function ScheduleMonthGrid({
 												onOpenShift(shift);
 											}}
 										>
-											<span className="shrink-0 font-medium text-[10px] tabular-nums">
+											<span className="shrink-0 font-medium text-xs tabular-nums">
 												{timeLabel}
 											</span>
-											<span className="min-w-0 truncate text-[10px]">
-												{who}
-											</span>
+											<span className="min-w-0 truncate text-xs">{who}</span>
 											{hasConflicts ? (
 												<AlertTriangleIcon className="ml-auto size-2.5 shrink-0" />
 											) : (
-												<span className="ml-auto hidden min-w-0 truncate text-[10px] opacity-80 xl:inline">
+												<span className="ml-auto hidden min-w-0 truncate text-xs opacity-80 xl:inline">
 													{shift.positionName}
 												</span>
 											)}

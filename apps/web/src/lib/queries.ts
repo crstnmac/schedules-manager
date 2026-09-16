@@ -742,6 +742,37 @@ export function useBilling(workplaceId: string | undefined) {
 	});
 }
 
+export interface BillingPlanState {
+	productId: string;
+	plan: "schedule" | "operations" | null;
+	billingInterval: "month" | "year" | null;
+	status: string;
+	cancelAtPeriodEnd: boolean;
+	currentPeriodEnd: string;
+	trialEnd: string | null;
+	seats: number;
+	pendingChange: {
+		id: string;
+		productId: string | null;
+		plan: "schedule" | "operations" | null;
+		billingInterval: "month" | "year" | null;
+		seats: number | null;
+		appliesAt: string;
+	} | null;
+}
+
+export function useBillingPlanState(
+	workplaceId: string | undefined,
+	enabled: boolean,
+) {
+	return useQuery({
+		queryKey: ["billing-plan-state", workplaceId],
+		queryFn: () =>
+			api<BillingPlanState>(`/v1/workplaces/${workplaceId}/billing/plan-state`),
+		enabled: Boolean(workplaceId) && enabled,
+	});
+}
+
 export interface SwapDetailDto {
 	id: string;
 	status:
@@ -2194,6 +2225,47 @@ export function useReportSummary(
 		queryFn: () =>
 			api<ReportSummary>(
 				`/v1/workplaces/${workplaceId}/reports/summary?from=${from}&to=${to}`,
+			),
+		enabled: Boolean(workplaceId) && enabled && from <= to,
+	});
+}
+
+export type AttendanceStatus =
+	| "scheduled"
+	| "present"
+	| "late"
+	| "absent"
+	| "sick";
+
+export interface AttendanceReport {
+	range: { from: string; to: string };
+	byDate: Array<{
+		date: string;
+		present: number;
+		late: number;
+		absent: number;
+		sick: number;
+		scheduled: number;
+	}>;
+	workers: Array<{
+		employmentId: string;
+		name: string;
+		positions: string[];
+		days: Record<string, AttendanceStatus>;
+	}>;
+}
+
+export function useAttendanceReport(
+	workplaceId: string | undefined,
+	from: string,
+	to: string,
+	enabled = true,
+) {
+	return useQuery({
+		queryKey: ["report-attendance", workplaceId, from, to] as const,
+		queryFn: () =>
+			api<AttendanceReport>(
+				`/v1/workplaces/${workplaceId}/reports/attendance?from=${from}&to=${to}`,
 			),
 		enabled: Boolean(workplaceId) && enabled && from <= to,
 	});

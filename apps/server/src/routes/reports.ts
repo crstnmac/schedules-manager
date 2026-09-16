@@ -19,7 +19,7 @@ import {
 	versionShifts,
 	workplaces,
 } from "@SchedulesManager/db";
-import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
 import { requireSubscriptionCapability } from "../billing";
@@ -50,6 +50,21 @@ type ReportEntry = {
 	approvalStatus: string;
 	attendance: string | null;
 };
+
+type AttendanceStatus = "scheduled" | "present" | "late" | "absent" | "sick";
+
+function dateInTimezone(date: Date, timezone: string) {
+	return new Intl.DateTimeFormat("en-CA", {
+		timeZone: timezone,
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+	}).format(date);
+}
+
+function attendancePriority(status: AttendanceStatus) {
+	return { scheduled: 0, present: 1, late: 2, sick: 3, absent: 4 }[status];
+}
 
 /**
  * Load every time entry in range for a workplace with its worked minutes
@@ -471,6 +486,166 @@ export const reportRoutes = new Elysia({
 			}),
 			detail: {
 				summary: "Hours, labor, sales, and labor % summary (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/reports/attendance",
+		async ({ headers, params, query }) => {
+			const { profile } = await requireSession(headers);
+			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
+			await requireSubscriptionCapability(params.workplaceId, "attendance");
+
+			const from = new Date(`${query.from}T00:00:00Z`);
+			const to = new Date(`${query.to}T23:59:59Z`);
+			const now = new Date();
+			const rows = await db
+				.select({
+					versionShiftId: versionShifts.id,
+					shiftId: versionShifts.shiftId,
+					employmentId: versionShifts.employmentId,
+					startsAt: versionShifts.startsAt,
+					endsAt: versionShifts.endsAt,
+					versionNumber: scheduleVersions.versionNumber,
+					name: profiles.fullName,
+					email: profiles.email,
+					positionName: positions.name,
+					timezone: locations.timezone,
+				})
+				.from(versionShifts)
+				.innerJoin(
+					scheduleVersions,
+					eq(scheduleVersions.id, versionShifts.versionId),
+				)
+				.innerJoin(schedules, eq(schedules.id, scheduleVersions.scheduleId))
+				.innerJoin(locations, eq(locations.id, schedules.locationId))
+				.innerJoin(positions, eq(positions.id, versionShifts.positionId))
+				.innerJoin(employments, eq(employments.id, versionShifts.employmentId))
+				.innerJoin(profiles, eq(profiles.id, employments.profileId))
+				.where(
+					and(
+						eq(locations.workplaceId, params.workplaceId),
+						gte(versionShifts.startsAt, from),
+						lte(versionShifts.startsAt, to),
+					),
+				);
+
+			const latestByShift = new Map<string, (typeof rows)[number]>();
+			for (const row of rows) {
+				const key = row.shiftId ?? row.versionShiftId;
+				const current = latestByShift.get(key);
+				if (!current || current.versionNumber < row.versionNumber) {
+					latestByShift.set(key, row);
+				}
+			}
+			const shiftsInRange = [...latestByShift.values()];
+			const versionShiftIds = new Set(
+				shiftsInRange.map((row) => row.versionShiftId),
+			);
+			const ids = [...versionShiftIds];
+			const [marks, entries] = ids.length
+				? await Promise.all([
+						db
+							.select()
+							.from(attendanceMarks)
+							.where(inArray(attendanceMarks.versionShiftId, ids)),
+						db
+							.select()
+							.from(timeEntries)
+							.where(inArray(timeEntries.versionShiftId, ids)),
+					])
+				: [[], []];
+			const markByShift = new Map(
+				marks
+					.filter((row) => versionShiftIds.has(row.versionShiftId))
+					.map((row) => [row.versionShiftId, row.kind]),
+			);
+			const entryShiftIds = new Set(
+				entries
+					.filter((row) => versionShiftIds.has(row.versionShiftId))
+					.map((row) => row.versionShiftId),
+			);
+
+			const workerMap = new Map<
+				string,
+				{
+					employmentId: string;
+					name: string;
+					positions: Set<string>;
+					days: Map<string, AttendanceStatus>;
+				}
+			>();
+			for (const shift of shiftsInRange) {
+				if (!shift.employmentId) continue;
+				const mark = markByShift.get(shift.versionShiftId);
+				const status: AttendanceStatus =
+					mark === "no_show"
+						? "absent"
+						: mark === "sick"
+							? "sick"
+							: mark === "late"
+								? "late"
+								: entryShiftIds.has(shift.versionShiftId)
+									? "present"
+									: shift.endsAt < now
+										? "absent"
+										: "scheduled";
+				const worker = workerMap.get(shift.employmentId) ?? {
+					employmentId: shift.employmentId,
+					name: shift.name ?? shift.email,
+					positions: new Set<string>(),
+					days: new Map<string, AttendanceStatus>(),
+				};
+				worker.positions.add(shift.positionName);
+				const date = dateInTimezone(shift.startsAt, shift.timezone);
+				const current = worker.days.get(date);
+				if (
+					!current ||
+					attendancePriority(status) > attendancePriority(current)
+				) {
+					worker.days.set(date, status);
+				}
+				workerMap.set(shift.employmentId, worker);
+			}
+
+			const workers = [...workerMap.values()]
+				.map((worker) => ({
+					employmentId: worker.employmentId,
+					name: worker.name,
+					positions: [...worker.positions].sort(),
+					days: Object.fromEntries(worker.days),
+				}))
+				.sort((a, b) => a.name.localeCompare(b.name));
+			const byDate = dateKeys(query.from, query.to).map((date) => {
+				const counts = {
+					present: 0,
+					late: 0,
+					absent: 0,
+					sick: 0,
+					scheduled: 0,
+				};
+				for (const worker of workers) {
+					const status = worker.days[date];
+					if (status) counts[status] += 1;
+				}
+				return { date, ...counts };
+			});
+
+			return { range: { from: query.from, to: query.to }, byDate, workers };
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			query: t.Object({
+				from: t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+				to: t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+			}),
+			detail: {
+				summary: "Daily attendance matrix and trend (Manager)",
 				security: [{ bearerAuth: [] }],
 			},
 		},

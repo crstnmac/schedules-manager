@@ -167,7 +167,7 @@ export function WorkerScheduleCalendar({
 												{new Date(`${day}T12:00:00`).getDate()}
 											</span>
 											{dayShifts.length > 0 ? (
-												<p className="min-w-0 truncate text-[10px] text-muted-foreground tabular-nums">
+												<p className="min-w-0 truncate text-muted-foreground text-xs tabular-nums">
 													{(minutes / 60).toFixed(1)}h
 												</p>
 											) : null}
@@ -190,17 +190,17 @@ export function WorkerScheduleCalendar({
 															shift.planned && "border-dashed opacity-80",
 														)}
 													>
-														<span className="shrink-0 font-medium text-[10px] tabular-nums">
+														<span className="shrink-0 font-medium text-xs tabular-nums">
 															{timeLabel}
 														</span>
-														<span className="min-w-0 truncate text-[10px]">
+														<span className="min-w-0 truncate text-xs">
 															{shift.positionName}
 														</span>
 													</div>
 												);
 											})}
 											{hidden > 0 ? (
-												<p className="px-1 text-[10px] text-muted-foreground">
+												<p className="px-1 text-muted-foreground text-xs">
 													+{hidden} more
 												</p>
 											) : null}

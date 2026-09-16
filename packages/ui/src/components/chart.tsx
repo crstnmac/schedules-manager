@@ -311,10 +311,12 @@ function ChartLegendContent({
 								<itemConfig.icon />
 							) : (
 								<div
-									className="h-2 w-2 shrink-0 rounded-[2px]"
-									style={{
-										backgroundColor: item.color,
-									}}
+									className="size-2 shrink-0 rounded-sm bg-(--indicator-color)"
+									style={
+										{
+											"--indicator-color": item.color,
+										} as React.CSSProperties
+									}
 								/>
 							)}
 							{itemConfig?.label}

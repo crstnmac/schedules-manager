@@ -2,6 +2,7 @@ import { Input } from "@SchedulesManager/ui/components/input";
 import { cn } from "@SchedulesManager/ui/lib/utils";
 import { ChevronDownIcon } from "lucide-react";
 import {
+	type CSSProperties,
 	useEffect,
 	useId,
 	useLayoutEffect,
@@ -167,14 +168,15 @@ export function TimezoneSelect({
 							id={listId}
 							role="listbox"
 							aria-label="Time zones"
-							className="z-50 overflow-y-auto overscroll-contain rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
-							style={{
-								position: "fixed",
-								top: box.top,
-								left: box.left,
-								width: box.width,
-								maxHeight: box.maxHeight,
-							}}
+							className="fixed top-(--list-top) left-(--list-left) z-50 max-h-(--list-max-height) w-(--list-width) overflow-y-auto overscroll-contain rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+							style={
+								{
+									"--list-top": `${box.top}px`,
+									"--list-left": `${box.left}px`,
+									"--list-width": `${box.width}px`,
+									"--list-max-height": `${box.maxHeight}px`,
+								} as CSSProperties
+							}
 						>
 							{matches.length === 0 ? (
 								<p

@@ -120,18 +120,6 @@ export const settingsGroups: SettingsGroup[] = [
 				capability: "workers.manage",
 			},
 			{
-				to: "/dashboard/settings/schedule-teams",
-				label: "Schedule teams",
-				description: "Parallel schedules per location",
-				capability: "settings.manage",
-			},
-			{
-				to: "/dashboard/settings/tags",
-				label: "Tags",
-				description: "Labels for shifts",
-				capability: "schedule.manage",
-			},
-			{
 				to: "/dashboard/settings/leave",
 				label: "Leave types",
 				description: "Vacation, sick, unpaid",
@@ -142,18 +130,6 @@ export const settingsGroups: SettingsGroup[] = [
 	{
 		label: "Schedule catalog",
 		items: [
-			{
-				to: "/dashboard/settings/time-blocks",
-				label: "Time blocks",
-				description: "Named windows on the day",
-				capability: "schedule.manage",
-			},
-			{
-				to: "/dashboard/settings/day-parts",
-				label: "Day parts",
-				description: "Breakfast, lunch, dinner",
-				capability: "schedule.manage",
-			},
 			{
 				to: "/dashboard/settings/templates",
 				label: "Shift templates",

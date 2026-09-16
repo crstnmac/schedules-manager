@@ -37,12 +37,12 @@ export function DirectoryCard() {
 			title="Directory"
 			description="People, sites, and labels used when you build a week."
 		>
-			<ul className="-mx-(--card-spacing) divide-y">
+			<ul className="divide-y">
 				{DIRECTORY_LINKS.map((item) => (
 					<li key={item.to}>
 						<Link
 							to={item.to}
-							className="flex items-center justify-between gap-3 px-(--card-spacing) py-2.5 text-inherit no-underline hover:bg-muted/50"
+							className="flex items-center justify-between gap-3 py-2.5 text-inherit no-underline hover:bg-muted/50"
 						>
 							<span className="min-w-0">
 								<span className="block font-medium text-sm">{item.label}</span>

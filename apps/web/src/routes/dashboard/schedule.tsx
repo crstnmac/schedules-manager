@@ -115,7 +115,7 @@ import {
 	UsersIcon,
 	XIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { ConfirmAction } from "@/components/confirm-action";
@@ -391,7 +391,7 @@ const publicationColumns = publicationHelper.columns([
 						key={worker.employmentId}
 						title={`${worker.name} · ${worker.status}`}
 						variant={worker.status === "acknowledged" ? "default" : "secondary"}
-						className="rounded-md text-[11px]"
+						className="rounded-md text-xs"
 					>
 						{worker.name} ·{" "}
 						{worker.status === "acknowledged"
@@ -2838,7 +2838,7 @@ function SchedulePage() {
 																	>
 																		<span
 																			className={cn(
-																				"text-[10px]",
+																				"text-xs",
 																				selected
 																					? "text-primary-foreground/80"
 																					: "text-muted-foreground",
@@ -3543,7 +3543,7 @@ function SchedulePage() {
 											) : null}
 										</FieldGroup>
 									</div>
-									<DialogFooter className="flex-row flex-wrap border-t px-6 py-4 sm:justify-start">
+									<DialogFooter className="mx-0 mb-0 rounded-none border-t px-6 py-4">
 										<Button
 											type="submit"
 											size="sm"
@@ -3769,19 +3769,21 @@ function SchedulePage() {
 							<div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
 								<div className="schedule-grid-scroll min-h-0 min-w-0 flex-1 overflow-auto overscroll-none">
 									<div
-										className="grid"
-										style={{
-											gridTemplateColumns:
-												gridDensity === "compact"
-													? `200px repeat(${visibleDays.length}, minmax(118px, 1fr))`
-													: `220px repeat(${visibleDays.length}, minmax(132px, 1fr))`,
-											minWidth:
-												visibleDays.length === 1
-													? undefined
-													: gridDensity === "compact"
-														? 1032
-														: 1144,
-										}}
+										className="grid min-w-(--schedule-grid-min-width) grid-cols-(--schedule-grid-columns)"
+										style={
+											{
+												"--schedule-grid-columns":
+													gridDensity === "compact"
+														? `200px repeat(${visibleDays.length}, minmax(118px, 1fr))`
+														: `220px repeat(${visibleDays.length}, minmax(132px, 1fr))`,
+												"--schedule-grid-min-width":
+													visibleDays.length === 1
+														? "auto"
+														: gridDensity === "compact"
+															? "1032px"
+															: "1144px",
+											} as CSSProperties
+										}
 									>
 										<div className="sticky top-0 left-0 z-30 flex items-center border-border border-r border-b bg-background px-3 py-2">
 											<span className="font-medium text-muted-foreground text-xs">
@@ -3808,7 +3810,7 @@ function SchedulePage() {
 												>
 													<span
 														className={cn(
-															"font-medium text-[11px] leading-none",
+															"font-medium text-xs leading-none",
 															isToday
 																? "text-primary"
 																: "text-muted-foreground",
@@ -3826,7 +3828,7 @@ function SchedulePage() {
 														{new Date(`${day}T12:00:00`).getDate()}
 													</span>
 													{hoursLabel ? (
-														<span className="text-[10px] text-muted-foreground/80 tabular-nums leading-none">
+														<span className="text-muted-foreground/80 text-xs tabular-nums leading-none">
 															{hoursLabel}
 														</span>
 													) : null}
@@ -3834,7 +3836,7 @@ function SchedulePage() {
 														<Tooltip>
 															<TooltipTrigger
 																render={
-																	<span className="flex max-w-full items-center gap-0.5 rounded bg-amber-500/10 px-1 py-0.5 font-medium text-[10px] text-amber-700 leading-none dark:text-amber-400">
+																	<span className="flex max-w-full items-center gap-0.5 rounded bg-warning/40 px-1 py-0.5 font-medium text-warning-foreground text-xs leading-none">
 																		<StarIcon className="size-2.5 shrink-0" />
 																		<span className="truncate">
 																			{holiday.name}
@@ -3859,7 +3861,7 @@ function SchedulePage() {
 																	size="xs"
 																	aria-label={`Sales for ${formatDayLabel(day)}`}
 																	className={cn(
-																		"h-4 px-1 font-normal text-[10px] text-muted-foreground tabular-nums",
+																		"h-4 px-1 font-normal text-muted-foreground text-xs tabular-nums",
 																		daySalesCents > 0
 																			? undefined
 																			: "opacity-0 transition-opacity focus-visible:opacity-100 group-hover/day:opacity-100 [@media(hover:none)]:opacity-60",
@@ -4037,7 +4039,7 @@ function SchedulePage() {
 																			<Badge
 																				key={constraint.key}
 																				variant="outline"
-																				className="max-w-full gap-1 border-dashed px-1.5 font-normal text-[10px] text-muted-foreground"
+																				className="max-w-full gap-1 border-dashed px-1.5 font-normal text-muted-foreground text-xs"
 																			>
 																				{constraint.kind ===
 																				"unavailability" ? (

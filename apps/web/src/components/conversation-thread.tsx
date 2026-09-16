@@ -349,7 +349,7 @@ export function ConversationWorkspace({
 												{person.email}
 											</span>
 										</span>
-										<span className="shrink-0 text-[0.6875rem] text-muted-foreground">
+										<span className="shrink-0 text-muted-foreground text-xs">
 											{startDirectPending && !existingId ? (
 												<Spinner className="size-3.5" />
 											) : existingId ? (
@@ -445,7 +445,7 @@ export function ConversationWorkspace({
 														{label}
 													</span>
 													{thread.lastMessage ? (
-														<span className="shrink-0 text-[0.6875rem] text-muted-foreground tabular-nums">
+														<span className="shrink-0 text-muted-foreground text-xs tabular-nums">
 															{formatThreadTime(thread.lastMessage.createdAt)}
 														</span>
 													) : null}

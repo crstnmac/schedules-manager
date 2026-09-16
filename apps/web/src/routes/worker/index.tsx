@@ -1548,7 +1548,7 @@ function SwapSheet({
 					) : null}
 				</div>
 
-				<DialogFooter className="border-t px-6 py-4 sm:justify-start">
+				<DialogFooter className="mx-0 mb-0 rounded-none border-t px-6 py-4">
 					<Button
 						disabled={
 							!shift || !selected?.employmentId || proposeSwap.isPending

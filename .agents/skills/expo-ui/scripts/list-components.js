@@ -35,7 +35,7 @@ try {
 		fs.readFileSync(path.join(pkgRoot, "package.json"), "utf8"),
 	);
 	version = pkg.version || "unknown";
-} catch (_) {}
+} catch {}
 
 // ---------------------------------------------------------------------------
 // Component extraction — parse `export * from './Name'` in an index.d.ts

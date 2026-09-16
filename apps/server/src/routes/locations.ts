@@ -1,16 +1,28 @@
-import { db, locations, schedules } from "@SchedulesManager/db";
+import {
+	db,
+	locations,
+	schedules,
+	workplaceSubscriptions,
+} from "@SchedulesManager/db";
+import { env } from "@SchedulesManager/env/server";
 import { count, eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import {
 	hasActiveSubscription,
+	hasPaidLocationCapacity,
 	loadWorkplaceSubscription,
-	requireActiveSubscription,
+	polarClient,
 	requireSubscriptionCapability,
-	seatsForLocationChange,
+	seatsAfterLocationRemoval,
 	setSubscriptionSeats,
 } from "../billing";
 import { requirePrivilege, requireSession } from "../context";
-import { BadRequestError, ConflictError, NotFoundError } from "../errors";
+import {
+	BadRequestError,
+	ConflictError,
+	ForbiddenError,
+	NotFoundError,
+} from "../errors";
 import { fillPlaceFromAddress } from "../geocode";
 import { hashPin } from "../pin";
 import { firstRow } from "../rows";
@@ -110,38 +122,49 @@ export const locationsRoutes = new Elysia({
 				null,
 				null,
 			);
-			const subscription = await requireActiveSubscription(params.workplaceId);
-			const [locationTotal] = await db
-				.select({ value: count() })
-				.from(locations)
-				.where(eq(locations.workplaceId, params.workplaceId));
-			const nextCount = (locationTotal?.value ?? 0) + 1;
-			const location = firstRow(
-				await db
-					.insert(locations)
-					.values({
-						workplaceId: params.workplaceId,
-						name: body.name,
-						timezone,
-						addressLine: body.addressLine?.trim() || null,
-						latitude: filled.latitude,
-						longitude: filled.longitude,
-						geofenceRadiusMeters: body.geofenceRadiusMeters ?? null,
-						openMinute: hours.openMinute,
-						closeMinute: hours.closeMinute,
-					})
-					.returning(),
-			);
-
-			try {
-				await setSubscriptionSeats(
-					subscription,
-					seatsForLocationChange("add", subscription.locationCount, nextCount),
+			const location = await db.transaction(async (tx) => {
+				const [subscription] = await tx
+					.select()
+					.from(workplaceSubscriptions)
+					.where(eq(workplaceSubscriptions.workplaceId, params.workplaceId))
+					.for("update")
+					.limit(1);
+				if (!subscription || !hasActiveSubscription(subscription.status)) {
+					throw new ForbiddenError(
+						"An active subscription is required to add a location.",
+					);
+				}
+				const [locationTotal] = await tx
+					.select({ value: count() })
+					.from(locations)
+					.where(eq(locations.workplaceId, params.workplaceId));
+				if (
+					!hasPaidLocationCapacity(
+						subscription.locationCount,
+						locationTotal?.value ?? 0,
+					)
+				) {
+					throw new ConflictError(
+						"No paid location seat is available. Buy another seat in Subscription settings before adding this location.",
+					);
+				}
+				return firstRow(
+					await tx
+						.insert(locations)
+						.values({
+							workplaceId: params.workplaceId,
+							name: body.name,
+							timezone,
+							addressLine: body.addressLine?.trim() || null,
+							latitude: filled.latitude,
+							longitude: filled.longitude,
+							geofenceRadiusMeters: body.geofenceRadiusMeters ?? null,
+							openMinute: hours.openMinute,
+							closeMinute: hours.closeMinute,
+						})
+						.returning(),
 				);
-			} catch (error) {
-				await db.delete(locations).where(eq(locations.id, location.id));
-				throw error;
-			}
+			});
 
 			return {
 				location: toLocationDto(location),
@@ -320,6 +343,26 @@ export const locationsRoutes = new Elysia({
 			const subscription = await loadWorkplaceSubscription(
 				existing.workplaceId,
 			);
+			if (subscription && hasActiveSubscription(subscription.status)) {
+				const [beforeDeletion] = await db
+					.select({ value: count() })
+					.from(locations)
+					.where(eq(locations.workplaceId, existing.workplaceId));
+				const seatTarget = seatsAfterLocationRemoval(
+					subscription.locationCount,
+					Math.max(0, (beforeDeletion?.value ?? 1) - 1),
+				);
+				if (env.POLAR_ACCESS_TOKEN && seatTarget < subscription.locationCount) {
+					const live = await polarClient().subscriptions.get({
+						id: subscription.polarSubscriptionId,
+					});
+					if (live.pendingUpdate) {
+						throw new ConflictError(
+							"Cancel the scheduled subscription change before deleting this location; otherwise its unused seat could remain billed.",
+						);
+					}
+				}
+			}
 			await db.delete(locations).where(eq(locations.id, existing.id));
 
 			if (subscription && hasActiveSubscription(subscription.status)) {
@@ -330,8 +373,7 @@ export const locationsRoutes = new Elysia({
 				try {
 					await setSubscriptionSeats(
 						subscription,
-						seatsForLocationChange(
-							"remove",
+						seatsAfterLocationRemoval(
 							subscription.locationCount,
 							locationTotal?.value ?? 1,
 						),

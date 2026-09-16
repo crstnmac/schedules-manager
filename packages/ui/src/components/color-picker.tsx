@@ -2,7 +2,7 @@
 
 import { cn } from "cn";
 import { CheckIcon } from "lucide-react";
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 import { HexColorPicker } from "react-colorful";
 
 import { Button } from "./button";
@@ -81,8 +81,10 @@ export function ColorPicker({
 				}
 			>
 				<span
-					className="size-4 shrink-0 rounded-full border"
-					style={value ? { backgroundColor: value } : undefined}
+					className="size-4 shrink-0 rounded-full border bg-(--picker-color)"
+					style={
+						value ? ({ "--picker-color": value } as CSSProperties) : undefined
+					}
 				/>
 				<span className="truncate font-mono uppercase">
 					{value || placeholder}
@@ -92,12 +94,12 @@ export function ColorPicker({
 				<HexColorPicker
 					color={pickerColor}
 					onChange={onChange}
-					style={{ width: "100%", height: 140 }}
+					className="h-35! w-full!"
 				/>
 				<div className="flex items-center gap-2">
 					<span
-						className="size-8 shrink-0 rounded-md border"
-						style={{ backgroundColor: pickerColor }}
+						className="size-8 shrink-0 rounded-md border bg-(--picker-color)"
+						style={{ "--picker-color": pickerColor } as CSSProperties}
 					/>
 					<Input
 						value={value}
@@ -118,10 +120,10 @@ export function ColorPicker({
 								aria-label={preset}
 								aria-pressed={active}
 								className={cn(
-									"relative size-5 rounded-md border transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+									"relative size-5 rounded-md border bg-(--picker-color) transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 									active && "ring-2 ring-ring",
 								)}
-								style={{ backgroundColor: preset }}
+								style={{ "--picker-color": preset } as CSSProperties}
 								onClick={() => onChange(preset)}
 							>
 								{active ? (

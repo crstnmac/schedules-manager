@@ -1,5 +1,19 @@
 @import "@SchedulesManager/ui/globals.css";
 
+.auth-canvas {
+	background-color: #f3f8fd;
+}
+
+.auth-fallback-gradient {
+	background-image:
+		radial-gradient(
+			120% 120% at 82% 85%,
+			rgb(0 110 220 / 35%) 0%,
+			transparent 60%
+		),
+		linear-gradient(135deg, #f3f8fd 0%, #d8e9fb 55%, #bbd7f6 100%);
+}
+
 /*
  * Flush worker pages run edge-to-edge, so their cards own their inset instead
  * of relying on page-body padding.

@@ -22,11 +22,18 @@ import {
 	billingProduct,
 	hasActiveSubscription,
 	planAllows,
+	planChangeTiming,
 	polarClient,
+	purchaseLocationSeats,
 	requireSeatBasedProduct,
 } from "../billing";
 import { requirePrivilege, requireSession } from "../context";
-import { BadRequestError, ForbiddenError, NotFoundError } from "../errors";
+import {
+	BadRequestError,
+	ConflictError,
+	ForbiddenError,
+	NotFoundError,
+} from "../errors";
 
 function clientIp(request: Request) {
 	const forwarded = request.headers
@@ -73,6 +80,37 @@ function verifyStandardWebhook(
 	return false;
 }
 
+/**
+ * The fallback path parses the raw payload, which uses snake_case. Normalize
+ * the fields the handler reads so it can treat both paths identically.
+ */
+function normalizeWebhookEvent(raw: {
+	type: string;
+	timestamp?: unknown;
+	data?: Record<string, unknown>;
+}) {
+	const data = raw.data ?? {};
+	const customer = (data.customer ?? {}) as Record<string, unknown>;
+	return {
+		...raw,
+		data: {
+			...data,
+			id: data.id,
+			status: data.status,
+			seats: data.seats,
+			productId: data.productId ?? data.product_id,
+			customerId: data.customerId ?? data.customer_id,
+			currentPeriodEnd: data.currentPeriodEnd ?? data.current_period_end,
+			cancelAtPeriodEnd:
+				data.cancelAtPeriodEnd ?? data.cancel_at_period_end,
+			customer: {
+				...customer,
+				externalId: customer.externalId ?? customer.external_id,
+			},
+		},
+	};
+}
+
 function subscriptionPayload(
 	row: typeof workplaceSubscriptions.$inferSelect | undefined,
 ) {
@@ -88,6 +126,39 @@ function subscriptionPayload(
 					hasActiveSubscription(row.status) || row.status === "past_due",
 			}
 		: null;
+}
+
+async function providerPlanState(
+	subscription: typeof workplaceSubscriptions.$inferSelect,
+) {
+	const remote = await polarClient().subscriptions.get({
+		id: subscription.polarSubscriptionId,
+	});
+	const current = billingProduct(remote.productId);
+	const pending = remote.pendingUpdate;
+	const pendingProduct = pending?.productId
+		? billingProduct(pending.productId)
+		: null;
+	return {
+		productId: remote.productId,
+		plan: current?.plan ?? null,
+		billingInterval: current?.interval ?? null,
+		status: remote.status,
+		cancelAtPeriodEnd: remote.cancelAtPeriodEnd,
+		currentPeriodEnd: remote.currentPeriodEnd.toISOString(),
+		trialEnd: remote.trialEnd?.toISOString() ?? null,
+		seats: remote.seats ?? subscription.locationCount,
+		pendingChange: pending
+			? {
+					id: pending.id,
+					productId: pending.productId,
+					plan: pendingProduct?.plan ?? null,
+					billingInterval: pendingProduct?.interval ?? null,
+					seats: pending.seats,
+					appliesAt: pending.appliesAt.toISOString(),
+				}
+			: null,
+	};
 }
 
 export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
@@ -118,11 +189,17 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 							planAllows(subscription.plan, "time_clock"),
 					),
 				},
-				locationCount: Math.max(1, locationTotal?.value ?? 1),
+				locationCount: locationTotal?.value ?? 0,
 				paidLocationCount: subscription?.locationCount ?? null,
 				catalog: {
-					schedule: { month: 3900, year: 37200 },
-					operations: { month: 7900, year: 75600 },
+					schedule: {
+						month: billingCatalog.schedule.month.unitAmount,
+						year: billingCatalog.schedule.year.unitAmount,
+					},
+					operations: {
+						month: billingCatalog.operations.month.unitAmount,
+						year: billingCatalog.operations.year.unitAmount,
+					},
 				},
 			};
 		},
@@ -134,6 +211,229 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			detail: {
 				summary: "Get Workplace subscription",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/billing/plan-state",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers);
+			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const [subscription] = await db
+				.select()
+				.from(workplaceSubscriptions)
+				.where(eq(workplaceSubscriptions.workplaceId, params.workplaceId))
+				.limit(1);
+			if (!subscription) throw new NotFoundError("Subscription not found");
+			return providerPlanState(subscription);
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			detail: {
+				summary: "Get live plan and scheduled change",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.post(
+		"/workplaces/:workplaceId/billing/plan-change",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers);
+			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			return db.transaction(async (tx) => {
+				const [subscription] = await tx
+					.select()
+					.from(workplaceSubscriptions)
+					.where(eq(workplaceSubscriptions.workplaceId, params.workplaceId))
+					.for("update")
+					.limit(1);
+				if (!subscription) throw new NotFoundError("Subscription not found");
+				const remote = await polarClient().subscriptions.get({
+					id: subscription.polarSubscriptionId,
+				});
+				if (remote.productId !== body.expectedProductId) {
+					throw new ConflictError(
+						"Your subscription changed. Refresh billing before trying again.",
+					);
+				}
+				if (remote.pendingUpdate) {
+					throw new ConflictError(
+						"A plan change is already scheduled. Cancel it before choosing a new plan.",
+					);
+				}
+				if (remote.status !== "active" || remote.cancelAtPeriodEnd) {
+					throw new ForbiddenError(
+						"Plan changes are unavailable during a trial, payment recovery, or scheduled cancellation. Manage billing to resolve this first.",
+					);
+				}
+				const current = billingProduct(remote.productId);
+				if (!current)
+					throw new ConflictError(
+						"Your current plan is not in the supported catalog.",
+					);
+				const timing = planChangeTiming(
+					current.plan,
+					current.interval,
+					body.plan,
+					body.billingInterval,
+				);
+				if (!timing)
+					throw new BadRequestError("This is already your current plan.");
+				const target = billingCatalog[body.plan][body.billingInterval];
+				const product = await requireSeatBasedProduct(target.productId);
+				if (
+					!product.prices.some(
+						(price) =>
+							price.amountType === "seat_based" &&
+							price.priceCurrency === remote.currency,
+					)
+				) {
+					throw new BadRequestError(
+						"The target plan must use the same billing currency.",
+					);
+				}
+				const updated = await polarClient().subscriptions.update({
+					id: subscription.polarSubscriptionId,
+					subscriptionUpdate: {
+						productId: target.productId,
+						prorationBehavior: timing === "renewal" ? "next_period" : "prorate",
+					},
+				});
+				if (timing === "renewal") {
+					if (updated.pendingUpdate?.productId !== target.productId) {
+						throw new ConflictError(
+							"Polar did not confirm the scheduled plan change. Check billing before retrying.",
+						);
+					}
+				} else {
+					if (updated.productId !== target.productId) {
+						throw new ConflictError(
+							"Polar did not confirm the new plan. Check billing before retrying.",
+						);
+					}
+					await tx
+						.update(workplaceSubscriptions)
+						.set({
+							polarProductId: target.productId,
+							plan: body.plan,
+							billingInterval: body.billingInterval,
+							updatedAt: new Date(),
+						})
+						.where(eq(workplaceSubscriptions.id, subscription.id));
+				}
+				return {
+					timing,
+					pendingChange: updated.pendingUpdate
+						? {
+								appliesAt: updated.pendingUpdate.appliesAt.toISOString(),
+								plan: body.plan,
+								billingInterval: body.billingInterval,
+							}
+						: null,
+				};
+			});
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			body: t.Object({
+				plan: t.Union([t.Literal("schedule"), t.Literal("operations")]),
+				billingInterval: t.Union([t.Literal("month"), t.Literal("year")]),
+				expectedProductId: t.String(),
+			}),
+			detail: {
+				summary: "Change or schedule a subscription plan",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.post(
+		"/workplaces/:workplaceId/billing/plan-change/cancel",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers);
+			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			return db.transaction(async (tx) => {
+				const [subscription] = await tx
+					.select()
+					.from(workplaceSubscriptions)
+					.where(eq(workplaceSubscriptions.workplaceId, params.workplaceId))
+					.for("update")
+					.limit(1);
+				if (!subscription) throw new NotFoundError("Subscription not found");
+				const remote = await polarClient().subscriptions.get({
+					id: subscription.polarSubscriptionId,
+				});
+				if (
+					!remote.pendingUpdate ||
+					remote.pendingUpdate.id !== body.expectedPendingUpdateId
+				) {
+					throw new ConflictError(
+						"The scheduled change has already changed. Refresh billing.",
+					);
+				}
+				if (
+					!remote.pendingUpdate.productId ||
+					remote.pendingUpdate.seats != null
+				) {
+					throw new ConflictError(
+						"This pending update also changes seats. Manage billing to review it.",
+					);
+				}
+				const updated = await polarClient().subscriptions.update({
+					id: subscription.polarSubscriptionId,
+					subscriptionUpdate: { pendingUpdate: null },
+				});
+				if (updated.pendingUpdate)
+					throw new ConflictError(
+						"Polar did not clear the scheduled change. Refresh billing.",
+					);
+				return { canceled: true };
+			});
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			body: t.Object({ expectedPendingUpdateId: t.String() }),
+			detail: {
+				summary: "Cancel a scheduled plan change",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.post(
+		"/workplaces/:workplaceId/billing/location-seats",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers);
+			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			return purchaseLocationSeats(
+				params.workplaceId,
+				body.expectedPaidLocationCount,
+				body.quantity,
+			);
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			body: t.Object({
+				expectedPaidLocationCount: t.Integer({ minimum: 1 }),
+				quantity: t.Integer({ minimum: 1, maximum: 1000 }),
+			}),
+			detail: {
+				summary: "Purchase additional location seats",
 				security: [{ bearerAuth: [] }],
 			},
 		},
@@ -185,8 +485,9 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 					billing_interval: body.billingInterval,
 					location_count: locationCount,
 				},
-				trialInterval: "day",
-				trialIntervalCount: 30,
+				...(existing
+					? {}
+					: { trialInterval: "day" as const, trialIntervalCount: 30 }),
 				allowDiscountCodes: true,
 				requireBillingAddress: true,
 				successUrl: `${env.APP_URL}/dashboard/settings/subscription?checkout=success&checkout_id={CHECKOUT_ID}`,
@@ -267,7 +568,7 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 					set.status = 403;
 					return { accepted: false };
 				}
-				event = JSON.parse(rawBody) as ReturnType<typeof validateEvent>;
+				event = normalizeWebhookEvent(JSON.parse(rawBody));
 			}
 
 			switch (event.type) {

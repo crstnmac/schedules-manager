@@ -299,7 +299,6 @@ async function main() {
 		.update(profiles)
 		.set({
 			fullName: "Pilot Manager",
-			email: "manager.pilot@icmans.com",
 			updatedAt: new Date(),
 		})
 		.where(eq(profiles.id, manager.profileId));

@@ -45,6 +45,7 @@ import {
 	SettingsSaveSection,
 	SettingsSection,
 } from "@/components/settings/page";
+import { PurchaseLocationSeat } from "@/components/settings/purchase-location-seat";
 import { TimePicker } from "@/components/time-picker";
 import { TimezoneSelect } from "@/components/timezone-select";
 import { useRegisterUnsavedChanges } from "@/components/unsaved-changes";
@@ -54,6 +55,7 @@ import type {
 	PositionDto,
 	WorkplaceSettings,
 } from "@/lib/queries";
+import { useBilling } from "@/lib/queries";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -506,6 +508,7 @@ export function LocationsCard({
 }) {
 	const { formatMinute } = useDisplayPrefs();
 	const { workplace } = useWorkplace();
+	const billing = useBilling(workplace?.id);
 	const [open, setOpen] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [name, setName] = useState("");
@@ -521,6 +524,13 @@ export function LocationsCard({
 	const editingLocation = locations.find(
 		(location) => location.id === editingId,
 	);
+	const canBuySeat =
+		billing.data?.subscription?.status === "active" ||
+		billing.data?.subscription?.status === "trialing";
+	const hasSeat =
+		canBuySeat &&
+		billing.data?.paidLocationCount != null &&
+		billing.data.locationCount < billing.data.paidLocationCount;
 
 	const resetForm = useCallback(() => {
 		setEditingId(null);
@@ -554,6 +564,7 @@ export function LocationsCard({
 			resetForm();
 			setOpen(false);
 			onChange();
+			void billing.refetch();
 			toast.success("Location added.");
 		},
 		onError: (error) => toast.error((error as Error).message),
@@ -603,6 +614,7 @@ export function LocationsCard({
 			}),
 		onSuccess: () => {
 			onChange();
+			void billing.refetch();
 			toast.success("Location deleted.");
 		},
 		onError: (error) => toast.error((error as Error).message),
@@ -784,7 +796,7 @@ export function LocationsCard({
 							<Button
 								type="submit"
 								form="location-form"
-								disabled={saving || !name.trim()}
+								disabled={saving || !name.trim() || (!editingId && !hasSeat)}
 							>
 								{saving ? <Spinner data-icon="inline-start" /> : null}
 								{editingId ? "Save location" : "Add location"}
@@ -793,6 +805,28 @@ export function LocationsCard({
 					</div>
 				}
 			>
+				{!editingId && !hasSeat ? (
+					<div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+						<p className="text-muted-foreground text-sm">
+							{billing.isLoading
+								? "Checking available location seats…"
+								: canBuySeat
+									? "All paid location seats are in use. Buy more seats to add locations."
+									: "An active subscription is required before adding another location."}
+						</p>
+						{canBuySeat && billing.data ? (
+							<PurchaseLocationSeat billing={billing.data} />
+						) : !billing.isLoading ? (
+							<Button
+								variant="outline"
+								nativeButton={false}
+								render={<Link to="/dashboard/settings/subscription" />}
+							>
+								View subscription
+							</Button>
+						) : null}
+					</div>
+				) : null}
 				<form
 					id="location-form"
 					className="flex flex-col gap-4"

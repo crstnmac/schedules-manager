@@ -10,23 +10,161 @@
 		{
 			"files": ["apps/web/src/**/*.{js,jsx,ts,tsx}"],
 			"rules": {
-				"shadcn/no-arbitrary-values": ["warn", { "allow": ["layout"] }],
-				"shadcn/no-inline-styles": "warn",
-				"shadcn/no-raw-colors": "warn",
-				"shadcn/no-restyle": ["warn", { "allow": ["layout"] }],
-				"shadcn/no-unknown-classes": "warn",
-				"shadcn/require-static-classes": "warn"
+				"shadcn/no-arbitrary-values": ["error", { "allow": ["layout"] }],
+				"shadcn/no-inline-styles": "error",
+				"shadcn/no-raw-colors": "error",
+				"shadcn/no-restyle": [
+					"error",
+					{
+						"allow": [
+							"layout",
+							"large-data-list",
+							"schedule-cell-add",
+							"schedule-cell-add-empty"
+						],
+						"contracts": [
+							{ "pattern": "^Alert$", "allow": ["layout", "shape"] },
+							{
+								"pattern": "^AlertDescription$",
+								"allow": ["layout", "spacing"]
+							},
+							{ "pattern": "^AlertDialogMedia$", "allow": ["layout", "color"] },
+							{ "pattern": "^AlertTitle$", "allow": ["layout", "typography"] },
+							{
+								"pattern": "^AvatarFallback$",
+								"allow": ["layout", "color", "typography"]
+							},
+							{
+								"pattern": "^Badge$",
+								"allow": ["layout", "color", "shape", "spacing", "typography"]
+							},
+							{
+								"pattern": "^Button$",
+								"allow": [
+									"layout",
+									"color",
+									"effects",
+									"motion",
+									"shape",
+									"spacing",
+									"typography",
+									"schedule-cell-add",
+									"schedule-cell-add-empty"
+								]
+							},
+							{
+								"pattern": "^Card$",
+								"allow": ["layout", "color", "effects", "shape"]
+							},
+							{
+								"pattern": "^CardContent$",
+								"allow": ["layout", "color", "spacing", "typography"]
+							},
+							{
+								"pattern": "^CardFooter$",
+								"allow": ["layout", "shape", "spacing"]
+							},
+							{
+								"pattern": "^CardHeader$",
+								"allow": ["layout", "shape", "spacing"]
+							},
+							{
+								"pattern": "^CardTitle$",
+								"allow": ["layout", "color", "spacing", "typography"]
+							},
+							{
+								"pattern": "^Dialog(Content|Footer|Header)$",
+								"allow": ["layout", "shape", "spacing"]
+							},
+							{
+								"pattern": "^DropdownMenuLabel$",
+								"allow": ["layout", "color", "typography"]
+							},
+							{ "pattern": "^Empty$", "allow": ["layout", "shape", "spacing"] },
+							{ "pattern": "^EmptyMedia$", "allow": ["layout", "color"] },
+							{
+								"pattern": "^Field$",
+								"allow": ["layout", "color", "shape", "spacing"]
+							},
+							{ "pattern": "^FieldDescription$", "allow": ["layout", "color"] },
+							{ "pattern": "^FieldGroup$", "allow": ["layout", "spacing"] },
+							{ "pattern": "^FieldLabel$", "allow": ["layout", "typography"] },
+							{
+								"pattern": "^Input$",
+								"allow": ["layout", "color", "spacing", "typography"]
+							},
+							{
+								"pattern": "^InputGroupInput$",
+								"allow": ["layout", "typography"]
+							},
+							{ "pattern": "^Item$", "allow": ["layout", "color", "effects"] },
+							{ "pattern": "^ItemDescription$", "allow": ["layout", "color"] },
+							{
+								"pattern": "^ItemGroup$",
+								"allow": ["layout", "spacing", "large-data-list"]
+							},
+							{ "pattern": "^ItemMedia$", "allow": ["layout", "color"] },
+							{
+								"pattern": "^ItemTitle$",
+								"allow": ["layout", "color", "typography"]
+							},
+							{
+								"pattern": "^MessageScrollerContent$",
+								"allow": ["layout", "spacing"]
+							},
+							{ "pattern": "^PopoverContent$", "allow": ["layout", "spacing"] },
+							{
+								"pattern": "^SelectTrigger$",
+								"allow": [
+									"layout",
+									"color",
+									"effects",
+									"shape",
+									"spacing",
+									"typography"
+								]
+							},
+							{ "pattern": "^SidebarInset$", "allow": ["layout", "color"] },
+							{ "pattern": "^Skeleton$", "allow": ["layout", "shape"] },
+							{ "pattern": "^TableRow$", "allow": ["layout", "color"] },
+							{ "pattern": "^Tabs$", "allow": ["layout", "spacing"] },
+							{ "pattern": "^TabsContent$", "allow": ["layout", "spacing"] }
+						]
+					}
+				],
+				"shadcn/no-unknown-classes": "error",
+				"shadcn/require-static-classes": "error"
 			}
 		},
 		{
 			"files": ["packages/ui/src/**/*.{js,jsx,ts,tsx}"],
 			"rules": {
 				"shadcn/no-arbitrary-values": "off",
-				"shadcn/no-inline-styles": "warn",
-				"shadcn/no-raw-colors": "warn",
+				"shadcn/no-inline-styles": ["error", { "allow": ["--picker-color"] }],
+				"shadcn/no-raw-colors": "error",
 				"shadcn/no-restyle": "off",
-				"shadcn/no-unknown-classes": "warn",
+				"shadcn/no-unknown-classes": ["error", { "allow": ["toaster"] }],
 				"shadcn/require-static-classes": "off"
+			}
+		},
+		{
+			"files": [
+				"apps/web/src/components/date-picker.tsx",
+				"apps/web/src/components/mode-toggle.tsx",
+				"apps/web/src/components/pilot-feedback.tsx",
+				"apps/web/src/components/schedule-month-grid.tsx",
+				"apps/web/src/components/schedule-shift-tile.tsx",
+				"apps/web/src/components/settings/page.tsx",
+				"apps/web/src/routes/dashboard/timeoff.tsx"
+			],
+			"rules": {
+				"shadcn/require-static-classes": "off"
+			}
+		},
+		{
+			"files": ["packages/ui/src/components/chart.tsx"],
+			"rules": {
+				"shadcn/no-inline-styles": "off"
 			}
 		}
 	]

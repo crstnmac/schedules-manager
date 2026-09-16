@@ -46,7 +46,12 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import { AppDocument } from "@/components/app-page";
+import { AttendanceReportView } from "@/components/attendance-report";
 import { DatePicker } from "@/components/date-picker";
+import {
+	ReportMetricGrid,
+	ReportSectionHeader,
+} from "@/components/report-layout";
 import { api } from "@/lib/api";
 import { formatLeaveHours } from "@/lib/leave";
 import { hasCapability } from "@/lib/privileges";
@@ -146,9 +151,9 @@ function ReportsPage() {
 	const [to, setTo] = useState(() => new Date().toLocaleDateString("sv-SE"));
 	const [isDownloading, setIsDownloading] = useState(false);
 	const [isDownloadingLeave, setIsDownloadingLeave] = useState(false);
-	const [tab, setTab] = useState<"hours" | "coverage" | "requests" | "leave">(
-		"hours",
-	);
+	const [tab, setTab] = useState<
+		"attendance" | "hours" | "coverage" | "requests" | "leave"
+	>("attendance");
 	const invalidRange = !from || !to || from > to;
 
 	const summary = useReportSummary(workplace?.id, from, to, !invalidRange);
@@ -311,58 +316,74 @@ function ReportsPage() {
 		}
 	}
 
-	return (
-		<AppDocument widthClassName="max-w-5xl">
-			<div className="flex flex-col gap-4">
-				<div>
-					<h2 className="font-heading font-medium text-sm">Hours and labor</h2>
-					<p className="text-muted-foreground text-xs/relaxed">
-						Worked hours, labor cost, sales, and labor percentage for the
-						selected range.
-					</p>
-				</div>
-				<div className="flex flex-wrap items-end gap-3">
-					<Field className="w-40">
-						<FieldLabel htmlFor="report-from">From</FieldLabel>
-						<DatePicker
-							id="report-from"
-							value={from}
-							onValueChange={setFrom}
-							displayValue={from}
-						/>
-					</Field>
-					<Field className="w-40">
-						<FieldLabel htmlFor="report-to">To</FieldLabel>
-						<DatePicker
-							id="report-to"
-							value={to}
-							onValueChange={setTo}
-							displayValue={to}
-						/>
-					</Field>
+	function rangeActions(includeLeavePayroll = false) {
+		return (
+			<>
+				<Field className="w-40">
+					<FieldLabel htmlFor="report-from">From</FieldLabel>
+					<DatePicker
+						id="report-from"
+						value={from}
+						onValueChange={setFrom}
+						displayValue={from}
+					/>
+				</Field>
+				<Field className="w-40">
+					<FieldLabel htmlFor="report-to">To</FieldLabel>
+					<DatePicker
+						id="report-to"
+						value={to}
+						onValueChange={setTo}
+						displayValue={to}
+					/>
+				</Field>
+				<Button
+					variant="outline"
+					disabled={invalidRange || isDownloading || !workplace}
+					onClick={() => void download()}
+				>
+					{isDownloading ? "Downloading…" : "Download CSV"}
+				</Button>
+				{includeLeavePayroll ? (
 					<Button
 						variant="outline"
-						disabled={invalidRange || isDownloading || !workplace}
-						onClick={() => void download()}
+						disabled={isDownloadingLeave}
+						onClick={() => void downloadLeavePayroll()}
 					>
-						{isDownloading ? "Downloading…" : "Download CSV"}
+						{isDownloadingLeave ? "Downloading…" : "Leave payroll CSV"}
 					</Button>
-				</div>
-			</div>
-			{invalidRange ? (
-				<p role="alert" className="text-destructive text-sm">
-					Choose an end date on or after the start date.
-				</p>
-			) : null}
+				) : null}
+			</>
+		);
+	}
 
+	const rangeError = invalidRange ? (
+		<p role="alert" className="text-destructive text-sm">
+			Choose an end date on or after the start date.
+		</p>
+	) : null;
+
+	return (
+		<AppDocument widthClassName="max-w-none">
+			<div>
+				<h2 className="font-heading font-medium text-sm">
+					Operational reports
+				</h2>
+				<p className="text-muted-foreground text-xs/relaxed">
+					Attendance, labor, coverage, requests, and leave in one place.
+				</p>
+			</div>
 			<Tabs
 				value={tab}
 				onValueChange={(value) =>
-					setTab(value as "hours" | "coverage" | "requests" | "leave")
+					setTab(
+						value as "attendance" | "hours" | "coverage" | "requests" | "leave",
+					)
 				}
 				className="gap-4"
 			>
 				<TabsList variant="line">
+					<TabsTrigger value="attendance">Attendance</TabsTrigger>
 					<TabsTrigger value="hours">Hours & labor</TabsTrigger>
 					<TabsTrigger value="coverage">Coverage</TabsTrigger>
 					<TabsTrigger value="requests">Requests</TabsTrigger>
@@ -371,7 +392,17 @@ function ReportsPage() {
 					) : null}
 				</TabsList>
 
-				<TabsContent value="hours" className="space-y-4">
+				<TabsContent value="attendance">
+					<AttendanceReportView workplaceId={workplace?.id} />
+				</TabsContent>
+
+				<TabsContent value="hours" className="flex flex-col gap-4">
+					<ReportSectionHeader
+						title="Hours & labor"
+						description="Worked time, labor cost, and sales for the selected range."
+						actions={rangeActions()}
+					/>
+					{rangeError}
 					{summary.isLoading ? (
 						<div className="grid place-items-center py-24">
 							<Spinner />
@@ -406,7 +437,7 @@ function ReportsPage() {
 						</Empty>
 					) : (
 						<>
-							<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+							<ReportMetricGrid>
 								<Card>
 									<CardHeader>
 										<CardDescription>Worked hours</CardDescription>
@@ -439,7 +470,7 @@ function ReportsPage() {
 										</CardTitle>
 									</CardHeader>
 								</Card>
-							</div>
+							</ReportMetricGrid>
 
 							<Card>
 								<CardHeader>
@@ -664,7 +695,13 @@ function ReportsPage() {
 					)}
 				</TabsContent>
 
-				<TabsContent value="coverage" className="space-y-4">
+				<TabsContent value="coverage" className="flex flex-col gap-4">
+					<ReportSectionHeader
+						title="Coverage"
+						description="Shift fill rate and scheduled-time utilization by location."
+						actions={rangeActions()}
+					/>
+					{rangeError}
 					{coverage.isLoading ? (
 						<div className="grid place-items-center py-24">
 							<Spinner />
@@ -699,7 +736,7 @@ function ReportsPage() {
 						</Empty>
 					) : (
 						<>
-							<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+							<ReportMetricGrid>
 								<Card>
 									<CardHeader>
 										<CardDescription>Fill rate</CardDescription>
@@ -732,7 +769,7 @@ function ReportsPage() {
 										</CardTitle>
 									</CardHeader>
 								</Card>
-							</div>
+							</ReportMetricGrid>
 
 							<Card>
 								<CardHeader>
@@ -840,7 +877,13 @@ function ReportsPage() {
 					)}
 				</TabsContent>
 
-				<TabsContent value="requests" className="space-y-4">
+				<TabsContent value="requests" className="flex flex-col gap-4">
+					<ReportSectionHeader
+						title="Requests"
+						description="Request volume, outcomes, approval rates, and decision time."
+						actions={rangeActions()}
+					/>
+					{rangeError}
 					{requests.isLoading ? (
 						<div className="grid place-items-center py-24">
 							<Spinner />
@@ -874,7 +917,7 @@ function ReportsPage() {
 						</Empty>
 					) : (
 						<>
-							<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+							<ReportMetricGrid>
 								{requestRows.map((row) => (
 									<Card key={row.type}>
 										<CardHeader>
@@ -893,7 +936,7 @@ function ReportsPage() {
 										</CardContent>
 									</Card>
 								))}
-							</div>
+							</ReportMetricGrid>
 
 							<Card>
 								<CardHeader>
@@ -1004,7 +1047,13 @@ function ReportsPage() {
 				</TabsContent>
 
 				{canViewReports ? (
-					<TabsContent value="leave" className="space-y-4">
+					<TabsContent value="leave" className="flex flex-col gap-4">
+						<ReportSectionHeader
+							title="Leave"
+							description="Approved, unpaid, overdrawn, and encashed leave by worker."
+							actions={rangeActions(true)}
+						/>
+						{rangeError}
 						{leave.isLoading ? (
 							<div className="grid place-items-center py-24">
 								<Spinner />
@@ -1038,49 +1087,40 @@ function ReportsPage() {
 							</Empty>
 						) : (
 							<>
-								<div className="flex flex-wrap items-end justify-between gap-3">
-									<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-										<Card>
-											<CardHeader>
-												<CardDescription>Approved leave</CardDescription>
-												<CardTitle className="text-2xl tabular-nums">
-													{formatLeaveHours(leave.data.totals.approvedMinutes)}
-												</CardTitle>
-											</CardHeader>
-										</Card>
-										<Card>
-											<CardHeader>
-												<CardDescription>Unpaid leave</CardDescription>
-												<CardTitle className="text-2xl tabular-nums">
-													{formatLeaveHours(leave.data.totals.unpaidMinutes)}
-												</CardTitle>
-											</CardHeader>
-										</Card>
-										<Card>
-											<CardHeader>
-												<CardDescription>Overdrawn</CardDescription>
-												<CardTitle className="text-2xl tabular-nums">
-													{formatLeaveHours(leave.data.totals.overdrawnMinutes)}
-												</CardTitle>
-											</CardHeader>
-										</Card>
-										<Card>
-											<CardHeader>
-												<CardDescription>Encashment value</CardDescription>
-												<CardTitle className="text-2xl tabular-nums">
-													{formatCurrency(leave.data.totals.encashmentCents)}
-												</CardTitle>
-											</CardHeader>
-										</Card>
-									</div>
-									<Button
-										variant="outline"
-										disabled={isDownloadingLeave}
-										onClick={() => void downloadLeavePayroll()}
-									>
-										{isDownloadingLeave ? "Downloading…" : "Leave payroll CSV"}
-									</Button>
-								</div>
+								<ReportMetricGrid>
+									<Card>
+										<CardHeader>
+											<CardDescription>Approved leave</CardDescription>
+											<CardTitle className="text-2xl tabular-nums">
+												{formatLeaveHours(leave.data.totals.approvedMinutes)}
+											</CardTitle>
+										</CardHeader>
+									</Card>
+									<Card>
+										<CardHeader>
+											<CardDescription>Unpaid leave</CardDescription>
+											<CardTitle className="text-2xl tabular-nums">
+												{formatLeaveHours(leave.data.totals.unpaidMinutes)}
+											</CardTitle>
+										</CardHeader>
+									</Card>
+									<Card>
+										<CardHeader>
+											<CardDescription>Overdrawn</CardDescription>
+											<CardTitle className="text-2xl tabular-nums">
+												{formatLeaveHours(leave.data.totals.overdrawnMinutes)}
+											</CardTitle>
+										</CardHeader>
+									</Card>
+									<Card>
+										<CardHeader>
+											<CardDescription>Encashment value</CardDescription>
+											<CardTitle className="text-2xl tabular-nums">
+												{formatCurrency(leave.data.totals.encashmentCents)}
+											</CardTitle>
+										</CardHeader>
+									</Card>
+								</ReportMetricGrid>
 
 								<Card>
 									<CardHeader>

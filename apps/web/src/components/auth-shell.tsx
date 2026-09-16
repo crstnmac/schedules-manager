@@ -33,11 +33,7 @@ const highlights = [
 	},
 ] as const;
 
-const BRAND_CANVAS = "#F3F8FD";
-
 const MESH_COLORS = ["#F3F8FD", "#BBD7F6", "#006EDC", "#DCEBFB"];
-
-const FALLBACK_GRADIENT = `radial-gradient(120% 120% at 82% 85%, rgba(0,110,220,0.35) 0%, transparent 60%), linear-gradient(135deg, ${BRAND_CANVAS} 0%, #d8e9fb 55%, #bbd7f6 100%)`;
 
 function useWebgl2(): boolean {
 	const [supported, setSupported] = useState(false);
@@ -59,12 +55,11 @@ export function AuthShell({ children }: { children: ReactNode }) {
 		<main
 			id="main-content"
 			tabIndex={-1}
-			className="light relative flex min-h-svh flex-col overflow-hidden text-foreground lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+			className="light relative flex min-h-svh flex-col overflow-hidden text-foreground lg:grid lg:grid-cols-2"
 		>
 			<div
 				aria-hidden="true"
-				className="pointer-events-none absolute inset-0"
-				style={{ backgroundColor: BRAND_CANVAS }}
+				className="auth-canvas pointer-events-none absolute inset-0"
 			>
 				{webgl2 ? (
 					<StaticMeshGradient
@@ -85,18 +80,15 @@ export function AuthShell({ children }: { children: ReactNode }) {
 						speed={0}
 					/>
 				) : (
-					<div
-						className="absolute inset-0"
-						style={{ backgroundImage: FALLBACK_GRADIENT }}
-					/>
+					<div className="auth-fallback-gradient absolute inset-0" />
 				)}
-				<div className="absolute inset-0 bg-[#F3F8FD]/45" />
-				<div className="absolute inset-0 hidden bg-gradient-to-r from-[#F3F8FD] via-[#F3F8FD]/55 to-transparent lg:block" />
+				<div className="absolute inset-0 bg-sidebar/45" />
+				<div className="absolute inset-0 hidden bg-gradient-to-r from-sidebar via-sidebar/55 to-transparent lg:block" />
 			</div>
 
 			<section
 				aria-hidden="true"
-				className="relative z-10 hidden overflow-hidden p-10 text-[#111B28] lg:flex lg:flex-col lg:justify-between"
+				className="relative z-10 hidden overflow-hidden p-10 text-foreground lg:flex lg:flex-col lg:justify-between"
 			>
 				<div className="relative z-10 flex flex-col gap-10">
 					<div className="flex items-center gap-3">
@@ -105,7 +97,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
 							<span className="font-semibold text-lg tracking-tight">
 								jooling
 							</span>
-							<span className="text-[#111B28]/60 text-xs">
+							<span className="text-foreground/60 text-xs">
 								Fast scheduling for hourly teams
 							</span>
 						</div>
@@ -114,7 +106,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
 						<h2 className="font-semibold text-2xl tracking-tight">
 							The schedule board for your team
 						</h2>
-						<p className="text-[#111B28]/70 text-sm leading-relaxed">
+						<p className="text-foreground/70 text-sm leading-relaxed">
 							Plan the week, fill open shifts, and keep your team informed when
 							work changes.
 						</p>
@@ -124,19 +116,19 @@ export function AuthShell({ children }: { children: ReactNode }) {
 							<Item
 								key={highlight.title}
 								size="sm"
-								className="border-[#111B28]/10 bg-white/55 backdrop-blur-sm"
+								className="border-foreground/10 bg-background/55 backdrop-blur-sm"
 							>
 								<ItemMedia
 									variant="icon"
-									className="bg-[#006EDC]/10 text-[#006EDC]"
+									className="bg-primary/10 text-primary"
 								>
 									<highlight.icon />
 								</ItemMedia>
 								<ItemContent>
-									<ItemTitle className="text-[#111B28]">
+									<ItemTitle className="text-foreground">
 										{highlight.title}
 									</ItemTitle>
-									<ItemDescription className="text-[#111B28]/70">
+									<ItemDescription className="text-foreground/70">
 										{highlight.description}
 									</ItemDescription>
 								</ItemContent>
@@ -144,7 +136,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
 						))}
 					</ItemGroup>
 				</div>
-				<p className="relative z-10 text-[#111B28]/50 text-xs">
+				<p className="relative z-10 text-foreground/50 text-xs">
 					Managers set up workplaces. Workers join through an invite.
 				</p>
 			</section>
