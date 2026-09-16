@@ -134,7 +134,8 @@ Better Auth and call it with the resulting session cookie to verify a session.
 ```bash
 bun run check-types  # Type-check the workspace
 bun run build        # Build all applications
-bun run check        # Format and lint with Biome
+bun run check        # Lint and check formatting with Biome
+bun run check:write  # Format and autofix with Biome
 bun test             # Run fast unit and invariant tests
 bun run test:integration # Run isolated PostgreSQL tests (Docker required)
 bun run db:generate  # Generate database migrations
