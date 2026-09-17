@@ -1,0 +1,3 @@
+ALTER TABLE "notifications" ADD COLUMN "schedule_version_id" uuid;--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_schedule_version_id_schedule_versions_id_fk" FOREIGN KEY ("schedule_version_id") REFERENCES "public"."schedule_versions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "notifications_schedule_version_idx" ON "notifications" USING btree ("schedule_version_id");

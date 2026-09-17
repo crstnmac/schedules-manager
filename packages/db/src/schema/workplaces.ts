@@ -45,6 +45,9 @@ export const plannedShiftsVisibilityEnum = pgEnum("planned_shifts_visibility", [
 export const workplaces = pgTable("workplaces", {
 	id: uuid("id").defaultRandom().primaryKey(),
 	name: text("name").notNull(),
+	openingRestaurantOffer: boolean("opening_restaurant_offer")
+		.notNull()
+		.default(false),
 	noticeWindowHours: integer("notice_window_hours").notNull().default(48),
 	weekStartDay: smallint("week_start_day").notNull().default(1),
 	payPeriodType: payPeriodTypeEnum("pay_period_type")

@@ -10,6 +10,7 @@ import {
 
 import { employments } from "./employments";
 import { profiles } from "./profiles";
+import { scheduleVersions } from "./publication";
 import { workplaces } from "./workplaces";
 
 export const notifications = pgTable(
@@ -22,12 +23,19 @@ export const notifications = pgTable(
 		kind: text("kind").notNull(),
 		title: text("title").notNull(),
 		body: text("body").notNull(),
+		scheduleVersionId: uuid("schedule_version_id").references(
+			() => scheduleVersions.id,
+			{ onDelete: "set null" },
+		),
 		readAt: timestamp("read_at", { withTimezone: true }),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
 			.notNull(),
 	},
-	(table) => [index("notifications_employment_idx").on(table.employmentId)],
+	(table) => [
+		index("notifications_employment_idx").on(table.employmentId),
+		index("notifications_schedule_version_idx").on(table.scheduleVersionId),
+	],
 );
 
 export const notificationOutbox = pgTable(

@@ -36,6 +36,16 @@ export const workplaceSubscriptions = pgTable(
 		status: text("status").notNull(),
 		locationCount: integer("location_count").notNull().default(1),
 		currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+		/** When the free trial ends and the first charge occurs. */
+		trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+		/** Set once the 7-day trial-ending notice has been sent to managers. */
+		trialNoticeSentAt: timestamp("trial_notice_sent_at", {
+			withTimezone: true,
+		}),
+		/** Period end for which the 30-day annual-renewal notice was last sent. */
+		renewalNoticePeriodEnd: timestamp("renewal_notice_period_end", {
+			withTimezone: true,
+		}),
 		cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.notNull()

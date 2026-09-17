@@ -174,6 +174,14 @@ export {
 	invitations,
 } from "./invitations";
 export type {
+	LegalAcceptance,
+	NewLegalAcceptance,
+} from "./legal";
+export {
+	legalAcceptanceKindEnum,
+	legalAcceptances,
+} from "./legal";
+export type {
 	AuditEvent,
 	NewAuditEvent,
 	NewNotification,

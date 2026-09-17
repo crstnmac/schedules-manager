@@ -1,0 +1,1 @@
+ALTER TABLE "workplaces" ADD COLUMN "opening_restaurant_offer" boolean DEFAULT false NOT NULL;
