@@ -27,7 +27,7 @@ The MVP includes scheduling, publication, acknowledgement, late-change acceptanc
 - Build vertical slices through database, API, web, and mobile.
 - Keep Elysia as one capability-based modular monolith.
 - Keep scheduling rules deterministic; do not introduce AI scheduling in the MVP.
-- Use Supabase only for PostgreSQL and identity. All Workplace data goes through Elysia.
+- Use self-managed PostgreSQL with better-auth for identity. All Workplace data goes through Elysia.
 - Optimize the Worker experience for one obvious primary action per screen.
 - Add infrastructure only when the Austin pilot demonstrates a real need.
 
@@ -39,7 +39,7 @@ The MVP includes scheduling, publication, acknowledgement, late-change acceptanc
 
 ### Domain and database
 
-- Profile linked one-to-one with a Supabase Auth identity
+- Profile linked one-to-one with a better-auth identity
 - Workplace
 - Location with IANA time zone (`America/Chicago` initially)
 - Position
