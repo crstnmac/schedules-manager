@@ -25,6 +25,12 @@ export const env = createEnv({
 		GEOCODER_BASE_URL: z.url().optional(),
 		/** Directory for uploaded leave documents. Defaults to ./uploads/leave. */
 		LEAVE_UPLOAD_DIR: z.string().min(1).optional(),
+		/**
+		 * Version stamped into consent records. Keep identical to
+		 * VITE_TERMS_VERSION in the landing and web apps so an acceptance can be
+		 * matched to the published Terms.
+		 */
+		TERMS_VERSION: z.string().min(1).default("2026-09-17"),
 		NODE_ENV: z
 			.enum(["development", "production", "test"])
 			.default("development"),

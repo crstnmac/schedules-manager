@@ -1,3 +1,4 @@
+import { env } from "@SchedulesManager/env/landing";
 import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import type React from "react";
 import { LandingLink } from "./landing-link";
@@ -9,7 +10,7 @@ import {
 	SUBPROCESSORS,
 } from "./site-config";
 
-const appUrl = import.meta.env.VITE_APP_URL || "http://localhost:3001";
+const appUrl = env.VITE_APP_URL;
 const signUpUrl = new URL(appUrl);
 signUpUrl.searchParams.set("mode", "sign-up");
 

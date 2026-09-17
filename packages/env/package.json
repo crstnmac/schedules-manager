@@ -6,6 +6,7 @@
 	"exports": {
 		"./server": "./src/server.ts",
 		"./web": "./src/web.ts",
+		"./landing": "./src/landing.ts",
 		"./native": "./src/native.ts"
 	},
 	"dependencies": {

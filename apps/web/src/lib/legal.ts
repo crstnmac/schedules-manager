@@ -11,8 +11,11 @@ import { api } from "./api";
  * §17600 et seq. require keeping that proof for three years. Because a new
  * account may need email confirmation before it has a session, acceptances
  * are queued locally and flushed on the first authenticated request.
+ *
+ * Keep VITE_TERMS_VERSION identical to the landing and server values so a
+ * stored acceptance can be matched to the published Terms.
  */
-export const TERMS_VERSION = "2026-09-17";
+export const TERMS_VERSION = env.VITE_TERMS_VERSION;
 
 export type LegalAcceptanceKind = "terms" | "billing";
 

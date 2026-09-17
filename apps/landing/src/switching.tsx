@@ -1,3 +1,4 @@
+import { env } from "@SchedulesManager/env/landing";
 import { ArrowDown, ArrowRight, Check, ChevronLeft } from "lucide-react";
 import type { ReactNode } from "react";
 import { captureComparisonSignup } from "./analytics";
@@ -224,7 +225,7 @@ export function SwitchingSection() {
 }
 
 export function OpeningRestaurantSection() {
-	const appUrl = import.meta.env.VITE_APP_URL || "http://localhost:3001";
+	const appUrl = env.VITE_APP_URL;
 	const signUp = new URL(appUrl);
 	signUp.searchParams.set("mode", "sign-up");
 	signUp.searchParams.set("opening_restaurant", "1");
@@ -252,7 +253,7 @@ export function ComparisonPage({ slug }: { slug: string }) {
 	const competitor = competitors.find((item) => item.slug === slug);
 	if (!competitor) return null;
 	const details = switchingDetails[competitor.slug];
-	const appUrl = import.meta.env.VITE_APP_URL || "http://localhost:3001";
+	const appUrl = env.VITE_APP_URL;
 	const signUp = new URL(appUrl);
 	signUp.searchParams.set("mode", "sign-up");
 	signUp.searchParams.set("switching_from", competitor.slug);

@@ -1,41 +1,42 @@
+import { env } from "@SchedulesManager/env/landing";
+
 /**
- * Single source of truth for the legal identity of the business.
+ * Landing-site legal configuration.
  *
- * ⚠️ REPLACE THE PLACEHOLDER VALUES BEFORE LAUNCH. Every legal page (Terms,
- * Privacy Policy, DPA) and the site footer read from this file, so a change
- * here updates the whole site. The values must match the actual corporate
- * registration: governing law and venue should be the jurisdiction the entity
- * is incorporated in.
+ * Identity, contacts, and document version come from environment variables so
+ * a deployment can set them without a code change (see .env.example). Set the
+ * VITE_LEGAL_* values before launch: the placeholders below are printed on the
+ * Terms, Privacy Policy, DPA, and every footer.
  */
 export const LEGAL_ENTITY = {
-	displayName: "jooling",
-	/** Exact registered legal name, e.g. "jooling, Inc." or "jooling Ltd". */
-	legalName: "[REGISTERED LEGAL NAME]",
-	/** Registered business address, e.g. "1 Example St, Wilmington, DE 19801, USA". */
-	address: "[REGISTERED BUSINESS ADDRESS]",
-	/** Jurisdiction of incorporation, e.g. "Delaware, USA". */
-	jurisdiction: "[JURISDICTION OF INCORPORATION]",
-	/** Company/registrar identifier, e.g. Delaware file number or Companies House number. */
-	registrationNumber: "[REGISTRATION NUMBER]",
-	/** Governing law for the Terms, e.g. "the laws of the State of Delaware, USA". */
-	governingLaw: "[e.g. the laws of the State of Delaware, USA]",
-	/** Exclusive venue for disputes, e.g. "the state and federal courts located in Delaware, USA". */
-	venue:
-		"[e.g. the state and federal courts located in New Castle County, Delaware, USA]",
-	contactEmail: "legal@jooling.com",
-	privacyEmail: "privacy@jooling.com",
-	supportEmail: "support@jooling.com",
+	legalName: env.VITE_LEGAL_NAME,
+	address: env.VITE_LEGAL_ADDRESS,
+	jurisdiction: env.VITE_LEGAL_JURISDICTION,
+	registrationNumber: env.VITE_LEGAL_REGISTRATION_NUMBER,
+	governingLaw: env.VITE_LEGAL_GOVERNING_LAW,
+	venue: env.VITE_LEGAL_VENUE,
+	contactEmail: env.VITE_LEGAL_CONTACT_EMAIL,
+	privacyEmail: env.VITE_LEGAL_PRIVACY_EMAIL,
+	supportEmail: env.VITE_LEGAL_SUPPORT_EMAIL,
 } as const;
 
-/** Version stamped into consent records at signup and checkout (CA ARL keeps these 3 years). */
-export const TERMS_VERSION = "2026-09-17";
+/**
+ * Version stamped into consent records. Keep identical to TERMS_VERSION in
+ * the server and web apps so an acceptance can be matched to the published
+ * document.
+ */
+export const TERMS_VERSION = env.VITE_TERMS_VERSION;
 
-export const LAST_UPDATED = "September 17, 2026";
+/** Rendered from an ISO date, in UTC so the printed day never shifts. */
+export const LAST_UPDATED = new Intl.DateTimeFormat("en-US", {
+	dateStyle: "long",
+	timeZone: "UTC",
+}).format(new Date(env.VITE_TERMS_UPDATED_AT));
 
 /**
- * Third parties that process personal data on our behalf. Keep this in sync
- * with the subprocessors actually configured in production (payments, product
- * analytics, transactional email, push delivery, hosting).
+ * Third parties that process personal data on our behalf. Kept in source
+ * rather than configuration: this list is published as part of the privacy
+ * commitment, so it should change only with review, not with a deploy.
  */
 export const SUBPROCESSORS = [
 	{
@@ -65,7 +66,10 @@ export const SUBPROCESSORS = [
 	},
 ] as const;
 
-/** Concrete retention commitments (Privacy Policy §5). Adjust only after ops agrees. */
+/**
+ * Retention commitments. Kept in source because they must match what the
+ * systems actually do; change them alongside the code that enforces them.
+ */
 export const RETENTION = {
 	/** Workplace records deleted or anonymized this long after closure. */
 	workplaceDataDays: 90,

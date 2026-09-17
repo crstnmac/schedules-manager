@@ -1,6 +1,7 @@
+import { env } from "@SchedulesManager/env/landing";
 import posthog from "posthog-js";
 
-const token = import.meta.env.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN;
+const token = env.VITE_PUBLIC_POSTHOG_PROJECT_TOKEN;
 
 /**
  * PostHog only initializes after the visitor accepts analytics cookies in the
@@ -13,8 +14,7 @@ export function initAnalytics() {
 	if (initialized || !token) return;
 	initialized = true;
 	posthog.init(token, {
-		api_host:
-			import.meta.env.VITE_PUBLIC_POSTHOG_HOST || "https://eu.i.posthog.com",
+		api_host: env.VITE_PUBLIC_POSTHOG_HOST || "https://eu.i.posthog.com",
 		capture_pageview: true,
 		capture_pageleave: true,
 		disable_session_recording: true,

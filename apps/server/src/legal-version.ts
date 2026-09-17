@@ -1,7 +1,11 @@
+import { env } from "@SchedulesManager/env/server";
+
 /**
- * Current version of the Terms & Conditions, recorded with each acceptance.
+ * Version stamped into each acceptance record, so a stored consent can be
+ * matched to the exact Terms that were published.
  *
- * Keep in sync with TERMS_VERSION in apps/landing/src/site-config.ts — both
- * must change together whenever the Terms are materially updated.
+ * Set TERMS_VERSION in the server environment and keep it identical to
+ * VITE_TERMS_VERSION in the landing and web apps; both default to the same
+ * revision, and all three must move together when the Terms change.
  */
-export const TERMS_VERSION = "2026-09-17";
+export const TERMS_VERSION = env.TERMS_VERSION;

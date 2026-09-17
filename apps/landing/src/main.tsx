@@ -1,3 +1,4 @@
+import { env } from "@SchedulesManager/env/landing";
 import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import {
@@ -67,8 +68,8 @@ import {
 } from "./switching";
 import "./styles.css";
 
-const appUrl = import.meta.env.VITE_APP_URL || "http://localhost:3001";
-const docsUrl = import.meta.env.VITE_DOCS_URL || "https://docs.jooling.com";
+const appUrl = env.VITE_APP_URL;
+const docsUrl = env.VITE_DOCS_URL;
 const signUpUrl = new URL(appUrl);
 signUpUrl.searchParams.set("mode", "sign-up");
 const people = [
