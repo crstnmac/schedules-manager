@@ -35,7 +35,8 @@
 		"db:migrate": "bun --cwd packages/db db:migrate:deploy",
 		"check": "biome check .",
 		"check:write": "biome check --write .",
-		"lint": "oxlint . --max-warnings 0"
+		"lint": "oxlint . --max-warnings 0",
+		"reviews:refresh": "bun scripts/gplay-reviews.ts"
 	},
 	"dependencies": {
 		"@SchedulesManager/env": "workspace:*",
@@ -47,6 +48,7 @@
 		"@biomejs/biome": "^2.5.6",
 		"@shadcn/lint": "^0.1.0",
 		"@types/bun": "catalog:",
+		"google-play-scraper": "^10.0.0",
 		"oxlint": "^1.83.0",
 		"turbo": "^2.10.7",
 		"typescript": "^6.0.3"
