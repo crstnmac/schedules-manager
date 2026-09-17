@@ -122,6 +122,10 @@ import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { DatePicker } from "@/components/date-picker";
 import { BulkEditDialog } from "@/components/schedule/bulk-edit-dialog";
+import {
+	ScheduleMobileBoard,
+	ScheduleMobileBoardSkeleton,
+} from "@/components/schedule/mobile-board";
 import { PatternApplyDialog } from "@/components/schedule/pattern-apply-dialog";
 import { PublishSelectionDialog } from "@/components/schedule/publish-selection-dialog";
 import { ScheduleMonthGrid } from "@/components/schedule-month-grid";
@@ -1914,8 +1918,8 @@ function SchedulePage() {
 			<div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-none">
 				{headerTarget
 					? createPortal(
-							<div className="flex w-full min-w-0 items-center justify-between gap-3">
-								<div className="flex min-w-0 items-center gap-1">
+							<div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
+								<div className="flex min-w-0 flex-wrap items-center gap-1">
 									<Select
 										items={locationItems}
 										value={activeLocationId ?? null}
@@ -2065,7 +2069,7 @@ function SchedulePage() {
 									</div>
 								</div>
 
-								<div className="flex shrink-0 items-center gap-1.5">
+								<div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
 									{publicationState ? (
 										<PublicationBadge publication={publicationState} />
 									) : null}
@@ -2314,7 +2318,7 @@ function SchedulePage() {
 							headerTarget,
 						)
 					: null}
-				<div className="flex min-w-0 items-center gap-2 border-b bg-background px-3 py-1.5 print:hidden">
+				<div className="flex min-w-0 flex-wrap items-center gap-2 border-b bg-background px-3 py-1.5 print:hidden">
 					{data && data.staff.length > 0 ? (
 						<>
 							<InputGroup className="min-w-36 max-w-52 flex-1 sm:flex-none">
@@ -3759,14 +3763,18 @@ function SchedulePage() {
 					) : null}
 
 					{viewMode !== "month" && schedule.isPending && !data ? (
-						<div className="flex min-h-0 flex-1 flex-col">
+						<div className="flex min-h-0 flex-1 flex-col max-md:hidden">
 							<ScheduleGridSkeleton />
 						</div>
 					) : null}
 
+					{viewMode !== "month" && schedule.isPending && !data ? (
+						<ScheduleMobileBoardSkeleton />
+					) : null}
+
 					{viewMode !== "month" && data ? (
 						<DragDropProvider onDragEnd={handleShiftDragEnd}>
-							<div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+							<div className="relative hidden min-h-0 flex-1 flex-col overflow-hidden bg-background md:flex">
 								<div className="schedule-grid-scroll min-h-0 min-w-0 flex-1 overflow-auto overscroll-none">
 									<div
 										className="grid min-w-(--schedule-grid-min-width) grid-cols-(--schedule-grid-columns)"
@@ -4270,6 +4278,25 @@ function SchedulePage() {
 								</div>
 							</div>
 						</DragDropProvider>
+					) : null}
+
+					{viewMode !== "month" && data ? (
+						<ScheduleMobileBoard
+							className="md:hidden"
+							days={days}
+							todayKey={todayKey}
+							staff={visibleStaff}
+							shiftsByWorkerDay={scheduleIndex.shiftsByWorkerDay}
+							offRosterShiftsByDay={offRosterShiftsByDay}
+							daySummaries={daySummaries}
+							holidayByDate={holidayByDate}
+							filterShift={shiftMatchesSurfaceFilters}
+							timeclockByShiftId={timeclockByShiftId}
+							canManage={canManage}
+							shiftsPending={moveShift.isPending}
+							onOpenShift={openEdit}
+							onCreateShift={openCreate}
+						/>
 					) : null}
 
 					{/* Insights */}
