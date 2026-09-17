@@ -768,9 +768,11 @@ function AvailabilityPage() {
 												key={document.id}
 												className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs"
 											>
-												<button
+												<Button
 													type="button"
-													className="max-w-40 truncate underline underline-offset-2"
+													variant="link"
+													size="sm"
+													className="max-w-40 truncate px-0"
 													onClick={() =>
 														void openLeaveDocumentFile(document.id).catch(
 															(error) => toast.error((error as Error).message),
@@ -778,19 +780,20 @@ function AvailabilityPage() {
 													}
 												>
 													{document.fileName}
-												</button>
+												</Button>
 												<span className="text-muted-foreground tabular-nums">
 													{formatFileSize(document.sizeBytes)}
 												</span>
-												<button
+												<Button
 													type="button"
 													aria-label={`Delete ${document.fileName}`}
-													className="text-muted-foreground hover:text-destructive"
+													variant="ghost"
+													size="icon-sm"
 													disabled={deleteDocument.isPending}
 													onClick={() => deleteDocument.mutate(document.id)}
 												>
-													<XIcon className="size-3" />
-												</button>
+													<XIcon />
+												</Button>
 											</span>
 										))}
 									</div>

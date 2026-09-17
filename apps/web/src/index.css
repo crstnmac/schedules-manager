@@ -1,5 +1,54 @@
 @import "@SchedulesManager/ui/globals.css";
 
+/* Shared page rules live here so the generated shadcn components stay intact. */
+html {
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+main :is(h1, h2, h3, h4, h5, h6) {
+	scroll-margin-top: 4.5rem;
+}
+
+main :is(p, li, td, th, code, a) {
+	overflow-wrap: break-word;
+}
+
+main a {
+	text-underline-position: from-font;
+	text-decoration-skip-ink: auto;
+}
+
+main img:not([src$=".svg"]) {
+	outline: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent);
+	outline-offset: -1px;
+}
+
+main :is([data-slot="badge"], [data-slot="table-head"]) {
+	white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	main button:not([data-slot="button"]):not(:disabled) {
+		transition: scale 200ms ease-out;
+	}
+
+	main [data-slot="button"]:not(:disabled) {
+		transition:
+			scale 200ms ease-out,
+			color 120ms ease-out,
+			background-color 120ms ease-out,
+			border-color 120ms ease-out,
+			box-shadow 120ms ease-out,
+			transform 120ms ease-out,
+			opacity 120ms ease-out;
+	}
+
+	main :is(button, [data-slot="button"]):not(:disabled):active {
+		scale: 0.97;
+	}
+}
+
 .auth-canvas {
 	background-color: #f3f8fd;
 }

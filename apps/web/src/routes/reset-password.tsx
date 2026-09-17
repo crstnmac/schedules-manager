@@ -6,9 +6,15 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@SchedulesManager/ui/components/card";
+import {
+	Field,
+	FieldError,
+	FieldGroup,
+	FieldLabel,
+} from "@SchedulesManager/ui/components/field";
 import { Input } from "@SchedulesManager/ui/components/input";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { AuthShell } from "@/components/auth-shell";
 import { authClient } from "@/lib/auth-client";
@@ -26,6 +32,7 @@ function ResetPasswordPage() {
 	const [password, setPassword] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const [complete, setComplete] = useState(false);
+	const passwordRef = useRef<HTMLInputElement>(null);
 	const [error, setError] = useState<string | null>(
 		providerError || !token
 			? "This password reset link is invalid or expired."
@@ -35,6 +42,11 @@ function ResetPasswordPage() {
 	async function submit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		if (!token || submitting) return;
+		if (password.length < 8) {
+			setError("Enter a password with at least 8 characters.");
+			passwordRef.current?.focus();
+			return;
+		}
 		setSubmitting(true);
 		setError(null);
 		const result = await authClient.resetPassword({
@@ -51,6 +63,7 @@ function ResetPasswordPage() {
 
 	return (
 		<AuthShell>
+			<h1 className="sr-only">Reset your password</h1>
 			<Card className="w-full max-w-md">
 				<CardHeader>
 					<CardTitle>Reset your password</CardTitle>
@@ -69,26 +82,32 @@ function ResetPasswordPage() {
 							Return to sign in
 						</Button>
 					) : (
-						<form className="space-y-4" onSubmit={submit}>
-							<Input
-								type="password"
-								autoComplete="new-password"
-								value={password}
-								onChange={(event) => setPassword(event.target.value)}
-								placeholder="New password"
-								minLength={8}
-								required
-								disabled={!token || submitting}
-							/>
-							{error ? (
-								<p className="text-destructive text-sm" role="alert">
-									{error}
-								</p>
-							) : null}
-							<Button
-								className="w-full"
-								disabled={!token || password.length < 8 || submitting}
-							>
+						<form className="flex flex-col gap-4" onSubmit={submit} noValidate>
+							<FieldGroup>
+								<Field data-invalid={Boolean(error)}>
+									<FieldLabel htmlFor="new-password">New password</FieldLabel>
+									<Input
+										ref={passwordRef}
+										id="new-password"
+										type="password"
+										autoComplete="new-password"
+										value={password}
+										onChange={(event) => {
+											setPassword(event.target.value);
+											setError(null);
+										}}
+										minLength={8}
+										required
+										aria-invalid={Boolean(error)}
+										aria-describedby={error ? "password-error" : undefined}
+										disabled={!token || submitting}
+									/>
+									{error ? (
+										<FieldError id="password-error">{error}</FieldError>
+									) : null}
+								</Field>
+							</FieldGroup>
+							<Button className="w-full" disabled={!token || submitting}>
 								{submitting ? "Updating…" : "Update password"}
 							</Button>
 						</form>

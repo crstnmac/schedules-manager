@@ -24,11 +24,13 @@ export function SettingsPage({
 		(query) => query.data === undefined && (query.isLoading || query.isError),
 	);
 	return (
-		<div className={cn("flex w-full flex-col gap-6", className)}>
-			<header className="flex flex-col gap-1">
-				<h1 className="font-medium text-base tracking-tight">{title}</h1>
+		<div className={cn("flex w-full flex-col gap-8", className)}>
+			<header className="flex flex-col gap-1.5">
+				<h1 className="text-balance font-heading font-semibold text-xl tracking-tight">
+					{title}
+				</h1>
 				{description ? (
-					<p className="max-w-prose text-muted-foreground text-sm">
+					<p className="max-w-prose text-pretty text-muted-foreground text-sm/relaxed">
 						{description}
 					</p>
 				) : null}
@@ -98,7 +100,9 @@ export function SettingsSection({
 						{title || typeof count === "number" ? (
 							<div className="flex min-w-0 items-center gap-2">
 								{title ? (
-									<h2 className="font-medium text-sm">{title}</h2>
+									<h2 className="text-balance font-semibold text-base tracking-tight">
+										{title}
+									</h2>
 								) : null}
 								{typeof count === "number" ? (
 									<Badge variant="secondary">{count}</Badge>
@@ -106,7 +110,9 @@ export function SettingsSection({
 							</div>
 						) : null}
 						{description ? (
-							<p className="text-muted-foreground text-sm">{description}</p>
+							<p className="max-w-prose text-pretty text-muted-foreground text-sm/relaxed">
+								{description}
+							</p>
 						) : null}
 					</div>
 					{action}

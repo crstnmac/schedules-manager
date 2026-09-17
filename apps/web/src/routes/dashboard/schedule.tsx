@@ -3075,9 +3075,10 @@ function SchedulePage() {
 																			className="gap-1 pr-1"
 																		>
 																			{name}
-																			<button
+																			<Button
 																				type="button"
-																				className="rounded-sm p-0.5 hover:bg-muted"
+																				variant="ghost"
+																				size="icon-sm"
 																				aria-label={`Remove ${name}`}
 																				onClick={() => {
 																					const next = addEmploymentIds.filter(
@@ -3091,8 +3092,8 @@ function SchedulePage() {
 																					});
 																				}}
 																			>
-																				<XIcon className="size-3" />
-																			</button>
+																				<XIcon />
+																			</Button>
 																		</Badge>
 																	);
 																})}

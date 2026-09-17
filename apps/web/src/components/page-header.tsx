@@ -10,11 +10,13 @@ export function PageHeader({
 	actions?: ReactNode;
 }) {
 	return (
-		<div className="flex flex-wrap items-start justify-between gap-3">
+		<div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
 			<div className="flex min-w-0 flex-col gap-1">
-				<h1 className="font-heading font-medium text-lg">{title}</h1>
+				<h1 className="text-balance font-heading font-semibold text-xl tracking-tight">
+					{title}
+				</h1>
 				{description ? (
-					<p className="max-w-prose text-muted-foreground text-sm">
+					<p className="max-w-prose text-pretty text-muted-foreground text-sm/relaxed">
 						{description}
 					</p>
 				) : null}

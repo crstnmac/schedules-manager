@@ -98,26 +98,32 @@ export function AppPageHeader({
 	return (
 		<header
 			className={cn(
-				"flex shrink-0 flex-wrap items-start justify-between gap-2 border-b px-4 py-3",
+				"flex shrink-0 flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b bg-background px-4 py-4 md:px-6",
 				className,
 			)}
 		>
 			{title || description || badge ? (
-				<div className="min-w-0">
+				<div className="flex min-w-0 flex-col gap-1">
 					{title ? (
 						<div className="flex flex-wrap items-center gap-2">
-							<h2 className="font-heading font-medium text-sm">{title}</h2>
+							<h1 className="text-balance font-heading font-semibold text-lg tracking-tight">
+								{title}
+							</h1>
 							{badge}
 						</div>
 					) : null}
 					{description ? (
-						<p className="text-muted-foreground text-xs/relaxed">
+						<p className="max-w-prose text-pretty text-muted-foreground text-sm/relaxed">
 							{description}
 						</p>
 					) : null}
 				</div>
 			) : null}
-			{actions}
+			{actions ? (
+				<div className="flex min-w-0 flex-wrap items-center gap-2">
+					{actions}
+				</div>
+			) : null}
 			{children}
 		</header>
 	);
@@ -158,7 +164,7 @@ export function AppDocument({
 		<section className="min-h-0 flex-1 overflow-y-auto">
 			<div
 				className={cn(
-					"mx-auto flex w-full flex-col gap-6 px-4 py-4 md:px-6",
+					"mx-auto flex w-full flex-col gap-8 px-4 py-6 md:px-6 md:py-8",
 					widthClassName,
 					className,
 				)}
