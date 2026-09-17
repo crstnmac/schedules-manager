@@ -3,7 +3,6 @@ import {
 	attendanceMarks,
 	conversationMembers,
 	conversations,
-	dayParts,
 	db,
 	employmentDocuments,
 	employmentGroups,
@@ -763,22 +762,6 @@ async function seedSettings(input: {
 			.limit(1);
 		if (!block) {
 			await db.insert(timeBlocks).values({
-				locationId: input.locationId,
-				...window,
-			});
-		}
-		const [part] = await db
-			.select()
-			.from(dayParts)
-			.where(
-				and(
-					eq(dayParts.locationId, input.locationId),
-					eq(dayParts.name, window.name),
-				),
-			)
-			.limit(1);
-		if (!part) {
-			await db.insert(dayParts).values({
 				locationId: input.locationId,
 				...window,
 			});

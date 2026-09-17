@@ -144,7 +144,6 @@ import type {
 import {
 	useAcceptances,
 	useApplyScheduleTemplate,
-	useApprovalPolicyGroups,
 	useEditTimeEntry,
 	useGroups,
 	useHolidays,
@@ -159,7 +158,6 @@ import {
 	useScheduleTeams,
 	useScheduleTemplates,
 	useScheduleTimeclock,
-	useSetSchedulePolicyGroup,
 	useShiftPatterns,
 	useTags,
 	useTimeBlocks,
@@ -198,7 +196,6 @@ const DAY_HEADERS = [
 ];
 
 /** Sentinel for "no policy group override" in the approval policy Select. */
-const WORKPLACE_DEFAULT_POLICY = "__workplace_default__";
 
 /** Sentinel for the Location's primary (team-less) schedule in the team Select. */
 const PRIMARY_TEAM = "__primary_team__";
@@ -882,7 +879,6 @@ function SchedulePage() {
 	const subject = kind ? { kind, privileges: privileges ?? null } : null;
 	const canManage = hasCapability(subject, "schedule.manage");
 	const canPublish = hasCapability(subject, "schedule.publish");
-	const canManagePolicies = hasCapability(subject, "policies.manage");
 	const { formatMinute } = useDisplayPrefs();
 	const posthog = usePostHog();
 	const scheduleStaffColumns = useMemo(
@@ -912,7 +908,7 @@ function SchedulePage() {
 	);
 	const [groupFilter, setGroupFilter] = useState("all");
 	const [tagFilter, setTagFilter] = useState("all");
-	const [dayPartFilter, setDayPartFilter] = useState("all");
+	const [timeBlockFilter, setTimeBlockFilter] = useState("all");
 	const [selectedShiftIds, setSelectedShiftIds] = useState<string[]>([]);
 	const [patternOpen, setPatternOpen] = useState(false);
 	const [scheduleImportOpen, setScheduleImportOpen] = useState(false);
@@ -961,8 +957,6 @@ function SchedulePage() {
 	const tags = useTags(workplace?.id);
 	const timeBlocks = useTimeBlocks(activeLocationId);
 	const patterns = useShiftPatterns(workplace?.id);
-	const approvalGroups = useApprovalPolicyGroups(workplace?.id);
-	const setPolicyGroup = useSetSchedulePolicyGroup(activeLocationId, weekStart);
 	const holidays = useHolidays(workplace?.id, {
 		from: weekStart,
 		to: addDays(weekStart, 6),
@@ -1036,13 +1030,6 @@ function SchedulePage() {
 	function handleBulkEdited() {
 		setSelectedShiftIds([]);
 		void invalidate();
-	}
-
-	function handlePolicyGroupChange(value: string) {
-		setPolicyGroup.mutate(value === WORKPLACE_DEFAULT_POLICY ? null : value, {
-			onSuccess: () => toast.success("Approval policy updated."),
-			onError: (error) => toast.error((error as Error).message),
-		});
 	}
 
 	const createOrUpdate = useMutation({
@@ -1560,28 +1547,28 @@ function SchedulePage() {
 		staffStateFilter !== "all" ||
 		groupFilter !== "all" ||
 		tagFilter !== "all" ||
-		dayPartFilter !== "all";
+		timeBlockFilter !== "all";
 	const activeSelectFilterCount =
 		Number(positionFilter !== "all") +
 		Number(staffStateFilter !== "all") +
 		Number(groupFilter !== "all") +
 		Number(tagFilter !== "all") +
-		Number(dayPartFilter !== "all");
+		Number(timeBlockFilter !== "all");
 	const clearStaffFilters = () => {
 		setWorkerQuery("");
 		setPositionFilter("all");
 		setStaffStateFilter("all");
 		setGroupFilter("all");
 		setTagFilter("all");
-		setDayPartFilter("all");
+		setTimeBlockFilter("all");
 		setVisibleStaffCount(40);
 	};
 
 	function shiftMatchesSurfaceFilters(shift: ScheduleShiftDto) {
 		if (tagFilter !== "all" && !shift.tagIds.includes(tagFilter)) return false;
-		if (dayPartFilter !== "all") {
-			const part = (timeBlocks.data?.dayParts ?? []).find(
-				(row) => row.id === dayPartFilter,
+		if (timeBlockFilter !== "all") {
+			const part = (timeBlocks.data?.timeBlocks ?? []).find(
+				(row) => row.id === timeBlockFilter,
 			);
 			if (
 				part &&
@@ -2103,51 +2090,6 @@ function SchedulePage() {
 									) : null}
 									<Select
 										items={[
-											{
-												label: "Workplace default",
-												value: WORKPLACE_DEFAULT_POLICY,
-											},
-											...(approvalGroups.data?.groups ?? []).map((group) => ({
-												label: group.name,
-												value: group.id,
-											})),
-										]}
-										value={
-											schedule.data?.schedule.policyGroupId ??
-											WORKPLACE_DEFAULT_POLICY
-										}
-										onValueChange={(value) => {
-											if (value) handlePolicyGroupChange(value);
-										}}
-									>
-										<SelectTrigger
-											aria-label="Approval policy"
-											size="sm"
-											disabled={
-												!canManagePolicies ||
-												!schedule.data ||
-												setPolicyGroup.isPending
-											}
-											className="w-auto max-w-52"
-										>
-											<span className="text-muted-foreground">Approvals:</span>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent alignItemWithTrigger={false}>
-											<SelectGroup>
-												<SelectItem value={WORKPLACE_DEFAULT_POLICY}>
-													Workplace default
-												</SelectItem>
-												{(approvalGroups.data?.groups ?? []).map((group) => (
-													<SelectItem key={group.id} value={group.id}>
-														{group.name}
-													</SelectItem>
-												))}
-											</SelectGroup>
-										</SelectContent>
-									</Select>
-									<Select
-										items={[
 											{ label: "Week", value: "week" },
 											{ label: "Day", value: "day" },
 											{ label: "Month", value: "month" },
@@ -2522,23 +2464,23 @@ function SchedulePage() {
 												</Select>
 											</Field>
 										) : null}
-										{(timeBlocks.data?.dayParts ?? []).length > 0 ? (
+										{(timeBlocks.data?.timeBlocks ?? []).length > 0 ? (
 											<Field>
-												<FieldLabel>Day part</FieldLabel>
+												<FieldLabel>Time block</FieldLabel>
 												<Select
 													items={[
-														{ label: "All day parts", value: "all" },
-														...(timeBlocks.data?.dayParts ?? []).map(
+														{ label: "All time blocks", value: "all" },
+														...(timeBlocks.data?.timeBlocks ?? []).map(
 															(part) => ({
 																label: part.name,
 																value: part.id,
 															}),
 														),
 													]}
-													value={dayPartFilter}
+													value={timeBlockFilter}
 													onValueChange={(value) => {
 														if (!value) return;
-														setDayPartFilter(value);
+														setTimeBlockFilter(value);
 													}}
 												>
 													<SelectTrigger className="w-full">
@@ -2546,12 +2488,16 @@ function SchedulePage() {
 													</SelectTrigger>
 													<SelectContent alignItemWithTrigger={false}>
 														<SelectGroup>
-															<SelectItem value="all">All day parts</SelectItem>
-															{(timeBlocks.data?.dayParts ?? []).map((part) => (
-																<SelectItem key={part.id} value={part.id}>
-																	{part.name}
-																</SelectItem>
-															))}
+															<SelectItem value="all">
+																All time blocks
+															</SelectItem>
+															{(timeBlocks.data?.timeBlocks ?? []).map(
+																(part) => (
+																	<SelectItem key={part.id} value={part.id}>
+																		{part.name}
+																	</SelectItem>
+																),
+															)}
 														</SelectGroup>
 													</SelectContent>
 												</Select>

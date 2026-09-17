@@ -18,7 +18,6 @@ import {
 } from "@SchedulesManager/db";
 import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { Elysia, t } from "elysia";
-import { resolveScheduleApprovalPolicy } from "../approval-policy";
 import {
 	requirePrivilege,
 	requireSession,
@@ -246,15 +245,10 @@ export const coverageRoutes = new Elysia({
 						.where(eq(employments.id, shift.employmentId ?? ""))
 						.limit(1);
 					if (employment) {
-						// The week's Approval Policy Group may auto-approve releases,
-						// skipping the manager queue. Reuse the manager decision path so
+						// Reuse the manager decision path so
 						// open-shift creation, notifications, and audit stay identical.
-						const rules = await resolveScheduleApprovalPolicy(
-							(await scheduleIdForVersionShift(shift.id)) ??
-								"00000000-0000-0000-0000-000000000000",
-						);
 						const workplace = await loadWorkplace(employment.workplaceId);
-						if (workplace.autoAcceptShiftReleases || !rules.shift_release) {
+						if (workplace.autoAcceptShiftReleases) {
 							await decideRelease(
 								profile.id,
 								employment.workplaceId,
@@ -457,12 +451,10 @@ export const coverageRoutes = new Elysia({
 						throw new ConflictError("You already requested this shift");
 					}
 
-					// The week's Approval Policy Group may auto-approve pickups. Reuse
-					// the manager decision path so assignment, notifications, audit, and
+					// Reuse the manager decision path so assignment, notifications, audit, and
 					// the successor Schedule Version publication all still happen.
-					const rules = await resolveScheduleApprovalPolicy(shift.scheduleId);
 					const workplace = await loadWorkplace(openShift.workplaceId);
-					if (workplace.autoAcceptShiftPickups || !rules.shift_pickup) {
+					if (workplace.autoAcceptShiftPickups) {
 						const decided = await decidePickup(
 							profile.id,
 							openShift.workplaceId,
@@ -1054,19 +1046,6 @@ async function decideRelease(
 	});
 
 	return { status: "approved" as const };
-}
-
-async function scheduleIdForVersionShift(versionShiftId: string) {
-	const [row] = await db
-		.select({ scheduleId: scheduleVersions.scheduleId })
-		.from(versionShifts)
-		.innerJoin(
-			scheduleVersions,
-			eq(scheduleVersions.id, versionShifts.versionId),
-		)
-		.where(eq(versionShifts.id, versionShiftId))
-		.limit(1);
-	return row?.scheduleId ?? null;
 }
 
 async function decidePickup(

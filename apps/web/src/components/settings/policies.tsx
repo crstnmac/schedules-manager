@@ -377,8 +377,8 @@ export function SchedulePoliciesCard({
 						</FieldGroup>
 					</SettingsSection>
 					<SettingsSection
-						title="Automatic approvals"
-						description="Skip manager review or worker acceptance for specific flows. These override the per-week Approval Policy Groups."
+						title="Approval policy"
+						description="Choose which requests the workplace approves automatically."
 					>
 						<FieldGroup>
 							<SettingsToggleField

@@ -1813,7 +1813,7 @@ export function registerOpsTests(getContext: () => Context) {
 		);
 	});
 
-	test("tags, time blocks, day parts, and shift templates can be updated", async () => {
+	test("tags, time blocks, and shift templates can be updated", async () => {
 		const { database: d, app, token } = getContext();
 		const seed = await seedWorkplace(d, "Surface Settings Cafe");
 		const access = await token(seed.managerProfileId, seed.managerEmail);
@@ -1868,38 +1868,6 @@ export function registerOpsTests(getContext: () => Context) {
 				await authJson(
 					app,
 					`/v1/locations/${seed.location.id}/time-blocks/${blockBody.timeBlock.id}`,
-					access,
-					{ method: "DELETE" },
-				)
-			).status,
-		).toBe(200);
-
-		const part = await authJson(
-			app,
-			`/v1/locations/${seed.location.id}/day-parts`,
-			access,
-			{
-				method: "POST",
-				body: { name: "Evening", startMinute: 960, endMinute: 1320 },
-			},
-		);
-		expect(part.status).toBe(200);
-		const partBody = (await part.json()) as { dayPart: { id: string } };
-		const partPatch = await authJson(
-			app,
-			`/v1/locations/${seed.location.id}/day-parts/${partBody.dayPart.id}`,
-			access,
-			{ method: "PATCH", body: { name: "Night" } },
-		);
-		expect(partPatch.status).toBe(200);
-		expect(await partPatch.json()).toMatchObject({
-			dayPart: { name: "Night", startMinute: 960, endMinute: 1320 },
-		});
-		expect(
-			(
-				await authJson(
-					app,
-					`/v1/locations/${seed.location.id}/day-parts/${partBody.dayPart.id}`,
 					access,
 					{ method: "DELETE" },
 				)

@@ -232,6 +232,20 @@
       "when": 1789625486217,
       "tag": "0032_legal_compliance",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789666103973,
+      "tag": "0033_superb_blizzard",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1789666375362,
+      "tag": "0034_yielding_lifeguard",
+      "breakpoints": true
     }
   ]
 }

@@ -353,7 +353,6 @@ export interface ScheduleResponse {
 		id: string;
 		locationId: string;
 		weekStartDate: string;
-		policyGroupId: string | null;
 		teamId: string | null;
 		teamName: string | null;
 		timezone: string;
@@ -1997,12 +1996,6 @@ export function useTimeBlocks(locationId: string | undefined) {
 					startMinute: number;
 					endMinute: number;
 				}[];
-				dayParts: {
-					id: string;
-					name: string;
-					startMinute: number;
-					endMinute: number;
-				}[];
 				shiftTemplates: {
 					id: string;
 					name: string;
@@ -2430,50 +2423,6 @@ export function useShiftPatterns(workplaceId: string | undefined) {
 				`/v1/workplaces/${workplaceId}/shift-patterns`,
 			).then((data) => data.patterns),
 		enabled: Boolean(workplaceId),
-	});
-}
-
-export type ApprovalRequestType =
-	| "time_off"
-	| "unavailability"
-	| "shift_release"
-	| "shift_pickup"
-	| "shift_swap";
-
-export interface ApprovalPolicyGroupDto {
-	id: string;
-	name: string;
-	description: string | null;
-	rules: { requestType: ApprovalRequestType; requiresApproval: boolean }[];
-}
-
-export function useApprovalPolicyGroups(workplaceId: string | undefined) {
-	return useQuery({
-		queryKey: ["approval-policy-groups", workplaceId],
-		queryFn: () =>
-			api<{ groups: ApprovalPolicyGroupDto[] }>(
-				`/v1/workplaces/${workplaceId}/approval-policy-groups`,
-			),
-		enabled: Boolean(workplaceId),
-	});
-}
-
-export function useSetSchedulePolicyGroup(
-	locationId: string | undefined,
-	weekStart: string | undefined,
-) {
-	const queryClient = useQueryClient();
-	return useMutation({
-		mutationFn: (policyGroupId: string | null) =>
-			api<{ ok: true }>(
-				`/v1/locations/${locationId}/schedules/${weekStart}/policy-group`,
-				{ method: "PATCH", body: { policyGroupId } },
-			),
-		onSuccess: () => {
-			queryClient.invalidateQueries({
-				queryKey: ["schedule", locationId, weekStart],
-			});
-		},
 	});
 }
 

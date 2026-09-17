@@ -30,7 +30,6 @@ import {
 	ClockIcon,
 	LayoutTemplateIcon,
 	SearchIcon,
-	SunIcon,
 	TagsIcon,
 	UsersIcon,
 } from "lucide-react";
@@ -97,7 +96,6 @@ const LEAVE_CLASSIFICATION_LABELS: Record<
 
 export type TimeConfiguration = {
 	timeBlocks: RangeRow[];
-	dayParts: RangeRow[];
 	shiftTemplates: TemplateRow[];
 };
 
@@ -914,7 +912,7 @@ function RangeSection({
 	onLocationChange,
 	isLoading,
 }: {
-	kind: "time-blocks" | "day-parts";
+	kind: "time-blocks";
 	label: string;
 	emptyTitle: string;
 	emptyDescription: string;
@@ -1016,12 +1014,8 @@ function RangeSection({
 	return (
 		<>
 			<SettingsCrudCard
-				title={label === "Time Block" ? "All time blocks" : "All day parts"}
-				description={
-					label === "Time Block"
-						? "Windows you can drop onto the week while building a schedule."
-						: "Parts of service for this location, such as breakfast or dinner."
-				}
+				title="All time blocks"
+				description={"Windows for creating shifts and filtering the schedule."}
 				count={rows.length}
 				data={rows}
 				columns={columns}
@@ -1104,7 +1098,7 @@ function RangeSection({
 								label="Name"
 								value={name}
 								onValueChange={setName}
-								placeholder={kind === "day-parts" ? "Evening" : "Mid shift"}
+								placeholder="Mid shift"
 								autoFocus
 							/>
 							<Field>
@@ -1151,37 +1145,8 @@ export function TimeBlocksCard({
 			label="Time Block"
 			emptyIcon={<ClockIcon />}
 			emptyTitle="No time blocks yet"
-			emptyDescription="Named windows you can drop onto the week while building a schedule."
+			emptyDescription="Named windows for creating shifts and filtering the schedule."
 			rows={data?.timeBlocks ?? []}
-			locationId={locationId}
-			locations={locations}
-			onLocationChange={onLocationChange}
-			isLoading={isLoading}
-		/>
-	);
-}
-
-export function DayPartsCard({
-	locations,
-	locationId,
-	onLocationChange,
-	data,
-	isLoading,
-}: {
-	locations: LocationDto[];
-	locationId: string | undefined;
-	onLocationChange: (id: string) => void;
-	data: TimeConfiguration | undefined;
-	isLoading: boolean;
-}) {
-	return (
-		<RangeSection
-			kind="day-parts"
-			label="Day Part"
-			emptyIcon={<SunIcon />}
-			emptyTitle="No day parts yet"
-			emptyDescription="Parts of service for this location, such as breakfast or dinner."
-			rows={data?.dayParts ?? []}
 			locationId={locationId}
 			locations={locations}
 			onLocationChange={onLocationChange}

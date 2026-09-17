@@ -5,7 +5,6 @@ export type SettingsSection = {
 		| "/dashboard/settings/locations"
 		| "/dashboard/settings/positions"
 		| "/dashboard/settings/schedule-policies"
-		| "/dashboard/settings/policy-groups"
 		| "/dashboard/settings/time-clock"
 		| "/dashboard/settings/integrations"
 		| "/dashboard/settings/patterns"
@@ -16,7 +15,6 @@ export type SettingsSection = {
 		| "/dashboard/settings/leave"
 		| "/dashboard/settings/leave-policies"
 		| "/dashboard/settings/time-blocks"
-		| "/dashboard/settings/day-parts"
 		| "/dashboard/settings/templates"
 		| "/dashboard/settings/holidays"
 		| "/dashboard/settings/preferences"
@@ -85,12 +83,6 @@ export const settingsGroups: SettingsGroup[] = [
 				capability: "settings.manage",
 			},
 			{
-				to: "/dashboard/settings/policy-groups",
-				label: "Approval policies",
-				description: "Which requests need a Manager decision",
-				capability: "policies.manage",
-			},
-			{
 				to: "/dashboard/settings/time-clock",
 				label: "Time clock",
 				description: "Clock-in rules, geofence, and rounding",
@@ -120,6 +112,12 @@ export const settingsGroups: SettingsGroup[] = [
 				capability: "workers.manage",
 			},
 			{
+				to: "/dashboard/settings/schedule-teams",
+				label: "Schedule teams",
+				description: "Parallel schedules at each location",
+				capability: "settings.manage",
+			},
+			{
 				to: "/dashboard/settings/leave",
 				label: "Leave types",
 				description: "Vacation, sick, unpaid",
@@ -140,6 +138,18 @@ export const settingsGroups: SettingsGroup[] = [
 				to: "/dashboard/settings/patterns",
 				label: "Shift patterns",
 				description: "Multi-week rotations to project onto drafts",
+				capability: "schedule.manage",
+			},
+			{
+				to: "/dashboard/settings/tags",
+				label: "Tags",
+				description: "Labels for shifts, such as Training or Event",
+				capability: "schedule.manage",
+			},
+			{
+				to: "/dashboard/settings/time-blocks",
+				label: "Time blocks",
+				description: "Reusable time windows for shifts and filters",
 				capability: "schedule.manage",
 			},
 			{

@@ -22,7 +22,7 @@ function TimeBlocksSettingsPage() {
 		<SettingsPage
 			queries={[locations, timeBlocks]}
 			title="Time blocks"
-			description="Named windows of the day you can reuse while building a week."
+			description="Named windows you can reuse to create shifts and filter the schedule."
 		>
 			<TimeBlocksCard
 				locations={locations.data ?? []}

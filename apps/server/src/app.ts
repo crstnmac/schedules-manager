@@ -13,7 +13,6 @@ import {
 } from "./errors";
 import { getReadinessReport, type ReadinessReport } from "./readiness";
 import { newRequestId, writeRequestLog } from "./request-log";
-import { approvalPolicyRoutes } from "./routes/approval-policies";
 import { billingRoutes } from "./routes/billing";
 import { changesRoutes } from "./routes/changes";
 import { constraintsRoutes } from "./routes/constraints";
@@ -223,7 +222,6 @@ export function createApp(options: CreateAppOptions = {}) {
 		.use(holidayRoutes)
 		.use(patternRoutes)
 		.use(templateRoutes)
-		.use(approvalPolicyRoutes)
 		.use(publicationRoutes)
 		.use(changesRoutes)
 		.use(coverageRoutes)

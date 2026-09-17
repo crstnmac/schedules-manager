@@ -2,7 +2,6 @@ import {
 	announcements,
 	conversationMembers,
 	conversations,
-	dayParts,
 	db,
 	employmentDocuments,
 	employmentGroups,
@@ -719,12 +718,11 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
 			const location = await locationForManager(profile.id, params.locationId);
-			const [blocks, parts, templates] = await Promise.all([
+			const [blocks, templates] = await Promise.all([
 				db
 					.select()
 					.from(timeBlocks)
 					.where(eq(timeBlocks.locationId, location.id)),
-				db.select().from(dayParts).where(eq(dayParts.locationId, location.id)),
 				db
 					.select()
 					.from(shiftTemplates)
@@ -732,12 +730,6 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 			]);
 			return {
 				timeBlocks: blocks.map((row) => ({
-					id: row.id,
-					name: row.name,
-					startMinute: row.startMinute,
-					endMinute: row.endMinute,
-				})),
-				dayParts: parts.map((row) => ({
 					id: row.id,
 					name: row.name,
 					startMinute: row.startMinute,
@@ -871,118 +863,6 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				{ additionalProperties: true },
 			),
 			params: t.Object({ locationId: uuid, blockId: uuid }),
-		},
-	)
-	.post(
-		"/locations/:locationId/day-parts",
-		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers);
-			await locationForManager(profile.id, params.locationId);
-			const created = firstRow(
-				await db
-					.insert(dayParts)
-					.values({
-						locationId: params.locationId,
-						name: body.name.trim(),
-						startMinute: body.startMinute,
-						endMinute: body.endMinute,
-					})
-					.returning(),
-			);
-			return {
-				dayPart: {
-					id: created.id,
-					name: created.name,
-					startMinute: created.startMinute,
-					endMinute: created.endMinute,
-				},
-			};
-		},
-		{
-			headers: t.Object(
-				{ authorization: t.Optional(t.String()) },
-				{ additionalProperties: true },
-			),
-			params: t.Object({ locationId: uuid }),
-			body: t.Object({
-				name: t.String({ minLength: 1, maxLength: 40 }),
-				startMinute: minuteSchema,
-				endMinute: minuteSchema,
-			}),
-		},
-	)
-	.patch(
-		"/locations/:locationId/day-parts/:dayPartId",
-		async ({ headers, params, body }) => {
-			const { profile } = await requireSession(headers);
-			const location = await locationForManager(profile.id, params.locationId);
-			const [existing] = await db
-				.select()
-				.from(dayParts)
-				.where(
-					and(
-						eq(dayParts.id, params.dayPartId),
-						eq(dayParts.locationId, location.id),
-					),
-				)
-				.limit(1);
-			if (!existing) throw new NotFoundError("Day part not found");
-			const updated = firstRow(
-				await db
-					.update(dayParts)
-					.set({
-						name: body.name !== undefined ? body.name.trim() : existing.name,
-						startMinute: body.startMinute ?? existing.startMinute,
-						endMinute: body.endMinute ?? existing.endMinute,
-					})
-					.where(eq(dayParts.id, existing.id))
-					.returning(),
-			);
-			return {
-				dayPart: {
-					id: updated.id,
-					name: updated.name,
-					startMinute: updated.startMinute,
-					endMinute: updated.endMinute,
-				},
-			};
-		},
-		{
-			headers: t.Object(
-				{ authorization: t.Optional(t.String()) },
-				{ additionalProperties: true },
-			),
-			params: t.Object({ locationId: uuid, dayPartId: uuid }),
-			body: t.Object({
-				name: t.Optional(t.String({ minLength: 1, maxLength: 40 })),
-				startMinute: t.Optional(minuteSchema),
-				endMinute: t.Optional(minuteSchema),
-			}),
-		},
-	)
-	.delete(
-		"/locations/:locationId/day-parts/:dayPartId",
-		async ({ headers, params }) => {
-			const { profile } = await requireSession(headers);
-			const location = await locationForManager(profile.id, params.locationId);
-			const [deleted] = await db
-				.delete(dayParts)
-				.where(
-					and(
-						eq(dayParts.id, params.dayPartId),
-						eq(dayParts.locationId, location.id),
-					),
-				)
-				.returning({ id: dayParts.id });
-			if (!deleted) throw new NotFoundError("Day part not found");
-			return { ok: true as const };
-		},
-		{
-			headers: t.Object(
-				{ authorization: t.Optional(t.String()) },
-				{ additionalProperties: true },
-			),
-			params: t.Object({ locationId: uuid, dayPartId: uuid }),
 		},
 	)
 	.post(

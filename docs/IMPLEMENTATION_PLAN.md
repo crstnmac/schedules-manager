@@ -286,7 +286,7 @@ Manager gaps vs Sling, now in schema/API/clients:
 - Named **Schedule Templates** (save a week, apply to a draft; not RRULE recurrence)
 - Manager **Time Entry** create/correct with clock-in/out times, reason, and audit
 - **Worker Groups**, **Shift Tags**, **Leave Types**, **PTO Balances**
-- Day / week / month schedule views, bulk edit, copy/paste, **Time Blocks**, **Day Parts**, **Shift Templates**, repeat N weeks, **Auto-assign**
+- Day / week / month schedule views, bulk edit, copy/paste, **Time Blocks** for shift creation and filtering, **Shift Templates**, repeat N weeks, **Auto-assign**
 - Dedicated **Daily Roster** with print, **Breaks**, punch rounding, **Timesheet Approval**
 - Configurable early clock-in, **Geofence**, **Kiosk** PIN clock
 - **Wage Rate**, overtime, **Labor Cost**, manual **Daily Sales**, hours CSV

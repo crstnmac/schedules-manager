@@ -7,20 +7,6 @@ export {
 	shiftAcceptances,
 } from "./acceptances";
 export type {
-	ApprovalPolicyGroup,
-	ApprovalPolicyRule,
-	ApprovalRequestType,
-	NewApprovalPolicyGroup,
-	NewApprovalPolicyRule,
-} from "./approval-policies";
-export {
-	approvalPolicyGroupRelations,
-	approvalPolicyGroups,
-	approvalPolicyRuleRelations,
-	approvalPolicyRules,
-	approvalRequestTypeEnum,
-} from "./approval-policies";
-export type {
 	AttendanceMark,
 	NewAttendanceMark,
 } from "./attendance-marks";
@@ -256,7 +242,6 @@ export { shiftSwaps, swapStatusEnum } from "./shift-swaps";
 export type {
 	Announcement,
 	Conversation,
-	DayPart,
 	EmploymentDocument,
 	LocationSale,
 	ShiftTag,
@@ -271,7 +256,6 @@ export {
 	conversationKindEnum,
 	conversationMembers,
 	conversations,
-	dayParts,
 	employmentDocuments,
 	employmentGroups,
 	locationSales,

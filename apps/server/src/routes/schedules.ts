@@ -697,7 +697,6 @@ async function loadSchedulePayload(
 			id: schedule.id,
 			locationId: location.id,
 			weekStartDate: schedule.weekStartDate,
-			policyGroupId: schedule.policyGroupId,
 			teamId: schedule.teamId,
 			teamName: scheduleTeam?.name ?? null,
 			timezone: location.timezone,

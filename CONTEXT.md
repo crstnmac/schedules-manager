@@ -129,12 +129,8 @@ The remaining Time-off minutes of one Leave Type for one Employment.
 _Avoid_: Accrual, allowance bank
 
 **Time Block**:
-A named start and end time a Manager reuses when creating Shifts.
-_Avoid_: Day part, template
-
-**Day Part**:
-A named time-of-day window used to filter Shifts on the Schedule.
-_Avoid_: Time block, meal period as a stored type
+A named start and end time a Manager reuses when creating Shifts or filtering the Schedule.
+_Avoid_: Day part as a separate stored type, template
 
 **Shift Template**:
 A reusable Shift skeleton for one Position and time range that a Manager applies to a single cell.

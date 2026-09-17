@@ -99,22 +99,6 @@ export const timeBlocks = pgTable(
 	],
 );
 
-export const dayParts = pgTable(
-	"day_parts",
-	{
-		id: uuid("id").defaultRandom().primaryKey(),
-		locationId: uuid("location_id")
-			.notNull()
-			.references(() => locations.id, { onDelete: "cascade" }),
-		name: text("name").notNull(),
-		startMinute: integer("start_minute").notNull(),
-		endMinute: integer("end_minute").notNull(),
-	},
-	(table) => [
-		unique("day_parts_location_name_unique").on(table.locationId, table.name),
-	],
-);
-
 export const shiftTemplates = pgTable(
 	"shift_templates",
 	{
@@ -267,7 +251,6 @@ export const employmentDocuments = pgTable("employment_documents", {
 export type WorkerGroup = typeof workerGroups.$inferSelect;
 export type ShiftTag = typeof shiftTags.$inferSelect;
 export type TimeBlock = typeof timeBlocks.$inferSelect;
-export type DayPart = typeof dayParts.$inferSelect;
 export type ShiftTemplate = typeof shiftTemplates.$inferSelect;
 export type LocationSale = typeof locationSales.$inferSelect;
 export type ShiftTask = typeof shiftTasks.$inferSelect;
