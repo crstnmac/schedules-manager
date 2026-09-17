@@ -429,7 +429,7 @@ function DashboardLayout() {
 					isSchedule && "bg-muted/20",
 				)}
 			>
-				<header className="sticky top-0 z-40 flex h-14 min-h-14 shrink-0 items-center gap-2 border-b bg-background px-3 shadow-xs">
+				<header className="sticky top-0 z-40 flex min-h-14 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-background px-3 py-2 shadow-xs md:h-14 md:py-0">
 					<SidebarTrigger className="-ml-1 shrink-0" />
 					{isSchedule ? null : (
 						<span className="shrink-0 font-medium text-sm">{headerLabel}</span>
