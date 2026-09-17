@@ -252,7 +252,7 @@ export function ImportSheet<TEntry>({
 			<div className="flex flex-col gap-2">
 				<label
 					htmlFor="import-sheet-file"
-					className="flex min-h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-4 text-center text-muted-foreground text-sm hover:border-foreground/30"
+					className="flex min-h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-4 text-center text-muted-foreground text-sm [@media(hover:hover)]:hover:border-foreground/30"
 				>
 					<FileUpIcon className="size-5" />
 					{fileName ? (

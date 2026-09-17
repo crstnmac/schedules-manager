@@ -8,8 +8,10 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@SchedulesManager/ui/components/card";
+import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
 import {
 	Field,
+	FieldContent,
 	FieldDescription,
 	FieldGroup,
 	FieldLabel,
@@ -137,7 +139,7 @@ function OnboardingChoice({
 						<Item
 							variant="outline"
 							render={<button type="button" />}
-							className="cursor-pointer text-left hover:bg-muted/50"
+							className="cursor-pointer text-left [@media(hover:hover)]:hover:bg-muted/50"
 							onClick={() => onChoose("worker")}
 						>
 							<ItemMedia variant="icon">
@@ -153,7 +155,7 @@ function OnboardingChoice({
 						<Item
 							variant="outline"
 							render={<button type="button" />}
-							className="cursor-pointer text-left hover:bg-muted/50"
+							className="cursor-pointer text-left [@media(hover:hover)]:hover:bg-muted/50"
 							onClick={() => onChoose("manager")}
 						>
 							<ItemMedia variant="icon">
@@ -436,25 +438,22 @@ function WorkplaceSetup({
 									maxLength={80}
 								/>
 							</Field>
-							<Field>
-								<label
-									htmlFor="opening-restaurant-offer"
-									className="flex items-start gap-2 text-sm"
-								>
-									<input
-										id="opening-restaurant-offer"
-										type="checkbox"
-										checked={openingRestaurantOffer}
-										onChange={(event) =>
-											setOpeningRestaurantOffer(event.target.checked)
-										}
-										className="mt-0.5"
-									/>
-									I’m opening a new restaurant and want the 90-day trial.
-								</label>
-								<FieldDescription>
-									Applies to your first workplace subscription at checkout.
-								</FieldDescription>
+							<Field orientation="horizontal">
+								<Checkbox
+									id="opening-restaurant-offer"
+									checked={openingRestaurantOffer}
+									onCheckedChange={(checked) =>
+										setOpeningRestaurantOffer(checked === true)
+									}
+								/>
+								<FieldContent>
+									<FieldLabel htmlFor="opening-restaurant-offer">
+										I’m opening a new restaurant and want the 90-day trial.
+									</FieldLabel>
+									<FieldDescription>
+										Applies to your first workplace subscription at checkout.
+									</FieldDescription>
+								</FieldContent>
 							</Field>
 						</FieldGroup>
 					</form>

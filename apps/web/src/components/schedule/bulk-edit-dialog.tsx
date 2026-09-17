@@ -8,7 +8,11 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@SchedulesManager/ui/components/dialog";
-import { Field, FieldLabel } from "@SchedulesManager/ui/components/field";
+import {
+	Field,
+	FieldError,
+	FieldLabel,
+} from "@SchedulesManager/ui/components/field";
 import {
 	Select,
 	SelectContent,
@@ -59,6 +63,7 @@ export function BulkEditDialog({
 	const [changeStart, setChangeStart] = useState(false);
 	const [changeEnd, setChangeEnd] = useState(false);
 	const [changeWorker, setChangeWorker] = useState(false);
+	const [changeError, setChangeError] = useState(false);
 	const [startMinute, setStartMinute] = useState(9 * 60);
 	const [endMinute, setEndMinute] = useState(17 * 60);
 	const [employmentId, setEmploymentId] = useState(UNASSIGNED);
@@ -69,6 +74,7 @@ export function BulkEditDialog({
 			setChangeStart(false);
 			setChangeEnd(false);
 			setChangeWorker(false);
+			setChangeError(false);
 			setStartMinute(9 * 60);
 			setEndMinute(17 * 60);
 			setEmploymentId(UNASSIGNED);
@@ -106,11 +112,7 @@ export function BulkEditDialog({
 	});
 
 	const count = shiftIds.length;
-	const canSubmit =
-		Boolean(locationId) &&
-		count > 0 &&
-		(changeStart || changeEnd || changeWorker) &&
-		!bulkEdit.isPending;
+	const hasChanges = changeStart || changeEnd || changeWorker;
 	const workerItems = [
 		{ label: "Unassigned", value: UNASSIGNED },
 		...workers.map((worker) => ({
@@ -136,6 +138,9 @@ export function BulkEditDialog({
 						Only the fields you enable are changed across every selected shift.
 					</DialogDescription>
 				</DialogHeader>
+				{changeError ? (
+					<FieldError>Select at least one field to change.</FieldError>
+				) : null}
 
 				<div className="flex flex-col gap-4">
 					<Field className="gap-2">
@@ -143,7 +148,10 @@ export function BulkEditDialog({
 							<Checkbox
 								id="bulk-change-start"
 								checked={changeStart}
-								onCheckedChange={() => setChangeStart((value) => !value)}
+								onCheckedChange={() => {
+									setChangeError(false);
+									setChangeStart((value) => !value);
+								}}
 							/>
 							<FieldLabel htmlFor="bulk-change-start" className="font-normal">
 								Start time
@@ -163,7 +171,10 @@ export function BulkEditDialog({
 							<Checkbox
 								id="bulk-change-end"
 								checked={changeEnd}
-								onCheckedChange={() => setChangeEnd((value) => !value)}
+								onCheckedChange={() => {
+									setChangeError(false);
+									setChangeEnd((value) => !value);
+								}}
 							/>
 							<FieldLabel htmlFor="bulk-change-end" className="font-normal">
 								End time
@@ -183,7 +194,10 @@ export function BulkEditDialog({
 							<Checkbox
 								id="bulk-change-worker"
 								checked={changeWorker}
-								onCheckedChange={() => setChangeWorker((value) => !value)}
+								onCheckedChange={() => {
+									setChangeError(false);
+									setChangeWorker((value) => !value);
+								}}
 							/>
 							<FieldLabel htmlFor="bulk-change-worker" className="font-normal">
 								Assign to worker
@@ -223,8 +237,15 @@ export function BulkEditDialog({
 					</Button>
 					<Button
 						type="button"
-						disabled={!canSubmit}
-						onClick={() => bulkEdit.mutate()}
+						disabled={!locationId || count === 0 || bulkEdit.isPending}
+						onClick={() => {
+							if (!hasChanges) {
+								setChangeError(true);
+								document.getElementById("bulk-change-start")?.focus();
+								return;
+							}
+							bulkEdit.mutate();
+						}}
 					>
 						{bulkEdit.isPending ? <Spinner data-icon="inline-start" /> : null}
 						Apply to {count} shift{count === 1 ? "" : "s"}

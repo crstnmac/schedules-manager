@@ -83,14 +83,14 @@ function ScheduleDayChip({
 			aria-label={`${weekdayShort(dayKey)} ${dayOfMonth(dayKey)}, ${formatHours(minutes)} scheduled${openCount > 0 ? `, ${openCount} open` : ""}${conflictCount > 0 ? `, ${conflictCount} conflicts` : ""}`}
 			onClick={onSelect}
 		>
-			<span className="text-[0.65rem] uppercase leading-tight opacity-80">
+			<span className="text-xs uppercase leading-tight opacity-80">
 				{weekdayShort(dayKey)}
 			</span>
 			<span className="font-semibold text-sm tabular-nums leading-tight">
 				{dayOfMonth(dayKey)}
 			</span>
 			<span className="flex items-center gap-1 leading-tight">
-				<span className="text-[0.65rem] tabular-nums opacity-80">
+				<span className="text-xs tabular-nums opacity-80">
 					{minutes > 0 ? formatHours(minutes) : "—"}
 				</span>
 				{openCount > 0 ? (
@@ -176,14 +176,14 @@ function ScheduleWorkerGroup({
 					aria-hidden
 					className="size-3.5 shrink-0 self-center text-muted-foreground"
 				/>
-				<span className="truncate font-medium text-sm leading-tight">
+				<span
+					className="truncate font-medium text-sm leading-tight"
+					title={name}
+				>
 					{name}
 				</span>
 				{kind === "manager" ? (
-					<Badge
-						variant="secondary"
-						className="px-1.5 font-normal text-[0.65rem]"
-					>
+					<Badge variant="secondary" className="px-1.5 font-normal text-xs">
 						Manager
 					</Badge>
 				) : null}

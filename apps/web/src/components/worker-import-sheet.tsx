@@ -63,8 +63,13 @@ export function WorkerImportSheet({
 			entryKey={(entry) => entry.email}
 			renderEntry={(entry) => (
 				<div className="min-w-0">
-					<p className="truncate font-medium">{entry.name ?? entry.email}</p>
-					<p className="truncate text-muted-foreground text-xs">
+					<p className="truncate font-medium" title={entry.name ?? entry.email}>
+						{entry.name ?? entry.email}
+					</p>
+					<p
+						className="truncate text-muted-foreground text-xs"
+						title={`${entry.name ? `${entry.email} · ` : ""}${[entry.position, entry.location].filter(Boolean).join(" · ") || "No position or location"}`}
+					>
 						{entry.name ? `${entry.email} · ` : ""}
 						{[entry.position, entry.location].filter(Boolean).join(" · ") ||
 							"No position or location"}

@@ -6,7 +6,6 @@ import {
 	FieldLabel,
 	FieldTitle,
 } from "@SchedulesManager/ui/components/field";
-import { Input } from "@SchedulesManager/ui/components/input";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { Textarea } from "@SchedulesManager/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -15,6 +14,7 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { createDataColumnHelper } from "@/components/data-table";
+import { RequiredTextField } from "@/components/required-text-field";
 import {
 	SettingsCrudCard,
 	SettingsFormSheet,
@@ -294,7 +294,7 @@ export function PolicyGroupsCard({
 							<Button
 								type="submit"
 								form="approval-policy-group-form"
-								disabled={!name.trim() || save.isPending}
+								disabled={save.isPending}
 							>
 								{save.isPending ? <Spinner data-icon="inline-start" /> : null}
 								{editingId ? "Save group" : "Add group"}
@@ -311,17 +311,14 @@ export function PolicyGroupsCard({
 						}}
 					>
 						<FieldGroup>
-							<Field>
-								<FieldLabel htmlFor="approval-group-name">Name</FieldLabel>
-								<Input
-									id="approval-group-name"
-									value={name}
-									onChange={(event) => setName(event.target.value)}
-									placeholder="Standard week"
-									autoFocus
-									required
-								/>
-							</Field>
+							<RequiredTextField
+								id="approval-group-name"
+								label="Name"
+								value={name}
+								onValueChange={setName}
+								placeholder="Standard week"
+								autoFocus
+							/>
 							<Field>
 								<FieldLabel htmlFor="approval-group-description">
 									Description (optional)

@@ -10,12 +10,14 @@ import {
 } from "@SchedulesManager/ui/components/dialog";
 import {
 	Field,
+	FieldError,
 	FieldGroup,
 	FieldLabel,
 } from "@SchedulesManager/ui/components/field";
 import {
 	Select,
 	SelectContent,
+	SelectGroup,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
@@ -25,7 +27,7 @@ import { Textarea } from "@SchedulesManager/ui/components/textarea";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
 import { MessageSquareMoreIcon } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
@@ -42,6 +44,12 @@ export function PilotFeedback({
 		"problem",
 	);
 	const [message, setMessage] = useState("");
+	const [attempted, setAttempted] = useState(false);
+	const messageRef = useRef<HTMLTextAreaElement>(null);
+	const messageError =
+		attempted && message.trim().length < 3
+			? "Enter at least 3 characters so we can understand your feedback."
+			: null;
 	const page = useRouterState({ select: (state) => state.location.pathname });
 	const queryClient = useQueryClient();
 	const submit = useMutation({
@@ -52,6 +60,7 @@ export function PilotFeedback({
 			}),
 		onSuccess: () => {
 			setMessage("");
+			setAttempted(false);
 			setOpen(false);
 			queryClient.invalidateQueries({
 				queryKey: ["pilot-status", workplaceId],
@@ -60,6 +69,14 @@ export function PilotFeedback({
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
+	const sendFeedback = () => {
+		setAttempted(true);
+		if (message.trim().length < 3) {
+			messageRef.current?.focus();
+			return;
+		}
+		submit.mutate();
+	};
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger
@@ -79,39 +96,46 @@ export function PilotFeedback({
 				</DialogHeader>
 				<FieldGroup>
 					<Field>
-						<FieldLabel>Type</FieldLabel>
+						<FieldLabel htmlFor="pilot-feedback-type">Type</FieldLabel>
 						<Select
 							value={category}
 							onValueChange={(value) =>
 								value && setCategory(value as typeof category)
 							}
 						>
-							<SelectTrigger>
+							<SelectTrigger id="pilot-feedback-type">
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
-								<SelectItem value="problem">Something went wrong</SelectItem>
-								<SelectItem value="question">I have a question</SelectItem>
-								<SelectItem value="idea">I have an idea</SelectItem>
+								<SelectGroup>
+									<SelectItem value="problem">Something went wrong</SelectItem>
+									<SelectItem value="question">I have a question</SelectItem>
+									<SelectItem value="idea">I have an idea</SelectItem>
+								</SelectGroup>
 							</SelectContent>
 						</Select>
 					</Field>
-					<Field>
+					<Field data-invalid={Boolean(messageError)}>
 						<FieldLabel htmlFor="pilot-feedback-message">Message</FieldLabel>
 						<Textarea
+							ref={messageRef}
 							id="pilot-feedback-message"
 							rows={7}
 							value={message}
 							onChange={(event) => setMessage(event.target.value)}
 							placeholder="What were you trying to do, and what happened?"
+							aria-invalid={Boolean(messageError)}
+							aria-describedby={
+								messageError ? "pilot-feedback-error" : undefined
+							}
 						/>
+						{messageError ? (
+							<FieldError id="pilot-feedback-error">{messageError}</FieldError>
+						) : null}
 					</Field>
 				</FieldGroup>
 				<DialogFooter>
-					<Button
-						disabled={message.trim().length < 3 || submit.isPending}
-						onClick={() => submit.mutate()}
-					>
+					<Button disabled={submit.isPending} onClick={sendFeedback}>
 						{submit.isPending ? <Spinner data-icon="inline-start" /> : null}Send
 						feedback
 					</Button>

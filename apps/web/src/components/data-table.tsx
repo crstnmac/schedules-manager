@@ -158,7 +158,10 @@ export function DataTable<TData extends RowData>({
 			<Table>
 				<TableHeader>
 					{dataTable.getHeaderGroups().map((headerGroup) => (
-						<TableRow key={headerGroup.id} className="hover:bg-transparent">
+						<TableRow
+							key={headerGroup.id}
+							className="[@media(hover:hover)]:hover:bg-transparent"
+						>
 							{headerGroup.headers.map((header) => {
 								const canSort = header.column.getCanSort();
 								const sorted = header.column.getIsSorted();
@@ -180,7 +183,7 @@ export function DataTable<TData extends RowData>({
 												type="button"
 												variant="ghost"
 												size="sm"
-												className="-ml-2 h-auto px-2 font-medium text-muted-foreground hover:text-foreground"
+												className="-ml-2 h-auto px-2 font-medium text-muted-foreground [@media(hover:hover)]:hover:text-foreground"
 												onClick={header.column.getToggleSortingHandler()}
 											>
 												{flexRender(

@@ -16,6 +16,7 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { createDataColumnHelper } from "@/components/data-table";
+import { RequiredTextField } from "@/components/required-text-field";
 import {
 	SettingsCrudCard,
 	SettingsFormSheet,
@@ -192,11 +193,7 @@ export function HolidaysCard({
 						>
 							Cancel
 						</Button>
-						<Button
-							type="submit"
-							form="holiday-form"
-							disabled={!name.trim() || !date || savePending}
-						>
+						<Button type="submit" form="holiday-form" disabled={savePending}>
 							{savePending ? <Spinner data-icon="inline-start" /> : null}
 							{editingId ? "Save holiday" : "Add holiday"}
 						</Button>
@@ -211,17 +208,14 @@ export function HolidaysCard({
 						submit();
 					}}
 				>
-					<Field>
-						<FieldLabel htmlFor="holiday-name">Name</FieldLabel>
-						<Input
-							id="holiday-name"
-							value={name}
-							onChange={(event) => setName(event.target.value)}
-							placeholder="Thanksgiving"
-							autoFocus
-							required
-						/>
-					</Field>
+					<RequiredTextField
+						id="holiday-name"
+						label="Name"
+						value={name}
+						onValueChange={setName}
+						placeholder="Thanksgiving"
+						autoFocus
+					/>
 					<Field>
 						<FieldLabel htmlFor="holiday-date">Date</FieldLabel>
 						<Input

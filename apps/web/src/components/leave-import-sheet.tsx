@@ -91,10 +91,25 @@ export function LeaveImportSheet({
 			renderEntry={(entry) => (
 				<>
 					<div className="min-w-0">
-						<p className="truncate font-medium">
+						<p
+							className="truncate font-medium"
+							title={entry.workerName ?? entry.workerEmail}
+						>
 							{entry.workerName ?? entry.workerEmail}
 						</p>
-						<p className="truncate text-muted-foreground text-xs">
+						<p
+							className="truncate text-muted-foreground text-xs"
+							title={[
+								entry.leaveTypeName,
+								entry.effectiveDate ??
+									(entry.startDate === entry.endDate
+										? entry.startDate
+										: `${entry.startDate} → ${entry.endDate}`),
+								entry.mode,
+							]
+								.filter(Boolean)
+								.join(" · ")}
+						>
 							{entry.leaveTypeName} ·{" "}
 							{entry.effectiveDate ??
 								(entry.startDate === entry.endDate

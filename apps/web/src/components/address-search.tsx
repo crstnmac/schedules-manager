@@ -153,7 +153,9 @@ export function AddressSearch({
 								id={`${listId}-option-${index}`}
 								aria-selected={index === activeIndex}
 								className={`flex w-full flex-col items-start rounded-sm px-2 py-1.5 text-left text-xs ${
-									index === activeIndex ? "bg-muted" : "hover:bg-muted/70"
+									index === activeIndex
+										? "bg-muted"
+										: "[@media(hover:hover)]:hover:bg-muted/70"
 								}`}
 								onMouseEnter={() => setActiveIndex(index)}
 								onClick={() => select(place)}

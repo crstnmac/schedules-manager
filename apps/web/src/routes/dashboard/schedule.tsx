@@ -1961,7 +1961,7 @@ function SchedulePage() {
 										<SelectTrigger
 											aria-label="Location"
 											size="sm"
-											className="min-w-0 max-w-36 border-transparent bg-transparent font-medium shadow-none hover:bg-muted"
+											className="min-w-0 max-w-36 border-transparent bg-transparent font-medium shadow-none [@media(hover:hover)]:hover:bg-muted"
 										>
 											<MapPinIcon />
 											<SelectValue placeholder="Location" />
@@ -1996,7 +1996,7 @@ function SchedulePage() {
 											<SelectTrigger
 												aria-label="Schedule team"
 												size="sm"
-												className="min-w-0 max-w-36 border-transparent bg-transparent font-medium shadow-none hover:bg-muted"
+												className="min-w-0 max-w-36 border-transparent bg-transparent font-medium shadow-none [@media(hover:hover)]:hover:bg-muted"
 											>
 												<UsersIcon />
 												<SelectValue placeholder="Primary" />
@@ -2043,7 +2043,7 @@ function SchedulePage() {
 													? formatMonthLabel(monthAnchor)
 													: formatWeekLabel(weekStart)
 											}
-											buttonClassName="h-8 w-auto min-w-0 border-transparent bg-transparent px-1.5 font-medium tabular-nums shadow-none hover:bg-muted"
+											buttonClassName="h-8 w-auto min-w-0 border-transparent bg-transparent px-1.5 font-medium tabular-nums shadow-none [@media(hover:hover)]:hover:bg-muted"
 											onValueChange={(date) => {
 												setWeekStart(
 													weekStartOf(
@@ -2897,7 +2897,7 @@ function SchedulePage() {
 												<span className="pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
 													Time
 												</span>
-												<div className="min-w-0 space-y-1.5">
+												<div className="flex min-w-0 flex-col gap-1.5">
 													<div className="grid grid-cols-2 gap-2">
 														<TimePicker
 															id="shift-start"
@@ -2925,7 +2925,7 @@ function SchedulePage() {
 												<span className="pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
 													Position
 												</span>
-												<div className="min-w-0 space-y-1.5">
+												<div className="flex min-w-0 flex-col gap-1.5">
 													<Select
 														items={positionItems}
 														value={form.positionId || null}
@@ -3011,7 +3011,7 @@ function SchedulePage() {
 												<span className="pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
 													{form.shiftId ? "Worker" : "Workers"}
 												</span>
-												<div className="min-w-0 space-y-1.5">
+												<div className="flex min-w-0 flex-col gap-1.5">
 													{form.shiftId ? (
 														<Select
 															items={workerItems}
@@ -3907,7 +3907,7 @@ function SchedulePage() {
 																		"h-4 px-1 font-normal text-muted-foreground text-xs tabular-nums",
 																		daySalesCents > 0
 																			? undefined
-																			: "opacity-0 transition-opacity focus-visible:opacity-100 group-hover/day:opacity-100 [@media(hover:none)]:opacity-60",
+																			: "opacity-0 transition-opacity focus-visible:opacity-100 [@media(hover:hover)]:group-hover/day:opacity-100 [@media(hover:none)]:opacity-60",
 																	)}
 																/>
 															}
@@ -4068,7 +4068,7 @@ function SchedulePage() {
 																employmentId={member.employmentId}
 																date={day}
 																className={cn(
-																	"group relative border-border/70 border-r border-b p-1.5 transition-colors last:border-r-0 hover:bg-accent/25",
+																	"group relative border-border/70 border-r border-b p-1.5 transition-colors last:border-r-0 [@media(hover:hover)]:hover:bg-accent/25",
 																	gridDensity === "compact"
 																		? "min-h-[4.5rem]"
 																		: "min-h-24",
@@ -4125,7 +4125,7 @@ function SchedulePage() {
 																	}
 																	size={isEmptyCell ? "sm" : "icon-xs"}
 																	className={cn(
-																		"schedule-cell-add absolute text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100",
+																		"schedule-cell-add absolute text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100",
 																		isEmptyCell &&
 																			"schedule-cell-add-empty inset-0 m-auto h-7 w-fit border-dashed bg-transparent shadow-none",
 																		!isEmptyCell && "right-1 bottom-1",

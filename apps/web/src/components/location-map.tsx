@@ -61,15 +61,14 @@ export function LocationMap({
 			<ClickToMove onMove={onMove} />
 			<CircleMarker
 				center={[latitude, longitude]}
-				pathOptions={{ color: "#2563eb", fillColor: "#2563eb", fillOpacity: 1 }}
+				pathOptions={{ className: "location-map-marker", fillOpacity: 1 }}
 				radius={7}
 			/>
 			{radiusMeters ? (
 				<Circle
 					center={[latitude, longitude]}
 					pathOptions={{
-						color: "#2563eb",
-						fillColor: "#2563eb",
+						className: "location-map-radius",
 						fillOpacity: 0.12,
 						weight: 1,
 					}}

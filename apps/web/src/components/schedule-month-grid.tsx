@@ -170,11 +170,11 @@ export function ScheduleMonthGrid({
 											className={cn(
 												"h-auto min-h-7 w-full justify-start gap-1 overflow-hidden rounded-md border px-1.5 py-0.5 text-left leading-none",
 												hasConflicts
-													? "border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15"
+													? "border-destructive/40 bg-destructive/10 text-destructive [@media(hover:hover)]:hover:bg-destructive/15"
 													: isOpen
-														? "border-warning-border bg-warning text-warning-foreground hover:bg-warning/80"
+														? "border-warning-border bg-warning text-warning-foreground [@media(hover:hover)]:hover:bg-warning/80"
 														: cn(
-																"border-transparent hover:opacity-90",
+																"border-transparent [@media(hover:hover)]:hover:opacity-90",
 																color.block,
 															),
 											)}

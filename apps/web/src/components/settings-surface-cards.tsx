@@ -3,6 +3,7 @@ import { Button } from "@SchedulesManager/ui/components/button";
 import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
 import {
 	Field,
+	FieldError,
 	FieldGroup,
 	FieldLabel,
 	FieldTitle,
@@ -37,6 +38,7 @@ import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { createDataColumnHelper } from "@/components/data-table";
+import { RequiredTextField } from "@/components/required-text-field";
 import {
 	SettingsCrudCard,
 	SettingsFormSheet,
@@ -299,11 +301,7 @@ export function GroupsCard({
 						>
 							Cancel
 						</Button>
-						<Button
-							type="submit"
-							form="group-form"
-							disabled={save.isPending || !name.trim()}
-						>
+						<Button type="submit" form="group-form" disabled={save.isPending}>
 							{save.isPending ? <Spinner data-icon="inline-start" /> : null}
 							{editingId ? "Save group" : "Add group"}
 						</Button>
@@ -319,17 +317,14 @@ export function GroupsCard({
 					}}
 				>
 					<FieldGroup>
-						<Field>
-							<FieldLabel htmlFor="group-name">Group name</FieldLabel>
-							<Input
-								id="group-name"
-								value={name}
-								onChange={(event) => setName(event.target.value)}
-								placeholder="Closing team"
-								autoFocus
-								required
-							/>
-						</Field>
+						<RequiredTextField
+							id="group-name"
+							label="Group name"
+							value={name}
+							onValueChange={setName}
+							placeholder="Closing team"
+							autoFocus
+						/>
 						<Field>
 							<FieldTitle>Members</FieldTitle>
 							<div className="flex flex-col gap-2">
@@ -355,7 +350,7 @@ export function GroupsCard({
 											<Field
 												key={worker.employmentId}
 												orientation="horizontal"
-												className="items-center rounded-md px-2 py-1.5 hover:bg-muted/50"
+												className="items-center rounded-md px-2 py-1.5 [@media(hover:hover)]:hover:bg-muted/50"
 											>
 												<Checkbox
 													id={`group-worker-${worker.employmentId}`}
@@ -508,11 +503,7 @@ export function TagsCard({
 						>
 							Cancel
 						</Button>
-						<Button
-							type="submit"
-							form="tag-form"
-							disabled={!tagName.trim() || save.isPending}
-						>
+						<Button type="submit" form="tag-form" disabled={save.isPending}>
 							{save.isPending ? <Spinner data-icon="inline-start" /> : null}
 							{editingId ? "Save tag" : "Add tag"}
 						</Button>
@@ -527,17 +518,14 @@ export function TagsCard({
 						save.mutate();
 					}}
 				>
-					<Field>
-						<FieldLabel htmlFor="tag-name">Tag name</FieldLabel>
-						<Input
-							id="tag-name"
-							value={tagName}
-							onChange={(event) => setTagName(event.target.value)}
-							placeholder="Training"
-							autoFocus
-							required
-						/>
-					</Field>
+					<RequiredTextField
+						id="tag-name"
+						label="Tag name"
+						value={tagName}
+						onValueChange={setTagName}
+						placeholder="Training"
+						autoFocus
+					/>
 				</form>
 			</SettingsFormSheet>
 		</>
@@ -775,11 +763,7 @@ export function LeaveTypesCard({
 						>
 							Cancel
 						</Button>
-						<Button
-							type="submit"
-							form="leave-form"
-							disabled={!leaveName.trim() || save.isPending}
-						>
+						<Button type="submit" form="leave-form" disabled={save.isPending}>
 							{save.isPending ? <Spinner data-icon="inline-start" /> : null}
 							{editingId ? "Save leave type" : "Add leave type"}
 						</Button>
@@ -794,17 +778,14 @@ export function LeaveTypesCard({
 						save.mutate();
 					}}
 				>
-					<Field>
-						<FieldLabel htmlFor="leave-name">Leave type name</FieldLabel>
-						<Input
-							id="leave-name"
-							value={leaveName}
-							onChange={(event) => setLeaveName(event.target.value)}
-							placeholder="Vacation"
-							autoFocus
-							required
-						/>
-					</Field>
+					<RequiredTextField
+						id="leave-name"
+						label="Leave type name"
+						value={leaveName}
+						onValueChange={setLeaveName}
+						placeholder="Vacation"
+						autoFocus
+					/>
 					<Field>
 						<FieldLabel htmlFor="leave-code">Code (optional)</FieldLabel>
 						<Input
@@ -1100,7 +1081,7 @@ function RangeSection({
 							<Button
 								type="submit"
 								form={`${kind}-form`}
-								disabled={!name.trim() || save.isPending}
+								disabled={save.isPending}
 							>
 								{save.isPending ? <Spinner data-icon="inline-start" /> : null}
 								{editingId ? `Save ${lower}` : `Add ${lower}`}
@@ -1117,17 +1098,15 @@ function RangeSection({
 						}}
 					>
 						<FieldGroup className="grid gap-4 sm:grid-cols-2">
-							<Field className="sm:col-span-2">
-								<FieldLabel htmlFor={`${kind}-name`}>Name</FieldLabel>
-								<Input
-									id={`${kind}-name`}
-									value={name}
-									onChange={(event) => setName(event.target.value)}
-									placeholder={kind === "day-parts" ? "Evening" : "Mid shift"}
-									autoFocus
-									required
-								/>
-							</Field>
+							<RequiredTextField
+								className="sm:col-span-2"
+								id={`${kind}-name`}
+								label="Name"
+								value={name}
+								onValueChange={setName}
+								placeholder={kind === "day-parts" ? "Evening" : "Mid shift"}
+								autoFocus
+							/>
 							<Field>
 								<FieldLabel htmlFor={`${kind}-start`}>Starts</FieldLabel>
 								<TimePicker
@@ -1232,6 +1211,7 @@ export function TemplatesCard({
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [templateName, setTemplateName] = useState("");
 	const [positionId, setPositionId] = useState("");
+	const [positionInvalid, setPositionInvalid] = useState(false);
 	const [templateStart, setTemplateStart] = useState(9 * 60);
 	const [templateEnd, setTemplateEnd] = useState(17 * 60);
 	const [note, setNote] = useState("");
@@ -1246,6 +1226,7 @@ export function TemplatesCard({
 		setEditingId(null);
 		setTemplateName("");
 		setPositionId("");
+		setPositionInvalid(false);
 		setTemplateStart(9 * 60);
 		setTemplateEnd(17 * 60);
 		setNote("");
@@ -1405,7 +1386,7 @@ export function TemplatesCard({
 							<Button
 								type="submit"
 								form="template-form"
-								disabled={!templateName.trim() || !positionId || save.isPending}
+								disabled={save.isPending}
 							>
 								{save.isPending ? <Spinner data-icon="inline-start" /> : null}
 								{editingId ? "Save template" : "Add template"}
@@ -1418,22 +1399,24 @@ export function TemplatesCard({
 						className="flex flex-col gap-4"
 						onSubmit={(event) => {
 							event.preventDefault();
+							if (!positionId) {
+								setPositionInvalid(true);
+								document.getElementById("template-position")?.focus();
+								return;
+							}
 							save.mutate();
 						}}
 					>
 						<FieldGroup className="grid gap-4 sm:grid-cols-2">
-							<Field>
-								<FieldLabel htmlFor="template-name">Name</FieldLabel>
-								<Input
-									id="template-name"
-									value={templateName}
-									onChange={(event) => setTemplateName(event.target.value)}
-									placeholder="Opening associate"
-									autoFocus
-									required
-								/>
-							</Field>
-							<Field>
+							<RequiredTextField
+								id="template-name"
+								label="Name"
+								value={templateName}
+								onValueChange={setTemplateName}
+								placeholder="Opening associate"
+								autoFocus
+							/>
+							<Field data-invalid={positionInvalid}>
 								<FieldLabel htmlFor="template-position">Position</FieldLabel>
 								<Select
 									items={positions.map((position) => ({
@@ -1441,9 +1424,19 @@ export function TemplatesCard({
 										value: position.id,
 									}))}
 									value={positionId}
-									onValueChange={(value) => value && setPositionId(value)}
+									onValueChange={(value) => {
+										if (value) setPositionId(value);
+										setPositionInvalid(false);
+									}}
 								>
-									<SelectTrigger id="template-position" className="w-full">
+									<SelectTrigger
+										id="template-position"
+										className="w-full"
+										aria-invalid={positionInvalid}
+										aria-describedby={
+											positionInvalid ? "template-position-error" : undefined
+										}
+									>
 										<SelectValue placeholder="Choose a position" />
 									</SelectTrigger>
 									<SelectContent>
@@ -1456,6 +1449,11 @@ export function TemplatesCard({
 										</SelectGroup>
 									</SelectContent>
 								</Select>
+								{positionInvalid ? (
+									<FieldError id="template-position-error">
+										Choose a position.
+									</FieldError>
+								) : null}
 							</Field>
 							<Field>
 								<FieldLabel htmlFor="template-start">Starts</FieldLabel>

@@ -208,7 +208,10 @@ function WorkerLayout() {
 							<SidebarMenuButton size="lg" tooltip={workplace.name}>
 								<LogoMark size={32} className="rounded-lg" />
 								<div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:sr-only">
-									<span className="truncate font-semibold">
+									<span
+										className="truncate font-semibold"
+										title={workplace.name}
+									>
 										{workplace.name}
 									</span>
 									<span className="truncate text-xs">Worker</span>
@@ -269,7 +272,7 @@ function WorkerLayout() {
 					<div className="px-1 group-data-[collapsible=icon]:hidden">
 						<PilotFeedback
 							workplaceId={workplace.id}
-							buttonClassName="w-full border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:border-sidebar-ring focus-visible:ring-sidebar-ring/30 dark:bg-sidebar-accent/40 dark:hover:bg-sidebar-accent"
+							buttonClassName="w-full border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground [@media(hover:hover)]:hover:bg-sidebar-accent [@media(hover:hover)]:hover:text-sidebar-accent-foreground focus-visible:border-sidebar-ring focus-visible:ring-sidebar-ring/30 dark:bg-sidebar-accent/40 dark:[@media(hover:hover)]:hover:bg-sidebar-accent"
 						/>
 					</div>
 					<SidebarMenu>
@@ -287,11 +290,17 @@ function WorkerLayout() {
 											</AvatarFallback>
 										</Avatar>
 										<div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-											<span className="truncate font-medium">
+											<span
+												className="truncate font-medium"
+												title={displayName}
+											>
 												{displayName}
 											</span>
 											{profile.fullName ? (
-												<span className="truncate text-xs">
+												<span
+													className="truncate text-xs"
+													title={profile.email}
+												>
 													{profile.email}
 												</span>
 											) : (
@@ -309,7 +318,9 @@ function WorkerLayout() {
 									>
 										<DropdownMenuGroup>
 											<DropdownMenuLabel>
-												<p className="truncate">{displayName}</p>
+												<p className="truncate" title={displayName}>
+													{displayName}
+												</p>
 												<p className="truncate font-normal text-muted-foreground text-xs">
 													Worker
 												</p>

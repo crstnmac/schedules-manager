@@ -5,7 +5,6 @@ import {
 	FieldGroup,
 	FieldLabel,
 } from "@SchedulesManager/ui/components/field";
-import { Input } from "@SchedulesManager/ui/components/input";
 import {
 	Select,
 	SelectContent,
@@ -19,6 +18,7 @@ import { UsersIcon } from "lucide-react";
 import { type CSSProperties, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { createDataColumnHelper } from "@/components/data-table";
+import { RequiredTextField } from "@/components/required-text-field";
 import {
 	SettingsCrudCard,
 	SettingsFormSheet,
@@ -213,7 +213,7 @@ export function ScheduleTeamsCard({ locations }: { locations: LocationDto[] }) {
 						<Button
 							type="submit"
 							form="schedule-team-form"
-							disabled={save.isPending || !name.trim()}
+							disabled={save.isPending}
 						>
 							{save.isPending ? <Spinner data-icon="inline-start" /> : null}
 							{editingId ? "Save team" : "Add team"}
@@ -230,17 +230,14 @@ export function ScheduleTeamsCard({ locations }: { locations: LocationDto[] }) {
 					}}
 				>
 					<FieldGroup>
-						<Field>
-							<FieldLabel htmlFor="schedule-team-name">Team name</FieldLabel>
-							<Input
-								id="schedule-team-name"
-								value={name}
-								onChange={(event) => setName(event.target.value)}
-								placeholder="Front of House"
-								autoFocus
-								required
-							/>
-						</Field>
+						<RequiredTextField
+							id="schedule-team-name"
+							label="Team name"
+							value={name}
+							onValueChange={setName}
+							placeholder="Front of House"
+							autoFocus
+						/>
 						<Field>
 							<FieldLabel htmlFor="schedule-team-color">
 								Color (optional)

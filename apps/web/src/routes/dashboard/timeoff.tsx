@@ -136,10 +136,9 @@ type TeamMember = {
 type LeaveTypeOption = { id: string; name: string; paid: boolean };
 
 const APPROVAL_STATUS_CLASS: Record<string, string> = {
-	approved:
-		"border-transparent bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+	approved: "border-transparent bg-primary/10 text-primary",
 	declined: "border-transparent bg-destructive/15 text-destructive",
-	pending: "border-transparent bg-blue-500/15 text-blue-700 dark:text-blue-400",
+	pending: "border-transparent bg-secondary text-secondary-foreground",
 	skipped: "border-transparent bg-muted text-muted-foreground",
 	escalated: "border-transparent bg-warning/40 text-warning-foreground",
 };
@@ -1754,7 +1753,7 @@ function RequestDocuments({
 					</Button>
 				</div>
 			))}
-			<label className="inline-flex w-fit cursor-pointer items-center gap-1.5 text-muted-foreground text-xs hover:text-foreground">
+			<label className="inline-flex w-fit cursor-pointer items-center gap-1.5 text-muted-foreground text-xs [@media(hover:hover)]:hover:text-foreground">
 				{upload.isPending ? (
 					<Spinner data-icon="inline-start" />
 				) : (

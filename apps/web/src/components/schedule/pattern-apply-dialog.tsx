@@ -280,7 +280,10 @@ export function PatternApplyDialog({
 																		shift.overnight,
 																	)}
 																</span>
-																<span className="min-w-0 truncate text-muted-foreground text-xs">
+																<span
+																	className="min-w-0 truncate text-muted-foreground text-xs"
+																	title={names || "Unassigned"}
+																>
 																	{names || "Unassigned"}
 																</span>
 																{shift.coverageTarget > 1 ? (

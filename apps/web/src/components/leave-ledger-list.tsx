@@ -106,7 +106,10 @@ export function LeaveLedgerList({
 						Balance {balanceHours(entry.balanceAfter)}
 					</span>
 					{entry.note ? (
-						<span className="w-full truncate text-muted-foreground text-xs sm:w-auto">
+						<span
+							className="w-full truncate text-muted-foreground text-xs sm:w-auto"
+							title={entry.note}
+						>
 							{entry.note}
 						</span>
 					) : null}

@@ -106,7 +106,7 @@ export function TimeClockCard({
 						</p>
 						<Button
 							variant="outline"
-							className="self-start border-primary-foreground/60 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+							className="self-start border-primary-foreground/60 bg-transparent text-primary-foreground [@media(hover:hover)]:hover:bg-primary-foreground/10 [@media(hover:hover)]:hover:text-primary-foreground"
 							disabled={clockOut.isPending}
 							onClick={() => {
 								setWorkerNote("");
@@ -134,7 +134,7 @@ export function TimeClockCard({
 					<div className="flex flex-col gap-2">
 						<Button
 							variant="secondary"
-							className="self-start bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+							className="self-start bg-primary-foreground text-primary [@media(hover:hover)]:hover:bg-primary-foreground/90"
 							disabled={clockIn.isPending}
 							onClick={() => setConfirmingIn(true)}
 						>
@@ -182,7 +182,7 @@ export function TimeClockCard({
 				{timecardTo ? (
 					<Button
 						variant="ghost"
-						className="self-start text-primary-foreground/80 hover:bg-primary-foreground/10 hover:text-primary-foreground"
+						className="self-start text-primary-foreground/80 [@media(hover:hover)]:hover:bg-primary-foreground/10 [@media(hover:hover)]:hover:text-primary-foreground"
 						nativeButton={false}
 						render={<Link to={timecardTo} />}
 					>

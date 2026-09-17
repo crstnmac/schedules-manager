@@ -38,7 +38,6 @@ import {
 	FieldLegend,
 	FieldSet,
 } from "@SchedulesManager/ui/components/field";
-import { Input } from "@SchedulesManager/ui/components/input";
 import {
 	InputGroup,
 	InputGroupAddon,
@@ -78,6 +77,7 @@ import { toast } from "sonner";
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { FormSheet } from "@/components/form-sheet";
+import { RequiredTextField } from "@/components/required-text-field";
 import {
 	TableFilter,
 	TablePagination,
@@ -785,7 +785,7 @@ function WorkersPage() {
 						<Button
 							type="submit"
 							form="invite-form"
-							disabled={invite.isPending || !email.trim()}
+							disabled={invite.isPending}
 						>
 							{invite.isPending ? (
 								<Spinner data-icon="inline-start" />
@@ -805,18 +805,15 @@ function WorkersPage() {
 					}}
 				>
 					<FieldGroup>
-						<Field>
-							<FieldLabel htmlFor="invite-email">Email</FieldLabel>
-							<Input
-								id="invite-email"
-								type="email"
-								value={email}
-								onChange={(event) => setEmail(event.target.value)}
-								placeholder="worker@example.com"
-								autoFocus
-								required
-							/>
-						</Field>
+						<RequiredTextField
+							id="invite-email"
+							label="Email"
+							type="email"
+							value={email}
+							onValueChange={setEmail}
+							placeholder="worker@example.com"
+							autoFocus
+						/>
 						<Field>
 							<FieldLabel>They are a…</FieldLabel>
 							<ToggleGroup

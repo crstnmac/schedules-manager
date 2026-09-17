@@ -70,11 +70,13 @@ function ResetPasswordPage() {
 					<CardDescription>
 						{complete
 							? "Your password has been changed."
-							: "Choose a new password with at least 8 characters."}
+							: !token || providerError
+								? "This password reset link is invalid or expired. Request a new link from the sign-in page."
+								: "Choose a new password with at least 8 characters."}
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
-					{complete ? (
+					{complete || !token || providerError ? (
 						<Button
 							className="w-full"
 							onClick={() => void navigate({ to: "/" })}

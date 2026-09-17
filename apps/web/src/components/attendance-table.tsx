@@ -79,7 +79,10 @@ export function AttendanceTable({
 			<Table className="w-max min-w-full border-collapse">
 				<TableHeader className="sticky top-0 z-10 bg-muted/95 backdrop-blur">
 					{table.getHeaderGroups().map((headerGroup) => (
-						<TableRow key={headerGroup.id} className="hover:bg-transparent">
+						<TableRow
+							key={headerGroup.id}
+							className="[@media(hover:hover)]:hover:bg-transparent"
+						>
 							{headerGroup.headers.map((header) => {
 								const canSort = header.column.getCanSort();
 								const sorted = header.column.getIsSorted();

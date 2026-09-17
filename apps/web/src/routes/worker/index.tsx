@@ -586,7 +586,7 @@ function WorkerHome() {
 							<Button
 								size="sm"
 								variant="outline"
-								className="border-primary-foreground/60 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+								className="border-primary-foreground/60 bg-transparent text-primary-foreground [@media(hover:hover)]:hover:bg-primary-foreground/10 [@media(hover:hover)]:hover:text-primary-foreground"
 								disabled={row.original.completed || completeTask.isPending}
 								onClick={() => completeTask.mutate(row.original.id)}
 							>

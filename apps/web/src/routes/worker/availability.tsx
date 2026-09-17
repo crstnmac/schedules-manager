@@ -803,7 +803,7 @@ function AvailabilityPage() {
 									</span>
 								)}
 								{attachable ? (
-									<label className="inline-flex w-fit cursor-pointer items-center gap-1 text-muted-foreground text-xs hover:text-foreground">
+									<label className="inline-flex w-fit cursor-pointer items-center gap-1 text-muted-foreground text-xs [@media(hover:hover)]:hover:text-foreground">
 										<PaperclipIcon className="size-3" />
 										<span>
 											{uploadDocument.isPending ? "Uploading…" : "Attach"}

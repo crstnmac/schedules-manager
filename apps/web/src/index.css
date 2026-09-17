@@ -53,6 +53,12 @@ main :is([data-slot="badge"], [data-slot="table-head"]) {
 	background-color: #f3f8fd;
 }
 
+.location-map-marker,
+.location-map-radius {
+	stroke: var(--primary);
+	fill: var(--primary);
+}
+
 .auth-fallback-gradient {
 	background-image:
 		radial-gradient(

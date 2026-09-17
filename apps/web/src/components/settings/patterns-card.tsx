@@ -723,7 +723,7 @@ export function PatternsCard({
 										<Field
 											key={worker.employmentId}
 											orientation="horizontal"
-											className="items-center rounded-md px-2 py-1.5 hover:bg-muted/50"
+											className="items-center rounded-md px-2 py-1.5 [@media(hover:hover)]:hover:bg-muted/50"
 										>
 											<Checkbox
 												id={`pattern-worker-${worker.employmentId}`}

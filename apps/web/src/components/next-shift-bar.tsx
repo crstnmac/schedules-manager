@@ -71,7 +71,10 @@ export function NextShiftBar() {
 								? "Planned shift"
 								: "Next shift"}
 					</p>
-					<p className="truncate font-medium text-sm tabular-nums">
+					<p
+						className="truncate font-medium text-sm tabular-nums"
+						title={`${formatDay(shift.startsAt)} · ${shiftRange} · ${shift.positionName}`}
+					>
 						{formatDay(shift.startsAt)} · {shiftRange} · {shift.positionName}
 					</p>
 				</div>

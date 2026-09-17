@@ -42,7 +42,7 @@ export function DirectoryCard() {
 					<li key={item.to}>
 						<Link
 							to={item.to}
-							className="flex items-center justify-between gap-3 py-2.5 text-inherit no-underline hover:bg-muted/50"
+							className="flex items-center justify-between gap-3 py-2.5 text-inherit no-underline [@media(hover:hover)]:hover:bg-muted/50"
 						>
 							<span className="min-w-0">
 								<span className="block font-medium text-sm">{item.label}</span>

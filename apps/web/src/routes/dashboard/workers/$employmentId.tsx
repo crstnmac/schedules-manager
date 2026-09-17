@@ -48,6 +48,7 @@ import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { DatePicker } from "@/components/date-picker";
 import { LeaveForecastTable } from "@/components/leave-forecast-table";
 import { LeaveLedgerList } from "@/components/leave-ledger-list";
+import { RequiredTextField } from "@/components/required-text-field";
 import {
 	TablePagination,
 	TableSearch,
@@ -977,43 +978,51 @@ function EmploymentPage() {
 									}
 								/>
 							</div>
-							<FieldGroup>
-								<Field>
-									<FieldLabel htmlFor="document-title">Title</FieldLabel>
-									<Input
-										id="document-title"
-										value={documentTitle}
-										onChange={(event) => setDocumentTitle(event.target.value)}
-									/>
-								</Field>
-								<Field>
-									<FieldLabel htmlFor="document-url">URL (optional)</FieldLabel>
-									<Input
-										id="document-url"
-										type="url"
-										value={documentUrl}
-										onChange={(event) => setDocumentUrl(event.target.value)}
-									/>
-								</Field>
-								<Field>
-									<FieldLabel htmlFor="document-note">
-										Note (optional)
-									</FieldLabel>
-									<Textarea
-										id="document-note"
-										value={documentNote}
-										onChange={(event) => setDocumentNote(event.target.value)}
-									/>
-								</Field>
-							</FieldGroup>
-							<Button
-								variant="outline"
-								className="self-start"
-								disabled={!documentTitle.trim() || addDocument.isPending}
-								onClick={() => addDocument.mutate()}
+							<form
+								className="flex flex-col gap-4"
+								onSubmit={(event) => {
+									event.preventDefault();
+									addDocument.mutate();
+								}}
 							>
-								Add employment document
-							</Button>
+								<FieldGroup>
+									<RequiredTextField
+										id="document-title"
+										label="Title"
+										value={documentTitle}
+										onValueChange={setDocumentTitle}
+									/>
+									<Field>
+										<FieldLabel htmlFor="document-url">
+											URL (optional)
+										</FieldLabel>
+										<Input
+											id="document-url"
+											type="url"
+											value={documentUrl}
+											onChange={(event) => setDocumentUrl(event.target.value)}
+										/>
+									</Field>
+									<Field>
+										<FieldLabel htmlFor="document-note">
+											Note (optional)
+										</FieldLabel>
+										<Textarea
+											id="document-note"
+											value={documentNote}
+											onChange={(event) => setDocumentNote(event.target.value)}
+										/>
+									</Field>
+								</FieldGroup>
+								<Button
+									type="submit"
+									variant="outline"
+									className="self-start"
+									disabled={addDocument.isPending}
+								>
+									Add employment document
+								</Button>
+							</form>
 						</CardContent>
 					</Card>
 				</div>

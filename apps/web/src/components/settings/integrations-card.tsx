@@ -11,9 +11,11 @@ import {
 } from "@SchedulesManager/ui/components/dialog";
 import {
 	Field,
+	FieldError,
 	FieldGroup,
 	FieldLabel,
-	FieldTitle,
+	FieldLegend,
+	FieldSet,
 } from "@SchedulesManager/ui/components/field";
 import { Input } from "@SchedulesManager/ui/components/input";
 import {
@@ -29,6 +31,7 @@ import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { createDataColumnHelper } from "@/components/data-table";
+import { RequiredTextField } from "@/components/required-text-field";
 import {
 	SettingsCrudCard,
 	SettingsFormSheet,
@@ -178,12 +181,14 @@ export function ApiKeysCard({
 	const [open, setOpen] = useState(false);
 	const [name, setName] = useState("");
 	const [scopes, setScopes] = useState<ApiKeyScope[]>(["schedule.read"]);
+	const [scopesInvalid, setScopesInvalid] = useState(false);
 	const [expiresAt, setExpiresAt] = useState("");
 	const [revealedToken, setRevealedToken] = useState<string | null>(null);
 
 	const resetForm = useCallback(() => {
 		setName("");
 		setScopes(["schedule.read"]);
+		setScopesInvalid(false);
 		setExpiresAt("");
 	}, []);
 
@@ -313,11 +318,7 @@ export function ApiKeysCard({
 						>
 							Cancel
 						</Button>
-						<Button
-							type="submit"
-							form="api-key-form"
-							disabled={!name.trim() || scopes.length === 0 || save.isPending}
-						>
+						<Button type="submit" form="api-key-form" disabled={save.isPending}>
 							{save.isPending ? <Spinner data-icon="inline-start" /> : null}
 							Create key
 						</Button>
@@ -329,21 +330,25 @@ export function ApiKeysCard({
 					className="flex flex-col gap-4"
 					onSubmit={(event) => {
 						event.preventDefault();
+						if (scopes.length === 0) {
+							setScopesInvalid(true);
+							document
+								.getElementById(`api-key-scope-${API_KEY_SCOPES[0]}`)
+								?.focus();
+							return;
+						}
 						save.mutate();
 					}}
 				>
 					<FieldGroup>
-						<Field>
-							<FieldLabel htmlFor="api-key-name">Name</FieldLabel>
-							<Input
-								id="api-key-name"
-								value={name}
-								onChange={(event) => setName(event.target.value)}
-								placeholder="Payroll sync"
-								autoFocus
-								required
-							/>
-						</Field>
+						<RequiredTextField
+							id="api-key-name"
+							label="Name"
+							value={name}
+							onValueChange={setName}
+							placeholder="Payroll sync"
+							autoFocus
+						/>
 						<Field>
 							<FieldLabel htmlFor="api-key-expires">
 								Expires (optional)
@@ -355,8 +360,12 @@ export function ApiKeysCard({
 								onChange={(event) => setExpiresAt(event.target.value)}
 							/>
 						</Field>
-						<Field>
-							<FieldTitle>Scopes</FieldTitle>
+						<FieldSet
+							aria-describedby={
+								scopesInvalid ? "api-key-scopes-error" : undefined
+							}
+						>
+							<FieldLegend>Scopes</FieldLegend>
 							<div className="flex flex-col gap-2">
 								{API_KEY_SCOPES.map((scope) => (
 									<Field
@@ -367,13 +376,14 @@ export function ApiKeysCard({
 										<Checkbox
 											id={`api-key-scope-${scope}`}
 											checked={scopes.includes(scope)}
-											onCheckedChange={() =>
+											onCheckedChange={() => {
+												setScopesInvalid(false);
 												setScopes((current) =>
 													current.includes(scope)
 														? current.filter((item) => item !== scope)
 														: [...current, scope],
-												)
-											}
+												);
+											}}
 										/>
 										<FieldLabel
 											htmlFor={`api-key-scope-${scope}`}
@@ -384,7 +394,12 @@ export function ApiKeysCard({
 									</Field>
 								))}
 							</div>
-						</Field>
+							{scopesInvalid ? (
+								<FieldError id="api-key-scopes-error">
+									Select at least one scope.
+								</FieldError>
+							) : null}
+						</FieldSet>
 					</FieldGroup>
 				</form>
 			</SettingsFormSheet>
@@ -599,7 +614,7 @@ export function WebhookEndpointsCard({
 						<Button
 							type="submit"
 							form="endpoint-form"
-							disabled={!name.trim() || !url.trim() || save.isPending}
+							disabled={save.isPending}
 						>
 							{save.isPending ? <Spinner data-icon="inline-start" /> : null}
 							{editingId ? "Save endpoint" : "Add endpoint"}
@@ -616,28 +631,22 @@ export function WebhookEndpointsCard({
 					}}
 				>
 					<FieldGroup>
-						<Field>
-							<FieldLabel htmlFor="endpoint-name">Name</FieldLabel>
-							<Input
-								id="endpoint-name"
-								value={name}
-								onChange={(event) => setName(event.target.value)}
-								placeholder="Payroll provider"
-								autoFocus
-								required
-							/>
-						</Field>
-						<Field>
-							<FieldLabel htmlFor="endpoint-url">URL</FieldLabel>
-							<Input
-								id="endpoint-url"
-								type="url"
-								value={url}
-								onChange={(event) => setUrl(event.target.value)}
-								placeholder="https://example.com/webhooks/jooling"
-								required
-							/>
-						</Field>
+						<RequiredTextField
+							id="endpoint-name"
+							label="Name"
+							value={name}
+							onValueChange={setName}
+							placeholder="Payroll provider"
+							autoFocus
+						/>
+						<RequiredTextField
+							id="endpoint-url"
+							label="URL"
+							type="url"
+							value={url}
+							onValueChange={setUrl}
+							placeholder="https://example.com/webhooks/jooling"
+						/>
 						<Field>
 							<FieldLabel htmlFor="endpoint-events">
 								Events (optional)

@@ -206,7 +206,7 @@ export function TimezoneSelect({
 													id={`${listId}-option-${index}`}
 													aria-selected={option.id === value}
 													className={cn(
-														"flex w-full rounded-sm px-2 py-1.5 text-left text-xs hover:bg-muted/70",
+														"flex w-full rounded-sm px-2 py-1.5 text-left text-xs [@media(hover:hover)]:hover:bg-muted/70",
 														option.id === value && "bg-muted",
 														index === activeIndex && "bg-muted",
 													)}

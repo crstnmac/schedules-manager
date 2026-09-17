@@ -36,27 +36,27 @@ const statusMeta: Record<
 	present: {
 		label: "Present",
 		short: "P",
-		className: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+		className: "bg-primary/10 text-primary",
 	},
 	late: {
 		label: "Late",
 		short: "L",
-		className: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+		className: "bg-warning text-warning-foreground",
 	},
 	absent: {
 		label: "Absent",
 		short: "A",
-		className: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
+		className: "bg-destructive/10 text-destructive",
 	},
 	sick: {
 		label: "Sick",
 		short: "S",
-		className: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+		className: "bg-secondary text-secondary-foreground",
 	},
 	scheduled: {
 		label: "Scheduled",
 		short: "•",
-		className: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
+		className: "bg-muted text-muted-foreground",
 	},
 };
 

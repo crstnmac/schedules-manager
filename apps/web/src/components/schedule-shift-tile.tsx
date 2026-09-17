@@ -89,14 +89,14 @@ export function ShiftTile({
 				onOpen(shift);
 			}}
 			className={cn(
-				"h-auto w-full cursor-grab touch-none flex-col items-stretch gap-1 overflow-hidden whitespace-normal rounded-md border px-2 py-1.5 text-left shadow-xs transition hover:shadow-sm active:cursor-grabbing motion-reduce:transition-none",
+				"h-auto w-full cursor-grab touch-none flex-col items-stretch gap-1 overflow-hidden whitespace-normal rounded-md border px-2 py-1.5 text-left shadow-xs transition-[box-shadow] active:cursor-grabbing motion-reduce:transition-none [@media(hover:hover)]:hover:shadow-sm",
 				compact ? "min-h-9 gap-0.5 py-1" : "min-h-11",
 				(isDragging || isDropping) && "opacity-45 ring-2 ring-primary/30",
 				selected && "ring-2 ring-primary",
 				hasConflicts
-					? "border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15"
+					? "border-destructive/40 bg-destructive/10 text-destructive [@media(hover:hover)]:hover:bg-destructive/15"
 					: isOpen
-						? "border-warning-border bg-warning text-warning-foreground hover:bg-warning/80"
+						? "border-warning-border bg-warning text-warning-foreground [@media(hover:hover)]:hover:bg-warning/80"
 						: cn("border-transparent", color.block),
 			)}
 		>

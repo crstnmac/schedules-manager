@@ -36,6 +36,7 @@ import {
 	LocationGeoFields,
 	type LocationGeoValue,
 } from "@/components/location-geo-fields";
+import { RequiredTextField } from "@/components/required-text-field";
 import {
 	SettingsCrudCard,
 	SettingsFormSheet,
@@ -796,7 +797,7 @@ export function LocationsCard({
 							<Button
 								type="submit"
 								form="location-form"
-								disabled={saving || !name.trim() || (!editingId && !hasSeat)}
+								disabled={saving || (!editingId && !hasSeat)}
 							>
 								{saving ? <Spinner data-icon="inline-start" /> : null}
 								{editingId ? "Save location" : "Add location"}
@@ -837,17 +838,14 @@ export function LocationsCard({
 					}}
 				>
 					<FieldGroup className="grid gap-4 sm:grid-cols-2">
-						<Field>
-							<FieldLabel htmlFor="location-name">Location name</FieldLabel>
-							<Input
-								id="location-name"
-								value={name}
-								onChange={(event) => setName(event.target.value)}
-								placeholder="Location name"
-								autoFocus
-								required
-							/>
-						</Field>
+						<RequiredTextField
+							id="location-name"
+							label="Location name"
+							value={name}
+							onValueChange={setName}
+							placeholder="Location name"
+							autoFocus
+						/>
 						<Field>
 							<FieldLabel htmlFor="location-timezone">Time zone</FieldLabel>
 							<TimezoneSelect
@@ -1072,11 +1070,7 @@ export function PositionsCard({
 						>
 							Cancel
 						</Button>
-						<Button
-							type="submit"
-							form="position-form"
-							disabled={saving || !name.trim()}
-						>
+						<Button type="submit" form="position-form" disabled={saving}>
 							{saving ? <Spinner data-icon="inline-start" /> : null}
 							{editingId ? "Save position" : "Add position"}
 						</Button>
@@ -1093,17 +1087,14 @@ export function PositionsCard({
 					}}
 				>
 					<FieldGroup>
-						<Field>
-							<FieldLabel htmlFor="position-name">Position name</FieldLabel>
-							<Input
-								id="position-name"
-								value={name}
-								onChange={(event) => setName(event.target.value)}
-								placeholder="Associate"
-								autoFocus
-								required
-							/>
-						</Field>
+						<RequiredTextField
+							id="position-name"
+							label="Position name"
+							value={name}
+							onValueChange={setName}
+							placeholder="Associate"
+							autoFocus
+						/>
 					</FieldGroup>
 				</form>
 			</SettingsFormSheet>
