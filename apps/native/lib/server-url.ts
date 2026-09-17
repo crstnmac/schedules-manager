@@ -32,12 +32,25 @@ function isLoopback(hostname: string): boolean {
 }
 
 export function getServerUrl(): string {
-	const configured = env.EXPO_PUBLIC_SERVER_URL.replace(/\/$/, "");
+	return resolveUrl(env.EXPO_PUBLIC_SERVER_URL);
+}
+
+/**
+ * Origin of the web app, which owns billing settings, the customer portal, and
+ * the legal pages. Mirrors getServerUrl so a phone on the LAN can reach a
+ * locally running web app during development.
+ */
+export function getAppUrl(): string {
+	return resolveUrl(env.EXPO_PUBLIC_APP_URL);
+}
+
+function resolveUrl(configured: string): string {
+	const trimmed = configured.replace(/\/$/, "");
 	let url: URL;
 	try {
-		url = new URL(configured);
+		url = new URL(trimmed);
 	} catch {
-		return configured;
+		return trimmed;
 	}
 
 	if (!isLoopback(url.hostname)) return url.origin;

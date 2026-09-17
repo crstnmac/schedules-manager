@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
 	ActivityIndicator,
 	KeyboardAvoidingView,
+	Linking,
 	Platform,
 	Pressable,
 	ScrollView,
@@ -15,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LogoMark } from "@/components/logo-mark";
 import { authClient } from "@/lib/auth-client";
 import { NAV_THEME } from "@/lib/constants";
+import { LEGAL_LINKS, recordLegalAcceptance } from "@/lib/legal";
 import { useColorScheme } from "@/lib/use-color-scheme";
 
 type Mode = "sign-in" | "sign-up";
@@ -29,10 +31,15 @@ export function AuthScreen() {
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
+	const [agreedToTerms, setAgreedToTerms] = useState(false);
 
 	async function submit() {
 		setError(null);
 		setMessage(null);
+		if (mode === "sign-up" && !agreedToTerms) {
+			setError("Please accept the Terms & Conditions and Privacy Policy.");
+			return;
+		}
 		setIsSubmitting(true);
 		try {
 			const normalizedEmail = email.trim().toLowerCase();
@@ -49,6 +56,8 @@ export function AuthScreen() {
 					password,
 				});
 				if (authError) throw authError;
+				// Proof of consent for the Terms accepted above.
+				await recordLegalAcceptance("terms", "mobile-sign-up");
 				setMessage("Your account is ready.");
 			}
 		} catch (caughtError) {
@@ -63,7 +72,10 @@ export function AuthScreen() {
 	}
 
 	const canSubmit =
-		email.trim().length > 0 && password.length >= 6 && !isSubmitting;
+		email.trim().length > 0 &&
+		password.length >= 6 &&
+		!isSubmitting &&
+		(mode === "sign-in" || agreedToTerms);
 
 	return (
 		<KeyboardAvoidingView
@@ -150,6 +162,42 @@ export function AuthScreen() {
 						</Text>
 					) : null}
 
+					{mode === "sign-up" ? (
+						<Pressable
+							accessibilityRole="checkbox"
+							accessibilityState={{ checked: agreedToTerms }}
+							accessibilityLabel="I agree to the Terms and Conditions and Privacy Policy"
+							onPress={() => setAgreedToTerms(!agreedToTerms)}
+							style={({ pressed }) => [
+								styles.agreementRow,
+								{ opacity: pressed ? 0.7 : 1 },
+							]}
+						>
+							<View
+								style={[
+									styles.checkbox,
+									{
+										borderColor: agreedToTerms ? theme.primary : theme.border,
+										backgroundColor: agreedToTerms
+											? theme.primary
+											: "transparent",
+									},
+								]}
+							>
+								{agreedToTerms ? (
+									<Text
+										style={[styles.checkboxMark, { color: theme.onPrimary }]}
+									>
+										✓
+									</Text>
+								) : null}
+							</View>
+							<Text style={[styles.agreementText, { color: theme.muted }]}>
+								I agree to the Terms &amp; Conditions and Privacy Policy.
+							</Text>
+						</Pressable>
+					) : null}
+
 					<Pressable
 						accessibilityRole="button"
 						disabled={!canSubmit}
@@ -191,6 +239,22 @@ export function AuthScreen() {
 								: "Already have an account? Sign in"}
 						</Text>
 					</Pressable>
+
+					<View style={styles.legalLinks}>
+						{LEGAL_LINKS.map((link) => (
+							<Pressable
+								key={link.label}
+								accessibilityRole="link"
+								accessibilityLabel={link.label}
+								onPress={() => void Linking.openURL(link.url)}
+								style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+							>
+								<Text style={[styles.legalLinkText, { color: theme.muted }]}>
+									{link.label}
+								</Text>
+							</Pressable>
+						))}
+					</View>
 				</View>
 			</ScrollView>
 		</KeyboardAvoidingView>
@@ -259,4 +323,30 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 8,
 	},
 	secondaryText: { fontSize: 14, fontWeight: "600", textAlign: "center" },
+	agreementRow: {
+		flexDirection: "row",
+		alignItems: "flex-start",
+		gap: 10,
+		marginTop: 16,
+		paddingVertical: 4,
+	},
+	checkbox: {
+		width: 22,
+		height: 22,
+		borderRadius: 6,
+		borderWidth: 1.5,
+		alignItems: "center",
+		justifyContent: "center",
+		marginTop: 1,
+	},
+	checkboxMark: { fontSize: 14, fontWeight: "800", lineHeight: 18 },
+	agreementText: { flex: 1, fontSize: 13, lineHeight: 19 },
+	legalLinks: {
+		flexDirection: "row",
+		flexWrap: "wrap",
+		justifyContent: "center",
+		gap: 14,
+		marginTop: 16,
+	},
+	legalLinkText: { fontSize: 12.5, textDecorationLine: "underline" },
 });

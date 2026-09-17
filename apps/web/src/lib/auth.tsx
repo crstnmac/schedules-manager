@@ -13,6 +13,7 @@ import {
 
 import { authClient } from "./auth-client";
 import { clearAuthIdentity, identifyAuthUser } from "./auth-listener";
+import { flushPendingLegalAcceptances } from "./legal";
 
 export type AuthSession = { session: AuthSessionRecord; user: AuthUser };
 
@@ -35,7 +36,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
 	useEffect(() => {
 		const userId = session?.user.id ?? null;
-		if (session?.user) identifyAuthUser(session.user, { posthog, queryClient });
+		if (session?.user) {
+			identifyAuthUser(session.user, { posthog, queryClient });
+			// Consent captured before email confirmation is recorded on the first
+			// sign-in that has a session.
+			void flushPendingLegalAcceptances();
+		}
 		if (previousUserId.current && !userId)
 			clearAuthIdentity({ posthog, queryClient });
 		previousUserId.current = userId;

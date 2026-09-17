@@ -14,8 +14,10 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@SchedulesManager/ui/components/card";
+import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
 import {
 	Field,
+	FieldContent,
 	FieldDescription,
 	FieldError,
 	FieldGroup,
@@ -46,6 +48,11 @@ import { useEffect, useState } from "react";
 
 import { AuthShell } from "@/components/auth-shell";
 import { authClient } from "@/lib/auth-client";
+import {
+	flushPendingLegalAcceptances,
+	legalUrls,
+	queueLegalAcceptance,
+} from "@/lib/legal";
 
 type Mode = "sign-in" | "sign-up";
 
@@ -94,8 +101,19 @@ export function AuthForm({
 	const [message, setMessage] = useState<string | null>(null);
 	const [resetSending, setResetSending] = useState(false);
 	const [resetSent, setResetSent] = useState(false);
+	const [agreedToTerms, setAgreedToTerms] = useState(false);
 
 	const posthog = usePostHog();
+	const switchingFrom = (() => {
+		const value = new URLSearchParams(window.location.search).get(
+			"switching_from",
+		);
+		return ["sling", "hotschedules", "homebase", "when-i-work"].includes(
+			value ?? "",
+		)
+			? value
+			: null;
+	})();
 	const isInvite = Boolean(invite);
 	const emailLocked = Boolean(lockedEmail) && isInvite;
 	const activeCopy = copy[mode];
@@ -141,6 +159,10 @@ export function AuthForm({
 		event.preventDefault();
 		setError(null);
 		setMessage(null);
+		if (mode === "sign-up" && !agreedToTerms) {
+			setError("Please accept the Terms & Conditions and Privacy Policy.");
+			return;
+		}
 		setIsSubmitting(true);
 		const submitEmail = (lockedEmail ?? email).trim().toLowerCase();
 		try {
@@ -151,6 +173,7 @@ export function AuthForm({
 						password,
 					});
 				if (authError) throw new Error(authError.message ?? "Sign in failed.");
+				await flushPendingLegalAcceptances();
 				if (authData.user) {
 					posthog?.identify(authData.user.id, { email: authData.user.email });
 					posthog?.capture("user_signed_in", {
@@ -158,17 +181,30 @@ export function AuthForm({
 					});
 				}
 			} else {
+				if (switchingFrom)
+					window.localStorage.setItem("jooling_switching_from", switchingFrom);
+				if (
+					new URLSearchParams(window.location.search).get(
+						"opening_restaurant",
+					) === "1"
+				)
+					window.localStorage.setItem("jooling_opening_restaurant", "1");
+				// Consent is captured with the checkbox; the record is queued here
+				// and flushed now or on the first sign-in that has a session.
+				queueLegalAcceptance("terms", isInvite ? "invite-sign-up" : "sign-up");
 				const data = await signUpWithEmail(
 					authClient,
 					submitEmail,
 					password,
 					name,
 				);
+				if (data.token) await flushPendingLegalAcceptances();
 				if (data.user) {
 					posthog?.identify(data.user.id, { email: data.user.email });
 					posthog?.capture("user_signed_up", {
 						invite_flow: isInvite,
 						email_confirmation_required: !data.token,
+						...(switchingFrom ? { switching_from: switchingFrom } : {}),
 					});
 				}
 				if (!data.token) {
@@ -343,6 +379,47 @@ export function AuthForm({
 							</Field>
 
 							{error ? <FieldError id="auth-error">{error}</FieldError> : null}
+							{mode === "sign-up" ? (
+								<Field orientation="horizontal">
+									<Checkbox
+										id="agree-to-terms"
+										checked={agreedToTerms}
+										onCheckedChange={(checked) =>
+											setAgreedToTerms(checked === true)
+										}
+										required
+										aria-describedby="agree-to-terms-description"
+									/>
+									<FieldContent>
+										<FieldLabel
+											htmlFor="agree-to-terms"
+											className="font-normal"
+										>
+											I agree to the{" "}
+											<a
+												className="underline"
+												href={legalUrls.terms}
+												target="_blank"
+												rel="noreferrer"
+											>
+												Terms &amp; Conditions
+											</a>{" "}
+											and{" "}
+											<a
+												className="underline"
+												href={legalUrls.privacy}
+												target="_blank"
+												rel="noreferrer"
+											>
+												Privacy Policy
+											</a>
+										</FieldLabel>
+										<FieldDescription id="agree-to-terms-description">
+											Required to create your account.
+										</FieldDescription>
+									</FieldContent>
+								</Field>
+							) : null}
 							{mode === "sign-in" ? (
 								<Button
 									type="button"

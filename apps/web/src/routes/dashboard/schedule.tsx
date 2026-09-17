@@ -121,6 +121,7 @@ import { toast } from "sonner";
 import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { DatePicker } from "@/components/date-picker";
+import { ImportSheet } from "@/components/import-sheet";
 import { BulkEditDialog } from "@/components/schedule/bulk-edit-dialog";
 import {
 	ScheduleMobileBoard,
@@ -393,16 +394,23 @@ const publicationColumns = publicationHelper.columns([
 				{row.original.workers.map((worker) => (
 					<Badge
 						key={worker.employmentId}
-						title={`${worker.name} · ${worker.status}`}
+						title={`${worker.name} · ${worker.status} · push ${worker.push.status}${worker.push.error ? `: ${worker.push.error}` : ""}`}
 						variant={worker.status === "acknowledged" ? "default" : "secondary"}
 						className="rounded-md text-xs"
 					>
 						{worker.name} ·{" "}
 						{worker.status === "acknowledged"
 							? "Seen"
-							: worker.status === "delivered"
-								? "Delivered"
-								: "Sent"}
+							: (
+									{
+										provider_accepted: "Push accepted",
+										receipt_pending: "Push pending",
+										failed: "Push failed",
+										no_device: "No push device",
+										queued: "Queued",
+										not_queued: "No push queued",
+									} as Record<string, string>
+								)[worker.push.status]}
 					</Badge>
 				))}
 			</div>
@@ -907,6 +915,7 @@ function SchedulePage() {
 	const [dayPartFilter, setDayPartFilter] = useState("all");
 	const [selectedShiftIds, setSelectedShiftIds] = useState<string[]>([]);
 	const [patternOpen, setPatternOpen] = useState(false);
+	const [scheduleImportOpen, setScheduleImportOpen] = useState(false);
 	const [publishSelectionOpen, setPublishSelectionOpen] = useState(false);
 	const [bulkEditOpen, setBulkEditOpen] = useState(false);
 	const [copiedShifts, setCopiedShifts] = useState<
@@ -1346,6 +1355,25 @@ function SchedulePage() {
 					: "";
 			toast.success(
 				`Published version ${result.version.versionNumber} to ${result.version.workers} worker(s).${acceptanceNote}`,
+			);
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+	const retryPublicationPush = useMutation({
+		mutationFn: async (versionId: string) => {
+			const scheduleId = schedule.data?.schedule.id;
+			if (!scheduleId) throw new Error("No schedule loaded");
+			return api<{ requeued: number }>(
+				`/v1/schedules/${scheduleId}/publications/${versionId}/retry-push`,
+				{ method: "POST" },
+			);
+		},
+		onSuccess: async ({ requeued }) => {
+			await invalidate();
+			toast.success(
+				requeued
+					? `${requeued} push notification(s) queued for retry.`
+					: "No failed push notifications need retrying.",
 			);
 		},
 		onError: (error) => toast.error((error as Error).message),
@@ -2172,6 +2200,12 @@ function SchedulePage() {
 										</DropdownMenuTrigger>
 										<DropdownMenuContent align="end" className="min-w-56">
 											<DropdownMenuGroup>
+												<DropdownMenuItem
+													disabled={!canManage || !activeLocationId}
+													onClick={() => setScheduleImportOpen(true)}
+												>
+													Import shifts from CSV
+												</DropdownMenuItem>
 												<DropdownMenuItem
 													disabled={
 														!canManage ||
@@ -4402,9 +4436,27 @@ function SchedulePage() {
 											Publication history
 										</h3>
 										<p className="mb-3 text-muted-foreground text-xs">
-											Acknowledgement means a worker saw the schedule. It does
-											not mean they accepted the shifts.
+											Push accepted means the device provider accepted it, not
+											that a phone displayed it. Seen means the worker opened
+											the schedule; shift acceptance is separate.
 										</p>
+										{data?.publication.versions[0]?.workers.some(
+											(worker) => worker.push.status === "failed",
+										) ? (
+											<Button
+												type="button"
+												size="sm"
+												variant="outline"
+												disabled={retryPublicationPush.isPending}
+												onClick={() =>
+													retryPublicationPush.mutate(
+														data.publication.versions[0].id,
+													)
+												}
+											>
+												Retry failed pushes
+											</Button>
+										) : null}
 										<DataTable
 											fill={false}
 											bounded
@@ -4598,6 +4650,51 @@ function SchedulePage() {
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
+			<ImportSheet<{
+				line: number;
+				date: string;
+				position: string;
+				email: string | null;
+				workerName: string | null;
+				startsAt: string;
+			}>
+				key={`${activeLocationId}-${weekStart}-${activeTeamId}`}
+				open={scheduleImportOpen}
+				requireAllValid
+				onOpenChange={setScheduleImportOpen}
+				title="Import shifts into this draft"
+				description="Upload one workweek at a time. Preview validates every shift; a file with errors imports nothing. Workers and positions must already exist. Sling names must uniquely match active workers. No shifts are published automatically."
+				modes={
+					activeLocationId
+						? [
+								{
+									value: "schedule",
+									label: "Schedule CSV",
+									importPath: `/v1/locations/${activeLocationId}/schedules/${weekStart}/import${activeTeamId ? `?teamId=${activeTeamId}` : ""}`,
+									templatePath: `/v1/locations/${activeLocationId}/schedules/import/template.csv`,
+									templateFileName: "schedule-import-template.csv",
+									successNoun: "shift(s)",
+									help: "Upload a Sling schedule CSV directly, or use the template with date, start time, end time, position, and worker email. Sling names must match uniquely; open shifts have no worker. All shifts go to the selected jooling location.",
+								},
+							]
+						: []
+				}
+				renderEntry={(entry) => (
+					<span>
+						{entry.date} · {entry.position} ·{" "}
+						{entry.email ?? entry.workerName ?? "Open shift"}
+					</span>
+				)}
+				entryKey={(entry) =>
+					`${entry.line}-${entry.startsAt}-${entry.position}`
+				}
+				onImported={() => {
+					void invalidate();
+					posthog?.capture("schedule_import_completed", {
+						week_start: weekStart,
+					});
+				}}
+			/>
 			<PatternApplyDialog
 				open={patternOpen}
 				onOpenChange={setPatternOpen}

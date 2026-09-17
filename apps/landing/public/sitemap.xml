@@ -15,4 +15,13 @@
 		<changefreq>yearly</changefreq>
 		<priority>0.2</priority>
 	</url>
+	<url>
+		<loc>https://jooling.com/dpa</loc>
+		<changefreq>yearly</changefreq>
+		<priority>0.2</priority>
+	</url>
+	<url><loc>https://jooling.com/vs/sling</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+	<url><loc>https://jooling.com/vs/hotschedules</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+	<url><loc>https://jooling.com/vs/homebase</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+	<url><loc>https://jooling.com/vs/when-i-work</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
 </urlset>

@@ -1,3 +1,4 @@
+import { env } from "@SchedulesManager/env/web";
 import {
 	Alert,
 	AlertDescription,
@@ -32,6 +33,7 @@ import {
 } from "@/components/settings/page";
 import { PurchaseLocationSeat } from "@/components/settings/purchase-location-seat";
 import { api } from "@/lib/api";
+import { queueLegalAcceptance } from "@/lib/legal";
 import { useBilling, useBillingPlanState } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -107,6 +109,44 @@ function SubscriptionPage() {
 	const [interval, setInterval] = useState<Interval>("year");
 	const [intervalInitialized, setIntervalInitialized] = useState(false);
 	const [confirmation, setConfirmation] = useState<Confirmation>(null);
+	const [subscriptionCancellationOpen, setSubscriptionCancellationOpen] =
+		useState(false);
+	const [trialConfirm, setTrialConfirm] = useState<Plan | null>(null);
+	const [exporting, setExporting] = useState(false);
+	async function exportSchedulingData() {
+		if (!workplace || exporting) return;
+		setExporting(true);
+		try {
+			for (const dataset of [
+				"workers",
+				"locations",
+				"positions",
+				"draft-shifts",
+				"published-shifts",
+				"time-off",
+				"unavailability",
+				"time-entries",
+				"time-entry-breaks",
+			]) {
+				const response = await fetch(
+					`${env.VITE_SERVER_URL}/v1/workplaces/${workplace.id}/export/${dataset}`,
+					{ credentials: "include" },
+				);
+				if (!response.ok) throw new Error(`Could not export ${dataset}`);
+				const url = URL.createObjectURL(await response.blob());
+				const anchor = document.createElement("a");
+				anchor.href = url;
+				anchor.download = `jooling-${dataset}.csv`;
+				anchor.click();
+				window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+			}
+			toast.success("Workplace data exported as nine CSV files.");
+		} catch (error) {
+			toast.error((error as Error).message);
+		} finally {
+			setExporting(false);
+		}
+	}
 
 	useEffect(() => {
 		if (!intervalInitialized && current?.billingInterval) {
@@ -161,6 +201,30 @@ function SubscriptionPage() {
 					? error.message
 					: "Could not open billing portal",
 			),
+	});
+	const subscriptionCancellation = useMutation({
+		mutationFn: async (cancelAtPeriodEnd: boolean) => {
+			if (!workplace) throw new Error("No Workplace selected");
+			return api<{ cancelAtPeriodEnd: boolean }>(
+				`/v1/workplaces/${workplace.id}/billing/cancellation`,
+				{ method: "POST", body: { cancelAtPeriodEnd } },
+			);
+		},
+		onSuccess: async ({ cancelAtPeriodEnd }) => {
+			setSubscriptionCancellationOpen(false);
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: ["billing", workplace?.id] }),
+				queryClient.invalidateQueries({
+					queryKey: ["billing-plan-state", workplace?.id],
+				}),
+			]);
+			toast.success(
+				cancelAtPeriodEnd
+					? "Subscription will end after this billing period."
+					: "Subscription will renew as usual.",
+			);
+		},
+		onError: (error) => toast.error((error as Error).message),
 	});
 
 	const refresh = async () => {
@@ -255,6 +319,48 @@ function SubscriptionPage() {
 			billedLocationCount
 		: 0;
 
+	// Pre-checkout disclosure: the trial length, the price and plan that begin
+	// when it ends, the first charge date, and how to cancel — shown before any
+	// payment details are entered (ROSCA; Cal. Bus. & Prof. Code §17602).
+	const trialDays = billing.data?.trialPolicy.days ?? 30;
+	const trialEligible = billing.data?.trialPolicy.eligible ?? true;
+	const trialFirstChargeDate = new Date(
+		Date.now() + trialDays * 24 * 60 * 60 * 1000,
+	);
+	const trialConfirmTotal = trialConfirm
+		? (billing.data?.catalog[trialConfirm][interval] ?? 0) * billedLocationCount
+		: 0;
+	const trialConfirmDetail = trialConfirm ? (
+		<div className="grid gap-2 text-sm">
+			<p>
+				{trialEligible
+					? `Your ${trialDays}-day free trial starts now. You will not be charged today.`
+					: "Your subscription starts now."}
+			</p>
+			<p>
+				{trialEligible
+					? `On ${date(trialFirstChargeDate.toISOString())}, the `
+					: "The "}
+				<strong>{planLabel(trialConfirm, interval)}</strong> plan starts and
+				your card is charged{" "}
+				<strong>
+					{money(trialConfirmTotal)}{" "}
+					{interval === "year" ? "per year" : "per month"}
+				</strong>{" "}
+				for {billedLocationCount}{" "}
+				{billedLocationCount === 1 ? "location" : "locations"}, plus any taxes,
+				and renews automatically each {interval === "year" ? "year" : "month"}{" "}
+				until cancelled.
+			</p>
+			<p className="text-muted-foreground">
+				{trialEligible
+					? "Cancel any time before the trial ends in Settings → Subscription and you will not be charged. "
+					: "Cancel any time in Settings → Subscription; access continues to the end of the paid period. "}
+				We will remind you in the app before the first charge.
+			</p>
+		</div>
+	) : null;
+
 	return (
 		<SettingsPage
 			title="Subscription"
@@ -314,6 +420,41 @@ function SubscriptionPage() {
 							changing plans.
 						</p>
 					) : null}
+					{/* Cancel must be reachable while trialing: the checkout disclosure
+					    promises cancellation from this page prevents the first charge,
+					    and exit has to stay as easy as sign-up. */}
+					{(live?.status === "active" || live?.status === "trialing") &&
+					!planState.isError ? (
+						<Button
+							variant="outline"
+							size="sm"
+							disabled={subscriptionCancellation.isPending}
+							onClick={() =>
+								live.cancelAtPeriodEnd
+									? subscriptionCancellation.mutate(false)
+									: setSubscriptionCancellationOpen(true)
+							}
+						>
+							{live.cancelAtPeriodEnd
+								? "Resume subscription"
+								: "Cancel subscription"}
+						</Button>
+					) : null}
+				</SettingsSection>
+			) : null}
+			{workplace ? (
+				<SettingsSection
+					title="Take your scheduling data"
+					description="Download workers, locations, positions, draft and published shifts, time off, unavailability, time entries, and breaks as CSV files."
+				>
+					<Button
+						variant="outline"
+						disabled={exporting}
+						onClick={() => void exportSchedulingData()}
+					>
+						{exporting ? <Spinner data-icon="inline-start" /> : null}Export
+						scheduling data
+					</Button>
 				</SettingsSection>
 			) : null}
 			{pending ? (
@@ -441,12 +582,12 @@ function SubscriptionPage() {
 									className="self-start"
 									variant={plan === "operations" ? "default" : "outline"}
 									disabled={checkout.isPending}
-									onClick={() => checkout.mutate(plan)}
+									onClick={() => setTrialConfirm(plan)}
 								>
 									{checkout.isPending && checkout.variables === plan ? (
 										<Spinner data-icon="inline-start" />
 									) : null}
-									{current ? "Subscribe" : "Start 30-day trial"}
+									{current ? "Subscribe" : "Start free trial"}
 								</Button>
 							) : !isCurrentPlan && canChangePlan && planTiming ? (
 								<Button
@@ -474,6 +615,72 @@ function SubscriptionPage() {
 					: "A payment method may be required for the trial. You can cancel in the billing portal before the first charge."}
 			</p>
 
+			<AlertDialog
+				open={trialConfirm !== null}
+				onOpenChange={(open) => {
+					if (!open && !checkout.isPending) setTrialConfirm(null);
+				}}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>
+							{trialEligible
+								? `Start your ${trialDays}-day free trial?`
+								: "Start your subscription?"}
+						</AlertDialogTitle>
+						<AlertDialogDescription>
+							{trialEligible
+								? "Free today. Here is exactly what happens when the trial ends."
+								: "Here is exactly what you will be charged."}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					{trialConfirmDetail}
+					<AlertDialogFooter>
+						<AlertDialogCancel disabled={checkout.isPending}>
+							Not now
+						</AlertDialogCancel>
+						<Button
+							disabled={checkout.isPending || !trialConfirm}
+							onClick={() => {
+								// Express affirmative consent to the auto-renewal terms,
+								// recorded server-side for the statutory retention period.
+								queueLegalAcceptance("billing", "checkout");
+								if (trialConfirm) checkout.mutate(trialConfirm);
+							}}
+						>
+							{checkout.isPending ? <Spinner data-icon="inline-start" /> : null}
+							{trialEligible ? "Start free trial" : "Subscribe"}
+						</Button>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+			<AlertDialog
+				open={subscriptionCancellationOpen}
+				onOpenChange={setSubscriptionCancellationOpen}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Cancel subscription?</AlertDialogTitle>
+						<AlertDialogDescription>
+							{live?.status === "trialing"
+								? `Your free trial ends on ${date(live?.trialEnd ?? live?.currentPeriodEnd)} and you will not be charged. Your team keeps access until then, and you can export your data before it ends.`
+								: `Your team keeps access until ${date(live?.currentPeriodEnd)}. Renewal stops at the end of this period. You can export your data before access ends.`}
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Keep subscription</AlertDialogCancel>
+						<Button
+							disabled={subscriptionCancellation.isPending}
+							onClick={() => subscriptionCancellation.mutate(true)}
+						>
+							{subscriptionCancellation.isPending ? (
+								<Spinner data-icon="inline-start" />
+							) : null}
+							Cancel at period end
+						</Button>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 			<AlertDialog
 				open={confirmation !== null}
 				onOpenChange={(open) => {

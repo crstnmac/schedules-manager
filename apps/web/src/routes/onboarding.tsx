@@ -304,6 +304,12 @@ function WorkplaceSetup({
 	const [locationLongitude, setLocationLongitude] = useState("");
 	const [timezone, setTimezone] = useState("America/Chicago");
 	const [positionName, setPositionName] = useState("");
+	const [switchingFrom, setSwitchingFrom] = useState(
+		() => window.localStorage.getItem("jooling_switching_from") ?? "",
+	);
+	const [openingRestaurantOffer, setOpeningRestaurantOffer] = useState(
+		() => window.localStorage.getItem("jooling_opening_restaurant") === "1",
+	);
 
 	const setup = useMutation({
 		mutationFn: () =>
@@ -311,6 +317,7 @@ function WorkplaceSetup({
 				method: "POST",
 				body: {
 					name: workplaceName.trim(),
+					openingRestaurantOffer,
 					location: {
 						name: locationName.trim(),
 						timezone,
@@ -326,7 +333,12 @@ function WorkplaceSetup({
 			toast.success(`${data.workplace.name} is ready.`);
 			posthog?.capture("workplace_created", {
 				location_timezone: data.location.timezone,
+				...(switchingFrom.trim()
+					? { switching_from: switchingFrom.trim().toLowerCase() }
+					: {}),
 			});
+			window.localStorage.removeItem("jooling_switching_from");
+			window.localStorage.removeItem("jooling_opening_restaurant");
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
@@ -411,6 +423,38 @@ function WorkplaceSetup({
 									placeholder="Associate"
 									required
 								/>
+							</Field>
+							<Field>
+								<FieldLabel htmlFor="switching-from">
+									What scheduling app are you moving from? (optional)
+								</FieldLabel>
+								<Input
+									id="switching-from"
+									value={switchingFrom}
+									onChange={(event) => setSwitchingFrom(event.target.value)}
+									placeholder="Sling, HotSchedules, spreadsheet…"
+									maxLength={80}
+								/>
+							</Field>
+							<Field>
+								<label
+									htmlFor="opening-restaurant-offer"
+									className="flex items-start gap-2 text-sm"
+								>
+									<input
+										id="opening-restaurant-offer"
+										type="checkbox"
+										checked={openingRestaurantOffer}
+										onChange={(event) =>
+											setOpeningRestaurantOffer(event.target.checked)
+										}
+										className="mt-0.5"
+									/>
+									I’m opening a new restaurant and want the 90-day trial.
+								</label>
+								<FieldDescription>
+									Applies to your first workplace subscription at checkout.
+								</FieldDescription>
 							</Field>
 						</FieldGroup>
 					</form>

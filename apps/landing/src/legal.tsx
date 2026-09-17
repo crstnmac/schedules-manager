@@ -2,12 +2,16 @@ import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import type React from "react";
 import { LandingLink } from "./landing-link";
 import { Link } from "./router";
+import {
+	LAST_UPDATED,
+	LEGAL_ENTITY,
+	RETENTION,
+	SUBPROCESSORS,
+} from "./site-config";
 
 const appUrl = import.meta.env.VITE_APP_URL || "http://localhost:3001";
 const signUpUrl = new URL(appUrl);
 signUpUrl.searchParams.set("mode", "sign-up");
-
-const LAST_UPDATED = "September 11, 2026";
 
 function LegalBrand() {
 	return (
@@ -42,14 +46,24 @@ function LegalHeader() {
 	);
 }
 
-function LegalFooter() {
+export function LegalFooter() {
 	return (
 		<footer className="legal-footer">
 			<div className="section-container legal-footer-inner">
-				<span>© {new Date().getFullYear()} jooling. All rights reserved.</span>
+				<div className="legal-footer-entity">
+					<span>
+						© {new Date().getFullYear()} {LEGAL_ENTITY.legalName}. All rights
+						reserved.
+					</span>
+					<span>
+						{LEGAL_ENTITY.legalName} · {LEGAL_ENTITY.address} · Reg.{" "}
+						{LEGAL_ENTITY.registrationNumber}
+					</span>
+				</div>
 				<nav aria-label="Legal">
 					<Link to="/privacy">Privacy Policy</Link>
 					<Link to="/terms">Terms &amp; Conditions</Link>
+					<Link to="/dpa">DPA</Link>
 					<LandingLink href={signUpUrl.toString()}>Get started</LandingLink>
 				</nav>
 			</div>
@@ -63,7 +77,7 @@ type LegalSection = {
 	body: React.ReactNode;
 };
 
-function LegalLayout({
+export function LegalLayout({
 	eyebrow,
 	title,
 	intro,
@@ -109,13 +123,24 @@ export function PrivacyPolicyPage() {
 			eyebrow="Privacy Policy"
 			title="Your data, handled with care."
 			intro={
-				<p>
-					This Privacy Policy explains how jooling ("jooling", "we", "us", or
-					"our") collects, uses, shares, and protects information when you use
-					our scheduling products and services for hourly teams (the "Service").
-					It applies to workplace owners, managers, workers, and anyone who
-					visits our website or apps.
-				</p>
+				<>
+					<p>
+						This Privacy Policy explains how {LEGAL_ENTITY.legalName} (
+						{LEGAL_ENTITY.address}; "jooling", "we", "us", or "our") collects,
+						uses, shares, and protects information when you use our scheduling
+						products and services (the "Service"). It applies to workplace
+						owners, managers, workers, and anyone who visits our website or
+						apps.
+					</p>
+					<p>
+						For the personal data in a workplace — worker records, schedules,
+						and messages — your employer or the workplace operator is the
+						controller and we act as their processor. For your own account data
+						and our website, we are the controller. See the{" "}
+						<Link to="/dpa">Data Processing Addendum</Link> for how we process
+						workplace data on behalf of business customers.
+					</p>
+				</>
 			}
 			sections={[
 				{
@@ -155,6 +180,11 @@ export function PrivacyPolicyPage() {
 									this off in your device settings, though some features will
 									stop working.
 								</li>
+								<li>
+									<strong>Consent records</strong>, such as when you accepted
+									these Terms and billing disclosures, so we can prove your
+									choices.
+								</li>
 							</ul>
 						</>
 					),
@@ -173,7 +203,7 @@ export function PrivacyPolicyPage() {
 								</li>
 								<li>
 									send notifications about schedules, schedule changes,
-									requests, and service updates;
+									requests, trials, renewals, and service updates;
 								</li>
 								<li>process payments and manage subscriptions;</li>
 								<li>
@@ -188,6 +218,11 @@ export function PrivacyPolicyPage() {
 									comply with legal obligations and enforce our agreements.
 								</li>
 							</ul>
+							<p>
+								We do not sell your personal information, and we do not share it
+								for cross-context behavioral advertising. We do not use your
+								personal data to train third-party AI models.
+							</p>
 						</>
 					),
 				},
@@ -197,13 +232,33 @@ export function PrivacyPolicyPage() {
 					body: (
 						<>
 							<p>
-								Where applicable law requires a legal basis, we process personal
-								information to perform our contract with you, to pursue our
-								legitimate interests in running and improving the Service, to
-								comply with legal duties, and with your consent where consent is
-								required (for example, for optional location features or
-								marketing).
+								Where the GDPR or similar laws apply, we rely on the following
+								legal bases:
 							</p>
+							<ul>
+								<li>
+									<strong>Contract</strong> — providing the Service, managing
+									accounts, workplaces, schedules, and notifications you
+									request.
+								</li>
+								<li>
+									<strong>Legitimate interests</strong> — securing and
+									troubleshooting the Service, preventing fraud and misuse, and
+									measuring how features are used through pseudonymized product
+									analytics (with session recording disabled). You can object to
+									processing based on legitimate interests by contacting us.
+								</li>
+								<li>
+									<strong>Consent</strong> — optional location features such as
+									geofenced time entries, non-essential cookies on our website,
+									and marketing communications. You can withdraw consent at any
+									time.
+								</li>
+								<li>
+									<strong>Legal obligation</strong> — keeping billing, tax, and
+									consent records, and responding to lawful requests.
+								</li>
+							</ul>
 						</>
 					),
 				},
@@ -212,10 +267,7 @@ export function PrivacyPolicyPage() {
 					heading: "4. When we share information",
 					body: (
 						<>
-							<p>
-								We do not sell your personal information. We share it only as
-								needed to run the Service:
-							</p>
+							<p>We share information only as needed to run the Service:</p>
 							<ul>
 								<li>
 									<strong>Within your workplace.</strong> Managers and
@@ -224,9 +276,19 @@ export function PrivacyPolicyPage() {
 									workplace-wide schedules and their own records.
 								</li>
 								<li>
-									<strong>Service providers.</strong> Vendors that help us with
-									hosting, email and push delivery, payments, analytics, and
-									support, under contracts that limit their use of your data.
+									<strong>Service providers (subprocessors).</strong> These
+									vendors help us run the Service, under contracts that limit
+									their use of your data:
+									<ul>
+										{SUBPROCESSORS.map((subprocessor) => (
+											<li key={subprocessor.name}>
+												<strong>{subprocessor.name}</strong> —{" "}
+												{subprocessor.purpose} ({subprocessor.location}).
+											</li>
+										))}
+									</ul>
+									The <Link to="/dpa#subprocessors">DPA</Link> carries the
+									current list and the change-notice terms that apply to it.
 								</li>
 								<li>
 									<strong>Legal and safety.</strong> When required by law or to
@@ -239,6 +301,12 @@ export function PrivacyPolicyPage() {
 									appropriate confidentiality protections.
 								</li>
 							</ul>
+							<p>
+								We will notify business customers before adding or replacing any
+								subprocessor that touches their workplace data, and they may
+								object on reasonable grounds as described in the{" "}
+								<Link to="/dpa">DPA</Link>.
+							</p>
 						</>
 					),
 				},
@@ -246,14 +314,40 @@ export function PrivacyPolicyPage() {
 					id: "retention",
 					heading: "5. Data retention",
 					body: (
-						<p>
-							We keep personal information for as long as needed to provide the
-							Service and for the purposes described in this policy, unless a
-							longer period is required or permitted by law. When a workplace
-							closes its account or asks us to delete data, we delete or
-							anonymize it within a reasonable period, except where we must
-							retain records for legal, tax, or security reasons.
-						</p>
+						<>
+							<p>We keep personal information only as long as needed:</p>
+							<ul>
+								<li>
+									<strong>Account and profile data</strong> — while your account
+									is active, then deleted or anonymized within{" "}
+									{RETENTION.accountDataDays} days of closure.
+								</li>
+								<li>
+									<strong>Workplace and scheduling data</strong> — while the
+									workplace is active, then deleted or anonymized within{" "}
+									{RETENTION.workplaceDataDays} days of workplace closure, so
+									the team can export or revisit its schedule history first.
+								</li>
+								<li>
+									<strong>Billing and tax records</strong> — up to{" "}
+									{RETENTION.billingYears} years, as required by accounting and
+									tax law.
+								</li>
+								<li>
+									<strong>Consent records</strong> — at least{" "}
+									{RETENTION.consentYears} years, to prove the choices you made.
+								</li>
+								<li>
+									<strong>Application and device logs</strong> — up to{" "}
+									{RETENTION.logDays} days.
+								</li>
+							</ul>
+							<p>
+								Where a longer period is required or permitted by law — for
+								example an open dispute — we retain only what that purpose
+								requires.
+							</p>
+						</>
 					),
 				},
 				{
@@ -276,9 +370,12 @@ export function PrivacyPolicyPage() {
 					body: (
 						<p>
 							We may process and store information in countries other than the
-							one where you live. Where required, we put appropriate safeguards
-							in place for these transfers, such as standard contractual clauses
-							or equivalent measures.
+							one where you live. Where personal data is transferred out of the
+							EEA, the UK, or Switzerland, we rely on adequacy decisions or the
+							European Commission's Standard Contractual Clauses (and the UK
+							Addendum or Swiss annex where applicable) with the recipient. You
+							can ask us for a copy of the transfer safeguards by writing to{" "}
+							{LEGAL_ENTITY.privacyEmail}.
 						</p>
 					),
 				},
@@ -288,67 +385,149 @@ export function PrivacyPolicyPage() {
 					body: (
 						<>
 							<p>
-								Depending on where you live, you may have the right to access,
-								correct, delete, or receive a copy of your personal information,
-								to object to or restrict certain processing, and to withdraw
-								consent. You can manage much of your information directly in the
-								Service, or contact us to make a request. We will not
-								discriminate against you for exercising these rights.
+								Depending on where you live, you may have the following rights
+								over your personal information:
+							</p>
+							<ul>
+								<li>
+									<strong>Access and portability</strong> — get a copy of your
+									data, in a machine-readable format where required.
+								</li>
+								<li>
+									<strong>Correction</strong> — fix inaccurate information.
+								</li>
+								<li>
+									<strong>Deletion</strong> — ask us to delete your data.
+								</li>
+								<li>
+									<strong>Restriction and objection</strong> — pause or object
+									to certain processing, including processing based on
+									legitimate interests.
+								</li>
+								<li>
+									<strong>Withdrawal of consent</strong> — for optional location
+									features, marketing, or cookies.
+								</li>
+								<li>
+									<strong>Limit use of sensitive data</strong> (California) —
+									precise geolocation collected for geofenced time entries is
+									sensitive personal information. We use it only to provide the
+									time-clock feature and never to infer characteristics about
+									you; you may ask us to limit its use.
+								</li>
+								<li>
+									<strong>No discrimination</strong> — we will never treat you
+									differently for exercising these rights.
+								</li>
+							</ul>
+							<p>
+								You can manage much of your information directly in the Service,
+								or make a request by email to {LEGAL_ENTITY.privacyEmail}. We
+								respond within 45 days of a verifiable request, with a possible
+								45-day extension for complex requests that we will explain to
+								you. If you are in the EEA or the UK, you also have the right to
+								lodge a complaint with your local supervisory authority (or the
+								UK Information Commissioner's Office).
 							</p>
 							<p>
 								Workplace members should direct requests about work records to
 								their employer first, since the employer controls much of that
 								data. We support employers in responding to valid requests.
 							</p>
+							<p>
+								Where the law requires us to have one, or where it helps you
+								reach us faster, you can contact our privacy team at{" "}
+								{LEGAL_ENTITY.privacyEmail}; our registered office is{" "}
+								{LEGAL_ENTITY.address}.
+							</p>
 						</>
 					),
 				},
 				{
-					id: "cookies",
-					heading: "9. Cookies and similar technologies",
+					id: "marketing",
+					heading: "9. Marketing communications",
 					body: (
 						<p>
-							We use cookies and similar technologies to keep you signed in,
-							remember preferences, measure how the Service is used, and improve
-							it. You can control cookies through your browser settings.
-							Blocking some cookies may affect how the Service works.
+							We send service notifications (schedules, requests, billing and
+							security notices) as part of the Service, so some of these cannot
+							be switched off while your account is active — but you can tune
+							them in Settings → Notifications. Where we send product marketing
+							emails, every message includes an unsubscribe link, and you can
+							opt out at any time by using that link or writing to us.
 						</p>
 					),
 				},
 				{
+					id: "cookies",
+					heading: "10. Cookies and similar technologies",
+					body: (
+						<>
+							<p>We use cookies and similar technologies in two ways:</p>
+							<ul>
+								<li>
+									<strong>Strictly necessary.</strong> Cookies that keep you
+									signed in and keep the Service secure. These do not require
+									consent because the Service cannot work without them.
+								</li>
+								<li>
+									<strong>Analytics.</strong> On our marketing website,
+									non-essential analytics cookies load only after you accept
+									them in our consent banner; you can decline or withdraw
+									consent at any time. Inside the signed-in product we run
+									pseudonymized, first-party product analytics (session
+									recording disabled) under legitimate interests, and you can
+									object at any time via {LEGAL_ENTITY.privacyEmail}.
+								</li>
+							</ul>
+							<p>
+								You can also control cookies through your browser settings.
+								Blocking some cookies may affect how the Service works.
+							</p>
+						</>
+					),
+				},
+				{
 					id: "children",
-					heading: "10. Children's privacy",
+					heading: "11. Children's privacy",
 					body: (
 						<p>
-							The Service is intended for use by workplaces and their workers,
-							not by children. We do not knowingly collect personal information
-							from children under the age required for valid consent in their
-							jurisdiction. If you believe a child has provided us information,
-							please contact us and we will take appropriate steps.
+							The Service is intended for workplaces and their workers. We do
+							not knowingly collect personal information directly from children
+							under 13 (or under the higher age set by your jurisdiction, up to
+							the GDPR's default of 16) without appropriate consent. Hourly
+							teams often include workers under 18: those workers join through
+							an employer invitation, and the employer is responsible for
+							obtaining any authorization required by law. If you believe a
+							child has provided us information improperly, contact us and we
+							will take appropriate steps.
 						</p>
 					),
 				},
 				{
 					id: "changes",
-					heading: "11. Changes to this policy",
+					heading: "12. Changes to this policy",
 					body: (
 						<p>
 							We may update this Privacy Policy from time to time. When we make
 							material changes, we will update the date above and, where
-							appropriate, notify you in the Service or by email. Your continued
-							use of the Service after an update means you accept the revised
-							policy.
+							appropriate, notify you in the Service or by email. For existing
+							subscribers we will give at least 30 days' notice of material
+							changes before they take effect.
 						</p>
 					),
 				},
 				{
 					id: "contact",
-					heading: "12. Contact us",
+					heading: "13. Contact us",
 					body: (
 						<p>
-							Questions or requests about privacy can be sent to{" "}
-							<a href="mailto:privacy@jooling.com">privacy@jooling.com</a>. We
-							will respond as required by applicable law.
+							{LEGAL_ENTITY.legalName} is the controller for account and website
+							data. Questions or requests about privacy can be sent to{" "}
+							<a href={`mailto:${LEGAL_ENTITY.privacyEmail}`}>
+								{LEGAL_ENTITY.privacyEmail}
+							</a>{" "}
+							or by post to {LEGAL_ENTITY.address}. We will respond as required
+							by applicable law.
 						</p>
 					),
 				},
@@ -363,14 +542,21 @@ export function TermsPage() {
 			eyebrow="Terms & Conditions"
 			title="The ground rules."
 			intro={
-				<p>
-					These Terms &amp; Conditions ("Terms") govern your access to and use
-					of the jooling websites, apps, and services for hourly teams (the
-					"Service"). By creating an account, accessing, or using the Service,
-					you agree to these Terms. If you use the Service on behalf of a
-					workplace, you represent that you have authority to bind that
-					workplace.
-				</p>
+				<>
+					<p>
+						These Terms &amp; Conditions ("Terms") are an agreement between you
+						and {LEGAL_ENTITY.legalName}, registered at {LEGAL_ENTITY.address} (
+						{LEGAL_ENTITY.registrationNumber}) ("jooling", "we", "us", or
+						"our"). They govern your access to and use of the jooling websites,
+						apps, and services for hourly teams (the "Service").
+					</p>
+					<p>
+						By ticking the agreement box when you create an account, or by
+						accessing or using the Service, you agree to these Terms. If you use
+						the Service on behalf of a workplace, you represent that you have
+						authority to bind that workplace to these Terms.
+					</p>
+				</>
 			}
 			sections={[
 				{
@@ -379,10 +565,17 @@ export function TermsPage() {
 					body: (
 						<>
 							<p>
-								You must be old enough to enter into a binding contract in your
-								jurisdiction to use the Service. You are responsible for the
-								accuracy of the information you provide and for keeping your
-								credentials secure.
+								To create or manage a workplace account you must be old enough
+								to enter into a binding contract in your jurisdiction. You are
+								responsible for the accuracy of the information you provide and
+								for keeping your credentials secure.
+							</p>
+							<p>
+								Workers may join through an employer invitation. Where a worker
+								is below the age of contractual capacity, the inviting workplace
+								(and, where required by law, a parent or guardian) is
+								responsible for authorizing that use and for complying with
+								applicable youth-employment and data protection laws.
 							</p>
 							<p>
 								If you create or manage a workplace account, you are responsible
@@ -432,24 +625,54 @@ export function TermsPage() {
 					),
 				},
 				{
+					id: "data-processing",
+					heading: "4. Data processing for workplaces",
+					body: (
+						<p>
+							When your workplace uses the Service, your workplace is the
+							controller of the worker records, schedules, and messages it
+							stores, and jooling processes that data on the workplace's
+							instructions as its processor. The{" "}
+							<Link to="/dpa">Data Processing Addendum</Link> forms part of
+							these Terms and describes our processing obligations, our
+							subprocessors, security measures, and international transfer
+							safeguards.
+						</p>
+					),
+				},
+				{
 					id: "billing",
-					heading: "4. Plans, billing, and free trial",
+					heading: "5. Plans, billing, free trials, and renewals",
 					body: (
 						<>
 							<p>
 								Paid plans are billed per location on a monthly or annual basis,
-								as selected at checkout. Fees are stated before you subscribe
-								and may change with notice.
+								as selected at checkout. All fees are stated — including the
+								price, the billing period, and what happens at the end of a
+								trial — before you enter any payment details.
 							</p>
 							<ul>
 								<li>
-									New workplaces may receive a 30-day free trial. At the end of
-									the trial, your selected plan begins unless you cancel before
-									it ends.
+									New workplaces may receive a 30-day free trial, and workplaces
+									that qualify for the new-restaurant offer may receive a 90-day
+									free trial instead. Before you check out we display the trial
+									length, the plan and price that begins when the trial ends,
+									the date of the first charge, and how to cancel. Your selected
+									plan begins automatically at the end of the trial unless you
+									cancel in your billing settings before then, and we will
+									remind you in the Service at least 7 days before that happens.
 								</li>
 								<li>
-									Subscriptions renew automatically until cancelled. You can
-									cancel at any time from your billing settings.
+									Subscriptions renew automatically at the end of each billing
+									period until cancelled. For annual plans, we will remind you
+									in the Service at least 30 days before each renewal. You can
+									cancel at any time in your billing settings; cancellation
+									takes effect at the end of the current period.
+								</li>
+								<li>
+									We will give you at least 30 days' notice in the Service
+									before any price change takes effect for your subscription;
+									changes never apply to your current billing period.
 								</li>
 								<li>
 									Except where required by law, fees are non-refundable and
@@ -460,12 +683,17 @@ export function TermsPage() {
 									information current.
 								</li>
 							</ul>
+							<p>
+								We keep a record of your acceptance of these billing terms
+								(version, date, and context) for at least{" "}
+								{RETENTION.consentYears} years.
+							</p>
 						</>
 					),
 				},
 				{
 					id: "acceptable-use",
-					heading: "5. Acceptable use",
+					heading: "6. Acceptable use",
 					body: (
 						<>
 							<p>You agree not to:</p>
@@ -496,7 +724,7 @@ export function TermsPage() {
 				},
 				{
 					id: "intellectual-property",
-					heading: "6. Intellectual property and content",
+					heading: "7. Intellectual property and content",
 					body: (
 						<>
 							<p>
@@ -516,7 +744,7 @@ export function TermsPage() {
 				},
 				{
 					id: "third-party",
-					heading: "7. Third-party services",
+					heading: "8. Third-party services",
 					body: (
 						<p>
 							The Service may integrate with third-party products, such as
@@ -528,7 +756,7 @@ export function TermsPage() {
 				},
 				{
 					id: "disclaimers",
-					heading: "8. Disclaimers",
+					heading: "9. Disclaimers",
 					body: (
 						<p>
 							The Service is provided "as is" and "as available". To the maximum
@@ -543,7 +771,7 @@ export function TermsPage() {
 				},
 				{
 					id: "liability",
-					heading: "9. Limitation of liability",
+					heading: "10. Limitation of liability",
 					body: (
 						<p>
 							To the maximum extent permitted by law, jooling will not be liable
@@ -559,7 +787,7 @@ export function TermsPage() {
 				},
 				{
 					id: "indemnity",
-					heading: "10. Indemnification",
+					heading: "11. Indemnification",
 					body: (
 						<p>
 							You agree to defend, indemnify, and hold harmless jooling from
@@ -571,52 +799,69 @@ export function TermsPage() {
 				},
 				{
 					id: "termination",
-					heading: "11. Suspension and termination",
+					heading: "12. Suspension and termination",
 					body: (
 						<p>
-							We may suspend or terminate access to the Service if you violate
-							these Terms or use the Service in a way that creates risk or legal
-							exposure. You may stop using the Service at any time and may
-							cancel your subscription from your billing settings. Sections that
-							by their nature should survive termination, such as intellectual
-							property, disclaimers, liability, and indemnity, will survive.
+							You may stop using the Service at any time and may cancel your
+							subscription in your billing settings. We may suspend or terminate
+							access if you materially breach these Terms and do not correct the
+							breach within 14 days of our notice, or immediately where required
+							to respond to a security incident, an unlawful use, a legal
+							obligation, or non-payment. Where practicable we will tell you
+							before suspension and explain what is needed to restore access.
+							Before deleting a closed workplace's data we will — where possible
+							— make an export available as described in the Privacy Policy.
+							Sections that by their nature should survive termination, such as
+							intellectual property, disclaimers, liability, indemnity, and data
+							processing, will survive.
 						</p>
 					),
 				},
 				{
 					id: "governing-law",
-					heading: "12. Governing law and disputes",
+					heading: "13. Governing law and disputes",
 					body: (
 						<p>
-							These Terms are governed by the laws of the jurisdiction in which
-							jooling is established, without regard to conflict of law rules.
-							Before filing a formal claim, you agree to try to resolve any
-							dispute informally by contacting us. Nothing in these Terms limits
-							rights you may have under mandatory local law.
+							These Terms are governed by {LEGAL_ENTITY.governingLaw}, without
+							regard to conflict of law rules. The exclusive venue for any
+							dispute is {LEGAL_ENTITY.venue}, except that either party may
+							bring a claim in its local small-claims or consumer court where
+							local law gives it that right. Before filing a formal claim, you
+							agree to try to resolve any dispute informally by contacting us —
+							we will respond within 30 days. Nothing in these Terms limits
+							rights you may have under mandatory local law, including the law
+							of your usual residence where it protects consumers.
 						</p>
 					),
 				},
 				{
 					id: "changes",
-					heading: "13. Changes to these Terms",
+					heading: "14. Changes to these Terms",
 					body: (
 						<p>
 							We may update these Terms from time to time. When we make material
-							changes, we will update the date above and, where appropriate,
-							notify you in the Service or by email. Your continued use of the
-							Service after an update means you accept the revised Terms.
+							changes, we will update the date above and, for existing
+							subscribers, notify you in the Service at least 30 days before the
+							changes take effect. Your continued use of the Service after an
+							update takes effect means you accept the revised Terms.
 						</p>
 					),
 				},
 				{
 					id: "contact",
-					heading: "14. Contact us",
+					heading: "15. Contact us",
 					body: (
 						<p>
-							Questions about these Terms can be sent to{" "}
-							<a href="mailto:legal@jooling.com">legal@jooling.com</a>. For
-							product help, reach us at{" "}
-							<a href="mailto:support@jooling.com">support@jooling.com</a>.
+							{LEGAL_ENTITY.legalName} · {LEGAL_ENTITY.address}. Questions about
+							these Terms can be sent to{" "}
+							<a href={`mailto:${LEGAL_ENTITY.contactEmail}`}>
+								{LEGAL_ENTITY.contactEmail}
+							</a>
+							. For product help, reach us at{" "}
+							<a href={`mailto:${LEGAL_ENTITY.supportEmail}`}>
+								{LEGAL_ENTITY.supportEmail}
+							</a>
+							.
 						</p>
 					),
 				},

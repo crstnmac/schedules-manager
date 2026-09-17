@@ -52,9 +52,19 @@ import {
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { captureComparisonVisit } from "./analytics";
+import { CookieConsent } from "./cookie-consent";
+import { DpaPage } from "./dpa";
 import { LandingLink } from "./landing-link";
 import { PrivacyPolicyPage, TermsPage } from "./legal";
 import { usePathname } from "./router";
+import { LEGAL_ENTITY } from "./site-config";
+import {
+	ComparisonPage,
+	competitors,
+	OpeningRestaurantSection,
+	SwitchingSection,
+} from "./switching";
 import "./styles.css";
 
 const appUrl = import.meta.env.VITE_APP_URL || "http://localhost:3001";
@@ -143,7 +153,7 @@ const faqs = [
 	],
 	[
 		"How does the free trial work?",
-		"Every plan starts with 30 days free. You can invite your whole team and use the complete plan before your first charge, then manage or cancel billing at any time.",
+		"Every plan starts with 30 days free, and new restaurants can opt into a 90-day trial. You can invite your whole team and use the complete plan before your first charge, then manage or cancel billing at any time.",
 	],
 ];
 function Brand() {
@@ -703,6 +713,8 @@ function HomePage() {
 						Shift scheduling for hourly teams.
 						<br />
 						Plan shifts, handle changes, and keep everyone in sync.
+						<br />
+						No worker fees. Your whole team is included.
 					</motion.p>
 					<motion.div className="hero-actions" variants={fadeUp}>
 						<CTA>Get started</CTA>
@@ -927,6 +939,8 @@ function HomePage() {
 						</div>
 					</div>
 				</section>
+				<SwitchingSection />
+				<OpeningRestaurantSection />
 				<Pricing />
 				<section className="faq-section" id="faq">
 					<motion.div
@@ -1007,11 +1021,17 @@ function HomePage() {
 					</div>
 				</div>
 				<div className="footer-bottom section-container">
-					<span>© {new Date().getFullYear()} jooling</span>
+					<span>
+						© {new Date().getFullYear()} {LEGAL_ENTITY.legalName}
+					</span>
 					<nav className="footer-legal" aria-label="Legal">
 						<LandingLink href="/privacy">Privacy Policy</LandingLink>
 						<LandingLink href="/terms">Terms &amp; Conditions</LandingLink>
+						<LandingLink href="/dpa">DPA</LandingLink>
 					</nav>
+				</div>
+				<div className="footer-entity section-container">
+					{LEGAL_ENTITY.legalName} · {LEGAL_ENTITY.address}
 				</div>
 				<div
 					className="footer-landscape"
@@ -1040,6 +1060,20 @@ const routeSeo: Record<string, { title: string; description: string }> = {
 		description:
 			"Read the terms and conditions that govern access to and use of jooling's scheduling products and services.",
 	},
+	"/dpa": {
+		title: "Data Processing Addendum — jooling",
+		description:
+			"How jooling processes workplace data on behalf of business customers: roles, subprocessors, security, and transfer safeguards.",
+	},
+	...Object.fromEntries(
+		competitors.map((competitor) => [
+			`/vs/${competitor.slug}`,
+			{
+				title: `jooling — ${competitor.name} alternative for shift scheduling`,
+				description: `Explore jooling as an alternative to ${competitor.name}. Plan, publish, and manage team schedules with clear per-location pricing.`,
+			},
+		]),
+	),
 };
 
 function setMeta(selector: string, value: string) {
@@ -1052,6 +1086,11 @@ function App() {
 
 	useEffect(() => {
 		const seo = routeSeo[pathname] ?? routeSeo["/"];
+		if (
+			pathname.startsWith("/vs/") &&
+			competitors.some((competitor) => `/vs/${competitor.slug}` === pathname)
+		)
+			captureComparisonVisit(pathname.slice(4));
 		const canonicalUrl = `${siteUrl}${pathname === "/" ? "/" : pathname}`;
 
 		document.title = seo.title;
@@ -1068,6 +1107,15 @@ function App() {
 
 	if (pathname === "/privacy") return <PrivacyPolicyPage />;
 	if (pathname === "/terms") return <TermsPage />;
+	if (pathname === "/dpa") return <DpaPage />;
+	if (pathname.startsWith("/vs/")) {
+		const slug = pathname.slice(4);
+		return competitors.some((competitor) => competitor.slug === slug) ? (
+			<ComparisonPage slug={slug} />
+		) : (
+			<HomePage />
+		);
+	}
 	return <HomePage />;
 }
 
@@ -1078,6 +1126,7 @@ createRoot(root).render(
 	<React.StrictMode>
 		<MotionRoot>
 			<App />
+			<CookieConsent />
 		</MotionRoot>
 	</React.StrictMode>,
 );

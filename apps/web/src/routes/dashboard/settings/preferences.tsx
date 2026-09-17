@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-
+import { LegalDocumentsCard } from "@/components/settings/legal-documents";
 import { SettingsPage } from "@/components/settings/page";
 import { DisplayPreferencesCard } from "@/components/settings/personal";
 import { useMe } from "@/lib/queries";
@@ -24,6 +24,7 @@ function PreferencesSettingsPage() {
 				isLoading={me.isLoading}
 				onChange={() => queryClient.invalidateQueries({ queryKey: ["me"] })}
 			/>
+			<LegalDocumentsCard />
 		</SettingsPage>
 	);
 }

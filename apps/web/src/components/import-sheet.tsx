@@ -15,6 +15,7 @@ import { toast } from "sonner";
 
 import { FormSheet } from "@/components/form-sheet";
 import { api } from "@/lib/api";
+import { spreadsheetRowsToCsv } from "@/lib/import-spreadsheet";
 
 export interface ImportFailure {
 	line: number;
@@ -53,6 +54,8 @@ export interface ImportSheetProps<TEntry> {
 	onImported: () => void;
 	/** Runs after a successful commit, for domain-specific side effects. */
 	onCommitted?: (result: ImportResult<TEntry>) => void;
+	/** Block commit until every row passes preview validation. */
+	requireAllValid?: boolean;
 }
 
 /**
@@ -70,6 +73,7 @@ export function ImportSheet<TEntry>({
 	entryKey,
 	onImported,
 	onCommitted,
+	requireAllValid = false,
 }: ImportSheetProps<TEntry>) {
 	const [mode, setMode] = useState(() => modes[0]?.value ?? "");
 	const [fileName, setFileName] = useState<string | null>(null);
@@ -145,16 +149,33 @@ export function ImportSheet<TEntry>({
 	}
 
 	async function readFile(file: File) {
-		setResult(null);
-		setCommitted(false);
-		setFileName(file.name);
-		setCsv(await file.text());
+		try {
+			setResult(null);
+			setCommitted(false);
+			setFileName(file.name);
+			if (/\.xlsx$/i.test(file.name)) {
+				const { default: readXlsxFile } = await import("read-excel-file");
+				const rows = await readXlsxFile(file);
+				setCsv(spreadsheetRowsToCsv(rows));
+			} else {
+				setCsv(await file.text());
+			}
+		} catch (error) {
+			setCsv("");
+			toast.error(
+				error instanceof Error ? error.message : "Could not read spreadsheet",
+			);
+		}
 	}
 
 	if (!activeMode) return null;
 
 	const importedSuffix = committed ? "Imported" : "Ready";
-	const canCommit = Boolean(csv) && !committed && result !== null;
+	const canCommit =
+		Boolean(csv) &&
+		!committed &&
+		result !== null &&
+		(!requireAllValid || (result.failed.length === 0 && result.imported > 0));
 
 	return (
 		<FormSheet
@@ -237,12 +258,12 @@ export function ImportSheet<TEntry>({
 					{fileName ? (
 						<span className="font-medium text-foreground">{fileName}</span>
 					) : (
-						<span>Choose a CSV file</span>
+						<span>Choose a CSV or XLSX file</span>
 					)}
 					<input
 						id="import-sheet-file"
 						type="file"
-						accept=".csv,text/csv"
+						accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 						className="sr-only"
 						onChange={(event) => {
 							const file = event.target.files?.[0];

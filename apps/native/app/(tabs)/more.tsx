@@ -1,7 +1,7 @@
 import { Icon, ListItem, Text as NativeText } from "@expo/ui";
 import { MaterialIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, Linking, StyleSheet, Text, View } from "react-native";
 import { SettingsGroup } from "@/components/settings-group";
 
 import {
@@ -12,7 +12,9 @@ import {
 	useAppTheme,
 } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
+import { LEGAL_LINKS } from "@/lib/legal";
 import { useCurrentEmployment } from "@/lib/queries";
+import { getAppUrl } from "@/lib/server-url";
 import { useSelectedWorkplaceId } from "@/lib/workplace-store";
 
 // Platform-native icons: SF Symbols on iOS, Material Symbols on Android.
@@ -56,6 +58,14 @@ const ICONS = {
 	chevron: Icon.select({
 		ios: "chevron.right",
 		android: import("@expo/material-symbols/chevron_right.xml"),
+	}),
+	legal: Icon.select({
+		ios: "doc.text",
+		android: import("@expo/material-symbols/description.xml"),
+	}),
+	billing: Icon.select({
+		ios: "creditcard",
+		android: import("@expo/material-symbols/credit_card.xml"),
 	}),
 } as const;
 
@@ -241,8 +251,45 @@ export default function MoreScreen() {
 				) : null}
 			</SettingsGroup>
 
+			<SectionLabel>LEGAL</SectionLabel>
+			<SettingsGroup>
+				{LEGAL_LINKS.map((link) => (
+					<ListItem
+						key={link.label}
+						onPress={() => void Linking.openURL(link.url)}
+						supportingText={link.url.replace("https://", "")}
+						leading={
+							<Icon name={ICONS.legal} size={21} color={theme.primary} />
+						}
+						trailing={
+							<Icon name={ICONS.chevron} size={14} color={theme.muted} />
+						}
+					>
+						{link.label}
+					</ListItem>
+				))}
+			</SettingsGroup>
+
 			<SectionLabel>ACCOUNT</SectionLabel>
 			<SettingsGroup>
+				{canManage ? (
+					<ListItem
+						onPress={() =>
+							void Linking.openURL(
+								`${getAppUrl()}/dashboard/settings/subscription`,
+							)
+						}
+						supportingText="Plan, invoices, and cancellation"
+						leading={
+							<Icon name={ICONS.billing} size={21} color={theme.primary} />
+						}
+						trailing={
+							<Icon name={ICONS.chevron} size={14} color={theme.muted} />
+						}
+					>
+						Subscription &amp; billing
+					</ListItem>
+				) : null}
 				<ListItem
 					onPress={confirmSignOut}
 					supportingText="Sign out of this device"

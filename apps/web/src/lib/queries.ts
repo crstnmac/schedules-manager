@@ -372,6 +372,16 @@ export interface ScheduleResponse {
 				name: string;
 				email: string;
 				status: "sent" | "delivered" | "acknowledged";
+				push: {
+					status:
+						| "not_queued"
+						| "queued"
+						| "receipt_pending"
+						| "provider_accepted"
+						| "failed"
+						| "no_device";
+					error: string | null;
+				};
 				acknowledgedAt: string | null;
 			}[];
 		}[];
@@ -727,6 +737,10 @@ export interface BillingSummary {
 	} | null;
 	locationCount: number;
 	paidLocationCount: number | null;
+	trialPolicy: {
+		eligible: boolean;
+		days: number;
+	};
 	capabilities: {
 		scheduling: boolean;
 		operations: boolean;
