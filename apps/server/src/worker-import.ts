@@ -32,7 +32,14 @@ const HEADER_ALIASES: HeaderAliases = {
 	full_name: "name",
 	worker_name: "name",
 	employee_name: "name",
+	user_name: "name",
+	first_name: "firstName",
+	firstname: "firstName",
+	last_name: "lastName",
+	surname: "lastName",
 	email: "email",
+	email_address: "email",
+	employee_email: "email",
 	worker_email: "email",
 	employment_email: "email",
 	phone: "phone",
@@ -40,7 +47,10 @@ const HEADER_ALIASES: HeaderAliases = {
 	mobile: "phone",
 	position: "position",
 	job_title: "position",
+	role: "position",
+	department: "position",
 	location: "location",
+	job_site: "location",
 	site: "location",
 	branch: "location",
 };
@@ -93,7 +103,12 @@ export function parseWorkerImportCsv(text: string): {
 		rows.push({
 			line,
 			email,
-			name: cell(row.values, map, "name") || null,
+			name:
+				cell(row.values, map, "name") ||
+				[cell(row.values, map, "firstName"), cell(row.values, map, "lastName")]
+					.filter(Boolean)
+					.join(" ") ||
+				null,
 			phone: cell(row.values, map, "phone") || null,
 			position: cell(row.values, map, "position") || null,
 			location: cell(row.values, map, "location") || null,

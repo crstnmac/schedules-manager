@@ -24,6 +24,7 @@ import { registerReportTests } from "./report-cases";
 import { registerReportsTests } from "./reports-cases";
 import { registerStalePositionTests } from "./stale-position-cases";
 import { registerTimeClockTests } from "./time-clock-cases";
+import { registerTrialPolicyTests } from "./trial-policy-cases";
 import { registerWorkspaceAutoAcceptTests } from "./workspace-auto-accept-cases";
 
 const integrationDescribe =
@@ -131,6 +132,7 @@ integrationDescribe("Schedule publication", () => {
 	registerStalePositionTests(() => ({ database, app, token: managerToken }));
 	registerLeaveTests(() => ({ database, app, token: managerToken }));
 	registerLocationBillingTests(() => ({ database, app, token: managerToken }));
+	registerTrialPolicyTests(() => ({ database, app, token: managerToken }));
 	registerOwnReleaseTests(() => ({ database, app, token: managerToken }));
 	registerAcceptanceRaceTests(() => ({ database, app, token: managerToken }));
 	registerAutoClockOutBreaksTests(() => ({
@@ -146,6 +148,230 @@ integrationDescribe("Schedule publication", () => {
 		emaillessToken,
 		emptyEmailToken,
 	}));
+
+	test("schedule CSV preview validates atomically and commit creates only draft shifts", async () => {
+		const managerId = crypto.randomUUID();
+		const email = `import-manager-${managerId}@example.test`;
+		const [workplace] = await database.db
+			.insert(database.workplaces)
+			.values({ name: "Import Test" })
+			.returning();
+		const [location] = await database.db
+			.insert(database.locations)
+			.values({
+				workplaceId: workplace.id,
+				name: "Main",
+				timezone: "America/Chicago",
+			})
+			.returning();
+		await database.db
+			.insert(database.positions)
+			.values({ workplaceId: workplace.id, name: "Server" });
+		await database.db
+			.insert(database.profiles)
+			.values({ id: managerId, email });
+		await database.db.insert(database.employments).values({
+			workplaceId: workplace.id,
+			profileId: managerId,
+			kind: "manager",
+		});
+		const token = await managerToken(managerId, email);
+		const path = `http://localhost/v1/locations/${location.id}/schedules/2026-09-07/import`;
+		const request = (csv: string, dryRun: boolean) =>
+			app.handle(
+				new Request(path, {
+					method: "POST",
+					headers: {
+						authorization: `Bearer ${token}`,
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({ csv, dryRun }),
+				}),
+			);
+		const valid =
+			"date,start_time,end_time,position,worker_email\n2026-09-07,09:00,17:00,Server,";
+		const preview = await request(valid, true);
+		expect(preview.status).toBe(200);
+		expect((await preview.json()).import.imported).toBe(1);
+		const invalid = await request(
+			`${valid}\n2026-09-08,09:00,17:00,Unknown,`,
+			false,
+		);
+		expect(invalid.status).toBe(200);
+		expect((await invalid.json()).import).toMatchObject({
+			imported: 0,
+			failed: [{ line: 3 }],
+		});
+		const committed = await request(valid, false);
+		expect(committed.status).toBe(200);
+		expect((await committed.json()).import.imported).toBe(1);
+		const [schedule] = await database.db
+			.select()
+			.from(database.schedules)
+			.where(eq(database.schedules.locationId, location.id));
+		expect(
+			await database.db
+				.select()
+				.from(database.shifts)
+				.where(eq(database.shifts.scheduleId, schedule.id)),
+		).toHaveLength(1);
+		expect(
+			await database.db
+				.select()
+				.from(database.scheduleVersions)
+				.where(eq(database.scheduleVersions.scheduleId, schedule.id)),
+		).toHaveLength(0);
+		const duplicate = await request(valid, false);
+		expect((await duplicate.json()).import.imported).toBe(0);
+		const workerId = crypto.randomUUID();
+		await database.db.insert(database.profiles).values({
+			id: workerId,
+			email: `alex-${workerId}@example.test`,
+			fullName: "Alex Worker",
+		});
+		await database.db.insert(database.employments).values({
+			workplaceId: workplace.id,
+			profileId: workerId,
+			kind: "worker",
+		});
+		await database.db
+			.insert(database.positions)
+			.values({ workplaceId: workplace.id, name: "Bartender" });
+		const slingCsv =
+			',2026-09-07,2026-09-08\nScheduled shifts\nAlex Worker,,"9:00 AM - 5:00 PM • 8h\nBartender • Source location\n "';
+		const slingPreview = await request(slingCsv, true);
+		expect(slingPreview.status).toBe(200);
+		expect((await slingPreview.json()).import).toMatchObject({
+			imported: 1,
+			failed: [],
+		});
+		const slingCommit = await request(slingCsv, false);
+		expect(slingCommit.status).toBe(200);
+		expect((await slingCommit.json()).import.imported).toBe(1);
+		expect(
+			await database.db
+				.select()
+				.from(database.shifts)
+				.where(eq(database.shifts.scheduleId, schedule.id)),
+		).toHaveLength(2);
+		const duplicateNameId = crypto.randomUUID();
+		await database.db.insert(database.profiles).values({
+			id: duplicateNameId,
+			email: `alex-${duplicateNameId}@example.test`,
+			fullName: "Alex Worker",
+		});
+		await database.db.insert(database.employments).values({
+			workplaceId: workplace.id,
+			profileId: duplicateNameId,
+			kind: "worker",
+		});
+		const ambiguous = await request(slingCsv, true);
+		expect((await ambiguous.json()).import).toMatchObject({
+			imported: 0,
+			failed: [{ line: 3 }],
+		});
+		const exported = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${workplace.id}/export/draft-shifts`,
+				{ headers: { authorization: `Bearer ${token}` } },
+			),
+		);
+		expect(exported.status).toBe(200);
+		expect(await exported.text()).toContain("alex-");
+		const otherId = crypto.randomUUID();
+		const otherEmail = `other-${otherId}@example.test`;
+		const [otherWorkplace] = await database.db
+			.insert(database.workplaces)
+			.values({ name: "Other" })
+			.returning();
+		await database.db
+			.insert(database.profiles)
+			.values({ id: otherId, email: otherEmail });
+		await database.db.insert(database.employments).values({
+			workplaceId: otherWorkplace.id,
+			profileId: otherId,
+			kind: "manager",
+		});
+		const otherToken = await managerToken(otherId, otherEmail);
+		const forbidden = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${workplace.id}/export/workers`,
+				{ headers: { authorization: `Bearer ${otherToken}` } },
+			),
+		);
+		expect(forbidden.status).toBe(403);
+		const published = await publishScheduleNow(schedule.id, managerId);
+		const linked = await database.db
+			.select({ id: database.notifications.id })
+			.from(database.notifications)
+			.where(
+				eq(database.notifications.scheduleVersionId, published.version.id),
+			);
+		expect(linked).toHaveLength(1);
+		// Published history is part of the portability promise made on the
+		// landing page: workers, draft shifts, and the versions they replaced.
+		const publishedShifts = await app.handle(
+			new Request(
+				`http://localhost/v1/workplaces/${workplace.id}/export/published-shifts`,
+				{ headers: { authorization: `Bearer ${token}` } },
+			),
+		);
+		expect(publishedShifts.status).toBe(200);
+		const publishedCsv = await publishedShifts.text();
+		expect(publishedCsv).toContain("version_number");
+		expect(publishedCsv).toContain("published_at_utc");
+		// Consent records back the clickwrap at sign-up; they must survive the
+		// three-year retention window the auto-renewal laws require.
+		await database.db.insert(database.legalAcceptances).values({
+			profileId: managerId,
+			kind: "terms",
+			version: "2026-09-17",
+			surface: "sign-up",
+		});
+		const acceptance = await app.handle(
+			new Request("http://localhost/v1/legal/acceptances", {
+				method: "POST",
+				headers: {
+					authorization: `Bearer ${token}`,
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					kind: "billing",
+					version: "2026-09-17",
+					surface: "checkout",
+				}),
+			}),
+		);
+		expect(acceptance.status).toBe(200);
+		const acceptances = await app.handle(
+			new Request("http://localhost/v1/legal/acceptances", {
+				headers: { authorization: `Bearer ${token}` },
+			}),
+		);
+		expect(await acceptances.json()).toMatchObject({
+			terms: { version: "2026-09-17" },
+			billing: { version: "2026-09-17" },
+			currentVersion: "2026-09-17",
+		});
+		await processNotificationOutboxBatch();
+		const scheduleResponse = await app.handle(
+			new Request(
+				`http://localhost/v1/locations/${location.id}/schedules/2026-09-07`,
+				{ headers: { authorization: `Bearer ${token}` } },
+			),
+		);
+		const schedulePayload = await scheduleResponse.json();
+		expect(["queued", "no_device"]).toContain(
+			schedulePayload.publication.versions[0].workers[0].push.status,
+		);
+		const retry = await app.handle(
+			new Request(
+				`http://localhost/v1/schedules/${schedule.id}/publications/${published.version.id}/retry-push`,
+				{ method: "POST", headers: { authorization: `Bearer ${token}` } },
+			),
+		);
+		expect((await retry.json()).requeued).toBe(0);
+	});
 
 	test("Better Auth sign-up creates a cookie session, profile, and revocable API access", async () => {
 		const email = `auth-${crypto.randomUUID()}@example.test`;

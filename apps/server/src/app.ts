@@ -24,12 +24,14 @@ import { integrationRoutes } from "./routes/integrations";
 import { invitationsRoutes } from "./routes/invitations";
 import { kioskRoutes } from "./routes/kiosk";
 import { leaveRoutes } from "./routes/leave";
+import { legalRoutes } from "./routes/legal";
 import { locationsRoutes } from "./routes/locations";
 import { meRoutes } from "./routes/me";
 import { notificationsRoutes } from "./routes/notifications";
 import { patternRoutes } from "./routes/patterns";
 import { pilotRoutes } from "./routes/pilot";
 import { placesRoutes } from "./routes/places";
+import { portabilityRoutes } from "./routes/portability";
 import { positionsRoutes } from "./routes/positions";
 import { publicationRoutes } from "./routes/publication";
 import { reportRoutes } from "./routes/reports";
@@ -205,7 +207,9 @@ export function createApp(options: CreateAppOptions = {}) {
 			},
 		)
 		.use(meRoutes)
+		.use(legalRoutes)
 		.use(billingRoutes)
+		.use(portabilityRoutes)
 		.use(workplacesRoutes)
 		.use(locationsRoutes)
 		.use(placesRoutes)

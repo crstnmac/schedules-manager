@@ -3,9 +3,13 @@ import {
 	employmentLocations,
 	employments,
 	locations,
+	notificationOutbox,
+	notifications,
 	openShifts,
 	positions,
 	profiles,
+	pushDeliveries,
+	pushTokens,
 	schedules,
 	scheduleVersions,
 	shiftAcceptances,
@@ -490,6 +494,7 @@ export async function publishScheduleNow(
 			workerIds,
 			{
 				kind: "schedule_published",
+				scheduleVersionId: version.id,
 				title: "Your schedule is ready",
 				body: `${location.name}: version ${version.versionNumber} for the week of ${schedule.weekStartDate} has been published.`,
 			},
@@ -612,6 +617,64 @@ export async function loadPublicationVersions(scheduleId: string) {
 		.innerJoin(employments, eq(employments.id, workerDeliveries.employmentId))
 		.innerJoin(profiles, eq(profiles.id, employments.profileId))
 		.where(inArray(workerDeliveries.versionId, versionIds));
+	const notificationRows = await db
+		.select({
+			versionId: notifications.scheduleVersionId,
+			employmentId: notifications.employmentId,
+			outboxId: notificationOutbox.id,
+			processedAt: notificationOutbox.processedAt,
+			lastError: notificationOutbox.lastError,
+		})
+		.from(notifications)
+		.leftJoin(
+			notificationOutbox,
+			eq(notificationOutbox.notificationId, notifications.id),
+		)
+		.where(
+			and(
+				inArray(notifications.scheduleVersionId, versionIds),
+				eq(notifications.kind, "schedule_published"),
+			),
+		);
+	const outboxIds = notificationRows.flatMap((row) =>
+		row.outboxId ? [row.outboxId] : [],
+	);
+	const [pushRows, tokenRows] = await Promise.all([
+		outboxIds.length
+			? db
+					.select({
+						outboxId: pushDeliveries.outboxId,
+						status: pushDeliveries.status,
+						lastError: pushDeliveries.lastError,
+					})
+					.from(pushDeliveries)
+					.where(inArray(pushDeliveries.outboxId, outboxIds))
+			: Promise.resolve([]),
+		deliveryRows.length
+			? db
+					.select({ employmentId: pushTokens.employmentId })
+					.from(pushTokens)
+					.where(
+						inArray(
+							pushTokens.employmentId,
+							deliveryRows.map((row) => row.delivery.employmentId),
+						),
+					)
+			: Promise.resolve([]),
+	]);
+	const tokenEmploymentIds = new Set(tokenRows.map((row) => row.employmentId));
+	const pushByOutbox = new Map<string, typeof pushRows>();
+	for (const row of pushRows) {
+		const list = pushByOutbox.get(row.outboxId) ?? [];
+		list.push(row);
+		pushByOutbox.set(row.outboxId, list);
+	}
+	const notificationByWorker = new Map(
+		notificationRows.map((row) => [
+			`${row.versionId}:${row.employmentId}`,
+			row,
+		]),
+	);
 
 	return versions.map((version) => ({
 		id: version.id,
@@ -620,6 +683,32 @@ export async function loadPublicationVersions(scheduleId: string) {
 		workers: deliveryRows
 			.filter((row) => row.delivery.versionId === version.id)
 			.map((row) => ({
+				push: (() => {
+					const notification = notificationByWorker.get(
+						`${version.id}:${row.delivery.employmentId}`,
+					);
+					if (!notification) return { status: "not_queued", error: null };
+					const pushes = pushByOutbox.get(notification.outboxId ?? "") ?? [];
+					if (pushes.some((push) => push.status === "delivered"))
+						return { status: "provider_accepted", error: null };
+					if (pushes.some((push) => push.status === "sent"))
+						return { status: "receipt_pending", error: null };
+					if (pushes.some((push) => push.status === "failed"))
+						return {
+							status: "failed",
+							error:
+								pushes.find((push) => push.status === "failed")?.lastError ??
+								null,
+						};
+					if (notification.lastError)
+						return { status: "failed", error: notification.lastError };
+					if (
+						!tokenEmploymentIds.has(row.delivery.employmentId) &&
+						notification.processedAt
+					)
+						return { status: "no_device", error: null };
+					return { status: "queued", error: null };
+				})(),
 				employmentId: row.delivery.employmentId,
 				name: row.fullName ?? row.email,
 				email: row.email,
@@ -633,6 +722,102 @@ export const publicationRoutes = new Elysia({
 	prefix: "/v1",
 	tags: ["Publication"],
 })
+	.post(
+		"/schedules/:scheduleId/publications/:versionId/retry-push",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers);
+			const { schedule, location } = await scheduleContext(params.scheduleId);
+			await requirePrivilege(
+				profile.id,
+				location.workplaceId,
+				"schedule.publish",
+			);
+			const [version] = await db
+				.select({ id: scheduleVersions.id })
+				.from(scheduleVersions)
+				.where(
+					and(
+						eq(scheduleVersions.id, params.versionId),
+						eq(scheduleVersions.scheduleId, schedule.id),
+					),
+				)
+				.limit(1);
+			if (!version) throw new NotFoundError("Publication not found");
+			const rows = await db
+				.select({
+					outboxId: notificationOutbox.id,
+					employmentId: notifications.employmentId,
+				})
+				.from(notifications)
+				.innerJoin(
+					notificationOutbox,
+					eq(notificationOutbox.notificationId, notifications.id),
+				)
+				.where(
+					and(
+						eq(notifications.scheduleVersionId, version.id),
+						eq(notifications.kind, "schedule_published"),
+					),
+				);
+			const ids = rows.map((row) => row.outboxId);
+			if (ids.length === 0) return { requeued: 0 };
+			const pushRows = await db
+				.select({
+					outboxId: pushDeliveries.outboxId,
+					status: pushDeliveries.status,
+				})
+				.from(pushDeliveries)
+				.where(inArray(pushDeliveries.outboxId, ids));
+			const hasDevice = new Set(
+				(
+					await db
+						.select({ employmentId: pushTokens.employmentId })
+						.from(pushTokens)
+						.where(
+							inArray(
+								pushTokens.employmentId,
+								rows.map((row) => row.employmentId),
+							),
+						)
+				).map((row) => row.employmentId),
+			);
+			const retryIds = rows
+				.filter(
+					(row) =>
+						hasDevice.has(row.employmentId) &&
+						!pushRows.some(
+							(push) =>
+								push.outboxId === row.outboxId && push.status !== "failed",
+						),
+				)
+				.map((row) => row.outboxId);
+			if (retryIds.length > 0)
+				await db
+					.update(notificationOutbox)
+					.set({
+						processedAt: null,
+						availableAt: new Date(),
+						lockedAt: null,
+						lastError: null,
+					})
+					.where(inArray(notificationOutbox.id, retryIds));
+			return { requeued: retryIds.length };
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({
+				scheduleId: t.String({ format: "uuid" }),
+				versionId: t.String({ format: "uuid" }),
+			}),
+			detail: {
+				summary: "Retry failed or unsent schedule push notifications",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
 	.post(
 		"/schedules/:scheduleId/publish",
 		async ({ headers, params }) => {

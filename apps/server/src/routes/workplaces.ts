@@ -115,7 +115,13 @@ export const workplacesRoutes = new Elysia({
 				}
 
 				const workplace = firstRow(
-					await tx.insert(workplaces).values({ name: body.name }).returning(),
+					await tx
+						.insert(workplaces)
+						.values({
+							name: body.name,
+							openingRestaurantOffer: body.openingRestaurantOffer ?? false,
+						})
+						.returning(),
 				);
 
 				await tx.insert(employments).values({
@@ -165,6 +171,7 @@ export const workplacesRoutes = new Elysia({
 				{ additionalProperties: true },
 			),
 			body: t.Object({
+				openingRestaurantOffer: t.Optional(t.Boolean()),
 				// Control characters are rejected so the workplace name is always
 				// safe single-line text for email subjects and plain-text bodies.
 				name: t.String({

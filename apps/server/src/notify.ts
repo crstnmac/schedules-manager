@@ -88,7 +88,12 @@ async function employmentIdsAllowingKind(
 
 export async function notifyEmployments(
 	employmentIds: string[],
-	payload: { kind: string; title: string; body: string },
+	payload: {
+		kind: string;
+		title: string;
+		body: string;
+		scheduleVersionId?: string;
+	},
 	writer: NotificationWriter = db,
 ): Promise<void> {
 	const unique = [
@@ -112,7 +117,12 @@ export async function notifyEmployments(
 
 async function insertEmploymentNotifications(
 	employmentIds: string[],
-	payload: { kind: string; title: string; body: string },
+	payload: {
+		kind: string;
+		title: string;
+		body: string;
+		scheduleVersionId?: string;
+	},
 	writer: NotificationWriter,
 ) {
 	const created = await writer
@@ -123,6 +133,7 @@ async function insertEmploymentNotifications(
 				kind: payload.kind,
 				title: payload.title,
 				body: payload.body,
+				scheduleVersionId: payload.scheduleVersionId,
 			})),
 		)
 		.returning({ id: notifications.id });
@@ -147,10 +158,12 @@ export async function deliverPushes(
 	if (tokens.length === 0) return;
 
 	const previous = await db
-		.select({ token: pushDeliveries.token })
+		.select({ token: pushDeliveries.token, status: pushDeliveries.status })
 		.from(pushDeliveries)
 		.where(eq(pushDeliveries.outboxId, outboxId));
-	const sentTokens = new Set(previous.map((row) => row.token));
+	const sentTokens = new Set(
+		previous.filter((row) => row.status !== "failed").map((row) => row.token),
+	);
 	const messages: ExpoPushMessage[] = tokens
 		.filter((row) => !sentTokens.has(row.token))
 		.map((row) => ({

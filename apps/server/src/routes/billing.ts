@@ -34,6 +34,7 @@ import {
 	ForbiddenError,
 	NotFoundError,
 } from "../errors";
+import { managerEmploymentIds, notifyEmployments, writeAudit } from "../notify";
 import { clientIpFromRequest } from "../rate-limit";
 
 function clientIp(request: Request) {
@@ -101,6 +102,7 @@ function normalizeWebhookEvent(raw: {
 			customerId: data.customerId ?? data.customer_id,
 			currentPeriodEnd: data.currentPeriodEnd ?? data.current_period_end,
 			cancelAtPeriodEnd: data.cancelAtPeriodEnd ?? data.cancel_at_period_end,
+			trialEnd: data.trialEnd ?? data.trial_end,
 			customer: {
 				...customer,
 				externalId: customer.externalId ?? customer.external_id,
@@ -160,6 +162,88 @@ async function providerPlanState(
 }
 
 export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
+	.post(
+		"/workplaces/:workplaceId/billing/cancellation",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers);
+			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const [subscription] = await db
+				.select()
+				.from(workplaceSubscriptions)
+				.where(eq(workplaceSubscriptions.workplaceId, params.workplaceId))
+				.limit(1);
+			if (!subscription) throw new NotFoundError("Subscription not found");
+			if (!hasActiveSubscription(subscription.status))
+				throw new BadRequestError(
+					"Only an active subscription can be canceled or resumed",
+				);
+			const remote = await polarClient().subscriptions.get({
+				id: subscription.polarSubscriptionId,
+			});
+			if (remote.cancelAtPeriodEnd !== body.cancelAtPeriodEnd) {
+				const updated = await polarClient().subscriptions.update({
+					id: subscription.polarSubscriptionId,
+					subscriptionUpdate: { cancelAtPeriodEnd: body.cancelAtPeriodEnd },
+				});
+				await db
+					.update(workplaceSubscriptions)
+					.set({
+						cancelAtPeriodEnd: updated.cancelAtPeriodEnd,
+						currentPeriodEnd: updated.currentPeriodEnd,
+					})
+					.where(eq(workplaceSubscriptions.id, subscription.id));
+				// A durable record that the exit happened, plus a notice managers
+				// can point at later — the ephemeral toast is not proof.
+				const accessEnds = new Intl.DateTimeFormat("en-US", {
+					dateStyle: "long",
+				}).format(updated.currentPeriodEnd);
+				await writeAudit({
+					workplaceId: params.workplaceId,
+					actorProfileId: profile.id,
+					action: body.cancelAtPeriodEnd
+						? "billing.subscription_canceled"
+						: "billing.subscription_resumed",
+					entityType: "workplace_subscription",
+					entityId: subscription.id,
+					summary: body.cancelAtPeriodEnd
+						? `Subscription cancelled; access ends ${accessEnds}`
+						: "Scheduled cancellation reversed; subscription renews as usual",
+				});
+				await notifyEmployments(
+					await managerEmploymentIds(params.workplaceId),
+					{
+						kind: "billing_cancellation_confirmed",
+						title: body.cancelAtPeriodEnd
+							? "Subscription cancellation confirmed"
+							: "Subscription resumed",
+						body: body.cancelAtPeriodEnd
+							? `Access continues until ${accessEnds}, and no further charges will be made. Export your scheduling data any time from Settings → Subscription.`
+							: "Your subscription will renew as usual at the end of the current period.",
+					},
+				);
+				return {
+					cancelAtPeriodEnd: updated.cancelAtPeriodEnd,
+					currentPeriodEnd: updated.currentPeriodEnd.toISOString(),
+				};
+			}
+			return {
+				cancelAtPeriodEnd: remote.cancelAtPeriodEnd,
+				currentPeriodEnd: remote.currentPeriodEnd.toISOString(),
+			};
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			body: t.Object({ cancelAtPeriodEnd: t.Boolean() }),
+			detail: {
+				summary: "Cancel or resume a subscription at period end",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
 	.get(
 		"/workplaces/:workplaceId/billing",
 		async ({ headers, params }) => {
@@ -170,6 +254,11 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 				.from(workplaceSubscriptions)
 				.where(eq(workplaceSubscriptions.workplaceId, params.workplaceId))
 				.limit(1);
+			const [workplace] = await db
+				.select({ openingRestaurantOffer: workplaces.openingRestaurantOffer })
+				.from(workplaces)
+				.where(eq(workplaces.id, params.workplaceId))
+				.limit(1);
 			const [locationTotal] = await db
 				.select({ value: count() })
 				.from(locations)
@@ -177,6 +266,14 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 
 			return {
 				subscription: subscriptionPayload(subscription),
+				trialPolicy: {
+					eligible: !(
+						subscription &&
+						(hasActiveSubscription(subscription.status) ||
+							subscription.status === "past_due")
+					),
+					days: workplace?.openingRestaurantOffer ? 90 : 30,
+				},
 				capabilities: {
 					scheduling: Boolean(
 						subscription && hasActiveSubscription(subscription.status),
@@ -485,7 +582,10 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 				},
 				...(existing
 					? {}
-					: { trialInterval: "day" as const, trialIntervalCount: 30 }),
+					: {
+							trialInterval: "day" as const,
+							trialIntervalCount: workplace.openingRestaurantOffer ? 90 : 30,
+						}),
 				allowDiscountCodes: true,
 				requireBillingAddress: true,
 				successUrl: `${env.APP_URL}/dashboard/settings/subscription?checkout=success&checkout_id={CHECKOUT_ID}`,
@@ -626,6 +726,9 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 			const currentPeriodEnd = subscription.currentPeriodEnd
 				? new Date(subscription.currentPeriodEnd)
 				: null;
+			const trialEndsAt = subscription.trialEnd
+				? new Date(subscription.trialEnd)
+				: null;
 
 			await db.transaction(async (tx) => {
 				const inserted = await tx
@@ -649,6 +752,7 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 								? locationCount
 								: 1,
 						currentPeriodEnd,
+						trialEndsAt,
 						cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
 					})
 					.onConflictDoUpdate({
@@ -665,6 +769,7 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 									? locationCount
 									: 1,
 							currentPeriodEnd,
+							trialEndsAt,
 							cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
 							updatedAt: new Date(),
 						},

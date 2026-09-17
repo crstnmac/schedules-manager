@@ -8,6 +8,7 @@ import {
 	processPushReceiptBatch,
 } from "./notify";
 import { sweepExpiredRateLimits } from "./rate-limit";
+import { processSubscriptionNoticeBatch } from "./subscription-notices";
 import { dispatchWebhookDeliveries } from "./webhooks";
 
 createApp().listen({ port: 3000, hostname: "0.0.0.0" }, () => {
@@ -32,6 +33,15 @@ async function processLeaveAutomation() {
 	await runLeaveAccruals({});
 }
 
+let lastSubscriptionNoticeRun = 0;
+
+/** Trial-ending and annual-renewal notices; the scan itself is idempotent. */
+async function processSubscriptionNotices() {
+	if (Date.now() - lastSubscriptionNoticeRun < 60 * 60_000) return;
+	lastSubscriptionNoticeRun = Date.now();
+	await processSubscriptionNoticeBatch();
+}
+
 async function dispatchNotifications() {
 	if (dispatchInFlight) return;
 	dispatchInFlight = true;
@@ -43,6 +53,7 @@ async function dispatchNotifications() {
 			processAutoClockOutBatch(),
 			dispatchWebhookDeliveries(),
 			processLeaveAutomation(),
+			processSubscriptionNotices(),
 		]);
 		for (const result of results) {
 			if (result.status === "rejected") {

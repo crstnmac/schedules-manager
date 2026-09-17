@@ -26,6 +26,7 @@ import { and, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { requireSubscriptionCapability } from "../billing";
 import { requirePrivilege, requireSession, weekStartDayFor } from "../context";
+import { csvAttachment, type ImportFailure } from "../csv-import";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { laborCents, laborPercent } from "../labor";
 import { firstRow } from "../rows";
@@ -34,6 +35,10 @@ import {
 	consecutiveWorkDayConflicts,
 	isLateArrival,
 } from "../schedule-conflicts";
+import {
+	parseScheduleImportCsv,
+	SCHEDULE_IMPORT_TEMPLATE,
+} from "../schedule-import";
 import { resolveScheduleTeam } from "../schedule-teams";
 import {
 	assertWeekStartDay,
@@ -1428,6 +1433,252 @@ export const schedulesRoutes = new Elysia({
 				summary: "Labor cost and sales rollup for one schedule week (Manager)",
 				security: [{ bearerAuth: [] }],
 			},
+		},
+	)
+	.get(
+		"/locations/:locationId/schedules/import/template.csv",
+		async ({ headers, params, set }) => {
+			const { profile } = await requireSession(headers);
+			const [location] = await db
+				.select()
+				.from(locations)
+				.where(eq(locations.id, params.locationId))
+				.limit(1);
+			if (!location) throw new NotFoundError("Location not found");
+			await requirePrivilege(
+				profile.id,
+				location.workplaceId,
+				"schedule.manage",
+			);
+			csvAttachment(set, "schedule-import-template.csv");
+			return SCHEDULE_IMPORT_TEMPLATE;
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ locationId: t.String({ format: "uuid" }) }),
+		},
+	)
+	.post(
+		"/locations/:locationId/schedules/:weekStart/import",
+		async ({ headers, params, body, query }) => {
+			const { profile } = await requireSession(headers);
+			const [location] = await db
+				.select()
+				.from(locations)
+				.where(eq(locations.id, params.locationId))
+				.limit(1);
+			if (!location) throw new NotFoundError("Location not found");
+			await requirePrivilege(
+				profile.id,
+				location.workplaceId,
+				"schedule.manage",
+			);
+			assertWeekStartDay(
+				params.weekStart,
+				await weekStartDayFor(location.workplaceId),
+			);
+			const teamId = await resolveScheduleTeam(location.id, query.teamId);
+			const parsed = parseScheduleImportCsv(body.csv);
+			const failures: ImportFailure[] = [...parsed.errors];
+			const [positionRows, workforce, existingSchedule] = await Promise.all([
+				db
+					.select()
+					.from(positions)
+					.where(eq(positions.workplaceId, location.workplaceId)),
+				loadWorkforce(location.workplaceId),
+				db
+					.select()
+					.from(schedules)
+					.where(
+						and(
+							eq(schedules.locationId, location.id),
+							eq(schedules.weekStartDate, params.weekStart),
+							scheduleTeamMatch(teamId),
+						),
+					)
+					.limit(1),
+			]);
+			const positionByName = new Map(
+				positionRows.map((row) => [row.name.toLowerCase(), row.id]),
+			);
+			const workerByEmail = new Map(
+				workforce.employmentRows.map((row) => [
+					row.profile.email.toLowerCase(),
+					row.employment.id,
+				]),
+			);
+			const workerIdsByName = new Map<string, string[]>();
+			for (const row of workforce.employmentRows) {
+				if (!row.profile.fullName) continue;
+				const name = row.profile.fullName
+					.trim()
+					.replace(/\s+/g, " ")
+					.toLocaleLowerCase();
+				workerIdsByName.set(name, [
+					...(workerIdsByName.get(name) ?? []),
+					row.employment.id,
+				]);
+			}
+			const sourceLocations = new Set(
+				parsed.rows
+					.map((row) => row.sourceLocation?.toLocaleLowerCase())
+					.filter(Boolean),
+			);
+			if (sourceLocations.size > 1)
+				failures.push({
+					line: 1,
+					message:
+						"This export contains multiple locations. Filter it to one source location before importing into a jooling location.",
+				});
+			const existing = existingSchedule[0]
+				? await db
+						.select()
+						.from(shifts)
+						.where(eq(shifts.scheduleId, existingSchedule[0].id))
+				: [];
+			const keys = new Set(
+				existing.map(
+					(shift) =>
+						`${shift.positionId}|${shift.employmentId ?? ""}|${shift.startsAt.toISOString()}|${shift.endsAt.toISOString()}`,
+				),
+			);
+			const accepted: {
+				line: number;
+				date: string;
+				position: string;
+				email: string | null;
+				workerName: string | null;
+				positionId: string;
+				employmentId: string | null;
+				startsAt: Date;
+				endsAt: Date;
+				note: string | null;
+			}[] = [];
+			for (const row of parsed.rows) {
+				try {
+					assertDateInWeek(row.date, params.weekStart);
+					const positionId = positionByName.get(row.position.toLowerCase());
+					if (!positionId)
+						throw new BadRequestError(`Unknown position "${row.position}"`);
+					let employmentId = row.email ? workerByEmail.get(row.email) : null;
+					if (row.email && !employmentId)
+						throw new BadRequestError(
+							`No active worker has email "${row.email}"`,
+						);
+					if (row.workerName) {
+						const name = row.workerName
+							.trim()
+							.replace(/\s+/g, " ")
+							.toLocaleLowerCase();
+						const matches = workerIdsByName.get(name) ?? [];
+						if (matches.length === 0)
+							throw new BadRequestError(
+								`No active worker has name "${row.workerName}"`,
+							);
+						if (matches.length > 1)
+							throw new BadRequestError(
+								`More than one active worker has name "${row.workerName}"; use the email-based template`,
+							);
+						if (employmentId && employmentId !== matches[0])
+							throw new BadRequestError(
+								`Worker email and name disagree for "${row.workerName}"`,
+							);
+						employmentId = matches[0];
+					}
+					if (employmentId)
+						await assertAssignmentValid(location, employmentId, positionId);
+					const { startsAt, endsAt } = resolveShiftTimes(
+						row,
+						location.timezone,
+					);
+					await overrideReasonIfNeeded(
+						location,
+						employmentId ?? null,
+						startsAt,
+						endsAt,
+						undefined,
+					);
+					const key = `${positionId}|${employmentId ?? ""}|${startsAt.toISOString()}|${endsAt.toISOString()}`;
+					if (keys.has(key))
+						throw new BadRequestError(
+							"Shift already exists in this draft or CSV",
+						);
+					keys.add(key);
+					accepted.push({
+						line: row.line,
+						date: row.date,
+						position: row.position,
+						email: row.email,
+						workerName: row.workerName,
+						positionId,
+						employmentId: employmentId ?? null,
+						startsAt,
+						endsAt,
+						note: row.note,
+					});
+				} catch (error) {
+					failures.push({
+						line: row.line,
+						message: error instanceof Error ? error.message : "Invalid shift",
+					});
+				}
+			}
+			// The import is all-or-nothing; a corrected upload cannot silently omit workers or shifts.
+			if (!body.dryRun && failures.length === 0 && accepted.length > 0) {
+				const schedule = await getOrCreateSchedule(
+					location.id,
+					params.weekStart,
+					teamId,
+				);
+				await db.transaction(async (tx) => {
+					await tx.insert(shifts).values(
+						accepted.map((row) => ({
+							scheduleId: schedule.id,
+							employmentId: row.employmentId,
+							positionId: row.positionId,
+							startsAt: row.startsAt,
+							endsAt: row.endsAt,
+							note: row.note,
+						})),
+					);
+				});
+			}
+			return {
+				import: {
+					dryRun: body.dryRun,
+					total: parsed.rows.length + parsed.errors.length,
+					imported: failures.length === 0 ? accepted.length : 0,
+					failed: failures,
+					entries: accepted.map(
+						({ line, date, position, email, workerName, startsAt }) => ({
+							line,
+							date,
+							position,
+							email,
+							workerName,
+							startsAt: startsAt.toISOString(),
+						}),
+					),
+				},
+			};
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({
+				locationId: t.String({ format: "uuid" }),
+				weekStart: dateSchema,
+			}),
+			query: t.Object({ teamId: t.Optional(t.String({ format: "uuid" })) }),
+			body: t.Object({
+				csv: t.String({ minLength: 1, maxLength: 1_000_000 }),
+				dryRun: t.Boolean(),
+			}),
 		},
 	)
 	.post(
