@@ -4,8 +4,13 @@
 #   docker build -f apps/web/Dockerfile \
 #     --build-arg VITE_SERVER_URL=https://api.example.com \
 #     --build-arg VITE_DOCS_URL=https://docs.jooling.com \
+#     --build-arg VITE_LANDING_URL=https://jooling.com \
+#     --build-arg VITE_TERMS_VERSION=2026-09-17 \
 #     --build-arg VITE_PUBLIC_POSTHOG_PROJECT_TOKEN=... \
 #     -t schedules-manager-web .
+#
+# VITE_* values are inlined into the bundle at build time, so they are build
+# inputs, not runtime settings: changing them requires a rebuild.
 
 FROM oven/bun:1.3.11-slim AS base
 WORKDIR /app
@@ -39,10 +44,17 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 FROM deps AS build
 ARG VITE_SERVER_URL=http://localhost:3000
 ARG VITE_DOCS_URL=https://docs.jooling.com
+# Marketing site hosting the Terms, Privacy Policy, and DPA.
+ARG VITE_LANDING_URL=https://jooling.com
+# Version stamped into each Terms acceptance; keep identical to the server's
+# TERMS_VERSION and the landing app's VITE_TERMS_VERSION.
+ARG VITE_TERMS_VERSION=2026-09-17
 ARG VITE_PUBLIC_POSTHOG_PROJECT_TOKEN
 ARG VITE_PUBLIC_POSTHOG_HOST=https://eu.posthog.com
 ENV VITE_SERVER_URL=${VITE_SERVER_URL} \
 	VITE_DOCS_URL=${VITE_DOCS_URL} \
+	VITE_LANDING_URL=${VITE_LANDING_URL} \
+	VITE_TERMS_VERSION=${VITE_TERMS_VERSION} \
 	VITE_PUBLIC_POSTHOG_PROJECT_TOKEN=${VITE_PUBLIC_POSTHOG_PROJECT_TOKEN} \
 	VITE_PUBLIC_POSTHOG_HOST=${VITE_PUBLIC_POSTHOG_HOST}
 COPY . .
