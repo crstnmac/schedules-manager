@@ -11,7 +11,6 @@ import {
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { cn } from "@SchedulesManager/ui/lib/utils";
 import {
-	CalendarOffIcon,
 	CalendarX2Icon,
 	PlusIcon,
 	StarIcon,
@@ -95,16 +94,14 @@ function ScheduleDayChip({
 					{minutes > 0 ? formatHours(minutes) : "—"}
 				</span>
 				{openCount > 0 ? (
-					<span
-						aria-label={`${openCount} open shifts`}
-						className="size-1.5 rounded-full bg-warning"
-					/>
+					<span className="size-1.5 rounded-full bg-warning">
+						<span className="sr-only">{`${openCount} open shifts`}</span>
+					</span>
 				) : null}
 				{conflictCount > 0 ? (
-					<span
-						aria-label={`${conflictCount} conflicts`}
-						className="size-1.5 rounded-full bg-destructive"
-					/>
+					<span className="size-1.5 rounded-full bg-destructive">
+						<span className="sr-only">{`${conflictCount} conflicts`}</span>
+					</span>
 				) : null}
 			</span>
 		</Button>
