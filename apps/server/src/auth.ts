@@ -5,7 +5,7 @@ import { expo } from "@better-auth/expo";
 import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { bearer } from "better-auth/plugins/bearer";
-import { sendPasswordResetEmail } from "./mail";
+import { sendEmailVerificationEmail, sendPasswordResetEmail } from "./mail";
 
 export class AuthenticationError extends Error {
 	constructor(message = "Authentication required") {
@@ -22,6 +22,20 @@ const authOptions: BetterAuthOptions = {
 		revokeSessionsOnPasswordReset: true,
 		sendResetPassword: async ({ user: authUser, url }) => {
 			await sendPasswordResetEmail({
+				email: authUser.email,
+				name: authUser.name,
+				url,
+			});
+		},
+	},
+	// Verification mail is sent on sign-up so users can prove mailbox control.
+	// requireEmailVerification stays off (it would lock existing users out of
+	// sign-in); the security-sensitive boundary — claiming invitations — is
+	// gated on a live emailVerified check in the invitations routes instead.
+	emailVerification: {
+		sendOnSignUp: true,
+		sendVerificationEmail: async ({ user: authUser, url }) => {
+			await sendEmailVerificationEmail({
 				email: authUser.email,
 				name: authUser.name,
 				url,

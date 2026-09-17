@@ -34,13 +34,12 @@ import {
 	ForbiddenError,
 	NotFoundError,
 } from "../errors";
+import { clientIpFromRequest } from "../rate-limit";
 
 function clientIp(request: Request) {
-	const forwarded = request.headers
-		.get("x-forwarded-for")
-		?.split(",")[0]
-		?.trim();
-	return request.headers.get("cf-connecting-ip") ?? forwarded ?? undefined;
+	// Shared trusted-proxy extraction (last x-forwarded-for hop) so Polar
+	// receives a non-spoofable client IP for fraud signals.
+	return clientIpFromRequest(request);
 }
 
 /**

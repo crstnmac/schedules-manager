@@ -7,6 +7,7 @@ import {
 	processNotificationOutboxBatch,
 	processPushReceiptBatch,
 } from "./notify";
+import { sweepExpiredRateLimits } from "./rate-limit";
 import { dispatchWebhookDeliveries } from "./webhooks";
 
 createApp().listen({ port: 3000, hostname: "0.0.0.0" }, () => {
@@ -68,3 +69,8 @@ const outboxTimer = setInterval(() => {
 }, 5_000);
 outboxTimer.unref();
 void dispatchNotifications();
+
+const rateLimitSweepTimer = setInterval(() => {
+	sweepExpiredRateLimits();
+}, 60_000);
+rateLimitSweepTimer.unref();

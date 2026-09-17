@@ -623,7 +623,7 @@ export function TimeClockPoliciesCard({
 							<SettingsToggleField
 								id="geofence-required"
 								label="Require geofence"
-								description="Clock-in must happen inside a location geofence. Set the radius on each location."
+								description="Clock-ins must report coordinates inside the location geofence. Coordinates are self-reported by the device, so this is an advisory check — review punches on the timesheet."
 								checked={form.value("geofenceRequired")}
 								onCheckedChange={(checked) =>
 									form.patch({ geofenceRequired: checked })

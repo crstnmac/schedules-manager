@@ -102,6 +102,24 @@ function RootComponent() {
 				session_recording: {
 					maskAllInputs: true,
 				},
+				// Reset and invitation tokens ride in the URL (query/path); never
+				// ship them to the analytics host in $current_url.
+				before_send: (event) => {
+					const currentUrl = event?.properties?.$current_url;
+					if (event && typeof currentUrl === "string") {
+						try {
+							const url = new URL(currentUrl);
+							url.search = "";
+							if (url.pathname.startsWith("/invite/")) {
+								url.pathname = "/invite/[redacted]";
+							}
+							event.properties.$current_url = url.toString();
+						} catch {
+							// leave unparseable values untouched
+						}
+					}
+					return event;
+				},
 				debug: import.meta.env.DEV,
 			}}
 		>

@@ -164,6 +164,19 @@ export function csvTemplate(header: string, sampleRows: string[]): string {
 }
 
 /**
+ * Renders one CSV cell for exports opened in spreadsheet clients. Cells that
+ * a spreadsheet would evaluate as formulas (leading =, +, -, @ or tab) are
+ * prefixed with a tab so the content stays text; quotes, commas, CR and LF
+ * are still handled structurally.
+ */
+export function csvCell(value: string): string {
+	const s = String(value);
+	const prefix = /^[=+@\t-]/.test(s) ? "\t" : "";
+	const body = `${prefix}${s}`;
+	return /[",\n\r]/.test(body) ? `"${body.replaceAll('"', '""')}"` : body;
+}
+
+/**
  * Sets the response headers so an Elysia handler's `set` streams a downloadable
  * CSV attachment.
  */

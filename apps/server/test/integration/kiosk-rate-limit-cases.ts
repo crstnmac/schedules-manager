@@ -17,7 +17,7 @@ type Context = {
 // published shift, under one location. Returns what the clock-in requests need.
 async function seedKioskWorkplace(
 	d: Context["database"],
-	hashPin: (pin: string) => string,
+	hashPin: (pin: string) => Promise<string>,
 	name: string,
 	workerCount: number,
 ) {
@@ -36,7 +36,7 @@ async function seedKioskWorkplace(
 		.returning();
 	await d.db
 		.update(d.locations)
-		.set({ kioskPinHash: hashPin(locationPin) })
+		.set({ kioskPinHash: await hashPin(locationPin) })
 		.where(eq(d.locations.id, required(location).id));
 	const [position] = await d.db
 		.insert(d.positions)
@@ -60,12 +60,14 @@ async function seedKioskWorkplace(
 	const employments = await d.db
 		.insert(d.employments)
 		.values(
-			profileIds.map((id, index) => ({
-				workplaceId: required(workplace).id,
-				profileId: id,
-				kind: "worker" as const,
-				kioskPinHash: hashPin(workerPins[index] ?? ""),
-			})),
+			await Promise.all(
+				profileIds.map(async (id, index) => ({
+					workplaceId: required(workplace).id,
+					profileId: id,
+					kind: "worker" as const,
+					kioskPinHash: await hashPin(workerPins[index] ?? ""),
+				})),
+			),
 		)
 		.returning();
 	const [schedule] = await d.db
@@ -158,5 +160,5 @@ export function registerKioskRateLimitTests(getContext: () => Context) {
 			.where(eq(d.timeEntries.employmentId, employmentIds[40] ?? ""))
 			.limit(1);
 		expect(victimEntry).toHaveLength(1);
-	});
+	}, 30_000); // 41 punches each verify salted PIN hashes across the seeded workforce.
 }

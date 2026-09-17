@@ -9,7 +9,7 @@ Time clock settings determine when and where Workers can start Time Entries and 
 - **Clock rounding** — round punch times to the nearest number of minutes, or keep them exact.
 - **Late arrival grace** — minutes after the Shift start that still do not count as late.
 - **Auto clock-out grace** — minutes after the Shift end before an open entry is closed automatically.
-- **Require geofence** — clock-ins must be within the Location radius; the radius itself is set per Location.
+- **Require geofence** — clock-ins must report coordinates within the Location radius (set per Location). Coordinates are self-reported by the device, so treat this as an advisory check and review punches on the timesheet.
 - **Timesheet notes** — allow notes on Time Entries.
 
 ![Time clock settings with rounding and grace rules](/screenshots/settings-time-clock.png)

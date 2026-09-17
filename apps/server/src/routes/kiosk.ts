@@ -8,7 +8,17 @@ import {
 	versionShifts,
 	workplaces,
 } from "@SchedulesManager/db";
-import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import {
+	and,
+	desc,
+	eq,
+	gte,
+	inArray,
+	isNotNull,
+	isNull,
+	lte,
+	sql,
+} from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
 import { requireSubscriptionCapability } from "../billing";
@@ -19,7 +29,7 @@ import {
 	RateLimitError,
 } from "../errors";
 import { assertClockInGeofence, roundToMinutes } from "../geo";
-import { hashPin, pinMatches } from "../pin";
+import { pinMatches } from "../pin";
 import { clientIpFromRequest, tryConsumeRateLimit } from "../rate-limit";
 import { firstRow } from "../rows";
 
@@ -42,40 +52,51 @@ export const kioskRoutes = new Elysia({ prefix: "/v1", tags: ["Kiosk"] }).post(
 			.limit(1);
 		if (
 			!location?.kioskPinHash ||
-			!pinMatches(body.locationPin, location.kioskPinHash)
+			!(await pinMatches(body.locationPin, location.kioskPinHash))
 		) {
 			throw new BadRequestError("Location PIN is not valid");
 		}
 		await requireSubscriptionCapability(location.workplaceId, "kiosk");
 
-		// Resolve by exact hash within the workplace. More than one active match
-		// means the PIN is shared and punches could be misattributed — refuse
-		// rather than guessing.
-		const workerMatches = await db
+		// PIN hashes are per-row salted, so equality lookup is not possible:
+		// verify the PIN against each active employment of the workplace.
+		// More than one match means the PIN is shared and punches could be
+		// misattributed — refuse rather than guessing.
+		const pinCandidates = await db
 			.select()
 			.from(employments)
 			.where(
 				and(
 					eq(employments.workplaceId, location.workplaceId),
 					eq(employments.status, "active"),
-					eq(employments.kioskPinHash, hashPin(body.workerPin)),
+					isNotNull(employments.kioskPinHash),
 				),
 			);
-		if (workerMatches.length === 0) {
+		const verifiedWorkers: (typeof employments.$inferSelect)[] = [];
+		for (const candidate of pinCandidates) {
+			if (await pinMatches(body.workerPin, candidate.kioskPinHash)) {
+				verifiedWorkers.push(candidate);
+			}
+		}
+		if (verifiedWorkers.length === 0) {
 			throw new BadRequestError("Worker PIN is not valid");
 		}
-		if (workerMatches.length > 1) {
+		if (verifiedWorkers.length > 1) {
 			throw new BadRequestError(
 				"This worker PIN is used by more than one worker. Ask a manager to set unique PINs.",
 			);
 		}
-		const worker = firstRow(workerMatches);
+		const worker = firstRow(verifiedWorkers);
 
 		const [workplace] = await db
 			.select()
 			.from(workplaces)
 			.where(eq(workplaces.id, location.workplaceId))
 			.limit(1);
+		// Coordinates are self-reported by the punching device; the geofence
+		// check is advisory friction, not proof of presence (a worker who
+		// knows both PINs can submit any in-fence point). Product copy and
+		// docs must not present geofenceRequired as enforced.
 		assertClockInGeofence({
 			geofenceRequired: workplace?.geofenceRequired ?? false,
 			latitude: location.latitude,

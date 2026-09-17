@@ -24,7 +24,7 @@ import {
 	NotFoundError,
 } from "../errors";
 import { fillPlaceFromAddress } from "../geocode";
-import { hashPin } from "../pin";
+import { assertPin, hashPin } from "../pin";
 import { firstRow } from "../rows";
 
 function assertTimeZone(timezone: string) {
@@ -33,6 +33,17 @@ function assertTimeZone(timezone: string) {
 	} catch {
 		throw new BadRequestError(`Unknown IANA time zone: ${timezone}`);
 	}
+}
+
+/** Keeps digit-only PINs consistent with the worker-PIN path before hashing. */
+async function resolveKioskPinHash(
+	pin: string | null | undefined,
+	existing: string | null,
+): Promise<string | null> {
+	if (pin === undefined) return existing;
+	if (pin === null) return null;
+	assertPin(pin);
+	return hashPin(pin);
 }
 
 function toLocationDto(location: typeof locations.$inferSelect) {
@@ -262,12 +273,10 @@ export const locationsRoutes = new Elysia({
 								: body.geofenceRadiusMeters,
 						openMinute: hours.openMinute,
 						closeMinute: hours.closeMinute,
-						kioskPinHash:
-							body.kioskPin === undefined
-								? existing.kioskPinHash
-								: body.kioskPin === null
-									? null
-									: hashPin(body.kioskPin),
+						kioskPinHash: await resolveKioskPinHash(
+							body.kioskPin,
+							existing.kioskPinHash,
+						),
 						updatedAt: new Date(),
 					})
 					.where(eq(locations.id, params.locationId))

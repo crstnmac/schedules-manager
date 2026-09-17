@@ -43,14 +43,35 @@ export function resetRateLimitState(): void {
 }
 
 export function clientIpFromRequest(request: Request): string {
+	// Only the LAST x-forwarded-for hop is appended by our trusted proxy
+	// (Traefik); every earlier entry is client-supplied, so keying on the
+	// first hop would let a caller rotate its own rate-limit bucket. The
+	// proxy must always set x-forwarded-for for this to hold — it does by
+	// default, and x-real-ip is only consulted when no proxy is present.
 	const forwarded = request.headers.get("x-forwarded-for");
 	if (forwarded) {
-		const first = forwarded.split(",")[0]?.trim();
-		if (first) return first;
+		const hops = forwarded
+			.split(",")
+			.map((hop) => hop.trim())
+			.filter(Boolean);
+		const last = hops[hops.length - 1];
+		if (last) return last;
 	}
 	const realIp = request.headers.get("x-real-ip")?.trim();
 	if (realIp) return realIp;
 	return "unknown";
+}
+
+/** Deletes expired buckets so unique keys cannot accumulate forever. */
+export function sweepExpiredRateLimits(now = Date.now()): number {
+	let swept = 0;
+	for (const [key, bucket] of buckets) {
+		if (bucket.resetAt <= now) {
+			buckets.delete(key);
+			swept += 1;
+		}
+	}
+	return swept;
 }
 
 /** Fixed-window counter. Returns false when the key has already used its limit. */

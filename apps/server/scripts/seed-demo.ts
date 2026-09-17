@@ -289,7 +289,7 @@ async function main() {
 		.update(locations)
 		.set({
 			addressLine: "900 E 11th St, Austin, TX 78702",
-			kioskPinHash: hashPin("2468"),
+			kioskPinHash: await hashPin("2468"),
 			geofenceRadiusMeters: 150,
 			updatedAt: new Date(),
 		})
@@ -396,7 +396,7 @@ async function main() {
 				hourlyWageCents: WAGE_CENTS[input.position] ?? 1500,
 				emergencyContactName: `${input.fullName.split(" ")[0]} Emergency`,
 				emergencyContactPhone: "512-555-0147",
-				kioskPinHash: hashPin(input.pin),
+				kioskPinHash: await hashPin(input.pin),
 			})
 			.where(eq(employments.id, employment.id));
 

@@ -165,7 +165,13 @@ export const workplacesRoutes = new Elysia({
 				{ additionalProperties: true },
 			),
 			body: t.Object({
-				name: t.String({ minLength: 1, maxLength: 120 }),
+				// Control characters are rejected so the workplace name is always
+				// safe single-line text for email subjects and plain-text bodies.
+				name: t.String({
+					minLength: 1,
+					maxLength: 120,
+					pattern: "^[^\\u0000-\\u001f]+$",
+				}),
 				location: t.Object({
 					name: t.String({ minLength: 1, maxLength: 120 }),
 					timezone: t.Optional(t.String({ default: "America/Chicago" })),
@@ -347,7 +353,13 @@ export const workplacesRoutes = new Elysia({
 			),
 			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
 			body: t.Object({
-				name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
+				name: t.Optional(
+					t.String({
+						minLength: 1,
+						maxLength: 120,
+						pattern: "^[^\\u0000-\\u001f]+$",
+					}),
+				),
 				noticeWindowHours: t.Optional(t.Integer({ minimum: 0, maximum: 336 })),
 				weekStartDay: t.Optional(t.Integer({ minimum: 0, maximum: 6 })),
 				payPeriodType: t.Optional(

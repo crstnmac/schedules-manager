@@ -15,6 +15,24 @@ import { ConflictError, ForbiddenError, NotFoundError } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { firstRow } from "../rows";
 
+/**
+ * Invitations grant workplace access (up to manager), so only a session user
+ * who has proven control of the invitee mailbox may list or claim them. The
+ * live user row is the source of truth — a session issued before verification
+ * must not keep working here.
+ */
+async function requireVerifiedEmail(
+	headers: Parameters<typeof requireSession>[0],
+) {
+	const { user, profile } = await requireSession(headers);
+	if (!user.emailVerified) {
+		throw new ForbiddenError(
+			"Verify your email address before accepting invitations",
+		);
+	}
+	return { user, profile };
+}
+
 /** Grant the invitation's location and position scopes to an Employment. */
 async function applyInvitationScopes(
 	writer: Pick<typeof db, "select" | "insert">,
@@ -61,7 +79,7 @@ export const invitationsRoutes = new Elysia({
 	.get(
 		"/invitations/pending",
 		async ({ headers }) => {
-			const { profile } = await requireSession(headers);
+			const { profile } = await requireVerifiedEmail(headers);
 
 			const rows = await db
 				.select({
@@ -137,7 +155,7 @@ export const invitationsRoutes = new Elysia({
 	.post(
 		"/invitations/accept",
 		async ({ headers, body }) => {
-			const { profile } = await requireSession(headers);
+			const { profile } = await requireVerifiedEmail(headers);
 
 			return withIdempotency({
 				actorProfileId: profile.id,

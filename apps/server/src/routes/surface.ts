@@ -28,7 +28,7 @@ import {
 	workerGroups,
 	workplaceMessages,
 } from "@SchedulesManager/db";
-import { and, desc, eq, inArray, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { requireSubscriptionCapability } from "../billing";
 
@@ -41,7 +41,7 @@ import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { leaveCapResetPayload } from "../leave";
 import { applyLeaveLedger } from "../leave-ledger";
 import { notifyEmployments, writeAudit } from "../notify";
-import { hashPin } from "../pin";
+import { hashPin, pinMatches } from "../pin";
 import { firstRow } from "../rows";
 import { assertWorkplaceEnabled, loadWorkplace } from "../workplace-policy";
 
@@ -656,6 +656,22 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				employment.kind !== "manager" &&
 				employment.id !== params.employmentId
 			) {
+				throw new NotFoundError("Employment not found");
+			}
+			// The subject employment must belong to the path workplace — the
+			// caller-side membership check above does not bind it, and the
+			// balances query below keys on employmentId alone.
+			const [subjectEmployment] = await db
+				.select({ id: employments.id })
+				.from(employments)
+				.where(
+					and(
+						eq(employments.id, params.employmentId),
+						eq(employments.workplaceId, params.workplaceId),
+					),
+				)
+				.limit(1);
+			if (!subjectEmployment) {
 				throw new NotFoundError("Employment not found");
 			}
 			const rows = await db
@@ -1779,23 +1795,32 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 					if (!/^\d{4,8}$/.test(body.kioskPin)) {
 						throw new BadRequestError("Worker PIN must be 4 to 8 digits");
 					}
-					const pinHash = hashPin(body.kioskPin);
+					const pinHash = await hashPin(body.kioskPin);
 					// A shared PIN would make kiosk punches impossible to attribute.
-					const [pinOwner] = await db
-						.select({ id: employments.id })
+					// PIN hashes are per-row salted, so compare by verifying against
+					// each active employment of the workplace (covers legacy hashes).
+					const pinCandidates = await db
+						.select({
+							id: employments.id,
+							kioskPinHash: employments.kioskPinHash,
+						})
 						.from(employments)
 						.where(
 							and(
 								eq(employments.workplaceId, params.workplaceId),
 								eq(employments.status, "active"),
-								eq(employments.kioskPinHash, pinHash),
+								isNotNull(employments.kioskPinHash),
 							),
-						)
-						.limit(1);
-					if (pinOwner && pinOwner.id !== params.employmentId) {
-						throw new ConflictError(
-							"This Kiosk PIN is already used by another worker",
 						);
+					for (const candidate of pinCandidates) {
+						if (
+							candidate.id !== params.employmentId &&
+							(await pinMatches(body.kioskPin, candidate.kioskPinHash))
+						) {
+							throw new ConflictError(
+								"This Kiosk PIN is already used by another worker",
+							);
+						}
 					}
 					values.kioskPinHash = pinHash;
 				}
@@ -2001,6 +2026,8 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 					and(
 						eq(timeEntries.id, params.timeEntryId),
 						eq(employments.profileId, profile.id),
+						// Deactivation must cut off access like every sibling /my route.
+						eq(employments.status, "active"),
 					),
 				)
 				.limit(1);
@@ -2057,6 +2084,8 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 					and(
 						eq(timeEntries.id, params.timeEntryId),
 						eq(employments.profileId, profile.id),
+						// Deactivation must cut off access like every sibling /my route.
+						eq(employments.status, "active"),
 					),
 				)
 				.limit(1);

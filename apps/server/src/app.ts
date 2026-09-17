@@ -162,6 +162,21 @@ export function createApp(options: CreateAppOptions = {}) {
 					message: error.message,
 				});
 			}
+			// Terminal fallback: anything outside the app's error taxonomy is an
+			// unexpected failure — Elysia's default would serialize the raw
+			// error message to the client, so return a generic body instead
+			// (the original message is already captured for the request log).
+			// Framework errors that carry their own status (e.g. Elysia's 422
+			// validation reports) are safe, formatted output — keep letting
+			// Elysia render those.
+			const errorStatus = (error as { status?: unknown } | undefined)?.status;
+			if (typeof errorStatus === "number") {
+				return undefined;
+			}
+			return status(500, {
+				error: "internal_error",
+				message: "An unexpected error occurred.",
+			});
 		})
 		.get("/health", () => ({ status: "ok" as const }), {
 			response: t.Object({ status: t.Literal("ok") }),

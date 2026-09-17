@@ -33,7 +33,7 @@ import {
 	requireSession,
 	requireWorkplaceMember,
 } from "../context";
-import { csvAttachment } from "../csv-import";
+import { csvAttachment, csvCell as csvEscape } from "../csv-import";
 import {
 	BadRequestError,
 	ConflictError,
@@ -145,11 +145,6 @@ const PRIVILEGES = [
 	"integrations.manage",
 ] as const;
 
-function csvEscape(value: string) {
-	if (/[",\n]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
-	return value;
-}
-
 async function loadEmploymentRows(workplaceId: string) {
 	return db
 		.select({
@@ -216,6 +211,20 @@ async function canViewEmployment(
 ): Promise<boolean> {
 	const member = await requireWorkplaceMember(profileId, workplaceId);
 	if (member.id === employmentId) return true;
+	// The subject employment must belong to the path workplace — the caller
+	// checks below authorize the caller only, and downstream reads key on
+	// employmentId alone.
+	const [subject] = await db
+		.select({ id: employments.id })
+		.from(employments)
+		.where(
+			and(
+				eq(employments.id, employmentId),
+				eq(employments.workplaceId, workplaceId),
+			),
+		)
+		.limit(1);
+	if (!subject) return false;
 	if (member.kind !== "manager" && member.kind !== "viewer") return false;
 	try {
 		await requirePrivilege(profileId, workplaceId, "approvals.review");

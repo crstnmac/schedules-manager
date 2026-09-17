@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, isNull, sql } from "drizzle-orm";
+import { eq, inArray, isNull, sql } from "drizzle-orm";
 import { registerAcceptanceRaceTests } from "./acceptance-race-cases";
 import { registerAutoClockOutBreaksTests } from "./auto-clock-out-breaks-cases";
 import { registerCoverageTests } from "./coverage-cases";
@@ -1129,6 +1129,20 @@ integrationDescribe("Schedule publication", () => {
 					body: JSON.stringify({ token: invitationToken }),
 				}),
 			);
+		// Unverified sessions must not list or claim invitations — prove mailbox
+		// control first, then re-run the identity checks below.
+		const unverifiedAccept = await accept(recipientToken);
+		expect(unverifiedAccept.status).toBe(403);
+		const unverifiedPending = await app.handle(
+			new Request("http://localhost/v1/invitations/pending", {
+				headers: { authorization: `Bearer ${recipientToken}` },
+			}),
+		);
+		expect(unverifiedPending.status).toBe(403);
+		await database.db
+			.update(database.user)
+			.set({ emailVerified: true })
+			.where(inArray(database.user.id, [recipientId, outsiderId]));
 		expect((await accept(outsiderToken)).status).toBe(403);
 		const outsiderPending = await app.handle(
 			new Request("http://localhost/v1/invitations/pending", {

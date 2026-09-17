@@ -1191,11 +1191,11 @@ export function registerOpsTests(getContext: () => Context) {
 		const seed = await seedWorkplace(d, "Kiosk Cafe");
 		await d.db
 			.update(d.locations)
-			.set({ kioskPinHash: hashPin("2468") })
+			.set({ kioskPinHash: await hashPin("2468") })
 			.where(eq(d.locations.id, seed.location.id));
 		await d.db
 			.update(d.employments)
-			.set({ kioskPinHash: hashPin("1357") })
+			.set({ kioskPinHash: await hashPin("1357") })
 			.where(eq(d.employments.id, seed.worker.id));
 		const badPin = await app.handle(
 			new Request("http://localhost/v1/kiosk/clock", {
@@ -1231,11 +1231,11 @@ export function registerOpsTests(getContext: () => Context) {
 		const seed = await seedWorkplace(d, "Kiosk Overtime Cafe");
 		await d.db
 			.update(d.locations)
-			.set({ kioskPinHash: hashPin("2468") })
+			.set({ kioskPinHash: await hashPin("2468") })
 			.where(eq(d.locations.id, seed.location.id));
 		await d.db
 			.update(d.employments)
-			.set({ kioskPinHash: hashPin("1357") })
+			.set({ kioskPinHash: await hashPin("1357") })
 			.where(eq(d.employments.id, seed.worker.id));
 		const [version] = await d.db
 			.insert(d.scheduleVersions)
@@ -1311,11 +1311,11 @@ export function registerOpsTests(getContext: () => Context) {
 		const seed = await seedWorkplace(d, "Kiosk Empty Cafe");
 		await d.db
 			.update(d.locations)
-			.set({ kioskPinHash: hashPin("2468") })
+			.set({ kioskPinHash: await hashPin("2468") })
 			.where(eq(d.locations.id, seed.location.id));
 		await d.db
 			.update(d.employments)
-			.set({ kioskPinHash: hashPin("1357") })
+			.set({ kioskPinHash: await hashPin("1357") })
 			.where(eq(d.employments.id, seed.worker.id));
 		const [version] = await d.db
 			.insert(d.scheduleVersions)
@@ -1373,11 +1373,11 @@ export function registerOpsTests(getContext: () => Context) {
 		const seed = await seedWorkplace(d, "Kiosk Disambig Cafe");
 		await d.db
 			.update(d.locations)
-			.set({ kioskPinHash: hashPin("2468") })
+			.set({ kioskPinHash: await hashPin("2468") })
 			.where(eq(d.locations.id, seed.location.id));
 		await d.db
 			.update(d.employments)
-			.set({ kioskPinHash: hashPin("1357") })
+			.set({ kioskPinHash: await hashPin("1357") })
 			.where(eq(d.employments.id, seed.worker.id));
 		const [version] = await d.db
 			.insert(d.scheduleVersions)
@@ -1468,11 +1468,11 @@ export function registerOpsTests(getContext: () => Context) {
 		const seed = await seedWorkplace(d, "Kiosk Adjacency Cafe");
 		await d.db
 			.update(d.locations)
-			.set({ kioskPinHash: hashPin("2468") })
+			.set({ kioskPinHash: await hashPin("2468") })
 			.where(eq(d.locations.id, seed.location.id));
 		await d.db
 			.update(d.employments)
-			.set({ kioskPinHash: hashPin("1357") })
+			.set({ kioskPinHash: await hashPin("1357") })
 			.where(eq(d.employments.id, seed.worker.id));
 		const [version] = await d.db
 			.insert(d.scheduleVersions)

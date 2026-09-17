@@ -6,6 +6,7 @@ import {
 	RateLimitError,
 	resetRateLimitState,
 	setRateLimitPoliciesForTests,
+	sweepExpiredRateLimits,
 	tryConsumeRateLimit,
 } from "../src/rate-limit";
 
@@ -36,6 +37,18 @@ describe("rate limit", () => {
 		expect(tryConsumeRateLimit("a", policy, now + 10_000).allowed).toBe(true);
 	});
 
+	test("sweepExpiredRateLimits deletes only expired buckets", () => {
+		const now = 3_000_000;
+		const policy = { limit: 1, windowMs: 10_000 };
+		tryConsumeRateLimit("expired", policy, now);
+		tryConsumeRateLimit("live", policy, now + 5_000);
+		expect(sweepExpiredRateLimits(now + 10_000)).toBe(1);
+		// The live bucket must survive the sweep with its budget intact.
+		expect(tryConsumeRateLimit("live", policy, now + 10_000).allowed).toBe(
+			false,
+		);
+	});
+
 	test("consumeRateLimitOrThrow uses named policies and throws RateLimitError", () => {
 		setRateLimitPoliciesForTests({
 			invitationCreate: { limit: 2, windowMs: 60_000 },
@@ -47,7 +60,9 @@ describe("rate limit", () => {
 		).toThrow(RateLimitError);
 	});
 
-	test("clientIpFromRequest prefers the first x-forwarded-for hop", () => {
+	test("clientIpFromRequest keys on the last (trusted-proxy-appended) x-forwarded-for hop", () => {
+		// The trusted proxy appends the real client IP as the final hop; earlier
+		// entries are client-supplied and must not influence the limit key.
 		expect(
 			clientIpFromRequest(
 				new Request("http://localhost/v1/webhooks/zeptomail", {
@@ -57,7 +72,16 @@ describe("rate limit", () => {
 					},
 				}),
 			),
-		).toBe("203.0.113.9");
+		).toBe("10.0.0.1");
+		expect(
+			clientIpFromRequest(
+				new Request("http://localhost/v1/kiosk/clock", {
+					headers: {
+						"x-forwarded-for": "203.0.113.9, 198.51.100.7, 10.0.0.1",
+					},
+				}),
+			),
+		).toBe("10.0.0.1");
 		expect(
 			clientIpFromRequest(
 				new Request("http://localhost/v1/webhooks/zeptomail"),

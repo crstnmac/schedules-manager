@@ -12,6 +12,16 @@ function escapeHtml(value: string) {
 	);
 }
 
+/** Single-line, control-character-free text for subject/plain-body slots. */
+function emailText(value: string) {
+	return (
+		value
+			.split("")
+			.filter((character) => character.charCodeAt(0) > 31)
+			.join("") || ""
+	).trim();
+}
+
 let cachedEnv: typeof import("@SchedulesManager/env/server").env | undefined;
 
 async function getMailEnv() {
@@ -96,6 +106,33 @@ export async function sendPasswordResetEmail(input: {
 	});
 }
 
+export async function sendEmailVerificationEmail(input: {
+	email: string;
+	name: string;
+	url: string;
+}) {
+	const env = await getMailEnv();
+	return sendZeptoMail({
+		from: {
+			address: env.ZEPTOMAIL_FROM_ADDRESS,
+			name: env.ZEPTOMAIL_FROM_NAME,
+		},
+		to: [
+			{
+				email_address: {
+					address: input.email,
+					name: input.name || input.email,
+				},
+			},
+		],
+		subject: "Verify your jooling email",
+		textbody: `Confirm your email address to unlock invitations: ${input.url}`,
+		htmlbody: `<p>Confirm this email address for your jooling account.</p><p><a href="${escapeHtml(input.url)}">Verify email</a></p><p>If you did not sign up, you can ignore this email.</p>`,
+		track_clicks: true,
+		track_opens: false,
+	});
+}
+
 export async function sendInvitationEmail(input: {
 	email: string;
 	token: string;
@@ -108,7 +145,7 @@ export async function sendInvitationEmail(input: {
 		`/invite/${encodeURIComponent(input.token)}`,
 		env.APP_URL,
 	);
-	const workplaceName = escapeHtml(input.workplaceName);
+	const workplaceName = emailText(input.workplaceName);
 	const role =
 		input.kind === "manager"
 			? "manager"
@@ -122,9 +159,9 @@ export async function sendInvitationEmail(input: {
 			name: env.ZEPTOMAIL_FROM_NAME,
 		},
 		to: [{ email_address: { address: input.email, name: input.email } }],
-		subject: `You're invited to join ${input.workplaceName}`,
-		textbody: `You've been invited to join ${input.workplaceName} as a ${role}. Accept your invitation: ${inviteUrl.toString()}`,
-		htmlbody: `<p>You've been invited to join <strong>${workplaceName}</strong> as a ${role}.</p><p><a href="${escapeHtml(inviteUrl.toString())}">Accept invitation</a></p>`,
+		subject: `You're invited to join ${workplaceName}`,
+		textbody: `You've been invited to join ${workplaceName} as a ${role}. Accept your invitation: ${inviteUrl.toString()}`,
+		htmlbody: `<p>You've been invited to join <strong>${escapeHtml(workplaceName)}</strong> as a ${role}.</p><p><a href="${escapeHtml(inviteUrl.toString())}">Accept invitation</a></p>`,
 		track_clicks: true,
 		track_opens: true,
 		client_reference: `email-delivery:${input.deliveryId}`,

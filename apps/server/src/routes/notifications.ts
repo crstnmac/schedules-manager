@@ -12,12 +12,8 @@ import {
 	requireSession,
 	requireWorkplaceMember,
 } from "../context";
+import { csvCell } from "../csv-import";
 import { NotFoundError } from "../errors";
-
-function csvCell(value: string) {
-	if (/[",\n]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
-	return value;
-}
 
 export const notificationsRoutes = new Elysia({
 	prefix: "/v1",

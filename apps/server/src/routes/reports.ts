@@ -24,14 +24,10 @@ import { Elysia, t } from "elysia";
 
 import { requireSubscriptionCapability } from "../billing";
 import { requirePrivilege, requireSession } from "../context";
+import { csvCell as csvEscape } from "../csv-import";
 import { laborPercent } from "../labor";
 import { computeLaborByEntry, distributeByWeight } from "../reports-labor";
 import { minutesByZonedDate } from "../time";
-
-function csvEscape(value: string) {
-	if (/[",\n]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
-	return value;
-}
 
 type ReportEntry = {
 	entryId: string;
