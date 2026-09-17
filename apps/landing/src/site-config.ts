@@ -4,9 +4,11 @@ import { env } from "@SchedulesManager/env/landing";
  * Landing-site legal configuration.
  *
  * Identity, contacts, and document version come from environment variables so
- * a deployment can set them without a code change (see .env.example). Set the
- * VITE_LEGAL_* values before launch: the placeholders below are printed on the
- * Terms, Privacy Policy, DPA, and every footer.
+ * a deployment can set them without a code change (see .env.example). Unset
+ * identity fields are blank rather than placeholders: the wording that would
+ * name the entity, its address, or the governing law is omitted instead of
+ * being filled with something that reads like a company. Fill them in before
+ * the public launch.
  */
 export const LEGAL_ENTITY = {
 	legalName: env.VITE_LEGAL_NAME,
@@ -19,6 +21,56 @@ export const LEGAL_ENTITY = {
 	privacyEmail: env.VITE_LEGAL_PRIVACY_EMAIL,
 	supportEmail: env.VITE_LEGAL_SUPPORT_EMAIL,
 } as const;
+
+/** A configured value counts as set only when it has non-whitespace content. */
+export function isSet(value: string): boolean {
+	return value.trim().length > 0;
+}
+
+/**
+ * The entity name to print. Falls back to the product name so sentences that
+ * mention who is speaking stay grammatical when no entity is configured.
+ */
+export const LEGAL_NAME = isSet(LEGAL_ENTITY.legalName)
+	? LEGAL_ENTITY.legalName
+	: "jooling";
+
+/**
+ * The defined-terms parenthetical for the start of a document. "jooling" is
+ * only listed as a defined term when the name itself is not already "jooling".
+ */
+export const ENTITY_DEFINITION = isSet(LEGAL_ENTITY.legalName)
+	? `("jooling", "we", "us", or "our")`
+	: `("we", "us", or "our")`;
+
+/**
+ * ", registered at <address> (<number>)" for sentences that name the entity,
+ * or an empty string when neither is configured. Registration number is only
+ * printed alongside an address, where it reads as part of the same clause.
+ */
+export function registrationSuffix(): string {
+	const details = [
+		isSet(LEGAL_ENTITY.address) ? LEGAL_ENTITY.address : "",
+		isSet(LEGAL_ENTITY.registrationNumber)
+			? `(${LEGAL_ENTITY.registrationNumber})`
+			: "",
+	].filter((part) => part.length > 0);
+	return details.length > 0 ? `, registered at ${details.join(" ")}` : "";
+}
+
+/** Joins the parts of an entity line that are set, e.g. "Acme Inc. · Reg. 123". */
+export function entityLine(parts: (string | false)[]): string {
+	return parts
+		.map((part) => (typeof part === "string" ? part.trim() : ""))
+		.filter((part) => part.length > 0)
+		.join(" · ");
+}
+
+/** Ends a sentence on the text without doubling a period it already has. */
+export function withPeriod(text: string): string {
+	const trimmed = text.trim();
+	return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
 
 /**
  * Version stamped into consent records. Keep identical to TERMS_VERSION in

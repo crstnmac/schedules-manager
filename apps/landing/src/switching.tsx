@@ -3,7 +3,7 @@ import { ArrowDown, ArrowRight, Check, ChevronLeft } from "lucide-react";
 import type { ReactNode } from "react";
 import { captureComparisonSignup } from "./analytics";
 import { LandingLink } from "./landing-link";
-import { LEGAL_ENTITY } from "./site-config";
+import { isSet, LEGAL_ENTITY, withPeriod } from "./site-config";
 
 export const competitors = [
 	{
@@ -378,7 +378,10 @@ export function ComparisonPage({ slug }: { slug: string }) {
 			</main>
 			<footer className="comparison-footer section-container">
 				<span>
-					© {new Date().getFullYear()} {LEGAL_ENTITY.legalName}
+					© {new Date().getFullYear()}
+					{isSet(LEGAL_ENTITY.legalName)
+						? ` ${withPeriod(LEGAL_ENTITY.legalName)}`
+						: ""}
 				</span>
 				<LandingLink href="/privacy">Privacy</LandingLink>
 				<LandingLink href="/terms">Terms</LandingLink>

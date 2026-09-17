@@ -4,10 +4,16 @@ import type React from "react";
 import { LandingLink } from "./landing-link";
 import { Link } from "./router";
 import {
+	ENTITY_DEFINITION,
+	entityLine,
+	isSet,
 	LAST_UPDATED,
 	LEGAL_ENTITY,
+	LEGAL_NAME,
 	RETENTION,
+	registrationSuffix,
 	SUBPROCESSORS,
+	withPeriod,
 } from "./site-config";
 
 const appUrl = env.VITE_APP_URL;
@@ -48,18 +54,24 @@ function LegalHeader() {
 }
 
 export function LegalFooter() {
+	const entity = entityLine([
+		LEGAL_ENTITY.legalName,
+		LEGAL_ENTITY.address,
+		isSet(LEGAL_ENTITY.registrationNumber) &&
+			`Reg. ${LEGAL_ENTITY.registrationNumber}`,
+	]);
 	return (
 		<footer className="legal-footer">
 			<div className="section-container legal-footer-inner">
 				<div className="legal-footer-entity">
 					<span>
-						© {new Date().getFullYear()} {LEGAL_ENTITY.legalName}. All rights
-						reserved.
+						© {new Date().getFullYear()}
+						{isSet(LEGAL_ENTITY.legalName)
+							? ` ${withPeriod(LEGAL_ENTITY.legalName)}`
+							: "."}{" "}
+						All rights reserved.
 					</span>
-					<span>
-						{LEGAL_ENTITY.legalName} · {LEGAL_ENTITY.address} · Reg.{" "}
-						{LEGAL_ENTITY.registrationNumber}
-					</span>
+					{entity ? <span>{entity}</span> : null}
 				</div>
 				<nav aria-label="Legal">
 					<Link to="/privacy">Privacy Policy</Link>
@@ -126,12 +138,11 @@ export function PrivacyPolicyPage() {
 			intro={
 				<>
 					<p>
-						This Privacy Policy explains how {LEGAL_ENTITY.legalName} (
-						{LEGAL_ENTITY.address}; "jooling", "we", "us", or "our") collects,
-						uses, shares, and protects information when you use our scheduling
-						products and services (the "Service"). It applies to workplace
-						owners, managers, workers, and anyone who visits our website or
-						apps.
+						This Privacy Policy explains how {LEGAL_NAME} {ENTITY_DEFINITION}{" "}
+						collects, uses, shares, and protects information when you use our
+						scheduling products and services (the "Service"). It applies to
+						workplace owners, managers, workers, and anyone who visits our
+						website or apps.
 					</p>
 					<p>
 						For the personal data in a workplace — worker records, schedules,
@@ -522,13 +533,15 @@ export function PrivacyPolicyPage() {
 					heading: "13. Contact us",
 					body: (
 						<p>
-							{LEGAL_ENTITY.legalName} is the controller for account and website
-							data. Questions or requests about privacy can be sent to{" "}
+							{LEGAL_NAME} is the controller for account and website data.
+							Questions or requests about privacy can be sent to{" "}
 							<a href={`mailto:${LEGAL_ENTITY.privacyEmail}`}>
 								{LEGAL_ENTITY.privacyEmail}
-							</a>{" "}
-							or by post to {LEGAL_ENTITY.address}. We will respond as required
-							by applicable law.
+							</a>
+							{isSet(LEGAL_ENTITY.address)
+								? ` or by post to ${LEGAL_ENTITY.address}`
+								: ""}
+							. We will respond as required by applicable law.
 						</p>
 					),
 				},
@@ -546,10 +559,10 @@ export function TermsPage() {
 				<>
 					<p>
 						These Terms &amp; Conditions ("Terms") are an agreement between you
-						and {LEGAL_ENTITY.legalName}, registered at {LEGAL_ENTITY.address} (
-						{LEGAL_ENTITY.registrationNumber}) ("jooling", "we", "us", or
-						"our"). They govern your access to and use of the jooling websites,
-						apps, and services for hourly teams (the "Service").
+						and {LEGAL_NAME}
+						{registrationSuffix()} {ENTITY_DEFINITION}. They govern your access
+						to and use of the jooling websites, apps, and services for hourly
+						teams (the "Service").
 					</p>
 					<p>
 						By ticking the agreement box when you create an account, or by
@@ -822,17 +835,25 @@ export function TermsPage() {
 					id: "governing-law",
 					heading: "13. Governing law and disputes",
 					body: (
-						<p>
-							These Terms are governed by {LEGAL_ENTITY.governingLaw}, without
-							regard to conflict of law rules. The exclusive venue for any
-							dispute is {LEGAL_ENTITY.venue}, except that either party may
-							bring a claim in its local small-claims or consumer court where
-							local law gives it that right. Before filing a formal claim, you
-							agree to try to resolve any dispute informally by contacting us —
-							we will respond within 30 days. Nothing in these Terms limits
-							rights you may have under mandatory local law, including the law
-							of your usual residence where it protects consumers.
-						</p>
+						<>
+							{isSet(LEGAL_ENTITY.governingLaw) ? (
+								<p>
+									These Terms are governed by {LEGAL_ENTITY.governingLaw},
+									without regard to conflict of law rules.
+								</p>
+							) : null}
+							<p>
+								{isSet(LEGAL_ENTITY.venue)
+									? `The exclusive venue for any dispute is ${LEGAL_ENTITY.venue}, except that either party may bring a claim`
+									: "Either party may bring a claim"}{" "}
+								in its local small-claims or consumer court where local law
+								gives it that right. Before filing a formal claim, you agree to
+								try to resolve any dispute informally by contacting us — we will
+								respond within 30 days. Nothing in these Terms limits rights you
+								may have under mandatory local law, including the law of your
+								usual residence where it protects consumers.
+							</p>
+						</>
 					),
 				},
 				{
@@ -853,8 +874,12 @@ export function TermsPage() {
 					heading: "15. Contact us",
 					body: (
 						<p>
-							{LEGAL_ENTITY.legalName} · {LEGAL_ENTITY.address}. Questions about
-							these Terms can be sent to{" "}
+							{entityLine([LEGAL_ENTITY.legalName, LEGAL_ENTITY.address])
+								? `${withPeriod(
+										entityLine([LEGAL_ENTITY.legalName, LEGAL_ENTITY.address]),
+									)} `
+								: ""}
+							Questions about these Terms can be sent to{" "}
 							<a href={`mailto:${LEGAL_ENTITY.contactEmail}`}>
 								{LEGAL_ENTITY.contactEmail}
 							</a>

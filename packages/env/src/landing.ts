@@ -3,9 +3,11 @@ import { z } from "zod";
 
 /**
  * Landing-site configuration. The legal identity below is printed on the
- * Terms, Privacy Policy, DPA, and every site footer, so it must match the
- * actual corporate registration before launch — the placeholder defaults are
- * deliberately obvious so they cannot ship unnoticed.
+ * Terms, Privacy Policy, DPA, and every site footer. Unset values are blank
+ * rather than placeholders: the affected wording is omitted instead of being
+ * filled with something that looks like a company. Fill these in before the
+ * public launch — a contract that names no counterparty and states no
+ * governing law is materially worse than one that visibly says it is missing.
  */
 export const env = createEnv({
 	clientPrefix: "VITE_",
@@ -16,34 +18,17 @@ export const env = createEnv({
 		VITE_PUBLIC_POSTHOG_HOST: z.url().optional(),
 
 		/** Exact registered legal name, e.g. "jooling, Inc." or "jooling Ltd". */
-		VITE_LEGAL_NAME: z.string().min(1).default("[REGISTERED LEGAL NAME]"),
+		VITE_LEGAL_NAME: z.string().default(""),
 		/** Registered business address. */
-		VITE_LEGAL_ADDRESS: z
-			.string()
-			.min(1)
-			.default("[REGISTERED BUSINESS ADDRESS]"),
+		VITE_LEGAL_ADDRESS: z.string().default(""),
 		/** Jurisdiction of incorporation, e.g. "Delaware, USA". */
-		VITE_LEGAL_JURISDICTION: z
-			.string()
-			.min(1)
-			.default("[JURISDICTION OF INCORPORATION]"),
+		VITE_LEGAL_JURISDICTION: z.string().default(""),
 		/** Registrar identifier, e.g. a Delaware file number. */
-		VITE_LEGAL_REGISTRATION_NUMBER: z
-			.string()
-			.min(1)
-			.default("[REGISTRATION NUMBER]"),
+		VITE_LEGAL_REGISTRATION_NUMBER: z.string().default(""),
 		/** Governing law for the Terms, e.g. "the laws of the State of Delaware, USA". */
-		VITE_LEGAL_GOVERNING_LAW: z
-			.string()
-			.min(1)
-			.default("[e.g. the laws of the State of Delaware, USA]"),
+		VITE_LEGAL_GOVERNING_LAW: z.string().default(""),
 		/** Exclusive venue for disputes. */
-		VITE_LEGAL_VENUE: z
-			.string()
-			.min(1)
-			.default(
-				"[e.g. the state and federal courts located in New Castle County, Delaware, USA]",
-			),
+		VITE_LEGAL_VENUE: z.string().default(""),
 		VITE_LEGAL_CONTACT_EMAIL: z.email().default("legal@jooling.com"),
 		VITE_LEGAL_PRIVACY_EMAIL: z.email().default("privacy@jooling.com"),
 		VITE_LEGAL_SUPPORT_EMAIL: z.email().default("support@jooling.com"),

@@ -59,7 +59,7 @@ import { DpaPage } from "./dpa";
 import { LandingLink } from "./landing-link";
 import { PrivacyPolicyPage, TermsPage } from "./legal";
 import { usePathname } from "./router";
-import { LEGAL_ENTITY } from "./site-config";
+import { entityLine, isSet, LEGAL_ENTITY, withPeriod } from "./site-config";
 import {
 	ComparisonPage,
 	competitors,
@@ -1023,7 +1023,10 @@ function HomePage() {
 				</div>
 				<div className="footer-bottom section-container">
 					<span>
-						© {new Date().getFullYear()} {LEGAL_ENTITY.legalName}
+						© {new Date().getFullYear()}
+						{isSet(LEGAL_ENTITY.legalName)
+							? ` ${withPeriod(LEGAL_ENTITY.legalName)}`
+							: ""}
 					</span>
 					<nav className="footer-legal" aria-label="Legal">
 						<LandingLink href="/privacy">Privacy Policy</LandingLink>
@@ -1031,9 +1034,11 @@ function HomePage() {
 						<LandingLink href="/dpa">DPA</LandingLink>
 					</nav>
 				</div>
-				<div className="footer-entity section-container">
-					{LEGAL_ENTITY.legalName} · {LEGAL_ENTITY.address}
-				</div>
+				{entityLine([LEGAL_ENTITY.legalName, LEGAL_ENTITY.address]) ? (
+					<div className="footer-entity section-container">
+						{entityLine([LEGAL_ENTITY.legalName, LEGAL_ENTITY.address])}
+					</div>
+				) : null}
 				<div
 					className="footer-landscape"
 					role="img"

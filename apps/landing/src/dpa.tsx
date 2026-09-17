@@ -1,6 +1,6 @@
 import { LegalLayout } from "./legal";
 import { Link } from "./router";
-import { LEGAL_ENTITY, SUBPROCESSORS } from "./site-config";
+import { isSet, LEGAL_ENTITY, LEGAL_NAME, SUBPROCESSORS } from "./site-config";
 
 /**
  * Data Processing Addendum. Workplace operators (the managers who create a
@@ -16,14 +16,14 @@ export function DpaPage() {
 			intro={
 				<>
 					<p>
-						This Data Processing Addendum ("DPA") applies where{" "}
-						{LEGAL_ENTITY.legalName} ("jooling") processes personal data on
-						behalf of a business customer that uses jooling for a workplace
-						("Customer", "you"). The Customer is the controller and jooling is
-						the processor for the workplace data described below. This DPA is
-						part of our Terms &amp; Conditions and applies automatically — there
-						is nothing to sign. If your organization requires a countersigned
-						copy, contact{" "}
+						This Data Processing Addendum ("DPA") applies where {LEGAL_NAME}
+						{isSet(LEGAL_ENTITY.legalName) ? ` ("jooling")` : ""} processes
+						personal data on behalf of a business customer that uses jooling for
+						a workplace ("Customer", "you"). The Customer is the controller and
+						jooling is the processor for the workplace data described below.
+						This DPA is part of our Terms &amp; Conditions and applies
+						automatically — there is nothing to sign. If your organization
+						requires a countersigned copy, contact{" "}
 						<a href={`mailto:${LEGAL_ENTITY.contactEmail}`}>
 							{LEGAL_ENTITY.contactEmail}
 						</a>

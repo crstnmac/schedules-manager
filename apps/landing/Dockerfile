@@ -41,8 +41,8 @@ FROM dependencies AS build
 ARG VITE_APP_URL=http://localhost:3001
 ARG VITE_DOCS_URL=https://docs.jooling.com
 # Legal identity shown on the Terms, Privacy Policy, DPA, and every footer.
-# Left unset, the documented placeholders from packages/env/src/landing.ts are
-# what ships — so these must be supplied for a production build.
+# Left unset, the wording that would name the entity is omitted rather than
+# filled with a placeholder — so a production build should supply these.
 ARG VITE_LEGAL_NAME
 ARG VITE_LEGAL_ADDRESS
 ARG VITE_LEGAL_JURISDICTION
