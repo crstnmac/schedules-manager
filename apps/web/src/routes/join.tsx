@@ -18,6 +18,7 @@ import {
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { usePostHog } from "@posthog/react";
 import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { AuthShell } from "@/components/auth-shell";
 import { CurrentProfile } from "@/components/current-profile";
 import { useAuth } from "@/lib/auth";
@@ -27,6 +28,10 @@ import {
 	useMe,
 	usePendingInvitations,
 } from "@/lib/queries";
+import {
+	isVerificationRequiredError,
+	resendVerificationEmail,
+} from "@/lib/verify-email";
 
 export const Route = createFileRoute("/join")({
 	component: JoinPage,
@@ -38,6 +43,30 @@ function JoinPage() {
 	const me = useMe(Boolean(user));
 	const pending = usePendingInvitations(Boolean(user));
 	const accept = useAcceptInvitation();
+	const [resendState, setResendState] = useState<
+		"idle" | "sending" | "sent" | "failed"
+	>("idle");
+	const acceptError = accept.isError ? (accept.error as Error) : null;
+	const needsVerification =
+		acceptError !== null && isVerificationRequiredError(acceptError);
+
+	const resend = async () => {
+		if (!user?.email) return;
+		setResendState("sending");
+		try {
+			const result = await resendVerificationEmail(user.email);
+			setResendState(
+				result &&
+					typeof result === "object" &&
+					"error" in result &&
+					result.error
+					? "failed"
+					: "sent",
+			);
+		} catch {
+			setResendState("failed");
+		}
+	};
 
 	if (!user) return <Navigate to="/" replace />;
 	if (me.data && me.data.employments.length > 0) {
@@ -117,10 +146,25 @@ function JoinPage() {
 							</Item>
 						))}
 					</ItemGroup>
-					{accept.isError ? (
+					{acceptError ? (
 						<Alert variant="destructive">
-							<AlertDescription>
-								{(accept.error as Error).message}
+							<AlertDescription className="flex flex-col gap-2">
+								<span>{acceptError.message}</span>
+								{needsVerification && user?.email ? (
+									<Button
+										size="sm"
+										variant="outline"
+										disabled={resendState === "sending"}
+										onClick={() => void resend()}
+									>
+										{resendState === "sending" ? (
+											<Spinner data-icon="inline-start" />
+										) : null}
+										{resendState === "sent"
+											? "Verification email sent"
+											: "Send verification email"}
+									</Button>
+								) : null}
 							</AlertDescription>
 						</Alert>
 					) : null}

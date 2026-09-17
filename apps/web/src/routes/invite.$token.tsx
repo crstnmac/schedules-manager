@@ -10,7 +10,7 @@ import {
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { MailWarningIcon } from "lucide-react";
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { AuthForm } from "@/components/auth-form";
 import { CurrentProfile } from "@/components/current-profile";
@@ -21,6 +21,10 @@ import {
 	useInvitationPreview,
 	useMe,
 } from "@/lib/queries";
+import {
+	isVerificationRequiredError,
+	resendVerificationEmail,
+} from "@/lib/verify-email";
 
 export const Route = createFileRoute("/invite/$token")({
 	component: InvitePage,
@@ -164,10 +168,21 @@ function InvitePage() {
 	}
 
 	if (isError) {
+		const error = accept.error as Error;
+		if (user && isVerificationRequiredError(error)) {
+			return (
+				<VerifyEmailPanel
+					email={user.email}
+					profile={me.data?.profile}
+					onRetry={() => accept.reset()}
+					onSwitchAccount={() => void signOut()}
+				/>
+			);
+		}
 		return (
 			<InviteMessage
 				title="Could not accept this invitation"
-				description={(accept.error as Error).message}
+				description={error.message}
 				profile={me.data?.profile}
 				action={
 					<Button variant="outline" onClick={() => void signOut()}>
@@ -227,5 +242,79 @@ function InviteMessage({
 				) : null}
 			</Empty>
 		</main>
+	);
+}
+
+function VerifyEmailPanel({
+	email,
+	profile,
+	onRetry,
+	onSwitchAccount,
+}: {
+	email: string;
+	profile?: {
+		id: string;
+		email: string;
+		fullName: string | null;
+	};
+	onRetry: () => void;
+	onSwitchAccount: () => void;
+}) {
+	const [sending, setSending] = useState(false);
+	const [sentTo, setSentTo] = useState<string | null>(null);
+	const [sendFailed, setSendFailed] = useState(false);
+
+	const resend = async () => {
+		setSending(true);
+		setSendFailed(false);
+		try {
+			const result = await resendVerificationEmail(email);
+			if (result && typeof result === "object" && "error" in result) {
+				if (result.error) {
+					setSendFailed(true);
+					return;
+				}
+			}
+			setSentTo(email);
+		} catch {
+			setSendFailed(true);
+		} finally {
+			setSending(false);
+		}
+	};
+
+	return (
+		<InviteMessage
+			title="Verify your email address"
+			description="Confirm your email to accept this invitation. We sent a verification link when you signed up — open it, then continue here."
+			profile={profile}
+			action={
+				<>
+					{sentTo ? (
+						<p className="text-muted-foreground text-sm">
+							Verification email sent to {sentTo}.
+						</p>
+					) : sendFailed ? (
+						<p className="text-destructive text-sm">
+							Couldn’t send the verification email. Try again.
+						</p>
+					) : null}
+					<div className="flex flex-wrap gap-2">
+						<Button disabled={sending} onClick={() => void resend()}>
+							{sending ? <Spinner data-icon="inline-start" /> : null}
+							{sentTo ? "Resend verification email" : "Send verification email"}
+						</Button>
+						{sentTo ? (
+							<Button variant="outline" onClick={onRetry}>
+								I’ve verified — continue
+							</Button>
+						) : null}
+						<Button variant="outline" onClick={onSwitchAccount}>
+							Sign in with a different account
+						</Button>
+					</div>
+				</>
+			}
+		/>
 	);
 }

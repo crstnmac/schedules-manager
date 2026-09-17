@@ -16,10 +16,10 @@ import { withIdempotency } from "../idempotency";
 import { firstRow } from "../rows";
 
 /**
- * Invitations grant workplace access (up to manager), so only a session user
- * who has proven control of the invitee mailbox may list or claim them. The
- * live user row is the source of truth — a session issued before verification
- * must not keep working here.
+ * Accepting an invitation grants workplace access (up to manager), so only a
+ * session user who has proven control of the invitee mailbox may claim one.
+ * The live user row is the source of truth — a session issued before
+ * verification must not keep working here.
  */
 async function requireVerifiedEmail(
 	headers: Parameters<typeof requireSession>[0],
@@ -79,7 +79,11 @@ export const invitationsRoutes = new Elysia({
 	.get(
 		"/invitations/pending",
 		async ({ headers }) => {
-			const { profile } = await requireVerifiedEmail(headers);
+			// Listing stays open to unverified sessions: the "waiting for an
+			// invite" onboarding flow depends on it and a new account is
+			// unverified by definition. A listed token cannot be used — accept
+			// below requires a verified email — so no access is granted here.
+			const { profile } = await requireSession(headers);
 
 			const rows = await db
 				.select({

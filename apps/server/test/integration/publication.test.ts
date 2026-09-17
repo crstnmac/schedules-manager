@@ -1129,8 +1129,9 @@ integrationDescribe("Schedule publication", () => {
 					body: JSON.stringify({ token: invitationToken }),
 				}),
 			);
-		// Unverified sessions must not list or claim invitations — prove mailbox
-		// control first, then re-run the identity checks below.
+		// Unverified sessions may LIST their own pending invitations (onboarding
+		// depends on it) but must not be able to CLAIM one — the accept gate is
+		// the security boundary.
 		const unverifiedAccept = await accept(recipientToken);
 		expect(unverifiedAccept.status).toBe(403);
 		const unverifiedPending = await app.handle(
@@ -1138,7 +1139,8 @@ integrationDescribe("Schedule publication", () => {
 				headers: { authorization: `Bearer ${recipientToken}` },
 			}),
 		);
-		expect(unverifiedPending.status).toBe(403);
+		expect(unverifiedPending.status).toBe(200);
+		expect((await unverifiedPending.json()).invitations).toHaveLength(1);
 		await database.db
 			.update(database.user)
 			.set({ emailVerified: true })
