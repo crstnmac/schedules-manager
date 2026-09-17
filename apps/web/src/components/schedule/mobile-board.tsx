@@ -1,8 +1,22 @@
 import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
+import {
+	Empty,
+	EmptyContent,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyMedia,
+	EmptyTitle,
+} from "@SchedulesManager/ui/components/empty";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { cn } from "@SchedulesManager/ui/lib/utils";
-import { CalendarOffIcon, PlusIcon, StarIcon } from "lucide-react";
+import {
+	CalendarOffIcon,
+	CalendarX2Icon,
+	PlusIcon,
+	StarIcon,
+	UserRoundIcon,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { ShiftTile } from "@/components/schedule-shift-tile";
@@ -18,10 +32,10 @@ type HolidayInfo = { id: string; name: string };
 
 type TimeclockEntry = ScheduleResponse["timeclock"][number];
 
-/** Height of the sticky day rail; section headers stick right below it. */
+/** Height of the sticky day rail; day headers stick right below it. */
 const RAIL_STICKY = "top-0";
-const SECTION_STICKY = "top-[3.7rem]";
-const SECTION_SCROLL_MARGIN = "scroll-mt-[3.7rem]";
+const DAY_HEADER_STICKY = "top-[3.9rem]";
+const SECTION_SCROLL_MARGIN = "scroll-mt-[3.9rem]";
 
 function weekdayShort(dateKey: string): string {
 	return new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(
@@ -41,6 +55,227 @@ function shiftMinutes(shift: ScheduleShiftDto): number {
 	return shift.endMinute > shift.startMinute
 		? shift.endMinute - shift.startMinute
 		: 1440 - shift.startMinute + shift.endMinute;
+}
+
+/** A single weekday chip in the sticky rail. */
+function ScheduleDayChip({
+	dayKey,
+	active,
+	isToday,
+	minutes,
+	openCount,
+	conflictCount,
+	onSelect,
+}: {
+	dayKey: string;
+	active: boolean;
+	isToday: boolean;
+	minutes: number;
+	openCount: number;
+	conflictCount: number;
+	onSelect: () => void;
+}) {
+	return (
+		<Button
+			variant={active ? "default" : "outline"}
+			size="sm"
+			className="h-auto shrink-0 snap-start flex-col gap-0 px-2.5 py-1.5"
+			aria-current={isToday ? "date" : undefined}
+			aria-label={`${weekdayShort(dayKey)} ${dayOfMonth(dayKey)}, ${formatHours(minutes)} scheduled${openCount > 0 ? `, ${openCount} open` : ""}${conflictCount > 0 ? `, ${conflictCount} conflicts` : ""}`}
+			onClick={onSelect}
+		>
+			<span className="text-[0.65rem] uppercase leading-tight opacity-80">
+				{weekdayShort(dayKey)}
+			</span>
+			<span className="font-semibold text-sm tabular-nums leading-tight">
+				{dayOfMonth(dayKey)}
+			</span>
+			<span className="flex items-center gap-1 leading-tight">
+				<span className="text-[0.65rem] tabular-nums opacity-80">
+					{minutes > 0 ? formatHours(minutes) : "—"}
+				</span>
+				{openCount > 0 ? (
+					<span
+						aria-label={`${openCount} open shifts`}
+						className="size-1.5 rounded-full bg-warning"
+					/>
+				) : null}
+				{conflictCount > 0 ? (
+					<span
+						aria-label={`${conflictCount} conflicts`}
+						className="size-1.5 rounded-full bg-destructive"
+					/>
+				) : null}
+			</span>
+		</Button>
+	);
+}
+
+/** Sticky rail of weekday chips for jumping between day sections. */
+function ScheduleDayRail({
+	days,
+	activeDay,
+	todayKey,
+	daySummaries,
+	openCounts,
+	conflictCounts,
+	onSelectDay,
+}: {
+	days: string[];
+	activeDay: string;
+	todayKey: string;
+	daySummaries: Map<string, { shifts: number; minutes: number }>;
+	openCounts: Map<string, number>;
+	conflictCounts: Map<string, number>;
+	onSelectDay: (day: string) => void;
+}) {
+	return (
+		<nav
+			aria-label="Days of week"
+			className={cn(
+				"sticky z-30 border-b bg-background px-2 py-2",
+				RAIL_STICKY,
+			)}
+		>
+			<div className="flex snap-x snap-mandatory gap-1.5 overflow-x-auto">
+				{days.map((day) => (
+					<ScheduleDayChip
+						key={day}
+						dayKey={day}
+						active={day === activeDay}
+						isToday={day === todayKey}
+						minutes={daySummaries.get(day)?.minutes ?? 0}
+						openCount={openCounts.get(day) ?? 0}
+						conflictCount={conflictCounts.get(day) ?? 0}
+						onSelect={() => onSelectDay(day)}
+					/>
+				))}
+			</div>
+		</nav>
+	);
+}
+
+/** One worker's shifts on one day. */
+function ScheduleWorkerGroup({
+	name,
+	kind,
+	shifts,
+	timeclockByShiftId,
+	shiftsPending,
+	onOpenShift,
+}: {
+	name: string;
+	kind: string;
+	shifts: ScheduleShiftDto[];
+	timeclockByShiftId: Map<string, TimeclockEntry>;
+	shiftsPending: boolean;
+	onOpenShift: (shift: ScheduleShiftDto) => void;
+}) {
+	const minutes = shifts.reduce((sum, shift) => sum + shiftMinutes(shift), 0);
+	return (
+		<section className="flex flex-col gap-1.5">
+			<div className="flex items-baseline gap-2">
+				<UserRoundIcon
+					aria-hidden
+					className="size-3.5 shrink-0 self-center text-muted-foreground"
+				/>
+				<span className="truncate font-medium text-sm leading-tight">
+					{name}
+				</span>
+				{kind === "manager" ? (
+					<Badge
+						variant="secondary"
+						className="px-1.5 font-normal text-[0.65rem]"
+					>
+						Manager
+					</Badge>
+				) : null}
+				<span className="ml-auto shrink-0 text-muted-foreground text-xs tabular-nums">
+					{formatHours(minutes)}
+				</span>
+			</div>
+			{shifts.map((shift) => (
+				<ShiftTile
+					key={shift.id}
+					shift={shift}
+					onOpen={onOpenShift}
+					draggable={false}
+					disabled={shiftsPending}
+					timeclock={timeclockByShiftId.get(shift.id)}
+				/>
+			))}
+		</section>
+	);
+}
+
+/** Grouped tile list that needs manager attention (open or off-roster). */
+function ScheduleAttentionGroup({
+	tone,
+	title,
+	description,
+	shifts,
+	timeclockByShiftId,
+	shiftsPending,
+	onOpenShift,
+}: {
+	tone: "open" | "offRoster";
+	title: string;
+	description: string;
+	shifts: ScheduleShiftDto[];
+	timeclockByShiftId: Map<string, TimeclockEntry>;
+	shiftsPending: boolean;
+	onOpenShift: (shift: ScheduleShiftDto) => void;
+}) {
+	return (
+		<section
+			className={cn(
+				"flex flex-col gap-1.5 rounded-lg border border-dashed p-2",
+				tone === "open" ? "border-primary/30 bg-accent/30" : "bg-muted/40",
+			)}
+		>
+			<div className="flex items-baseline gap-2">
+				<p className="font-medium text-sm leading-tight">{title}</p>
+				<span className="text-muted-foreground text-xs leading-tight">
+					{description}
+				</span>
+				<Badge
+					variant="outline"
+					className="ml-auto h-5 shrink-0 rounded-md px-1.5 tabular-nums"
+				>
+					{shifts.length}
+				</Badge>
+			</div>
+			{shifts.map((shift) => (
+				<ShiftTile
+					key={shift.id}
+					shift={shift}
+					onOpen={onOpenShift}
+					draggable={false}
+					disabled={shiftsPending}
+					timeclock={timeclockByShiftId.get(shift.id)}
+				/>
+			))}
+		</section>
+	);
+}
+
+function ScheduleDayEmptyState({ canManage }: { canManage: boolean }) {
+	return (
+		<Empty className="border-none py-4">
+			<EmptyHeader>
+				<EmptyMedia variant="icon">
+					<CalendarX2Icon />
+				</EmptyMedia>
+				<EmptyTitle>No shifts scheduled</EmptyTitle>
+				<EmptyDescription>
+					{canManage
+						? "Tap the + in the day header to add the first shift."
+						: "Check back once the manager publishes the schedule."}
+				</EmptyDescription>
+			</EmptyHeader>
+			<EmptyContent />
+		</Empty>
+	);
 }
 
 /**
@@ -112,42 +347,38 @@ export function ScheduleMobileBoard({
 		});
 	};
 
+	const openCounts = new Map<string, number>();
+	const conflictCounts = new Map<string, number>();
+	for (const day of days) {
+		const dayShifts = [
+			...(shiftsByWorkerDay.get(`open:${day}`) ?? []),
+			...(offRosterShiftsByDay.get(day) ?? []),
+			...staff.flatMap(
+				(member) =>
+					shiftsByWorkerDay.get(`${member.employmentId}:${day}`) ?? [],
+			),
+		].filter(filterShift);
+		openCounts.set(
+			day,
+			dayShifts.filter((shift) => shift.employmentId === null).length,
+		);
+		conflictCounts.set(
+			day,
+			dayShifts.reduce((sum, shift) => sum + shift.conflicts.length, 0),
+		);
+	}
+
 	return (
 		<div className={cn("flex min-h-0 flex-1 flex-col", className)}>
-			<div
-				className={cn(
-					"sticky z-30 border-b bg-background px-2 py-2",
-					RAIL_STICKY,
-				)}
-			>
-				<div className="flex gap-1.5 overflow-x-auto">
-					{days.map((day) => {
-						const isActive = day === activeDay;
-						const isToday = day === todayKey;
-						const minutes = daySummaries.get(day)?.minutes ?? 0;
-						return (
-							<Button
-								key={day}
-								variant={isActive ? "default" : "outline"}
-								size="sm"
-								className="h-auto shrink-0 flex-col gap-0 px-2.5 py-1.5"
-								aria-current={isToday ? "date" : undefined}
-								onClick={() => scrollToDay(day)}
-							>
-								<span className="text-[0.65rem] uppercase leading-tight opacity-80">
-									{weekdayShort(day)}
-								</span>
-								<span className="font-semibold text-sm tabular-nums leading-tight">
-									{dayOfMonth(day)}
-								</span>
-								<span className="text-[0.65rem] tabular-nums leading-tight opacity-80">
-									{minutes > 0 ? formatHours(minutes) : "—"}
-								</span>
-							</Button>
-						);
-					})}
-				</div>
-			</div>
+			<ScheduleDayRail
+				days={days}
+				activeDay={activeDay}
+				todayKey={todayKey}
+				daySummaries={daySummaries}
+				openCounts={openCounts}
+				conflictCounts={conflictCounts}
+				onSelectDay={scrollToDay}
+			/>
 
 			{days.map((day) => {
 				const isToday = day === todayKey;
@@ -179,12 +410,13 @@ export function ScheduleMobileBoard({
 							if (node) sectionRefs.current.set(day, node);
 							else sectionRefs.current.delete(day);
 						}}
+						aria-label={`${weekdayShort(day)} ${dayOfMonth(day)}`}
 						className={cn("border-t first:border-t-0", SECTION_SCROLL_MARGIN)}
 					>
 						<header
 							className={cn(
 								"sticky z-20 flex items-center gap-2 border-b bg-background px-3 py-2",
-								SECTION_STICKY,
+								DAY_HEADER_STICKY,
 								isToday && "bg-accent/40",
 							)}
 						>
@@ -229,88 +461,42 @@ export function ScheduleMobileBoard({
 						</header>
 
 						<div className="flex flex-col gap-3 px-3 py-3">
-							{isEmpty ? (
-								<p className="py-4 text-center text-muted-foreground text-sm">
-									{canManage
-										? "No shifts yet — tap + to add the first one."
-										: "No shifts scheduled."}
-								</p>
-							) : null}
+							{isEmpty ? <ScheduleDayEmptyState canManage={canManage} /> : null}
 
 							{staffGroups.map((group) => (
-								<section
+								<ScheduleWorkerGroup
 									key={group.member.employmentId}
-									className="flex flex-col gap-1.5"
-								>
-									<div className="flex items-baseline gap-2">
-										<span className="truncate font-medium text-sm leading-tight">
-											{group.member.name}
-										</span>
-										{group.member.kind === "manager" ? (
-											<Badge
-												variant="secondary"
-												className="px-1.5 font-normal text-[0.65rem]"
-											>
-												Manager
-											</Badge>
-										) : null}
-										<span className="ml-auto shrink-0 text-muted-foreground text-xs tabular-nums">
-											{formatHours(
-												group.shifts.reduce(
-													(sum, shift) => sum + shiftMinutes(shift),
-													0,
-												),
-											)}
-										</span>
-									</div>
-									{group.shifts.map((shift) => (
-										<ShiftTile
-											key={shift.id}
-											shift={shift}
-											onOpen={onOpenShift}
-											draggable={false}
-											disabled={shiftsPending}
-											timeclock={timeclockByShiftId.get(shift.id)}
-										/>
-									))}
-								</section>
+									name={group.member.name}
+									kind={group.member.kind}
+									shifts={group.shifts}
+									timeclockByShiftId={timeclockByShiftId}
+									shiftsPending={shiftsPending}
+									onOpenShift={onOpenShift}
+								/>
 							))}
 
 							{openShifts.length > 0 ? (
-								<section className="flex flex-col gap-1.5 rounded-lg border border-dashed bg-accent/30 p-2">
-									<p className="font-medium text-sm leading-tight">
-										Open shifts
-									</p>
-									{openShifts.map((shift) => (
-										<ShiftTile
-											key={shift.id}
-											shift={shift}
-											onOpen={onOpenShift}
-											draggable={false}
-											disabled={shiftsPending}
-											timeclock={timeclockByShiftId.get(shift.id)}
-										/>
-									))}
-								</section>
+								<ScheduleAttentionGroup
+									tone="open"
+									title="Open shifts"
+									description="Needs a worker"
+									shifts={openShifts}
+									timeclockByShiftId={timeclockByShiftId}
+									shiftsPending={shiftsPending}
+									onOpenShift={onOpenShift}
+								/>
 							) : null}
 
 							{offRoster.length > 0 ? (
-								<section className="flex flex-col gap-1.5 rounded-lg border border-dashed bg-muted/40 p-2">
-									<p className="flex items-center gap-1.5 font-medium text-sm leading-tight">
-										<CalendarOffIcon className="size-3.5" />
-										Off-roster
-									</p>
-									{offRoster.map((shift) => (
-										<ShiftTile
-											key={shift.id}
-											shift={shift}
-											onOpen={onOpenShift}
-											draggable={false}
-											disabled={shiftsPending}
-											timeclock={timeclockByShiftId.get(shift.id)}
-										/>
-									))}
-								</section>
+								<ScheduleAttentionGroup
+									tone="offRoster"
+									title="Off-roster"
+									description="Reassign or remove"
+									shifts={offRoster}
+									timeclockByShiftId={timeclockByShiftId}
+									shiftsPending={shiftsPending}
+									onOpenShift={onOpenShift}
+								/>
 							) : null}
 						</div>
 					</section>
