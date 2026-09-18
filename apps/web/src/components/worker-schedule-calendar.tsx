@@ -102,7 +102,8 @@ export function WorkerScheduleCalendar({
 			</CardHeader>
 			<CardContent className="p-0">
 				{calendar.isLoading && shifts.length === 0 ? (
-					<div className="grid gap-2 p-4 sm:grid-cols-3">
+					<div className="grid gap-2 p-4 sm:grid-cols-3" role="status">
+						<span className="sr-only">Loading</span>
 						<Skeleton className="h-20" />
 						<Skeleton className="h-20" />
 						<Skeleton className="h-20" />

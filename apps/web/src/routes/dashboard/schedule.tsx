@@ -808,7 +808,11 @@ type GridDensity = "compact" | "comfortable";
 
 function ScheduleGridSkeleton() {
 	return (
-		<div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+		<div
+			className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background"
+			role="status"
+		>
+			<span className="sr-only">Loading</span>
 			<div className="grid min-w-[1144px] grid-cols-[220px_repeat(7,minmax(132px,1fr))] border-b">
 				<div className="p-3">
 					<Skeleton className="h-3 w-14" />
@@ -2934,7 +2938,7 @@ function SchedulePage() {
 														</SelectContent>
 													</Select>
 													{positionNeedsApproval ? (
-														<Alert>
+														<Alert role="status">
 															<UserPlusIcon />
 															<AlertTitle>
 																{selectedCreateStaff.length > 1

@@ -202,8 +202,14 @@ export function ImportSheet<TEntry>({
 							type="button"
 							size="sm"
 							variant="outline"
-							disabled={!csv || runImport.isPending}
-							onClick={() => runImport.mutate({ dryRun: true })}
+							disabled={runImport.isPending}
+							onClick={() => {
+								if (!csv) {
+									toast.error("Choose a file to import first.");
+									return;
+								}
+								runImport.mutate({ dryRun: true });
+							}}
 						>
 							{runImport.isPending ? (
 								<Spinner data-icon="inline-start" />
@@ -213,8 +219,16 @@ export function ImportSheet<TEntry>({
 						<Button
 							type="button"
 							size="sm"
-							disabled={!canCommit || runImport.isPending}
-							onClick={() => runImport.mutate({ dryRun: false })}
+							disabled={runImport.isPending}
+							onClick={() => {
+								if (!canCommit) {
+									toast.error(
+										"Preview the file and fix any issues before importing.",
+									);
+									return;
+								}
+								runImport.mutate({ dryRun: false });
+							}}
 						>
 							{runImport.isPending ? (
 								<Spinner data-icon="inline-start" />

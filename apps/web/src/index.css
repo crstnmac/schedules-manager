@@ -97,9 +97,11 @@ main :is([data-slot="badge"], [data-slot="table-head"]) {
 		content-box;
 }
 
-.schedule-grid-scroll::-webkit-scrollbar-thumb:hover {
-	background: color-mix(in oklab, var(--muted-foreground) 55%, transparent)
-		content-box;
+@media (hover: hover) {
+	.schedule-grid-scroll::-webkit-scrollbar-thumb:hover {
+		background: color-mix(in oklab, var(--muted-foreground) 55%, transparent)
+			content-box;
+	}
 }
 
 @media (hover: none), (pointer: coarse) {

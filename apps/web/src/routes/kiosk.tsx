@@ -164,7 +164,7 @@ function KioskPage() {
 						</Alert>
 					) : null}
 					{(locations.data ?? []).length === 0 && locations.isSuccess ? (
-						<Alert>
+						<Alert role="status">
 							<AlertTitle>No locations set up</AlertTitle>
 							<AlertDescription>
 								A manager needs to add a location for this workplace before this

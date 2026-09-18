@@ -135,12 +135,12 @@ export function AddressSearch({
 					id={listId}
 					role="listbox"
 					aria-label="Address matches"
-					className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+					className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-md"
 				>
 					{search.isFetching && places.length === 0 ? (
 						<p
 							className="px-2 py-1.5 text-muted-foreground text-xs"
-							role="presentation"
+							role="status"
 						>
 							Searching places…
 						</p>

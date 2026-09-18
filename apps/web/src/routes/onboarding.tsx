@@ -205,7 +205,10 @@ function WaitingForInvite({
 
 	function submit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
-		if (!token) return;
+		if (!token) {
+			toast.error("Paste your invitation link or code.");
+			return;
+		}
 		accept.mutate(token);
 	}
 
@@ -267,7 +270,7 @@ function WaitingForInvite({
 						className="w-full"
 						form="join-invite-form"
 						type="submit"
-						disabled={!token || accept.isPending || accept.isSuccess}
+						disabled={accept.isPending || accept.isSuccess}
 					>
 						{accept.isPending ? <Spinner data-icon="inline-start" /> : null}
 						{accept.isPending ? "Joining…" : "Join workplace"}

@@ -399,7 +399,13 @@ function WorkersPage() {
 					header: "Wage",
 					cell: ({ getValue }) => {
 						const cents = getValue();
-						return cents != null ? `$${(cents / 100).toFixed(2)}/hr` : "—";
+						return cents != null ? (
+							<span className="tabular-nums">
+								${(cents / 100).toFixed(2)}/hr
+							</span>
+						) : (
+							"—"
+						);
 					},
 				}),
 				workerHelper.display({
@@ -657,7 +663,8 @@ function WorkersPage() {
 						/>
 						<div className="min-h-0 flex-1 overflow-auto">
 							{workers.isLoading ? (
-								<div className="flex flex-col gap-3 p-4">
+								<div className="flex flex-col gap-3 p-4" role="status">
+									<span className="sr-only">Loading</span>
 									<Skeleton className="h-12" />
 									<Skeleton className="h-12" />
 									<Skeleton className="h-12" />

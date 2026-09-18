@@ -187,7 +187,7 @@ export function AttendanceReportView({
 			</div>
 
 			{report.isLoading ? (
-				<div className="grid place-items-center py-24">
+				<div className="grid place-items-center py-24" role="status">
 					<Spinner />
 					<span className="sr-only">Loading attendance report</span>
 				</div>

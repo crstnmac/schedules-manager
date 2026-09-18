@@ -1000,7 +1000,8 @@ function AvailabilityPage() {
 			/>
 			<AppPageBody scroll={false} className="gap-0">
 				{constraints.isLoading ? (
-					<div className="min-h-0 flex-1 overflow-y-auto p-4">
+					<div className="min-h-0 flex-1 overflow-y-auto p-4" role="status">
+						<span className="sr-only">Loading</span>
 						<Skeleton className="h-40" />
 					</div>
 				) : (
@@ -1384,10 +1385,12 @@ function AvailabilityPage() {
 									<CardFooter>
 										<div className="flex items-center gap-2">
 											<Button
-												disabled={
-													saveUnavailability.isPending || !unavailabilityDirty
+												disabled={saveUnavailability.isPending}
+												onClick={() =>
+													unavailabilityDirty
+														? saveUnavailability.mutate()
+														: toast("No changes to save")
 												}
-												onClick={() => saveUnavailability.mutate()}
 											>
 												{saveUnavailability.isPending ? (
 													<Spinner data-icon="inline-start" />
@@ -1451,17 +1454,23 @@ function AvailabilityPage() {
 								Cancel
 							</Button>
 							<Button
-								disabled={
-									requestTimeOff.isPending ||
-									!leaveTypeId ||
-									(requestMode === "recurring" &&
-										(recurrenceCount < 2 || recurrenceCount > 26))
-								}
-								onClick={() =>
+								disabled={requestTimeOff.isPending}
+								onClick={() => {
+									if (!leaveTypeId) {
+										toast.error("Choose a leave type.");
+										return;
+									}
+									if (
+										requestMode === "recurring" &&
+										(recurrenceCount < 2 || recurrenceCount > 26)
+									) {
+										toast.error("Repeat the request between 2 and 26 times.");
+										return;
+									}
 									requestTimeOff.mutate(undefined, {
 										onSuccess: () => setRequestOpen(false),
-									})
-								}
+									});
+								}}
 							>
 								{requestTimeOff.isPending ? (
 									<Spinner data-icon="inline-start" />

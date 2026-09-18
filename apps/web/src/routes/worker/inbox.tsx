@@ -190,7 +190,8 @@ function WorkerInbox() {
 				/>
 				<div className="min-h-0 flex-1 overflow-auto">
 					{inbox.isLoading ? (
-						<div className="flex flex-col gap-2 p-4">
+						<div className="flex flex-col gap-2 p-4" role="status">
+							<span className="sr-only">Loading</span>
 							<Skeleton className="h-16" />
 							<Skeleton className="h-16" />
 						</div>

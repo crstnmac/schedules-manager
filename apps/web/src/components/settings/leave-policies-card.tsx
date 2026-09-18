@@ -319,10 +319,12 @@ export function LeavePolicySheet({
 	const patch = (partial: Partial<PolicyForm>) =>
 		setForm((current) => ({ ...current, ...partial }));
 
-	const canSave = Boolean(workplaceId && leaveType && policyFormValid(form));
-
 	const submit = () => {
 		if (!leaveType) return;
+		if (!policyFormValid(form)) {
+			toast.error("Complete the policy rules before saving.");
+			return;
+		}
 		upsert.mutate(
 			{ leaveTypeId: leaveType.id, ...policyBodyFromForm(form) },
 			{
@@ -349,7 +351,7 @@ export function LeavePolicySheet({
 					<Button
 						type="submit"
 						form="leave-policy-form"
-						disabled={!canSave || upsert.isPending}
+						disabled={upsert.isPending}
 					>
 						{upsert.isPending ? <Spinner data-icon="inline-start" /> : null}
 						Save policy
@@ -1164,9 +1166,11 @@ export function LeaveApprovalChainsCard({
 				(step.escalationKind !== "specific_employment" ||
 					step.escalationEmploymentId !== ""),
 		);
-	const canSave = name.trim().length > 0 && stepsValid && !save.isPending;
-
 	const submit = () => {
+		if (name.trim().length === 0 || !stepsValid) {
+			toast.error("Add a name and complete each approval step.");
+			return;
+		}
 		save.mutate(
 			{
 				id: editingId ?? undefined,
@@ -1306,7 +1310,7 @@ export function LeaveApprovalChainsCard({
 								<Button
 									type="submit"
 									form="approval-chain-form"
-									disabled={!canSave}
+									disabled={save.isPending}
 								>
 									{save.isPending ? <Spinner data-icon="inline-start" /> : null}
 									{editingId ? "Save chain" : "Add chain"}

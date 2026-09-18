@@ -171,11 +171,7 @@ function AnnouncementsPage() {
 						<Button
 							type="submit"
 							form="announcement-form"
-							disabled={
-								post.isPending ||
-								title.trim().length === 0 ||
-								body.trim().length === 0
-							}
+							disabled={post.isPending}
 						>
 							{post.isPending ? <Spinner data-icon="inline-start" /> : null}
 							{post.isPending ? "Posting…" : "Post announcement"}
@@ -188,6 +184,10 @@ function AnnouncementsPage() {
 					className="flex flex-col gap-4"
 					onSubmit={(event) => {
 						event.preventDefault();
+						if (!title.trim() || !body.trim()) {
+							toast.error("Add a title and a message before posting.");
+							return;
+						}
 						post.mutate();
 					}}
 				>

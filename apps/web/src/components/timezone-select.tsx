@@ -168,7 +168,7 @@ export function TimezoneSelect({
 							id={listId}
 							role="listbox"
 							aria-label="Time zones"
-							className="fixed top-(--list-top) left-(--list-left) z-50 max-h-(--list-max-height) w-(--list-width) overflow-y-auto overscroll-contain rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+							className="fixed top-(--list-top) left-(--list-left) z-50 max-h-(--list-max-height) w-(--list-width) overflow-y-auto overscroll-contain rounded-lg border bg-popover p-1 text-popover-foreground shadow-md"
 							style={
 								{
 									"--list-top": `${box.top}px`,

@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
 		justifyContent: "center",
 		gap: 3,
 		minHeight: 52,
-		borderRadius: 16,
+		borderRadius: 18,
 		paddingVertical: 6,
 		paddingHorizontal: 4,
 	},

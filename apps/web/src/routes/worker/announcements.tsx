@@ -92,7 +92,8 @@ function WorkerAnnouncementsPage() {
 				/>
 				<div className="min-h-0 flex-1 overflow-auto">
 					{announcements.isLoading ? (
-						<div className="flex flex-col gap-3 p-4">
+						<div className="flex flex-col gap-3 p-4" role="status">
+							<span className="sr-only">Loading</span>
 							<Skeleton className="h-24" />
 							<Skeleton className="h-24" />
 						</div>

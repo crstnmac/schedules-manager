@@ -112,7 +112,8 @@ function WorkerHistory() {
 			/>
 			<AppPageBody scroll={false}>
 				{version.isLoading ? (
-					<div className="flex flex-col gap-3 p-4 md:p-6">
+					<div className="flex flex-col gap-3 p-4 md:p-6" role="status">
+						<span className="sr-only">Loading</span>
 						<Skeleton className="h-40" />
 					</div>
 				) : null}

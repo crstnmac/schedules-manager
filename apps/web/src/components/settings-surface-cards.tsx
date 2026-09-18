@@ -348,7 +348,7 @@ export function GroupsCard({
 											<Field
 												key={worker.employmentId}
 												orientation="horizontal"
-												className="items-center rounded-md px-2 py-1.5 [@media(hover:hover)]:hover:bg-muted/50"
+												className="items-center rounded-sm px-2 py-1.5 [@media(hover:hover)]:hover:bg-muted/50"
 											>
 												<Checkbox
 													id={`group-worker-${worker.employmentId}`}

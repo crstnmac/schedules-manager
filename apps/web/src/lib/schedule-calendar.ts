@@ -67,27 +67,33 @@ export function formatCompactShiftRange(
 
 export const POSITION_PALETTE = [
 	{
-		block: "bg-category-1 text-category-1-foreground hover:bg-category-1/80",
+		block:
+			"bg-category-1 text-category-1-foreground [@media(hover:hover)]:hover:bg-category-1/80",
 		dot: "bg-category-1-marker",
 	},
 	{
-		block: "bg-category-2 text-category-2-foreground hover:bg-category-2/80",
+		block:
+			"bg-category-2 text-category-2-foreground [@media(hover:hover)]:hover:bg-category-2/80",
 		dot: "bg-category-2-marker",
 	},
 	{
-		block: "bg-category-3 text-category-3-foreground hover:bg-category-3/80",
+		block:
+			"bg-category-3 text-category-3-foreground [@media(hover:hover)]:hover:bg-category-3/80",
 		dot: "bg-category-3-marker",
 	},
 	{
-		block: "bg-category-4 text-category-4-foreground hover:bg-category-4/80",
+		block:
+			"bg-category-4 text-category-4-foreground [@media(hover:hover)]:hover:bg-category-4/80",
 		dot: "bg-category-4-marker",
 	},
 	{
-		block: "bg-category-5 text-category-5-foreground hover:bg-category-5/80",
+		block:
+			"bg-category-5 text-category-5-foreground [@media(hover:hover)]:hover:bg-category-5/80",
 		dot: "bg-category-5-marker",
 	},
 	{
-		block: "bg-category-6 text-category-6-foreground hover:bg-category-6/80",
+		block:
+			"bg-category-6 text-category-6-foreground [@media(hover:hover)]:hover:bg-category-6/80",
 		dot: "bg-category-6-marker",
 	},
 ] as const;

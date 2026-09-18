@@ -472,7 +472,8 @@ function CoveragePage() {
 			/>
 			<AppPageBody scroll={false}>
 				{coverage.isLoading ? (
-					<div className="flex flex-col gap-3 p-4">
+					<div className="flex flex-col gap-3 p-4" role="status">
+						<span className="sr-only">Loading</span>
 						<Skeleton className="h-24" />
 						<Skeleton className="h-24" />
 					</div>

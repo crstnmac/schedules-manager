@@ -310,7 +310,8 @@ export function ConversationWorkspace({
 							aria-label="People"
 						>
 							{composeLoading ? (
-								<div className="flex flex-col gap-1 p-1">
+								<div className="flex flex-col gap-1 p-1" role="status">
+									<span className="sr-only">Loading</span>
 									<Skeleton className="h-12" />
 									<Skeleton className="h-12" />
 									<Skeleton className="h-12" />
@@ -520,7 +521,8 @@ export function ConversationWorkspace({
 											</div>
 										) : null}
 										{messagesLoading ? (
-											<div className="flex flex-col gap-4">
+											<div className="flex flex-col gap-4" role="status">
+												<span className="sr-only">Loading</span>
 												<Skeleton className="h-16 w-3/5" />
 												<Skeleton className="ml-auto h-12 w-2/5" />
 												<Skeleton className="h-14 w-1/2" />

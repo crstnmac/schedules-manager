@@ -388,16 +388,7 @@ export function PatternsCard({
 						>
 							Cancel
 						</Button>
-						<Button
-							type="submit"
-							form="pattern-form"
-							disabled={
-								!name.trim() ||
-								shifts.length === 0 ||
-								!shiftsValid ||
-								save.isPending
-							}
-						>
+						<Button type="submit" form="pattern-form" disabled={save.isPending}>
 							{save.isPending ? <Spinner data-icon="inline-start" /> : null}
 							{editingId ? "Save pattern" : "Add pattern"}
 						</Button>
@@ -409,6 +400,10 @@ export function PatternsCard({
 					className="flex flex-col gap-4"
 					onSubmit={(event) => {
 						event.preventDefault();
+						if (!name.trim() || !shiftsValid) {
+							toast.error("Add a name and at least one complete shift.");
+							return;
+						}
 						save.mutate();
 					}}
 				>
@@ -723,7 +718,7 @@ export function PatternsCard({
 										<Field
 											key={worker.employmentId}
 											orientation="horizontal"
-											className="items-center rounded-md px-2 py-1.5 [@media(hover:hover)]:hover:bg-muted/50"
+											className="items-center rounded-sm px-2 py-1.5 [@media(hover:hover)]:hover:bg-muted/50"
 										>
 											<Checkbox
 												id={`pattern-worker-${worker.employmentId}`}

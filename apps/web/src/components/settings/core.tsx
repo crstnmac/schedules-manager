@@ -261,7 +261,10 @@ export function WorkplaceCard({
 			: laborCostPercentGoal;
 	const noticeHours = hours ?? settings.noticeWindowHours;
 	const saveFooter = (
-		<Button disabled={save.isPending || !dirty} onClick={() => save.mutate()}>
+		<Button
+			disabled={save.isPending}
+			onClick={() => (dirty ? save.mutate() : toast("No changes to save"))}
+		>
 			{save.isPending ? <Spinner data-icon="inline-start" /> : null}
 			{save.isPending ? "Saving…" : "Save changes"}
 		</Button>

@@ -644,7 +644,8 @@ function WorkerHome() {
 			/>
 			<AppPageBody scroll={false} className="gap-0">
 				{schedule.isLoading ? (
-					<div className="flex flex-col gap-3">
+					<div className="flex flex-col gap-3" role="status">
+						<span className="sr-only">Loading</span>
 						<Skeleton className="h-28" />
 						<Skeleton className="h-40" />
 					</div>
@@ -964,7 +965,7 @@ function WorkerHome() {
 									pendingAcceptances.length > 0 || currentChanges.length > 0 ? (
 										<>
 											{currentChanges.length > 0 ? (
-												<Alert>
+												<Alert role="status">
 													<AlertTitle>What changed this week</AlertTitle>
 													<AlertDescription>
 														<ul className="flex flex-col gap-1">

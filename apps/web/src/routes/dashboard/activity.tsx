@@ -316,7 +316,8 @@ function ActivityPage() {
 						/>
 						<div className="min-h-0 flex-1 overflow-auto">
 							{inbox.isLoading ? (
-								<div className="flex flex-col gap-3 p-4">
+								<div className="flex flex-col gap-3 p-4" role="status">
+									<span className="sr-only">Loading</span>
 									<Skeleton className="h-20" />
 								</div>
 							) : (
@@ -402,7 +403,8 @@ function ActivityPage() {
 						/>
 						<div className="min-h-0 flex-1 overflow-auto">
 							{audit.isLoading ? (
-								<div className="flex flex-col gap-3 p-4">
+								<div className="flex flex-col gap-3 p-4" role="status">
+									<span className="sr-only">Loading</span>
 									<Skeleton className="h-20" />
 								</div>
 							) : (

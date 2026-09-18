@@ -291,8 +291,4 @@ export function registerMocks() {
 	mock.module("@/components/settings/nav", () => ({
 		settingsSectionLabel: () => "Settings",
 	}));
-
-	mock.module("@/components/mode-toggle", () => ({
-		ModeToggle: () => createElement("div", { "data-testid": "mode-toggle" }),
-	}));
 }

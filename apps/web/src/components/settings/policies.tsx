@@ -153,8 +153,10 @@ function PolicyCard<T extends WorkplaceSettings>({
 				message={form.dirty ? "You have unsaved policy changes." : idleMessage}
 				footer={
 					<Button
-						disabled={form.save.isPending || !form.dirty}
-						onClick={() => form.save.mutate()}
+						disabled={form.save.isPending}
+						onClick={() =>
+							form.dirty ? form.save.mutate() : toast("No changes to save")
+						}
 					>
 						{form.save.isPending ? <Spinner data-icon="inline-start" /> : null}
 						{form.save.isPending ? "Saving…" : "Save changes"}

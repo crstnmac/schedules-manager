@@ -704,7 +704,8 @@ function TimeOffPage() {
 						className="flex min-h-0 flex-1 flex-col"
 					>
 						{timeOff.isLoading ? (
-							<div className="flex flex-col gap-3 p-4">
+							<div className="flex flex-col gap-3 p-4" role="status">
+								<span className="sr-only">Loading</span>
 								<Skeleton className="h-20" />
 								<Skeleton className="h-20" />
 							</div>
@@ -1218,10 +1219,13 @@ function TimeOffPage() {
 					<AlertDialogFooter>
 						<AlertDialogCancel>Cancel</AlertDialogCancel>
 						<AlertDialogAction
-							disabled={
-								expedite.isPending || expediteReason.trim().length === 0
-							}
-							onClick={() => {
+							disabled={expedite.isPending}
+							onClick={(event) => {
+								if (expediteReason.trim().length === 0) {
+									event.preventDefault();
+									toast.error("Add a reason for the override.");
+									return;
+								}
 								if (!expediteId) return;
 								expedite.mutate({
 									requestId: expediteId,
@@ -1257,7 +1261,8 @@ function PendingUnavailabilityPanel({
 
 	if (loading) {
 		return (
-			<div className="flex flex-col gap-3 p-4">
+			<div className="flex flex-col gap-3 p-4" role="status">
+				<span className="sr-only">Loading</span>
 				<Skeleton className="h-16" />
 				<Skeleton className="h-16" />
 			</div>
@@ -1346,7 +1351,8 @@ function MyApprovalsPanel({
 
 	if (loading) {
 		return (
-			<div className="flex flex-col gap-3 p-4">
+			<div className="flex flex-col gap-3 p-4" role="status">
+				<span className="sr-only">Loading</span>
 				<Skeleton className="h-20" />
 				<Skeleton className="h-20" />
 			</div>
@@ -1518,7 +1524,10 @@ function DelegationsSection({
 				</Button>
 			</div>
 			{loading ? (
-				<Skeleton className="h-12" />
+				<div role="status">
+					<Skeleton className="h-12" />
+					<span className="sr-only">Loading</span>
+				</div>
 			) : delegations.length === 0 ? (
 				<p className="text-muted-foreground text-sm">
 					No delegations yet. You can delegate your approvals to another manager
@@ -1947,7 +1956,8 @@ function WhoIsOut({
 
 	if (loading) {
 		return (
-			<div className="flex flex-col gap-3 p-4">
+			<div className="flex flex-col gap-3 p-4" role="status">
+				<span className="sr-only">Loading</span>
 				<Skeleton className="h-16" />
 				<Skeleton className="h-16" />
 			</div>
@@ -2130,7 +2140,8 @@ function BalancesPanel({
 			</div>
 
 			{overviewLoading ? (
-				<div className="flex flex-col gap-2">
+				<div className="flex flex-col gap-2" role="status">
+					<span className="sr-only">Loading</span>
 					<Skeleton className="h-10" />
 					<Skeleton className="h-10" />
 					<Skeleton className="h-10" />
@@ -2800,7 +2811,8 @@ function EncashmentsPanel({
 			/>
 
 			{loading ? (
-				<div className="flex flex-col gap-3">
+				<div className="flex flex-col gap-3" role="status">
+					<span className="sr-only">Loading</span>
 					<Skeleton className="h-16" />
 					<Skeleton className="h-16" />
 				</div>

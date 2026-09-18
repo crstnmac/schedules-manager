@@ -112,10 +112,14 @@ export function DisplayPreferencesCard({
 			description="How times and names appear for you. These do not change workplace rules."
 			footer={
 				<Button
-					disabled={
-						save.isPending || (timeFormat === null && nameFormat === null)
-					}
-					onClick={() => save.mutate()}
+					disabled={save.isPending}
+					onClick={() => {
+						if (timeFormat === null && nameFormat === null) {
+							toast("No changes to save");
+							return;
+						}
+						save.mutate();
+					}}
 				>
 					{save.isPending ? <Spinner data-icon="inline-start" /> : null}
 					{save.isPending ? "Saving…" : "Save changes"}
@@ -268,8 +272,14 @@ export function NotificationPreferencesCard({
 			description="Each topic is a separate channel. Turn off anything you do not need to hear about."
 			footer={
 				<Button
-					disabled={save.isPending || Object.keys(draft).length === 0}
-					onClick={() => save.mutate()}
+					disabled={save.isPending}
+					onClick={() => {
+						if (Object.keys(draft).length === 0) {
+							toast("No changes to save");
+							return;
+						}
+						save.mutate();
+					}}
 				>
 					{save.isPending ? <Spinner data-icon="inline-start" /> : null}
 					{save.isPending ? "Saving…" : "Save changes"}

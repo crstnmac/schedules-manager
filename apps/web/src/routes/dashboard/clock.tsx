@@ -194,7 +194,8 @@ function ManagerClockPage() {
 			/>
 
 			{schedule.isLoading ? (
-				<div className="flex flex-col gap-3">
+				<div className="flex flex-col gap-3" role="status">
+					<span className="sr-only">Loading</span>
 					<Skeleton className="h-40 rounded-2xl" />
 					<div className="grid gap-4 lg:grid-cols-2">
 						<Skeleton className="h-40" />
@@ -303,7 +304,12 @@ function ManagerClockPage() {
 							<CardDescription>Recent Time Entries.</CardDescription>
 						</CardHeader>
 						<CardContent>
-							{timecard.isLoading ? <Skeleton className="h-32" /> : null}
+							{timecard.isLoading ? (
+								<div role="status">
+									<Skeleton className="h-32" />
+									<span className="sr-only">Loading</span>
+								</div>
+							) : null}
 							{timecard.isError ? (
 								<Alert variant="destructive">
 									<AlertTitle>Couldn’t load your Time Entries</AlertTitle>

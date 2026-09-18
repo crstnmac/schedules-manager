@@ -434,7 +434,7 @@ export function AuthForm({
 								</Button>
 							) : null}
 							{resetSent ? (
-								<Alert>
+								<Alert role="status">
 									<MailIcon />
 									<AlertTitle>Check your email</AlertTitle>
 									<AlertDescription>
@@ -444,7 +444,7 @@ export function AuthForm({
 								</Alert>
 							) : null}
 							{message ? (
-								<Alert>
+								<Alert role="status">
 									<CalendarDaysIcon />
 									<AlertTitle>Confirm your email</AlertTitle>
 									<AlertDescription>{message}</AlertDescription>
