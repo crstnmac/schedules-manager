@@ -14,6 +14,7 @@ import { registerJoinPolicyTests } from "./join-policy-cases";
 import { registerKioskRateLimitTests } from "./kiosk-rate-limit-cases";
 import { registerLeaveTests } from "./leave-cases";
 import { registerLocationBillingTests } from "./location-billing-cases";
+import { registerMcpIntegrationTests } from "./mcp-integration-cases";
 import { registerMyScheduleTests } from "./my-schedule-cases";
 import { registerOpsTests } from "./ops-cases";
 import { registerOwnReleaseTests } from "./own-release-cases";
@@ -125,6 +126,7 @@ integrationDescribe("Schedule publication", () => {
 		token: managerToken,
 		publishScheduleNow,
 	}));
+	registerMcpIntegrationTests(() => ({ database, app }));
 	registerOpsTests(() => ({ database, app, token: managerToken }));
 	registerKioskRateLimitTests(() => ({ database, app }));
 	registerReportTests(() => ({ database, app, token: managerToken }));

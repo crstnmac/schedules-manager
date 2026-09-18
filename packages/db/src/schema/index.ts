@@ -14,10 +14,24 @@ export {
 	attendanceMarkKindEnum,
 	attendanceMarks,
 } from "./attendance-marks";
-export type { AuthSession, AuthUser } from "./auth";
+export type {
+	AuthSession,
+	AuthUser,
+	OauthAccessToken,
+	OauthClient,
+	OauthRefreshToken,
+} from "./auth";
 export {
 	account,
 	accountRelations,
+	jwks,
+	oauthAccessToken,
+	oauthClient,
+	oauthClientAssertion,
+	oauthClientResource,
+	oauthConsent,
+	oauthRefreshToken,
+	oauthResource,
 	session,
 	sessionRelations,
 	user,

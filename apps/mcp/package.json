@@ -1,0 +1,22 @@
+{
+	"name": "mcp",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"main": "src/index.ts",
+	"scripts": {
+		"check-types": "tsc -b",
+		"start:stdio": "bun run src/stdio.ts"
+	},
+	"dependencies": {
+		"@SchedulesManager/env": "workspace:*",
+		"@modelcontextprotocol/sdk": "^1.30.0",
+		"dotenv": "catalog:",
+		"zod": "4.5.2"
+	},
+	"devDependencies": {
+		"@SchedulesManager/config": "workspace:*",
+		"@types/bun": "catalog:",
+		"typescript": "^6.0.3"
+	}
+}

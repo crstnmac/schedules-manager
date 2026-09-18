@@ -6,9 +6,7 @@ import {
 } from "@SchedulesManager/db";
 import { createHash, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
-
-import { AuthenticationError } from "./auth";
-import { ForbiddenError } from "./errors";
+import { AuthenticationError, ForbiddenError } from "./errors";
 
 export interface GeneratedApiKey {
 	token: string;
@@ -50,10 +48,12 @@ function tokenFromHeaders(
 /**
  * Resolves the Workplace for a scoped API key and enforces its scope. Revoked
  * and expired keys are rejected with 401; a valid key missing the scope is 403.
+ * `requiredScope` accepts one scope or several (any-of); omit it to accept any
+ * valid key, which context-style endpoints use.
  */
 export async function requireApiKey(
 	headers: Headers | Record<string, string | undefined>,
-	requiredScope: ApiKeyScope,
+	requiredScope?: ApiKeyScope | ApiKeyScope[],
 ): Promise<{ apiKey: ApiKey; workplaceId: string }> {
 	const token = tokenFromHeaders(headers);
 	if (!token) throw new AuthenticationError("An API key is required");
@@ -69,10 +69,16 @@ export async function requireApiKey(
 	if (apiKey.expiresAt && apiKey.expiresAt.getTime() <= Date.now()) {
 		throw new AuthenticationError("This API key has expired");
 	}
-	if (!apiKey.scopes.includes(requiredScope)) {
-		throw new ForbiddenError(
-			`This API key is missing the ${requiredScope} scope`,
-		);
+	if (requiredScope) {
+		const required = Array.isArray(requiredScope)
+			? requiredScope
+			: [requiredScope];
+		const satisfied = required.some((scope) => apiKey.scopes.includes(scope));
+		if (!satisfied) {
+			throw new ForbiddenError(
+				`This API key is missing the ${required.join(" or ")} scope`,
+			);
+		}
 	}
 
 	await db

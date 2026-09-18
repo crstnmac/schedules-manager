@@ -76,7 +76,7 @@ function scheduleTeamMatch(teamId: string | null | undefined) {
 	return teamId ? eq(schedules.teamId, teamId) : isNull(schedules.teamId);
 }
 
-async function getOrCreateSchedule(
+export async function getOrCreateSchedule(
 	locationId: string,
 	weekStart: string,
 	teamId: string | null = null,
@@ -115,7 +115,7 @@ async function getOrCreateSchedule(
 	return created;
 }
 
-async function loadWorkforce(workplaceId: string) {
+export async function loadWorkforce(workplaceId: string) {
 	const employmentRows = await db
 		.select({ employment: employments, profile: profiles })
 		.from(employments)
@@ -197,7 +197,7 @@ async function loadWorkforce(workplaceId: string) {
 	};
 }
 
-async function loadNearbyShifts(
+export async function loadNearbyShifts(
 	workplaceId: string,
 	employmentIds: string[],
 	weekStart: string,
@@ -226,7 +226,7 @@ async function loadNearbyShifts(
 		);
 }
 
-function shiftHitsUnavailability(
+export function shiftHitsUnavailability(
 	shiftStart: Date,
 	shiftEnd: Date,
 	employmentId: string,
@@ -272,7 +272,7 @@ function shiftHitsUnavailability(
 	return false;
 }
 
-async function overrideReasonIfNeeded(
+export async function overrideReasonIfNeeded(
 	location: Location,
 	employmentId: string | null | undefined,
 	startsAt: Date,
@@ -332,7 +332,7 @@ function recurringWindowOverlaps(
 	return false;
 }
 
-function computeConflicts(
+export function computeConflicts(
 	location: Location,
 	shiftRows: ShiftRow[],
 	workforce: Awaited<ReturnType<typeof loadWorkforce>>,
@@ -456,7 +456,7 @@ function computeConflicts(
 	return conflicts;
 }
 
-function serializeShift(
+export function serializeShift(
 	shift: ShiftRow,
 	location: Location,
 	conflicts: Conflict[],
@@ -883,7 +883,7 @@ async function locationForShift(shiftId: string) {
 	return context.location;
 }
 
-async function shiftContext(shiftId: string) {
+export async function shiftContext(shiftId: string) {
 	const [row] = await db
 		.select({ location: locations, schedule: schedules })
 		.from(shifts)
@@ -895,7 +895,7 @@ async function shiftContext(shiftId: string) {
 	return row;
 }
 
-function resolveShiftTimes(
+export function resolveShiftTimes(
 	body: { date: string; startMinute: number; endMinute: number },
 	timeZone: string,
 ): { startsAt: Date; endsAt: Date } {
@@ -909,14 +909,14 @@ function resolveShiftTimes(
 	return { startsAt, endsAt };
 }
 
-function assertDateInWeek(date: string, weekStart: string) {
+export function assertDateInWeek(date: string, weekStart: string) {
 	const last = shiftDays(weekStart, 6);
 	if (date < weekStart || date > last) {
 		throw new BadRequestError("Shift must start on a day in this workweek");
 	}
 }
 
-async function assertAssignmentValid(
+export async function assertAssignmentValid(
 	location: Location,
 	employmentId: string,
 	positionId: string,

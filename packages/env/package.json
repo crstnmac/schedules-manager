@@ -7,6 +7,7 @@
 		"./server": "./src/server.ts",
 		"./web": "./src/web.ts",
 		"./landing": "./src/landing.ts",
+		"./mcp": "./src/mcp.ts",
 		"./native": "./src/native.ts"
 	},
 	"dependencies": {

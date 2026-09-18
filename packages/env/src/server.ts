@@ -10,6 +10,12 @@ export const env = createEnv({
 		BETTER_AUTH_SECRET: z.string().min(32),
 		BETTER_AUTH_URL: z.url(),
 		APP_URL: z.url(),
+		/**
+		 * Canonical MCP protected-resource URL (RFC 8707). MCP access tokens are
+		 * audience-bound to it; keep identical to the mcp() plugin's `resource`.
+		 * Defaults to `${BETTER_AUTH_URL}/mcp`. HTTP is only valid on loopback.
+		 */
+		MCP_RESOURCE_URL: z.url().optional(),
 		POLAR_ACCESS_TOKEN: z.string().min(1).optional(),
 		POLAR_WEBHOOK_SECRET: z.string().min(16).optional(),
 		POLAR_MODE: z.enum(["sandbox", "production"]).default("production"),

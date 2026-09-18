@@ -19,12 +19,14 @@ import { constraintsRoutes } from "./routes/constraints";
 import { coverageRoutes } from "./routes/coverage";
 import { emailDeliveryRoutes } from "./routes/email-delivery";
 import { holidayRoutes } from "./routes/holidays";
+import { integrationApiRoutes } from "./routes/integration-api";
 import { integrationRoutes } from "./routes/integrations";
 import { invitationsRoutes } from "./routes/invitations";
 import { kioskRoutes } from "./routes/kiosk";
 import { leaveRoutes } from "./routes/leave";
 import { legalRoutes } from "./routes/legal";
 import { locationsRoutes } from "./routes/locations";
+import { createMcpRoutes } from "./routes/mcp";
 import { meRoutes } from "./routes/me";
 import { notificationsRoutes } from "./routes/notifications";
 import { patternRoutes } from "./routes/patterns";
@@ -63,7 +65,20 @@ function responseStatus(set: { status?: number | string }): number {
 export function createApp(options: CreateAppOptions = {}) {
 	const getReadiness = options.getReadiness ?? getReadinessReport;
 
-	return new Elysia()
+	// The MCP routes execute tools against this same app over an in-process
+	// loopback, so the closure is filled in once the chain is built.
+	let integrationHandler: ((request: Request) => Promise<Response>) | null =
+		null;
+	const mcpRoutes = createMcpRoutes({
+		handleIntegration: async (request) => {
+			if (!integrationHandler) {
+				throw new Error("Application is still initializing");
+			}
+			return integrationHandler(request);
+		},
+	});
+
+	const app = new Elysia()
 		.use(
 			openapi({
 				documentation: {
@@ -90,7 +105,16 @@ export function createApp(options: CreateAppOptions = {}) {
 				origin: env.CORS_ORIGIN,
 				methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 				credentials: true,
-				allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
+				allowedHeaders: [
+					"Content-Type",
+					"Authorization",
+					"Idempotency-Key",
+					// MCP Streamable HTTP + workplace selection for principals.
+					"Mcp-Session-Id",
+					"Mcp-Protocol-Version",
+					"X-Workplace-Id",
+				],
+				exposeHeaders: ["Mcp-Session-Id"],
 			}),
 		)
 		.mount(auth.handler)
@@ -227,6 +251,7 @@ export function createApp(options: CreateAppOptions = {}) {
 		.use(coverageRoutes)
 		.use(emailDeliveryRoutes)
 		.use(integrationRoutes)
+		.use(integrationApiRoutes)
 		.use(notificationsRoutes)
 		.use(timeEntryRoutes)
 		.use(swapRoutes)
@@ -234,5 +259,9 @@ export function createApp(options: CreateAppOptions = {}) {
 		.use(surfaceRoutes)
 		.use(leaveRoutes)
 		.use(kioskRoutes)
-		.use(reportRoutes);
+		.use(reportRoutes)
+		.use(mcpRoutes);
+
+	integrationHandler = (request) => app.handle(request);
+	return app;
 }
