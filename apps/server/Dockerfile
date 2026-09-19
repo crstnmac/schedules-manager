@@ -9,6 +9,7 @@ WORKDIR /app
 # ---- Install dependencies (server workspace + its workspace deps only) ----
 FROM base AS deps
 COPY package.json bun.lock ./
+COPY apps/mcp/package.json apps/mcp/
 COPY apps/native/package.json apps/native/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
@@ -22,6 +23,7 @@ COPY packages/env/package.json packages/env/
 COPY packages/ui/package.json packages/ui/
 RUN --mount=type=cache,target=/root/.bun/install/cache \
 	bun install --frozen-lockfile --filter server \
+		--filter mcp \
 		--filter '@SchedulesManager/config' \
 		--filter '@SchedulesManager/db' \
 		--filter '@SchedulesManager/env'
