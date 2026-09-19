@@ -11,6 +11,26 @@ import { sweepExpiredRateLimits } from "./rate-limit";
 import { processSubscriptionNoticeBatch } from "./subscription-notices";
 import { dispatchWebhookDeliveries } from "./webhooks";
 
+// Bun terminates the process on an unhandled rejection. Rejections can escape
+// outside the dispatch loops below — better-auth plugins run background work
+// (OAuth resource seeding, session cleanup) fire-and-forget, and pool-level
+// failures reject independently. Log them and keep serving: a degraded
+// subsystem fails its own requests with logged errors instead of taking the
+// whole server down.
+process.on("unhandledRejection", (reason) => {
+	console.error(
+		JSON.stringify({
+			level: "error",
+			message: "Unhandled rejection",
+			error:
+				reason instanceof Error
+					? `${reason.message}\n${reason.stack ?? ""}`
+					: String(reason),
+			timestamp: new Date().toISOString(),
+		}),
+	);
+});
+
 createApp().listen({ port: 3000, hostname: "0.0.0.0" }, () => {
 	console.log("Server is running on http://0.0.0.0:3000");
 	console.log(
