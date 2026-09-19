@@ -23,6 +23,7 @@ WORKDIR /app
 # bun validates every workspace in bun.lock against disk, so all
 # workspace package.json files must be present even when filtering.
 COPY package.json bun.lock ./
+COPY apps/mcp/package.json apps/mcp/
 COPY apps/native/package.json apps/native/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
