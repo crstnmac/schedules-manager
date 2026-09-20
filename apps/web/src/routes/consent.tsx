@@ -7,11 +7,13 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@SchedulesManager/ui/components/card";
-import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
-import { Label } from "@SchedulesManager/ui/components/label";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import {
+	OAuthConsentScopes,
+	REQUIRED_OAUTH_SCOPES,
+} from "@/components/oauth-consent-scopes";
 import { useAuth } from "@/lib/auth";
 import { oauthConsentRedirect } from "@/lib/oauth";
 
@@ -23,19 +25,6 @@ export const Route = createFileRoute("/consent")({
 	component: ConsentComponent,
 });
 
-const SCOPE_LABELS: Record<string, string> = {
-	openid: "Confirm who you are",
-	profile: "See your basic profile",
-	email: "See your email address",
-	offline_access: "Stay connected without asking again",
-	"schedule.read": "View published schedules and drafts",
-	"schedule.write": "Create and change draft schedules, and publish them",
-	"workers.read": "View workers, availability, and wage rates",
-	"reports.read": "View labor hours and cost reports",
-	"requests.read": "View time-off requests",
-	"requests.write": "Submit and update time-off requests",
-};
-
 function ConsentComponent() {
 	const { isLoading, user } = useAuth();
 	const search = Route.useSearch();
@@ -44,6 +33,19 @@ function ConsentComponent() {
 	const [denied, setDenied] = useState(false);
 
 	const requestedScopes = (search.scope ?? "").split(" ").filter(Boolean);
+	const [selectedScopes, setSelectedScopes] = useState(() => requestedScopes);
+
+	function toggleScope(scope: string, selected: boolean) {
+		if (REQUIRED_OAUTH_SCOPES.has(scope)) return;
+		setSelectedScopes((current) =>
+			selected
+				? requestedScopes.filter(
+						(requestedScope) =>
+							requestedScope === scope || current.includes(requestedScope),
+					)
+				: current.filter((selectedScope) => selectedScope !== scope),
+		);
+	}
 
 	async function respond(accept: boolean) {
 		setDecision("working");
@@ -57,6 +59,7 @@ function ConsentComponent() {
 					headers: { "content-type": "application/json" },
 					body: JSON.stringify({
 						accept,
+						scope: accept ? selectedScopes.join(" ") : undefined,
 						oauth_query: window.location.search.slice(1),
 					}),
 				},
@@ -150,17 +153,11 @@ function ConsentComponent() {
 						className="w-full space-y-3"
 						disabled={decision === "working"}
 					>
-						{requestedScopes.map((scope) => (
-							<div key={scope} className="flex items-start gap-3">
-								<Checkbox id={`scope-${scope}`} defaultChecked disabled />
-								<Label
-									htmlFor={`scope-${scope}`}
-									className="font-normal leading-snug"
-								>
-									{SCOPE_LABELS[scope] ?? scope}
-								</Label>
-							</div>
-						))}
+						<OAuthConsentScopes
+							requestedScopes={requestedScopes}
+							selectedScopes={selectedScopes}
+							onToggle={toggleScope}
+						/>
 					</fieldset>
 					{error ? <p className="text-destructive text-sm">{error}</p> : null}
 					<div className="flex w-full gap-2">
