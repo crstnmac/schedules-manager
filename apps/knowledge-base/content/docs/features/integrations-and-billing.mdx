@@ -17,7 +17,8 @@ The jooling MCP lets an MCP-compatible AI assistant read schedules, drafts, Work
 
 1. Open **Settings → Integrations**.
 2. In **Connected assistants**, copy the MCP server URL shown for the environment you are signed in to. Staging shows the staging API URL; production shows the production API URL.
-3. In your assistant or MCP client, add a remote **Streamable HTTP** server named `jooling` and paste that URL. If the client accepts JSON configuration, use:
+3. To let an AI agent configure its own client, choose **Copy AI setup prompt**, paste the prompt into the agent, and review the configuration change it proposes. The prompt includes the correct environment URL, preserves existing MCP servers, and instructs the agent to use OAuth rather than requesting an API key.
+4. To configure the client manually, add a remote **Streamable HTTP** server named `jooling` and paste the URL. If the client accepts JSON configuration, use:
 
 ```json
 {
@@ -30,8 +31,8 @@ The jooling MCP lets an MCP-compatible AI assistant read schedules, drafts, Work
 }
 ```
 
-4. Connect the server. Your browser opens jooling for sign-in and consent.
-5. Choose the Workplace and approve only the access the assistant needs. The connection then appears under **Connected assistants** with its scopes and last-used time.
+5. Connect the server. Your browser opens jooling for sign-in and consent.
+6. Choose the Workplace and approve only the access the assistant needs. The connection then appears under **Connected assistants** with its scopes and last-used time.
 
 To remove an assistant, open its row menu and choose **Disconnect**. This revokes that assistant's access and refresh tokens for your account and removes its consent grant. You can reconnect it later and approve access again.
 

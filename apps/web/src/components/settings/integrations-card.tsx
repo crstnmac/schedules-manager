@@ -29,6 +29,7 @@ import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 	BookOpenIcon,
+	BotIcon,
 	CopyIcon,
 	KeyRoundIcon,
 	PlugIcon,
@@ -44,6 +45,7 @@ import {
 	SettingsFormSheet,
 } from "@/components/settings/crud";
 import { api } from "@/lib/api";
+import { createMcpInstallPrompt } from "@/lib/mcp-install";
 
 const API_KEY_SCOPES = [
 	"schedule.read",
@@ -808,6 +810,7 @@ export function McpConnectionsCard({
 	const connections = useMcpConnections(workplaceId);
 	const mcpUrl = `${env.VITE_SERVER_URL.replace(/\/$/, "")}/mcp`;
 	const integrationsDocsUrl = `${env.VITE_DOCS_URL.replace(/\/$/, "")}/features/integrations-and-billing`;
+	const mcpInstallPrompt = createMcpInstallPrompt(mcpUrl);
 	const disconnect = useMutation({
 		mutationFn: (clientId: string) =>
 			api(
@@ -901,7 +904,20 @@ export function McpConnectionsCard({
 							</InputGroupButton>
 						</InputGroupAddon>
 					</InputGroup>
-					<div>
+					<div className="flex flex-wrap gap-2">
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => {
+								navigator.clipboard
+									.writeText(mcpInstallPrompt)
+									.then(() => toast.success("AI setup prompt copied."))
+									.catch(() => toast.error("Copy failed."));
+							}}
+						>
+							<BotIcon data-icon="inline-start" />
+							Copy AI setup prompt
+						</Button>
 						<Button
 							variant="outline"
 							size="sm"
