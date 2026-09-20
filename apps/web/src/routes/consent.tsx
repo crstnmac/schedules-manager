@@ -13,6 +13,7 @@ import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { oauthConsentRedirect } from "@/lib/oauth";
 
 export const Route = createFileRoute("/consent")({
 	validateSearch: (search: Record<string, unknown>) => ({
@@ -63,8 +64,11 @@ function ConsentComponent() {
 			if (!response.ok) {
 				throw new Error(`The server rejected the request (${response.status})`);
 			}
-			const result = (await response.json()) as { redirect_uri: string };
-			window.location.assign(result.redirect_uri);
+			const result = (await response.json()) as {
+				redirect_uri?: unknown;
+				url?: unknown;
+			};
+			window.location.assign(oauthConsentRedirect(result));
 		} catch (cause) {
 			setError(
 				cause instanceof Error ? cause.message : "Something went wrong.",
