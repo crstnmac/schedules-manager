@@ -3,13 +3,15 @@ import {
 	apiKeys,
 	db,
 	locations,
+	oauthClient,
+	oauthConsent,
 	schedules,
 	scheduleVersions,
 	versionShifts,
 	webhookDeliveries,
 	webhookEndpoints,
 } from "@SchedulesManager/db";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
 import { generateApiKey, requireApiKey } from "../api-key-auth";
@@ -91,6 +93,46 @@ export const integrationRoutes = new Elysia({
 			params: t.Object({ workplaceId: uuid }),
 			detail: {
 				summary: "List API keys for a Workplace (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/mcp-connections",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers);
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"integrations.manage",
+			);
+			const connections = await db
+				.select({
+					clientId: oauthConsent.clientId,
+					clientName: oauthClient.name,
+					scopes: oauthConsent.scopes,
+					consentedAt: oauthConsent.createdAt,
+					updatedAt: oauthConsent.updatedAt,
+					lastUsedAt: sql<string | null>`(
+						select max(created_at) from oauth_access_token
+						where client_id = ${oauthConsent.clientId}
+							and user_id = ${oauthConsent.userId}
+					)`,
+				})
+				.from(oauthConsent)
+				.innerJoin(oauthClient, eq(oauthClient.clientId, oauthConsent.clientId))
+				.where(eq(oauthConsent.userId, profile.id))
+				.orderBy(desc(oauthConsent.updatedAt));
+			return { connections };
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ workplaceId: uuid }),
+			detail: {
+				summary: "List MCP/assistants the current user has connected",
 				security: [{ bearerAuth: [] }],
 			},
 		},

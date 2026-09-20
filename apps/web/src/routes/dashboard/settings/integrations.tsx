@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
 	ApiKeysCard,
+	McpConnectionsCard,
 	WebhookDeliveriesCard,
 	WebhookEndpointsCard,
 } from "@/components/settings/integrations-card";
@@ -20,6 +21,7 @@ function IntegrationsSettingsPage() {
 			description="Issue scoped API keys and send signed webhooks when scheduling data changes."
 		>
 			<div className="grid gap-6">
+				<McpConnectionsCard workplaceId={workplace?.id} />
 				<ApiKeysCard workplaceId={workplace?.id} />
 				<WebhookEndpointsCard workplaceId={workplace?.id} />
 				<WebhookDeliveriesCard workplaceId={workplace?.id} />

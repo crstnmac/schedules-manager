@@ -26,7 +26,7 @@ import {
 } from "@SchedulesManager/ui/components/input-group";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CopyIcon, KeyRoundIcon, WebhookIcon } from "lucide-react";
+import { CopyIcon, KeyRoundIcon, PlugIcon, WebhookIcon } from "lucide-react";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -87,6 +87,17 @@ const apiKeyHelper = createDataColumnHelper<ApiKeyDto>();
 const endpointHelper = createDataColumnHelper<WebhookEndpointDto>();
 const deliveryHelper = createDataColumnHelper<WebhookDeliveryDto>();
 
+interface McpConnectionDto {
+	clientId: string;
+	clientName: string | null;
+	scopes: string[];
+	consentedAt: string;
+	updatedAt: string;
+	lastUsedAt: string | null;
+}
+
+const mcpHelper = createDataColumnHelper<McpConnectionDto>();
+
 const sheetFooterClassName =
 	"flex flex-col-reverse gap-2 sm:flex-row sm:justify-end";
 
@@ -124,6 +135,17 @@ function useWebhookDeliveries(workplaceId: string | undefined) {
 		queryFn: () =>
 			api<{ deliveries: WebhookDeliveryDto[] }>(
 				`/v1/workplaces/${workplaceId}/webhook-deliveries?limit=100`,
+			),
+		enabled: Boolean(workplaceId),
+	});
+}
+
+function useMcpConnections(workplaceId: string | undefined) {
+	return useQuery({
+		queryKey: ["mcp-connections", workplaceId],
+		queryFn: () =>
+			api<{ connections: McpConnectionDto[] }>(
+				`/v1/workplaces/${workplaceId}/mcp-connections`,
 			),
 		enabled: Boolean(workplaceId),
 	});
@@ -766,6 +788,66 @@ export function WebhookDeliveriesCard({
 			emptyTitle="No deliveries yet"
 			emptyDescription="Deliveries appear here once an audited event matches an active endpoint."
 			addLabel="Add delivery"
+		/>
+	);
+}
+
+export function McpConnectionsCard({
+	workplaceId,
+}: {
+	workplaceId: string | undefined;
+}) {
+	const connections = useMcpConnections(workplaceId);
+
+	const columns = useMemo(
+		() =>
+			mcpHelper.columns([
+				mcpHelper.accessor((row) => row.clientName ?? row.clientId, {
+					id: "client",
+					header: "Assistant",
+					cell: ({ getValue }) => (
+						<span className="font-medium">{getValue()}</span>
+					),
+				}),
+				mcpHelper.accessor((row) => row.scopes.join(", "), {
+					id: "scopes",
+					header: "Access",
+					cell: ({ getValue }) => (
+						<span className="text-muted-foreground text-xs">{getValue()}</span>
+					),
+				}),
+				mcpHelper.accessor("updatedAt", {
+					header: "Connected",
+					cell: ({ getValue }) => formatTimestamp(getValue()),
+				}),
+				mcpHelper.accessor("lastUsedAt", {
+					header: "Last used",
+					cell: ({ getValue }) => formatTimestamp(getValue()),
+				}),
+				mcpHelper.display({
+					id: "status",
+					header: "Status",
+					cell: () => <Badge variant="secondary">Connected</Badge>,
+				}),
+			]),
+		[],
+	);
+
+	return (
+		<SettingsCrudCard
+			title="Connected assistants"
+			description="Assistants authorized through the MCP integration. They act with your privileges and the scopes you approved."
+			count={connections.data?.connections.length ?? 0}
+			data={connections.data?.connections ?? []}
+			columns={columns}
+			getRowId={(row) => row.clientId}
+			getSearchText={(row) => `${row.clientName ?? ""} ${row.clientId}`}
+			searchPlaceholder="Search assistants"
+			isLoading={connections.isLoading}
+			entityLabel="connection"
+			emptyIcon={<PlugIcon />}
+			emptyTitle="No assistants connected"
+			emptyDescription="Connect Claude or another MCP client to jooling to see it here."
 		/>
 	);
 }
