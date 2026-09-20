@@ -9,6 +9,7 @@ WORKDIR /app
 # Bun validates every workspace in bun.lock against disk, so copy each
 # workspace manifest before installing the documentation workspace.
 COPY package.json bun.lock ./
+COPY patches patches/
 COPY apps/mcp/package.json apps/mcp/
 COPY apps/knowledge-base/package.json apps/knowledge-base/
 COPY apps/landing/package.json apps/landing/
