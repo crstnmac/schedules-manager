@@ -5,10 +5,7 @@ import { registerAutoClockOutBreaksTests } from "./auto-clock-out-breaks-cases";
 import { registerCoverageTests } from "./coverage-cases";
 import { resetAndMigrateDatabase } from "./database";
 import { registerDstRouteTests } from "./dst-route-cases";
-import {
-	emailWebhookTestSecret,
-	registerEmailDeliveryTests,
-} from "./email-delivery-cases";
+import { registerEmailDeliveryTests } from "./email-delivery-cases";
 import { registerEnsureProfileCollisionTests } from "./ensure-profile-collision-cases";
 import { registerJoinPolicyTests } from "./join-policy-cases";
 import { registerKioskRateLimitTests } from "./kiosk-rate-limit-cases";
@@ -39,7 +36,6 @@ integrationDescribe("Schedule publication", () => {
 	let app: ReturnType<typeof import("../../src/app").createApp>;
 
 	beforeAll(async () => {
-		process.env.ZEPTOMAIL_WEBHOOK_SECRET = emailWebhookTestSecret;
 		await resetAndMigrateDatabase();
 		database = await import("@SchedulesManager/db");
 		await database.db.execute(
