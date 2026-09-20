@@ -214,9 +214,12 @@ async function verifyMcpAccessToken(token: string): Promise<{
 }> {
 	const resource = mcpResourceUrl();
 	// Same issuer/audience binding that requireMcpAuth enforces on /mcp; a
-	// token accepted for tools is accepted here and vice versa.
+	// token accepted for tools is accepted here and vice versa. Issuer comes
+	// from auth context — better-auth appends /api/auth to the raw
+	// BETTER_AUTH_URL, and the tokens' iss uses that normalized value.
+	const { baseURL } = await auth.$context;
 	const { payload } = await jwtVerify(token, await localJwks(), {
-		issuer: env.BETTER_AUTH_URL.replace(/\/$/, ""),
+		issuer: baseURL.replace(/\/$/, ""),
 		audience: resource ?? undefined,
 	});
 	const scopeClaim = payload.scope;
