@@ -8,7 +8,8 @@ WORKDIR /app
 
 # ---- Install dependencies (server workspace + its workspace deps only) ----
 FROM base AS deps
-COPY package.json bun.lock patches/ ./
+COPY package.json bun.lock ./
+COPY patches patches/
 COPY apps/mcp/package.json apps/mcp/
 COPY apps/native/package.json apps/native/
 COPY apps/server/package.json apps/server/
