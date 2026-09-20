@@ -1,0 +1,22 @@
+diff --git a/dist/authorize-riRRCSbC.mjs b/dist/authorize-riRRCSbC.mjs
+index 3242d48eb31e844240b0cd9f5931580f3c5367c2..1f04206b73bf9f985aeb6d210bfdedba5a922853 100644
+--- a/dist/authorize-riRRCSbC.mjs
++++ b/dist/authorize-riRRCSbC.mjs
+@@ -1775,7 +1775,7 @@ async function checkOAuthClient(client, opts, settings) {
+ 		error: "invalid_redirect_uri",
+ 		error_description: "Redirect URIs are required for authorization_code and implicit grant types"
+ 	});
+-	for (const uri of clientWithDefaults.redirect_uris ?? []) validateClientRedirectUri(uri, applicationType ?? (isClientMetadataDocument ? "native" : "web"));
++	for (const uri of clientWithDefaults.redirect_uris ?? []) validateClientRedirectUri(uri, applicationType ?? (isClientMetadataDocument ? "native" : "native"));
+ 	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
+ 	if (isClientMetadataDocument) {
+ 		if (!grantTypes.some((grantType) => supportedGrantTypes.has(grantType))) throw new APIError("BAD_REQUEST", {
+@@ -1917,7 +1917,7 @@ async function persistOAuthClientRegistration(ctx, opts, input) {
+ 	const body = applyOAuthClientRegistrationDefaults(input.registrationSource === "dynamic" && !input.metadata.scope ? {
+ 		...input.metadata,
+ 		scope: (opts.clientRegistrationDefaultScopes ?? opts.scopes)?.join(" ")
+-	} : input.metadata, input.registrationSource === "clientMetadataDocument" ? null : "web");
++	} : input.metadata, input.registrationSource === "clientMetadataDocument" ? null : "native");
+ 	const isPublic = body.token_endpoint_auth_method === "none";
+ 	const isPrivateKeyJwt = body.token_endpoint_auth_method === "private_key_jwt";
+ 	const isExtensionAuthMethod = isExtensionTokenEndpointAuthMethod(opts, body.token_endpoint_auth_method);
