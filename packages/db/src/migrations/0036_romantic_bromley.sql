@@ -1,0 +1,1 @@
+ALTER TYPE "public"."api_key_scope" ADD VALUE 'workers.write' BEFORE 'reports.read';

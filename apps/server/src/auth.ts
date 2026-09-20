@@ -76,6 +76,7 @@ const oauthPlugins: BetterAuthOptions["plugins"] = [
 			"schedule.read",
 			"schedule.write",
 			"workers.read",
+			"workers.write",
 			"reports.read",
 			"requests.read",
 			"requests.write",

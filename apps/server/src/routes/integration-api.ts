@@ -4,6 +4,9 @@ import {
 	employmentLocations,
 	employmentPositions,
 	employments,
+	invitationLocations,
+	invitationPositions,
+	invitations,
 	leaveTypes,
 	locationSales,
 	locations,
@@ -13,7 +16,9 @@ import {
 	schedules,
 	scheduleVersions,
 	shiftPickups,
+	shiftReleases,
 	shifts,
+	timeEntries,
 	timeOffRequests,
 	unavailability,
 	versionShifts,
@@ -32,13 +37,21 @@ import {
 	lte,
 } from "drizzle-orm";
 import { Elysia, t } from "elysia";
-import { BadRequestError, ForbiddenError, NotFoundError } from "../errors";
+import { enqueueInvitationEmail } from "../email-outbox";
+import {
+	BadRequestError,
+	ConflictError,
+	ForbiddenError,
+	NotFoundError,
+} from "../errors";
 import { withIdempotency } from "../idempotency";
 import {
 	type IntegrationActor,
 	requireIntegrationActor,
 } from "../integration-auth";
 import { laborCents, laborPercent } from "../labor";
+import { decideLeaveRequest } from "../leave-approvals";
+import { writeAudit } from "../notify";
 import { firstRow } from "../rows";
 import {
 	assertWeekStartDay,
@@ -48,6 +61,7 @@ import {
 	weekStartOfDateKey,
 	zonedDayInfo,
 } from "../time";
+import { decidePickup, decideRelease } from "./coverage";
 import {
 	closeOpenMarketplaceForShifts,
 	publishScheduleNow,
@@ -74,6 +88,23 @@ const isoInstant = t.String({
 	pattern:
 		"^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$",
 });
+const invitationEmail = t.String({ format: "email", maxLength: 200 });
+
+function assertDeliverableWorkerEmail(email: string) {
+	const domain = email.split("@").at(-1) ?? "";
+	if (
+		domain === "example.com" ||
+		domain === "example.net" ||
+		domain === "example.org" ||
+		domain.endsWith(".invalid") ||
+		domain.endsWith(".localhost") ||
+		domain.endsWith(".test")
+	) {
+		throw new BadRequestError(
+			"Use a deliverable email address so the Worker can accept the invitation",
+		);
+	}
+}
 
 interface WorkerInfo {
 	name: string;
@@ -361,6 +392,131 @@ export const integrationApiRoutes = new Elysia({
 			detail: {
 				summary:
 					"List active Workers with positions and wage rates (workers.read)",
+			},
+		},
+	)
+	.post(
+		"/worker-invitations",
+		async ({ headers, body }) => {
+			const actor = await requireIntegrationActor(headers, "workers.write");
+			const email = body.email.trim().toLowerCase();
+			assertDeliverableWorkerEmail(email);
+			const locationIds = [...new Set(body.locationIds ?? [])];
+			const positionIds = [...new Set(body.positionIds ?? [])];
+
+			const [existingProfile] = await db
+				.select({ id: profiles.id })
+				.from(profiles)
+				.where(eq(profiles.email, email))
+				.limit(1);
+			if (existingProfile) {
+				const [existingEmployment] = await db
+					.select({ id: employments.id })
+					.from(employments)
+					.where(
+						and(
+							eq(employments.workplaceId, actor.workplaceId),
+							eq(employments.profileId, existingProfile.id),
+							eq(employments.status, "active"),
+						),
+					)
+					.limit(1);
+				if (existingEmployment) {
+					throw new ConflictError(
+						"This person already has an active Employment at this Workplace",
+					);
+				}
+			}
+
+			if (locationIds.length > 0) {
+				const found = await db
+					.select({ id: locations.id })
+					.from(locations)
+					.where(
+						and(
+							eq(locations.workplaceId, actor.workplaceId),
+							inArray(locations.id, locationIds),
+						),
+					);
+				if (found.length !== locationIds.length) {
+					throw new NotFoundError("One or more Locations were not found");
+				}
+			}
+			if (positionIds.length > 0) {
+				const found = await db
+					.select({ id: positions.id })
+					.from(positions)
+					.where(
+						and(
+							eq(positions.workplaceId, actor.workplaceId),
+							inArray(positions.id, positionIds),
+						),
+					);
+				if (found.length !== positionIds.length) {
+					throw new NotFoundError("One or more Positions were not found");
+				}
+			}
+
+			return db.transaction(async (tx) => {
+				await tx
+					.update(invitations)
+					.set({ status: "revoked" })
+					.where(
+						and(
+							eq(invitations.workplaceId, actor.workplaceId),
+							eq(invitations.email, email),
+							eq(invitations.status, "pending"),
+						),
+					);
+				const invitation = firstRow(
+					await tx
+						.insert(invitations)
+						.values({
+							workplaceId: actor.workplaceId,
+							email,
+							kind: "worker",
+							invitedBy: actor.profileId,
+							expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+						})
+						.returning(),
+				);
+				if (locationIds.length > 0) {
+					await tx.insert(invitationLocations).values(
+						locationIds.map((locationId) => ({
+							invitationId: invitation.id,
+							locationId,
+						})),
+					);
+				}
+				if (positionIds.length > 0) {
+					await tx.insert(invitationPositions).values(
+						positionIds.map((positionId) => ({
+							invitationId: invitation.id,
+							positionId,
+						})),
+					);
+				}
+				await enqueueInvitationEmail(tx, invitation);
+				return {
+					invitation: {
+						id: invitation.id,
+						email: invitation.email,
+						kind: "worker" as const,
+						status: "pending" as const,
+						expiresAt: invitation.expiresAt.toISOString(),
+					},
+				};
+			});
+		},
+		{
+			headers: keyHeaders,
+			body: t.Object({
+				email: invitationEmail,
+				locationIds: t.Optional(t.Array(uuid, { uniqueItems: true })),
+				positionIds: t.Optional(t.Array(uuid, { uniqueItems: true })),
+			}),
+			detail: {
+				summary: "Invite a Worker by email (workers.write)",
 			},
 		},
 	)
@@ -830,6 +986,221 @@ export const integrationApiRoutes = new Elysia({
 			detail: {
 				summary: "List Time-off Requests with worker names (requests.read)",
 			},
+		},
+	)
+	.get(
+		"/manager-actions",
+		async ({ headers }) => {
+			const actor = await requireIntegrationActor(headers, "requests.read");
+			const workplaceId = actor.workplaceId;
+			const [releaseRows, pickupRows, timesheetRows] = await Promise.all([
+				db
+					.select({
+						id: shiftReleases.id,
+						workerName: profiles.fullName,
+						workerEmail: profiles.email,
+						reason: shiftReleases.reason,
+						createdAt: shiftReleases.createdAt,
+					})
+					.from(shiftReleases)
+					.innerJoin(employments, eq(employments.id, shiftReleases.requestedBy))
+					.innerJoin(profiles, eq(profiles.id, employments.profileId))
+					.where(
+						and(
+							eq(employments.workplaceId, workplaceId),
+							eq(shiftReleases.status, "pending"),
+						),
+					),
+				db
+					.select({
+						id: shiftPickups.id,
+						workerName: profiles.fullName,
+						workerEmail: profiles.email,
+						createdAt: shiftPickups.createdAt,
+					})
+					.from(shiftPickups)
+					.innerJoin(employments, eq(employments.id, shiftPickups.requestedBy))
+					.innerJoin(profiles, eq(profiles.id, employments.profileId))
+					.where(
+						and(
+							eq(employments.workplaceId, workplaceId),
+							eq(shiftPickups.status, "pending"),
+						),
+					),
+				db
+					.select({
+						id: timeEntries.id,
+						workerName: profiles.fullName,
+						workerEmail: profiles.email,
+						clockedInAt: timeEntries.clockedInAt,
+						clockedOutAt: timeEntries.clockedOutAt,
+					})
+					.from(timeEntries)
+					.innerJoin(employments, eq(employments.id, timeEntries.employmentId))
+					.innerJoin(profiles, eq(profiles.id, employments.profileId))
+					.where(
+						and(
+							eq(employments.workplaceId, workplaceId),
+							eq(timeEntries.approvalStatus, "pending"),
+						),
+					),
+			]);
+			return {
+				releases: releaseRows.map((row) => ({
+					...row,
+					workerName: row.workerName ?? row.workerEmail,
+					createdAt: row.createdAt.toISOString(),
+				})),
+				pickups: pickupRows.map((row) => ({
+					...row,
+					workerName: row.workerName ?? row.workerEmail,
+					createdAt: row.createdAt.toISOString(),
+				})),
+				timesheets: timesheetRows.map((row) => ({
+					...row,
+					workerName: row.workerName ?? row.workerEmail,
+					clockedInAt: row.clockedInAt.toISOString(),
+					clockedOutAt: row.clockedOutAt?.toISOString() ?? null,
+				})),
+			};
+		},
+		{
+			headers: keyHeaders,
+			detail: { summary: "Pending manager action queue (requests.read)" },
+		},
+	)
+	.post(
+		"/time-off/:requestId/decision",
+		async ({ headers, params, body }) => {
+			const actor = await requireIntegrationActor(headers, "requests.write");
+			if (!actor.profileId)
+				throw new ForbiddenError("A human manager must own this credential");
+			const result = await decideLeaveRequest({
+				workplaceId: actor.workplaceId,
+				requestId: params.requestId,
+				profileId: actor.profileId,
+				decision: body.decision,
+				reason: body.reason ?? null,
+			});
+			await writeAudit({
+				workplaceId: actor.workplaceId,
+				actorProfileId: actor.profileId,
+				action: `time_off.${result.status === "pending" ? "step_approved" : result.status}`,
+				entityType: "time_off_request",
+				entityId: params.requestId,
+				summary: `Leave approval step ${result.stepOrder}: ${result.status}`,
+			});
+			return result;
+		},
+		{
+			headers: keyHeaders,
+			params: t.Object({ requestId: uuid }),
+			body: t.Object({
+				decision: t.Union([t.Literal("approved"), t.Literal("declined")]),
+				reason: t.Optional(t.String({ maxLength: 300 })),
+			}),
+			detail: { summary: "Decide a Time-off Request (requests.write)" },
+		},
+	)
+	.post(
+		"/releases/:releaseId/decision",
+		async ({ headers, params, body }) => {
+			const actor = await requireIntegrationActor(headers, "requests.write");
+			if (!actor.profileId)
+				throw new ForbiddenError("A human manager must own this credential");
+			return decideRelease(
+				actor.profileId,
+				actor.workplaceId,
+				params.releaseId,
+				body,
+			);
+		},
+		{
+			headers: keyHeaders,
+			params: t.Object({ releaseId: uuid }),
+			body: t.Object({
+				decision: t.Union([t.Literal("approved"), t.Literal("declined")]),
+			}),
+			detail: { summary: "Decide a Shift Release (requests.write)" },
+		},
+	)
+	.post(
+		"/pickups/:pickupId/decision",
+		async ({ headers, params, body }) => {
+			const actor = await requireIntegrationActor(headers, "requests.write");
+			if (!actor.profileId)
+				throw new ForbiddenError("A human manager must own this credential");
+			if (body.decision === "approved" && !actor.canPublish) {
+				throw new ForbiddenError(
+					"Approving a pickup publishes a Schedule Version and requires schedule.write plus schedule.publish",
+				);
+			}
+			return decidePickup(
+				actor.profileId,
+				actor.workplaceId,
+				params.pickupId,
+				body,
+			);
+		},
+		{
+			headers: keyHeaders,
+			params: t.Object({ pickupId: uuid }),
+			body: t.Object({
+				decision: t.Union([t.Literal("approved"), t.Literal("declined")]),
+			}),
+			detail: {
+				summary:
+					"Decide a Shift Pickup; approval publishes (requests.write + schedule.write)",
+			},
+		},
+	)
+	.post(
+		"/timesheets/:timeEntryId/decision",
+		async ({ headers, params, body }) => {
+			const actor = await requireIntegrationActor(headers, "requests.write");
+			if (!actor.profileId)
+				throw new ForbiddenError("A human manager must own this credential");
+			const [updated] = await db
+				.update(timeEntries)
+				.set({
+					approvalStatus: body.decision,
+					approvedAt: new Date(),
+					approvedByProfileId: actor.profileId,
+				})
+				.where(
+					and(
+						eq(timeEntries.id, params.timeEntryId),
+						inArray(
+							timeEntries.employmentId,
+							db
+								.select({ id: employments.id })
+								.from(employments)
+								.where(eq(employments.workplaceId, actor.workplaceId)),
+						),
+					),
+				)
+				.returning({
+					id: timeEntries.id,
+					approvalStatus: timeEntries.approvalStatus,
+				});
+			if (!updated) throw new NotFoundError("Time Entry not found");
+			await writeAudit({
+				workplaceId: actor.workplaceId,
+				actorProfileId: actor.profileId,
+				action: `timesheet.${body.decision}`,
+				entityType: "time_entry",
+				entityId: updated.id,
+				summary: `${body.decision === "approved" ? "Approved" : "Declined"} a Time Entry`,
+			});
+			return { timeEntry: updated };
+		},
+		{
+			headers: keyHeaders,
+			params: t.Object({ timeEntryId: uuid }),
+			body: t.Object({
+				decision: t.Union([t.Literal("approved"), t.Literal("declined")]),
+			}),
+			detail: { summary: "Approve or decline a Time Entry (requests.write)" },
 		},
 	)
 	.get(

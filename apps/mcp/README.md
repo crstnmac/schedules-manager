@@ -28,7 +28,7 @@ Two credential types, one authorization model:
 - **Workplace API keys** (`jl_live_…`), created by Managers under Workplace
   settings → Integrations. Accepted directly for CLI/local use.
 
-Scopes are shared: `schedule.read`, `schedule.write`, `workers.read`,
+Scopes are shared: `schedule.read`, `schedule.write`, `workers.read`, `workers.write`,
 `reports.read`, `requests.read`, `requests.write`. API keys carry them
 literally; human principals get scopes derived from their Employment
 privileges. Principals spanning several Workplaces pass `x-workplace-id`.
@@ -120,6 +120,7 @@ raw payload as structured content.
 | ----------------------- | --------------- | -------------------------------------------------- |
 | `get_workplace_context` | any credential  | Locations, positions, week-start day, overtime, labor goal |
 | `list_workers`          | `workers.read`  | Workers with roles, positions, wage rates          |
+| `invite_worker`         | `workers.write` | Invite a Worker and grant Location/Position access |
 | `get_published_schedule`| `schedule.read` | What Workers were told, per Location and week      |
 | `get_schedule_draft`    | `schedule.read` | The working draft, with server-computed conflicts  |
 | `get_daily_roster`      | `schedule.read` | Who works a given date (published + draft)         |
@@ -127,6 +128,11 @@ raw payload as structured content.
 | `find_available_workers`| `workers.read`  | Who can cover a window, and why everyone else can't |
 | `list_open_shifts`      | `schedule.read` | Open shifts offered for pickup, with requests      |
 | `list_time_off_requests`| `requests.read` | Time-off requests by status/date                   |
+| `list_manager_actions`  | `requests.read` | Pending releases, pickups, and Timesheets          |
+| `decide_time_off_request` | `requests.write` | Approve or decline the current leave approval step |
+| `decide_shift_release`  | `requests.write` | Approve or decline a Shift Release                 |
+| `decide_shift_pickup`   | `requests.write` + publish authority | Decide a pickup; approval publishes |
+| `decide_timesheet`      | `requests.write` | Approve or decline a Time Entry                    |
 | `get_labor_summary`     | `reports.read`  | Scheduled hours/cost by Worker and day, sales, labor % |
 | `create_draft_shift`    | `schedule.write`| Add a shift to a draft (invisible to Workers until published) |
 | `update_draft_shift`    | `schedule.write`| Re-time or reassign a draft shift                  |
@@ -145,11 +151,20 @@ ends the next day).
 
 - `POST/DELETE /mcp` (apps/server) — MCP Streamable HTTP, OAuth-protected;
   API keys accepted.
+- `GET /mcp` — authenticated Streamable HTTP notification channel. The server
+  advertises `tools.listChanged`; compatible clients automatically re-fetch
+  `tools/list` when a live catalog changes. Deployments close old sessions, so
+  clients reconnect and receive the current catalog during initialization.
 - `/v1/integration/*` (apps/server) — the endpoints tools execute against,
   accepting API keys, MCP access tokens, or user sessions
   (`apps/server/src/routes/integration-api.ts`).
 - `/oauth` and `/consent` (apps/web) — the authorize flow's sign-in and
   consent pages.
+
+Tool updates never silently expand authorization. Existing connections can use
+new tools covered by scopes they already granted. A tool requiring a newly
+introduced scope remains unavailable until the Manager reconnects or
+reauthorizes and explicitly grants that scope.
 
 ## Tests
 

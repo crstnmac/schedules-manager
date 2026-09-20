@@ -28,6 +28,7 @@ const apiKeyScope = t.Union([
 	t.Literal("schedule.read"),
 	t.Literal("schedule.write"),
 	t.Literal("workers.read"),
+	t.Literal("workers.write"),
 	t.Literal("reports.read"),
 	t.Literal("requests.read"),
 	t.Literal("requests.write"),

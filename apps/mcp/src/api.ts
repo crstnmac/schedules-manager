@@ -48,6 +48,16 @@ export interface WorkerSummary {
 	locations: { id: string; name: string }[];
 }
 
+export interface WorkerInvitation {
+	invitation: {
+		id: string;
+		email: string;
+		kind: "worker";
+		status: "pending";
+		expiresAt: string;
+	};
+}
+
 export interface RosterShift {
 	id: string;
 	workerName: string | null;
@@ -141,6 +151,22 @@ export interface TimeOffRequests {
 		leaveTypeName: string | null;
 		chargeMinutes: number | null;
 		createdAt: string;
+	}[];
+}
+
+export interface ManagerActions {
+	releases: {
+		id: string;
+		workerName: string;
+		reason: string | null;
+		createdAt: string;
+	}[];
+	pickups: { id: string; workerName: string; createdAt: string }[];
+	timesheets: {
+		id: string;
+		workerName: string;
+		clockedInAt: string;
+		clockedOutAt: string | null;
 	}[];
 }
 
@@ -325,6 +351,16 @@ export class JoolingApi {
 		return this.request<{ workers: WorkerSummary[] }>("GET", "/workers");
 	}
 
+	inviteWorker(body: {
+		email: string;
+		locationIds?: string[];
+		positionIds?: string[];
+	}) {
+		return this.request<WorkerInvitation>("POST", "/worker-invitations", {
+			body,
+		});
+	}
+
 	getPublishedSchedule(weekStart: string, locationId?: string) {
 		return this.request<PublishedSchedule>("GET", "/published", {
 			query: { weekStart, locationId },
@@ -356,6 +392,45 @@ export class JoolingApi {
 		to?: string;
 	}) {
 		return this.request<TimeOffRequests>("GET", "/time-off", { query });
+	}
+
+	getManagerActions() {
+		return this.request<ManagerActions>("GET", "/manager-actions");
+	}
+
+	decideTimeOff(
+		requestId: string,
+		body: { decision: "approved" | "declined"; reason?: string },
+	) {
+		return this.request<Record<string, unknown>>(
+			"POST",
+			`/time-off/${requestId}/decision`,
+			{ body },
+		);
+	}
+
+	decideRelease(releaseId: string, decision: "approved" | "declined") {
+		return this.request<Record<string, unknown>>(
+			"POST",
+			`/releases/${releaseId}/decision`,
+			{ body: { decision } },
+		);
+	}
+
+	decidePickup(pickupId: string, decision: "approved" | "declined") {
+		return this.request<Record<string, unknown>>(
+			"POST",
+			`/pickups/${pickupId}/decision`,
+			{ body: { decision } },
+		);
+	}
+
+	decideTimesheet(timeEntryId: string, decision: "approved" | "declined") {
+		return this.request<Record<string, unknown>>(
+			"POST",
+			`/timesheets/${timeEntryId}/decision`,
+			{ body: { decision } },
+		);
 	}
 
 	getLaborSummary(weekStart: string, locationId?: string) {

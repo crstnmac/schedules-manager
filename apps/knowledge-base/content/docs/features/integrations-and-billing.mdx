@@ -13,7 +13,9 @@ Managers with the appropriate access can open **Settings → Integrations** to c
 
 ## Install the jooling MCP
 
-The jooling MCP lets an MCP-compatible AI assistant read schedules, drafts, Workers, requests, and labor reports, and—when you approve write access—edit and publish schedule drafts. It uses the same permissions and scheduling rules as the jooling app.
+The jooling MCP lets an MCP-compatible AI assistant read schedules, drafts, Workers, requests, pending manager actions, and labor reports. With the write permissions you approve, it can invite Workers, edit and publish schedule drafts, decide Time-off Requests and coverage requests, and approve Timesheets. It uses the same permissions, scheduling rules, audit trail, and Worker notifications as the jooling app.
+
+Approving a Shift Pickup publishes a successor Schedule Version and notifies affected Workers, so that action also requires publication authority. Draft edits remain invisible until they are explicitly published.
 
 1. Open **Settings → Integrations**.
 2. In **Connected assistants**, copy the MCP server URL shown for the environment you are signed in to. Staging shows the staging API URL; production shows the production API URL.
@@ -35,6 +37,8 @@ The jooling MCP lets an MCP-compatible AI assistant read schedules, drafts, Work
 6. Review the requested permissions. Identity permissions required for OAuth sign-in stay selected; you can turn off persistent access and any jooling read or write permission the assistant does not need. Choose **Allow access** when the selection is correct. The connection then appears under **Connected assistants** with its approved scopes and last-used time.
 
 To remove an assistant, open its row menu and choose **Disconnect**. This revokes that assistant's access and refresh tokens for your account and removes its consent grant. You can reconnect it later and approve access again.
+
+Connected clients refresh Jooling's tool catalog automatically when they support MCP tool-list change notifications. After a deployment, clients reconnect and receive the current catalog. New tools covered by permissions you already granted become available automatically; Jooling never silently grants a newly introduced permission, so reconnect and approve that permission when a tool needs one.
 
 Use the URL displayed in the app rather than copying one from another environment. OAuth credentials are audience-bound, so a staging connection cannot be reused against production, or the other way around.
 

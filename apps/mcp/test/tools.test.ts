@@ -109,6 +109,12 @@ describe("jooling MCP server tools", () => {
 		expect(names).toContain("get_workplace_context");
 		expect(names).toContain("get_published_schedule");
 		expect(names).toContain("find_available_workers");
+		expect(names).toContain("invite_worker");
+		expect(names).toContain("list_manager_actions");
+		expect(names).toContain("decide_time_off_request");
+		expect(names).toContain("decide_shift_release");
+		expect(names).toContain("decide_shift_pickup");
+		expect(names).toContain("decide_timesheet");
 		expect(names).toContain("create_draft_shift");
 		expect(names).toContain("publish_schedule");
 
@@ -120,6 +126,111 @@ describe("jooling MCP server tools", () => {
 			(tool) => tool.name === "get_published_schedule",
 		);
 		expect(reads?.annotations?.readOnlyHint).toBe(true);
+	});
+
+	test("manager action tools read the queue and post decisions", async () => {
+		const calls: { method: string; path: string; body?: unknown }[] = [];
+		const api = new JoolingApi({
+			baseUrl: "http://stub",
+			apiKey: TEST_API_KEY,
+			fetchImpl: async (input, init) => {
+				const path = new URL(String(input)).pathname.replace(
+					"/v1/integration",
+					"",
+				);
+				calls.push({
+					method: init?.method ?? "GET",
+					path,
+					body: init?.body ? JSON.parse(String(init.body)) : undefined,
+				});
+				if (path === "/manager-actions") {
+					return Response.json({
+						releases: [],
+						pickups: [{ id: "pickup-1" }],
+						timesheets: [],
+					});
+				}
+				return Response.json({ status: "approved", publishedVersion: 2 });
+			},
+		});
+		const { client, server } = await connectedClient(api);
+		cleanup.push(() => client.close());
+		cleanup.push(() => server.close());
+
+		const queue = await client.callTool({
+			name: "list_manager_actions",
+			arguments: {},
+		});
+		expect(queue.isError).toBeFalsy();
+		const decision = await client.callTool({
+			name: "decide_shift_pickup",
+			arguments: {
+				id: "44444444-4444-4444-8444-444444444444",
+				decision: "approved",
+			},
+		});
+		expect(decision.isError).toBeFalsy();
+		expect(calls.at(-1)).toEqual({
+			method: "POST",
+			path: "/pickups/44444444-4444-4444-8444-444444444444/decision",
+			body: { decision: "approved" },
+		});
+	});
+
+	test("invite_worker posts scoped access and explains acceptance", async () => {
+		const calls: { method: string; path: string; body?: unknown }[] = [];
+		const api = new JoolingApi({
+			baseUrl: "http://stub",
+			apiKey: TEST_API_KEY,
+			fetchImpl: async (input, init) => {
+				const path = new URL(String(input)).pathname.replace(
+					"/v1/integration",
+					"",
+				);
+				calls.push({
+					method: init?.method ?? "GET",
+					path,
+					body: init?.body ? JSON.parse(String(init.body)) : undefined,
+				});
+				return Response.json({
+					invitation: {
+						id: "invitation-1",
+						email: "worker@company.co",
+						kind: "worker",
+						status: "pending",
+						expiresAt: "2026-10-04T00:00:00.000Z",
+					},
+				});
+			},
+		});
+		const { client, server } = await connectedClient(api);
+		cleanup.push(() => client.close());
+		cleanup.push(() => server.close());
+
+		const result = await client.callTool({
+			name: "invite_worker",
+			arguments: {
+				email: "worker@company.co",
+				locationIds: [LOCATION_ID],
+				positionIds: [POSITION_ID],
+			},
+		});
+		expect(result.isError).toBeFalsy();
+		expect(calls).toEqual([
+			{
+				method: "POST",
+				path: "/worker-invitations",
+				body: {
+					email: "worker@company.co",
+					locationIds: [LOCATION_ID],
+					positionIds: [POSITION_ID],
+				},
+			},
+		]);
+		const content = result.content?.[0];
+		expect(content && content.type === "text" ? content.text : "").toContain(
+			"must accept",
+		);
 	});
 
 	test("get_workplace_context returns structured content and text", async () => {

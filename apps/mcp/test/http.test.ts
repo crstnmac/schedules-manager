@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { JoolingApi } from "../src/api";
-import {
-	createMcpRequestHandler,
-	McpAuthError,
-	type McpPrincipal,
-} from "../src/http";
+import { createMcpRequestHandler, McpAuthError } from "../src/http";
 
 /**
  * Synthetic key for the in-memory stub only; never a real credential.
@@ -199,7 +195,7 @@ describe("MCP embeddable request handler", () => {
 		expect(unknown.status).toBe(404);
 	});
 
-	test("GET streams are refused and DELETE terminates the session", async () => {
+	test("GET opens the notification stream and DELETE terminates the session", async () => {
 		const { handler, sessions } = makeHandler();
 		const init = await handler(
 			mcpPost(
@@ -216,12 +212,15 @@ describe("MCP embeddable request handler", () => {
 		const get = await handler(
 			new Request("http://localhost/mcp", {
 				headers: {
+					accept: "text/event-stream",
 					authorization: `Bearer ${TEST_KEY}`,
 					"mcp-session-id": sessionId,
 				},
 			}),
 		);
-		expect(get.status).toBe(405);
+		expect(get.status).toBe(200);
+		expect(get.headers.get("content-type")).toContain("text/event-stream");
+		await get.body?.cancel();
 
 		const deleted = await handler(
 			new Request("http://localhost/mcp", {

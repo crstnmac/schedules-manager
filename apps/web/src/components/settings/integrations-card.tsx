@@ -51,6 +51,7 @@ const API_KEY_SCOPES = [
 	"schedule.read",
 	"schedule.write",
 	"workers.read",
+	"workers.write",
 	"reports.read",
 	"requests.read",
 	"requests.write",

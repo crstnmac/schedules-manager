@@ -28,6 +28,7 @@ const PRIVILEGE_BY_SCOPE: Record<ApiKeyScope, EmploymentPrivilege> = {
 	"schedule.read": "schedule.view",
 	"schedule.write": "schedule.manage",
 	"workers.read": "schedule.view",
+	"workers.write": "workers.manage",
 	"reports.read": "reports.view",
 	"requests.read": "schedule.view",
 	"requests.write": "approvals.review",

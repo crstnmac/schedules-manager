@@ -98,6 +98,7 @@ async function seedMcpWorkplace(
 				"schedule.read",
 				"schedule.write",
 				"workers.read",
+				"workers.write",
 				"reports.read",
 				"requests.read",
 				"requests.write",
@@ -191,6 +192,55 @@ export function registerMcpIntegrationTests(getContext: () => Context) {
 		expect(
 			workersBody.workers.filter((worker) => worker.kind === "manager"),
 		).toHaveLength(1);
+
+		const invitedEmail = `mcp-invite-${crypto.randomUUID()}@mailinator.com`;
+		const invited = await request(
+			"/v1/integration/worker-invitations",
+			seed.fullKey,
+			{
+				method: "POST",
+				body: {
+					email: invitedEmail,
+					locationIds: [seed.locationId],
+					positionIds: [seed.positionId],
+				},
+			},
+		);
+		expect(invited.status).toBe(200);
+		const invitedBody = (await invited.json()) as {
+			invitation: { id: string; email: string; status: string };
+		};
+		expect(invitedBody.invitation).toMatchObject({
+			email: invitedEmail,
+			status: "pending",
+		});
+		const invitationLocations = await d.db
+			.select()
+			.from(d.invitationLocations)
+			.where(eq(d.invitationLocations.invitationId, invitedBody.invitation.id));
+		expect(invitationLocations).toHaveLength(1);
+
+		const managerActions = await request(
+			"/v1/integration/manager-actions",
+			seed.fullKey,
+		);
+		expect(managerActions.status).toBe(200);
+		expect(await managerActions.json()).toMatchObject({
+			releases: [],
+			pickups: [],
+			timesheets: [],
+		});
+		const actionsDenied = await request(
+			"/v1/integration/manager-actions",
+			seed.readOnlyKey,
+		);
+		expect(actionsDenied.status).toBe(403);
+		const missingRelease = await request(
+			`/v1/integration/releases/${crypto.randomUUID()}/decision`,
+			seed.fullKey,
+			{ method: "POST", body: { decision: "approved" } },
+		);
+		expect(missingRelease.status).toBe(404);
 
 		// --- Scope enforcement ----------------------------------------------
 		const readOnlyDenied = await request(

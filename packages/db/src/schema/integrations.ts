@@ -16,6 +16,7 @@ export const apiKeyScopeEnum = pgEnum("api_key_scope", [
 	"schedule.read",
 	"schedule.write",
 	"workers.read",
+	"workers.write",
 	"reports.read",
 	"requests.read",
 	"requests.write",

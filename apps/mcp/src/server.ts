@@ -24,7 +24,7 @@ import {
 } from "./format";
 
 const SERVER_NAME = "jooling";
-const SERVER_VERSION = "0.1.0";
+const SERVER_VERSION = "0.2.0";
 
 const dateArg = z
 	.string()
@@ -149,6 +149,32 @@ export function createJoolingServer(api: JoolingApi): McpServer {
 			try {
 				const result = await api.getWorkers();
 				return toolResult(formatWorkers(result), result);
+			} catch (error) {
+				return toolError(error);
+			}
+		},
+	);
+
+	server.registerTool(
+		"invite_worker",
+		{
+			title: "Invite worker",
+			description:
+				"Invite a Worker by deliverable email and optionally grant access to specific Locations and Positions. This queues a real invitation email; the Worker becomes schedulable after accepting it. Requires the workers.write scope.",
+			inputSchema: {
+				email: z.string().email().max(200),
+				locationIds: z.array(z.string().uuid()).optional(),
+				positionIds: z.array(z.string().uuid()).optional(),
+			},
+			annotations: writeAnnotations,
+		},
+		async (input) => {
+			try {
+				const result = await api.inviteWorker(input);
+				return toolResult(
+					`Worker invitation queued for ${result.invitation.email}. It expires at ${result.invitation.expiresAt}. The Worker must accept it before shifts can be assigned.`,
+					result,
+				);
 			} catch (error) {
 				return toolError(error);
 			}
@@ -331,6 +357,105 @@ export function createJoolingServer(api: JoolingApi): McpServer {
 			}
 		},
 	);
+
+	server.registerTool(
+		"list_manager_actions",
+		{
+			title: "List manager actions",
+			description:
+				"List pending Shift Releases, Shift Pickups, and Timesheets that need a Manager decision. Use list_time_off_requests with status=pending for leave requests. Requires requests.read.",
+			inputSchema: {},
+			annotations: readAnnotations,
+		},
+		async () => {
+			try {
+				const result = await api.getManagerActions();
+				return toolResult(
+					`Pending manager actions: ${result.releases.length} releases, ${result.pickups.length} pickups, ${result.timesheets.length} timesheets.`,
+					result,
+				);
+			} catch (error) {
+				return toolError(error);
+			}
+		},
+	);
+
+	server.registerTool(
+		"decide_time_off_request",
+		{
+			title: "Decide time-off request",
+			description:
+				"Approve or decline the current approval step of a Time-off Request. Multi-step policies may leave the request pending. Requires requests.write.",
+			inputSchema: {
+				requestId: z.string().uuid(),
+				decision: z.enum(["approved", "declined"]),
+				reason: z.string().max(300).optional(),
+			},
+			annotations: writeAnnotations,
+		},
+		async ({ requestId, ...body }) => {
+			try {
+				const result = await api.decideTimeOff(requestId, body);
+				return toolResult(
+					`Time-off request ${requestId} was ${body.decision}.`,
+					result,
+				);
+			} catch (error) {
+				return toolError(error);
+			}
+		},
+	);
+
+	for (const config of [
+		{
+			name: "decide_shift_release",
+			title: "Decide shift release",
+			description:
+				"Approve or decline a Worker's Shift Release. Approval opens the shift for pickup; the original Worker remains responsible until reassigned. Requires requests.write.",
+			call: (id: string, decision: "approved" | "declined") =>
+				api.decideRelease(id, decision),
+			idKey: "releaseId",
+		},
+		{
+			name: "decide_shift_pickup",
+			title: "Decide shift pickup",
+			description:
+				"Approve or decline a Shift Pickup. Approval assigns the Worker and immediately publishes a successor Schedule Version, notifying affected Workers. Requires requests.write and publication authority.",
+			call: (id: string, decision: "approved" | "declined") =>
+				api.decidePickup(id, decision),
+			idKey: "pickupId",
+		},
+		{
+			name: "decide_timesheet",
+			title: "Decide timesheet",
+			description:
+				"Approve or decline a completed Time Entry for hours. Requires requests.write.",
+			call: (id: string, decision: "approved" | "declined") =>
+				api.decideTimesheet(id, decision),
+			idKey: "timeEntryId",
+		},
+	] as const) {
+		server.registerTool(
+			config.name,
+			{
+				title: config.title,
+				description: config.description,
+				inputSchema: {
+					id: z.string().uuid().describe(config.idKey),
+					decision: z.enum(["approved", "declined"]),
+				},
+				annotations: writeAnnotations,
+			},
+			async ({ id, decision }) => {
+				try {
+					const result = await config.call(id, decision);
+					return toolResult(`${config.title} ${id}: ${decision}.`, result);
+				} catch (error) {
+					return toolError(error);
+				}
+			},
+		);
+	}
 
 	server.registerTool(
 		"get_labor_summary",

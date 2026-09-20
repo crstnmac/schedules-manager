@@ -11,6 +11,7 @@ export const OAUTH_SCOPE_LABELS: Record<string, string> = {
 	"schedule.read": "View published schedules and drafts",
 	"schedule.write": "Create and change draft schedules, and publish them",
 	"workers.read": "View workers, availability, and wage rates",
+	"workers.write": "Invite workers and assign their workplace access",
 	"reports.read": "View labor hours and cost reports",
 	"requests.read": "View time-off requests",
 	"requests.write": "Submit and update time-off requests",

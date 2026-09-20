@@ -230,6 +230,27 @@ export function createMcpRequestHandler(options: McpRequestHandlerOptions): {
 		return new Response(null, { status: 204 });
 	}
 
+	async function handleGet(request: Request): Promise<Response> {
+		const principal = await resolvePrincipal(request);
+		if (principal instanceof Response) return principal;
+
+		const session = registry.get(request.headers.get("mcp-session-id"));
+		if (!session) {
+			return errorBody(404, "not_found", "Unknown or expired MCP session.");
+		}
+		if (
+			session.principalId !== principal.id ||
+			session.workplaceId !== principal.workplaceId
+		) {
+			return errorBody(
+				403,
+				"forbidden",
+				"This session belongs to a different principal.",
+			);
+		}
+		return session.transport.handleRequest(request);
+	}
+
 	const handler = async (request: Request): Promise<Response> => {
 		const url = new URL(request.url);
 
@@ -254,15 +275,14 @@ export function createMcpRequestHandler(options: McpRequestHandlerOptions): {
 			case "DELETE":
 				return handleDelete(request);
 			case "GET":
-				// This server does not offer server-initiated streams.
-				return new Response(
-					"This server does not support GET streams; POST messages to /mcp.",
-					{ status: 405, headers: { allow: "POST, DELETE" } },
-				);
+				// Streamable HTTP SSE channel for server-initiated notifications,
+				// including notifications/tools/list_changed. Compatible clients
+				// automatically re-fetch tools/list when the catalog changes.
+				return handleGet(request);
 			default:
 				return new Response(null, {
 					status: 405,
-					headers: { allow: "POST, DELETE" },
+					headers: { allow: "GET, POST, DELETE" },
 				});
 		}
 	};

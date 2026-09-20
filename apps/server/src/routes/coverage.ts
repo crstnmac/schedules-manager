@@ -869,7 +869,7 @@ export const coverageRoutes = new Elysia({
 		},
 	);
 
-async function decideRelease(
+export async function decideRelease(
 	profileId: string,
 	workplaceId: string,
 	releaseId: string,
@@ -1048,7 +1048,7 @@ async function decideRelease(
 	return { status: "approved" as const };
 }
 
-async function decidePickup(
+export async function decidePickup(
 	profileId: string,
 	workplaceId: string,
 	pickupId: string,
