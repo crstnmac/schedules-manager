@@ -1,6 +1,8 @@
 import * as authSchema from "@SchedulesManager/db";
 import { db, profiles } from "@SchedulesManager/db";
 import { env } from "@SchedulesManager/env/server";
+import { cimd } from "@better-auth/cimd";
+import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { expo } from "@better-auth/expo";
 import { mcp } from "@better-auth/mcp";
 import { type BetterAuthOptions, betterAuth } from "better-auth";
@@ -82,6 +84,13 @@ const oauthPlugins: BetterAuthOptions["plugins"] = [
 		// clients with PKCE; user consent still gates every authorization.
 		allowDynamicClientRegistration: true,
 		allowUnauthenticatedClientRegistration: true,
+	}),
+	// MCP 2026-07-28 pins Client ID Metadata Documents draft-00; Claude Code
+	// prefers CIMD over the deprecated DCR fallback (plain DCR without
+	// application_type is classified "web" and rejects loopback http redirects).
+	cimd({
+		fetchClientMetadataResource,
+		metadataProfile: "mcp-2026-07-28",
 	}),
 ];
 

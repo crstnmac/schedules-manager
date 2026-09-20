@@ -12,6 +12,7 @@
 	"dependencies": {
 		"@SchedulesManager/db": "workspace:*",
 		"@SchedulesManager/env": "workspace:*",
+		"@better-auth/cimd": "1.7.5",
 		"@better-auth/expo": "^1.7.3",
 		"@better-auth/mcp": "^1.7.5",
 		"@better-auth/oauth-provider": "^1.7.5",
