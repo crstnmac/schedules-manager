@@ -18,7 +18,7 @@ function IntegrationsSettingsPage() {
 	return (
 		<SettingsPage
 			title="Integrations"
-			description="Issue scoped API keys and send signed webhooks when scheduling data changes."
+			description="Connect AI assistants, issue scoped API keys, and send signed webhooks when scheduling data changes."
 		>
 			<div className="grid gap-6">
 				<McpConnectionsCard workplaceId={workplace?.id} />

@@ -46,6 +46,29 @@ Server env: `MCP_RESOURCE_URL` (optional; canonical resource/audience, default
 `<BETTER_AUTH_URL>/mcp`). The OAuth provider tables arrive with migration
 0035 (`bun run db:migrate`).
 
+Set the public URLs independently in every deployment. The web settings page
+builds the install URL from `VITE_SERVER_URL`; the server uses
+`MCP_RESOURCE_URL` as the OAuth resource and token audience. They must identify
+the same public `/mcp` endpoint:
+
+```sh
+# Staging
+VITE_SERVER_URL=https://api.staging.example.com
+BETTER_AUTH_URL=https://api.staging.example.com
+MCP_RESOURCE_URL=https://api.staging.example.com/mcp
+
+# Production
+VITE_SERVER_URL=https://api.example.com
+BETTER_AUTH_URL=https://api.example.com
+MCP_RESOURCE_URL=https://api.example.com/mcp
+```
+
+Do not point a staging web build at the production MCP resource (or vice
+versa). OAuth access tokens are audience-bound and are not portable between
+environments. `MCP_RESOURCE_URL` may be omitted when the MCP endpoint is
+exactly `<BETTER_AUTH_URL>/mcp`; setting it explicitly in deployed environments
+makes the intended audience clear.
+
 stdio (local clients):
 
 ```sh

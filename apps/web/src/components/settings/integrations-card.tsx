@@ -1,3 +1,4 @@
+import { env } from "@SchedulesManager/env/web";
 import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
@@ -26,10 +27,15 @@ import {
 } from "@SchedulesManager/ui/components/input-group";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CopyIcon, KeyRoundIcon, PlugIcon, WebhookIcon } from "lucide-react";
+import {
+	BookOpenIcon,
+	CopyIcon,
+	KeyRoundIcon,
+	PlugIcon,
+	WebhookIcon,
+} from "lucide-react";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
-
 import { createDataColumnHelper } from "@/components/data-table";
 import { RequiredTextField } from "@/components/required-text-field";
 import {
@@ -798,6 +804,8 @@ export function McpConnectionsCard({
 	workplaceId: string | undefined;
 }) {
 	const connections = useMcpConnections(workplaceId);
+	const mcpUrl = `${env.VITE_SERVER_URL.replace(/\/$/, "")}/mcp`;
+	const integrationsDocsUrl = `${env.VITE_DOCS_URL.replace(/\/$/, "")}/features/integrations-and-billing`;
 
 	const columns = useMemo(
 		() =>
@@ -836,7 +844,7 @@ export function McpConnectionsCard({
 	return (
 		<SettingsCrudCard
 			title="Connected assistants"
-			description="Assistants authorized through the MCP integration. They act with your privileges and the scopes you approved."
+			description="Connect an MCP-compatible assistant to jooling, then review the assistants authorized to act with your approved access."
 			count={connections.data?.connections.length ?? 0}
 			data={connections.data?.connections ?? []}
 			columns={columns}
@@ -845,6 +853,56 @@ export function McpConnectionsCard({
 			searchPlaceholder="Search assistants"
 			isLoading={connections.isLoading}
 			entityLabel="connection"
+			addLabel="Connect assistant"
+			toolbar={
+				<div className="grid gap-3 rounded-lg border bg-muted/40 p-4">
+					<div className="grid gap-1">
+						<p className="font-medium text-sm">Install the jooling MCP</p>
+						<p className="text-muted-foreground text-sm">
+							Add this remote server URL to your MCP client. The first
+							connection opens jooling so you can sign in, choose a Workplace,
+							and approve the requested access.
+						</p>
+					</div>
+					<InputGroup>
+						<InputGroupInput
+							aria-label="jooling MCP server URL"
+							className="font-mono text-xs"
+							readOnly
+							value={mcpUrl}
+						/>
+						<InputGroupAddon align="inline-end">
+							<InputGroupButton
+								aria-label="Copy MCP server URL"
+								onClick={() => {
+									navigator.clipboard
+										.writeText(mcpUrl)
+										.then(() => toast.success("MCP server URL copied."))
+										.catch(() => toast.error("Copy failed."));
+								}}
+							>
+								<CopyIcon />
+							</InputGroupButton>
+						</InputGroupAddon>
+					</InputGroup>
+					<div>
+						<Button
+							variant="outline"
+							size="sm"
+							render={
+								<a
+									href={integrationsDocsUrl}
+									target="_blank"
+									rel="noreferrer"
+								/>
+							}
+						>
+							<BookOpenIcon data-icon="inline-start" />
+							Installation guide
+						</Button>
+					</div>
+				</div>
+			}
 			emptyIcon={<PlugIcon />}
 			emptyTitle="No assistants connected"
 			emptyDescription="Connect Claude or another MCP client to jooling to see it here."

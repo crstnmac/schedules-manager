@@ -1,14 +1,49 @@
 ---
 title: Connected services and billing
-description: API keys, webhooks, and workplace subscriptions.
+description: MCP assistants, API keys, webhooks, and workplace subscriptions.
 ---
 
 ## Integrations
 
 Managers with the appropriate access can open **Settings → Integrations** to connect their own tooling to the Workplace:
 
+- **Connected assistants** — install jooling as a remote MCP server, authorize an MCP-compatible assistant with your jooling account, and review its approved access and recent use.
 - **API keys** — scoped keys for reading schedules, workers, reports, and requests, with optional expiry. The key is shown once when created.
 - **Webhook endpoints** — receive signed events at your own URL, filtered by event type. The signing secret is shown once, and deliveries are logged with their response status.
+
+## Install the jooling MCP
+
+The jooling MCP lets an MCP-compatible AI assistant read schedules, drafts, Workers, requests, and labor reports, and—when you approve write access—edit and publish schedule drafts. It uses the same permissions and scheduling rules as the jooling app.
+
+1. Open **Settings → Integrations**.
+2. In **Connected assistants**, copy the MCP server URL shown for the environment you are signed in to. Staging shows the staging API URL; production shows the production API URL.
+3. In your assistant or MCP client, add a remote **Streamable HTTP** server named `jooling` and paste that URL. If the client accepts JSON configuration, use:
+
+```json
+{
+  "mcpServers": {
+    "jooling": {
+      "type": "http",
+      "url": "PASTE_THE_URL_FROM_JOOLING"
+    }
+  }
+}
+```
+
+4. Connect the server. Your browser opens jooling for sign-in and consent.
+5. Choose the Workplace and approve only the access the assistant needs. The connection then appears under **Connected assistants** with its scopes and last-used time.
+
+Use the URL displayed in the app rather than copying one from another environment. OAuth credentials are audience-bound, so a staging connection cannot be reused against production, or the other way around.
+
+For a local or server-to-server client that cannot complete browser-based OAuth, create a Workplace API key and pass it as a Bearer token to the same `/mcp` endpoint. Store the key in a secret manager; it is shown only once and acts with every scope you select.
+
+## API keys
+
+Create a separate key for each integration, select only the scopes it needs, and set an expiry when practical. Revoke a key immediately if it is exposed or no longer used. API keys can also authenticate the MCP endpoint for clients that support custom request headers.
+
+## Webhooks
+
+Add an HTTPS endpoint, choose its event types, and copy the signing secret when it is revealed. Verify every webhook signature before processing the payload. **Recent deliveries** shows the latest attempts, response codes, retries, and errors so you can diagnose a receiver without exposing its secret.
 
 ![Integrations with API keys and webhooks](/screenshots/settings-integrations.png)
 
