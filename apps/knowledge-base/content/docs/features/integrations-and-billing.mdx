@@ -33,6 +33,8 @@ The jooling MCP lets an MCP-compatible AI assistant read schedules, drafts, Work
 4. Connect the server. Your browser opens jooling for sign-in and consent.
 5. Choose the Workplace and approve only the access the assistant needs. The connection then appears under **Connected assistants** with its scopes and last-used time.
 
+To remove an assistant, open its row menu and choose **Disconnect**. This revokes that assistant's access and refresh tokens for your account and removes its consent grant. You can reconnect it later and approve access again.
+
 Use the URL displayed in the app rather than copying one from another environment. OAuth credentials are audience-bound, so a staging connection cannot be reused against production, or the other way around.
 
 For a local or server-to-server client that cannot complete browser-based OAuth, create a Workplace API key and pass it as a Bearer token to the same `/mcp` endpoint. Store the key in a secret manager; it is shown only once and acts with every scope you select.

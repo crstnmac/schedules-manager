@@ -54,6 +54,8 @@ export { FormSheet as SettingsFormSheet } from "@/components/form-sheet";
 export type SettingsCrudRowActions<TData> = {
 	onEdit?: (row: TData) => void;
 	onDelete?: (row: TData) => void;
+	deleteIcon?: ReactNode;
+	deleteLabel?: string;
 	deleteTitle: string;
 	deleteDescription: string | ((row: TData) => string);
 	deleteDisabled?: boolean;
@@ -152,8 +154,8 @@ export function SettingsCrudCard<TData extends RowData>({
 											variant="destructive"
 											onClick={() => setDeleteTarget(row.original)}
 										>
-											<Trash2Icon />
-											Delete
+											{rowActions.deleteIcon ?? <Trash2Icon />}
+											{rowActions.deleteLabel ?? "Delete"}
 										</DropdownMenuItem>
 									</>
 								) : null}
@@ -292,7 +294,7 @@ export function SettingsCrudCard<TData extends RowData>({
 									setDeleteTarget(null);
 								}}
 							>
-								Delete
+								{rowActions.deleteLabel ?? "Delete"}
 							</AlertDialogAction>
 						</AlertDialogFooter>
 					</AlertDialogContent>

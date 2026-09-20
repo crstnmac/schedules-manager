@@ -32,6 +32,7 @@ import {
 	CopyIcon,
 	KeyRoundIcon,
 	PlugIcon,
+	UnplugIcon,
 	WebhookIcon,
 } from "lucide-react";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
@@ -803,9 +804,24 @@ export function McpConnectionsCard({
 }: {
 	workplaceId: string | undefined;
 }) {
+	const queryClient = useQueryClient();
 	const connections = useMcpConnections(workplaceId);
 	const mcpUrl = `${env.VITE_SERVER_URL.replace(/\/$/, "")}/mcp`;
 	const integrationsDocsUrl = `${env.VITE_DOCS_URL.replace(/\/$/, "")}/features/integrations-and-billing`;
+	const disconnect = useMutation({
+		mutationFn: (clientId: string) =>
+			api(
+				`/v1/workplaces/${workplaceId}/mcp-connections/${encodeURIComponent(clientId)}`,
+				{ method: "DELETE" },
+			),
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["mcp-connections", workplaceId],
+			});
+			toast.success("Assistant disconnected.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
 
 	const columns = useMemo(
 		() =>
@@ -906,6 +922,15 @@ export function McpConnectionsCard({
 			emptyIcon={<PlugIcon />}
 			emptyTitle="No assistants connected"
 			emptyDescription="Connect Claude or another MCP client to jooling to see it here."
+			rowActions={{
+				onDelete: (row) => disconnect.mutate(row.clientId),
+				deleteIcon: <UnplugIcon />,
+				deleteLabel: "Disconnect",
+				deleteTitle: "Disconnect this assistant?",
+				deleteDescription: (row) =>
+					`${row.clientName ?? row.clientId} will lose access to your jooling account. You can reconnect it later and approve access again.`,
+				deleteDisabled: disconnect.isPending,
+			}}
 		/>
 	);
 }

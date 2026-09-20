@@ -449,6 +449,82 @@ export function registerMcpIntegrationTests(getContext: () => Context) {
 		expect(contextBody.credential.scopes).toContain("schedule.read");
 		expect(contextBody.credential.scopes).toContain("schedule.write");
 
+		// Connected assistants can be listed and disconnected. Disconnecting
+		// removes consent and revokes both token types for this user/client pair.
+		const clientId = `mcp-client-${crypto.randomUUID()}`;
+		await d.db.insert(d.oauthClient).values({
+			clientId,
+			name: "Bistro Assistant",
+			redirectUris: ["http://localhost/callback"],
+		});
+		await d.db.insert(d.oauthConsent).values({
+			clientId,
+			userId: seed.managerProfileId,
+			scopes: ["schedule.read"],
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		});
+		const [refreshToken] = await d.db
+			.insert(d.oauthRefreshToken)
+			.values({
+				token: `refresh-${crypto.randomUUID()}`,
+				clientId,
+				userId: seed.managerProfileId,
+				expiresAt: new Date(Date.now() + 60_000),
+				createdAt: new Date(),
+				scopes: ["schedule.read"],
+			})
+			.returning();
+		const [accessToken] = await d.db
+			.insert(d.oauthAccessToken)
+			.values({
+				token: `access-${crypto.randomUUID()}`,
+				clientId,
+				userId: seed.managerProfileId,
+				refreshId: required(refreshToken).id,
+				expiresAt: new Date(Date.now() + 60_000),
+				createdAt: new Date(),
+				scopes: ["schedule.read"],
+			})
+			.returning();
+
+		const listedConnections = await request(
+			`/v1/workplaces/${seed.workplaceId}/mcp-connections`,
+			managerSession,
+		);
+		expect(listedConnections.status).toBe(200);
+		expect(await listedConnections.json()).toMatchObject({
+			connections: [{ clientId, clientName: "Bistro Assistant" }],
+		});
+
+		const disconnected = await request(
+			`/v1/workplaces/${seed.workplaceId}/mcp-connections/${encodeURIComponent(clientId)}`,
+			managerSession,
+			{ method: "DELETE" },
+		);
+		expect(disconnected.status).toBe(200);
+		expect(await disconnected.json()).toEqual({ disconnected: true });
+		expect(
+			await d.db
+				.select()
+				.from(d.oauthConsent)
+				.where(eq(d.oauthConsent.clientId, clientId)),
+		).toHaveLength(0);
+		const [revokedAccessToken] = await d.db
+			.select()
+			.from(d.oauthAccessToken)
+			.where(eq(d.oauthAccessToken.id, required(accessToken).id));
+		expect(required(revokedAccessToken)).toMatchObject({
+			revoked: expect.any(Date),
+		});
+		const [revokedRefreshToken] = await d.db
+			.select()
+			.from(d.oauthRefreshToken)
+			.where(eq(d.oauthRefreshToken.id, required(refreshToken).id));
+		expect(required(revokedRefreshToken)).toMatchObject({
+			revoked: expect.any(Date),
+		});
+
 		// A manager session may write draft shifts…
 		const write = await request("/v1/integration/shifts", managerSession, {
 			method: "POST",

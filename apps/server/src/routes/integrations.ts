@@ -3,8 +3,10 @@ import {
 	apiKeys,
 	db,
 	locations,
+	oauthAccessToken,
 	oauthClient,
 	oauthConsent,
+	oauthRefreshToken,
 	schedules,
 	scheduleVersions,
 	versionShifts,
@@ -133,6 +135,70 @@ export const integrationRoutes = new Elysia({
 			params: t.Object({ workplaceId: uuid }),
 			detail: {
 				summary: "List MCP/assistants the current user has connected",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.delete(
+		"/workplaces/:workplaceId/mcp-connections/:clientId",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers);
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"integrations.manage",
+			);
+
+			const disconnected = await db.transaction(async (tx) => {
+				const [consent] = await tx
+					.select({ id: oauthConsent.id })
+					.from(oauthConsent)
+					.where(
+						and(
+							eq(oauthConsent.clientId, params.clientId),
+							eq(oauthConsent.userId, profile.id),
+						),
+					)
+					.limit(1);
+				if (!consent) return false;
+
+				const revokedAt = new Date();
+				await tx
+					.update(oauthAccessToken)
+					.set({ revoked: revokedAt })
+					.where(
+						and(
+							eq(oauthAccessToken.clientId, params.clientId),
+							eq(oauthAccessToken.userId, profile.id),
+						),
+					);
+				await tx
+					.update(oauthRefreshToken)
+					.set({ revoked: revokedAt })
+					.where(
+						and(
+							eq(oauthRefreshToken.clientId, params.clientId),
+							eq(oauthRefreshToken.userId, profile.id),
+						),
+					);
+				await tx.delete(oauthConsent).where(eq(oauthConsent.id, consent.id));
+				return true;
+			});
+
+			if (!disconnected) throw new NotFoundError("MCP connection not found");
+			return { disconnected: true };
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({
+				workplaceId: uuid,
+				clientId: t.String({ minLength: 1, maxLength: 512 }),
+			}),
+			detail: {
+				summary: "Disconnect an MCP assistant and revoke its OAuth grants",
 				security: [{ bearerAuth: [] }],
 			},
 		},
