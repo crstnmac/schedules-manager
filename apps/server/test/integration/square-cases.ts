@@ -279,11 +279,11 @@ export function registerSquareTests(getContext: () => Context) {
 			expect(manual.status).toBe(200);
 			const source = await d.db
 				.select()
-				.from(d.squareSalesImports)
+				.from(d.salesImportSources)
 				.where(
 					and(
-						eq(d.squareSalesImports.locationId, location.id),
-						eq(d.squareSalesImports.saleDate, "2026-09-08"),
+						eq(d.salesImportSources.locationId, location.id),
+						eq(d.salesImportSources.saleDate, "2026-09-08"),
 					),
 				);
 			expect(source).toHaveLength(0);

@@ -1,13 +1,4 @@
-import {
-	date,
-	integer,
-	pgTable,
-	primaryKey,
-	text,
-	timestamp,
-	unique,
-	uuid,
-} from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { locations, workplaces } from "./workplaces";
 
 export const squareOAuthStates = pgTable("square_oauth_states", {
@@ -51,19 +42,4 @@ export const squareLocationMappings = pgTable(
 			table.squareLocationId,
 		),
 	],
-);
-
-export const squareSalesImports = pgTable(
-	"square_sales_imports",
-	{
-		locationId: uuid("location_id")
-			.notNull()
-			.references(() => locations.id, { onDelete: "cascade" }),
-		saleDate: date("sale_date").notNull(),
-		amountCents: integer("amount_cents").notNull(),
-		importedAt: timestamp("imported_at", { withTimezone: true })
-			.defaultNow()
-			.notNull(),
-	},
-	(table) => [primaryKey({ columns: [table.locationId, table.saleDate] })],
 );

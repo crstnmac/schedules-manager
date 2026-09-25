@@ -43,7 +43,34 @@ their Square Dashboard before production enablement. Square application ID,
 secret, redirect URL, and a pilot seller authorization are required for that
 last live check.
 
-## 3. Worker directory and payroll providers
+## 3. Sales CSV import
+
+The reviewed CSV sales import is shipped: the Schedule page's sales popover
+opens **Import CSV**, which diffs every row against the stored
+`location_sales` figures the Square connector and the day drawer write.
+The file has `location`, `date`, and `amount` columns:
+location names must match jooling Locations, `date` is that location's own
+business date with no timezone conversion, and `amount` is net sales
+excluding tips and taxes. Import is additive: a date missing from the file
+never zeroes an existing figure, and a day currently owned by manual entry
+or another connector requires the same explicit overwrite as a Square
+import, with provenance recording the winning source.
+
+Import runs through the same reviewed preview as the worker directory sync:
+every row is validated (unknown location, malformed or formula amounts, and
+duplicate location-days are row failures), the preview shows every day and
+amount with a review hash, and nothing is written until a manager with
+manual-sales access commits. Committing is idempotent under retries, capped
+at one calendar year per file, rate limited like other CSV imports, and
+emits a `sales.imported` audit and webhook event.
+
+Acceptance: integration tests cover row validation, manual-override and
+provenance conflicts against Square-imported days, stale review hash,
+idempotent replay, cross-Workplace isolation, absent days preserving
+existing figures, and the split between read-only preview and commit
+authorization.
+
+## 4. Worker directory and payroll providers
 
 The reviewed CSV directory sync is shipped: Workers → **Sync directory** maps
 every row to a hire (pending invitation), an update of role and
@@ -54,7 +81,7 @@ approved time and leave after a manager reviews the pay period. Persist
 provider employee ID mapping and delivery receipts. Payroll remains the source
 of truth for pay.
 
-## 4. Calendar and automation
+## 5. Calendar and automation
 
 The personal calendar feed now ships with per-app setup guidance and a feed
 self-check (fetch counts, last fetcher, event counts, timezone) on the token.

@@ -37,6 +37,7 @@ import { positionsRoutes } from "./routes/positions";
 import { publicationRoutes } from "./routes/publication";
 import { reportRoutes } from "./routes/reports";
 import { rosterRoutes } from "./routes/roster";
+import { salesRoutes } from "./routes/sales";
 import { scheduleTeamRoutes } from "./routes/schedule-teams";
 import { schedulesRoutes } from "./routes/schedules";
 import { squareRoutes } from "./routes/square";
@@ -253,6 +254,7 @@ export function createApp(options: CreateAppOptions = {}) {
 		.use(emailDeliveryRoutes)
 		.use(integrationRoutes)
 		.use(squareRoutes)
+		.use(salesRoutes)
 		.use(integrationApiRoutes)
 		.use(notificationsRoutes)
 		.use(timeEntryRoutes)

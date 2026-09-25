@@ -13,6 +13,7 @@ import {
 	positions,
 	profiles,
 	ptoBalances,
+	salesImportSources,
 	schedules,
 	shifts,
 	shiftTagAssignments,
@@ -20,7 +21,6 @@ import {
 	shiftTaskCompletions,
 	shiftTasks,
 	shiftTemplates,
-	squareSalesImports,
 	timeBlocks,
 	timeEntries,
 	timeEntryBreaks,
@@ -1040,11 +1040,11 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 						set: { amountCents: body.amountCents, updatedAt: new Date() },
 					});
 				await tx
-					.delete(squareSalesImports)
+					.delete(salesImportSources)
 					.where(
 						and(
-							eq(squareSalesImports.locationId, params.locationId),
-							eq(squareSalesImports.saleDate, params.saleDate),
+							eq(salesImportSources.locationId, params.locationId),
+							eq(salesImportSources.saleDate, params.saleDate),
 						),
 					);
 			});

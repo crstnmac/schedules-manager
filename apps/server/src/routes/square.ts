@@ -2,10 +2,10 @@ import {
 	db,
 	locationSales,
 	locations,
+	salesImportSources,
 	squareConnections,
 	squareLocationMappings,
 	squareOAuthStates,
-	squareSalesImports,
 } from "@SchedulesManager/db";
 import { env } from "@SchedulesManager/env/server";
 import { createHash } from "node:crypto";
@@ -432,19 +432,24 @@ export const squareRoutes = new Elysia({
 							set: { amountCents: row.amountCents, updatedAt: new Date() },
 						});
 					await tx
-						.insert(squareSalesImports)
+						.insert(salesImportSources)
 						.values({
 							locationId: body.locationId,
 							saleDate: row.date,
+							source: "square",
 							amountCents: row.amountCents,
 							importedAt: new Date(),
 						})
 						.onConflictDoUpdate({
 							target: [
-								squareSalesImports.locationId,
-								squareSalesImports.saleDate,
+								salesImportSources.locationId,
+								salesImportSources.saleDate,
 							],
-							set: { amountCents: row.amountCents, importedAt: new Date() },
+							set: {
+								source: "square",
+								amountCents: row.amountCents,
+								importedAt: new Date(),
+							},
 						});
 				}
 			});

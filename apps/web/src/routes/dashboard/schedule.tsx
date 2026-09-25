@@ -122,6 +122,7 @@ import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { DatePicker } from "@/components/date-picker";
 import { ImportSheet } from "@/components/import-sheet";
+import { SalesImportSheet } from "@/components/sales-import-sheet";
 import { BulkEditDialog } from "@/components/schedule/bulk-edit-dialog";
 import {
 	ScheduleMobileBoard,
@@ -927,6 +928,7 @@ function SchedulePage() {
 		}[]
 	>([]);
 	const [salesDollars, setSalesDollars] = useState("");
+	const [salesImportOpen, setSalesImportOpen] = useState(false);
 	const [repeatWeeks, setRepeatWeeks] = useState("1");
 	const [templateName, setTemplateName] = useState("");
 	const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
@@ -3913,6 +3915,15 @@ function SchedulePage() {
 																	) : null}
 																	Save sales
 																</Button>
+																{workplace ? (
+																	<Button
+																		variant="ghost"
+																		size="sm"
+																		onClick={() => setSalesImportOpen(true)}
+																	>
+																		Import CSV…
+																	</Button>
+																) : null}
 															</FieldGroup>
 														</PopoverContent>
 													</Popover>
@@ -4646,6 +4657,14 @@ function SchedulePage() {
 					});
 				}}
 			/>
+			{workplace ? (
+				<SalesImportSheet
+					open={salesImportOpen}
+					onOpenChange={setSalesImportOpen}
+					workplaceId={workplace.id}
+					onImported={() => void invalidate()}
+				/>
+			) : null}
 			<PatternApplyDialog
 				open={patternOpen}
 				onOpenChange={setPatternOpen}

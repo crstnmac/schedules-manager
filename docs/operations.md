@@ -61,7 +61,7 @@ Abuse-sensitive email endpoints are rate limited in process with fixed windows:
 | --- | --- |
 | Invitation create | 30 / 10m per manager |
 | Invitation resend | 20 / 10m per manager |
-| CSV import (invitations, worker directory sync) | 10 / 10m per manager |
+| CSV import (invitations, worker directory sync, daily sales) | 10 / 10m per manager |
 | ZeptoMail webhook | 120 / 1m per client IP (`X-Forwarded-For` first hop when present) |
 
 Over-limit requests return `429` with `error: "rate_limited"`. Idempotent invitation create/resend replays do not consume a new slot.

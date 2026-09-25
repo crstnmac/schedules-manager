@@ -257,7 +257,6 @@ export {
 	squareConnections,
 	squareLocationMappings,
 	squareOAuthStates,
-	squareSalesImports,
 } from "./square";
 export type {
 	Announcement,
@@ -279,6 +278,7 @@ export {
 	employmentDocuments,
 	employmentGroups,
 	locationSales,
+	salesImportSources,
 	shiftTagAssignments,
 	shiftTags,
 	shiftTaskCompletions,

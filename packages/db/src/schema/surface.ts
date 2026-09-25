@@ -140,6 +140,28 @@ export const locationSales = pgTable(
 	(table) => [primaryKey({ columns: [table.locationId, table.saleDate] })],
 );
 
+/**
+ * Provenance for location sales figures written by a connector import.
+ * A manual edit deletes the row, marking the day as manually owned until a
+ * connector re-imports it with an explicit overwrite.
+ */
+export const salesImportSources = pgTable(
+	"sales_import_sources",
+	{
+		locationId: uuid("location_id")
+			.notNull()
+			.references(() => locations.id, { onDelete: "cascade" }),
+		saleDate: date("sale_date").notNull(),
+		/** Which connector wrote the figure, e.g. "square" or "csv". */
+		source: text("source").notNull(),
+		amountCents: integer("amount_cents").notNull(),
+		importedAt: timestamp("imported_at", { withTimezone: true })
+			.defaultNow()
+			.notNull(),
+	},
+	(table) => [primaryKey({ columns: [table.locationId, table.saleDate] })],
+);
+
 export const shiftTasks = pgTable("shift_tasks", {
 	id: uuid("id").defaultRandom().primaryKey(),
 	shiftId: uuid("shift_id")
