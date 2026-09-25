@@ -253,11 +253,6 @@ export {
 } from "./shift-patterns";
 export type { NewShiftSwap, ShiftSwap } from "./shift-swaps";
 export { shiftSwaps, swapStatusEnum } from "./shift-swaps";
-export {
-	squareConnections,
-	squareLocationMappings,
-	squareOAuthStates,
-} from "./square";
 export type {
 	Announcement,
 	Conversation,

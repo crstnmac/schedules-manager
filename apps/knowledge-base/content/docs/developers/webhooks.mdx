@@ -48,7 +48,6 @@ The payload is the same JSON object the audit log records:
 | `workers.imported` | A worker CSV import or directory sync commits |
 | `attendance.marked` | An attendance mark is recorded |
 | `announcement.posted` | A workplace announcement is posted |
-| `integration.square_connected` / `square_location_mapped` / `square_sales_imported` / `square_disconnected` | Square sales connector changes |
 
 Events are emitted after the underlying change commits, in the same process
 that handled the request.

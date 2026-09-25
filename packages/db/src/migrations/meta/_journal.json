@@ -288,6 +288,13 @@
       "when": 1790325167664,
       "tag": "0040_sales_import_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790327695819,
+      "tag": "0041_drop_square",
+      "breakpoints": true
     }
   ]
 }

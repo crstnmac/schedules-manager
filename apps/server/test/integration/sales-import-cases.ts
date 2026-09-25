@@ -41,7 +41,8 @@ export function registerSalesImportTests(getContext: () => Context) {
 			kind: "manager",
 		});
 
-		// A manually entered day (no provenance), a Square-owned day, and an
+		// A manually entered day (no provenance), a day owned by a prior
+		// import, and an
 		// absent day the import must not touch.
 		await d.db.insert(d.locationSales).values([
 			{ locationId: downtown.id, saleDate: "2026-09-06", amountCents: 500 },
@@ -51,7 +52,7 @@ export function registerSalesImportTests(getContext: () => Context) {
 		await d.db.insert(d.salesImportSources).values({
 			locationId: downtown.id,
 			saleDate: "2026-09-08",
-			source: "square",
+			source: "csv",
 			amountCents: 110000,
 		});
 
@@ -116,7 +117,7 @@ export function registerSalesImportTests(getContext: () => Context) {
 			change: true,
 		});
 		expect(entry("Downtown", "2026-09-08")).toMatchObject({
-			source: "square",
+			source: "csv",
 			change: true,
 		});
 		expect(entry("Uptown", "2026-09-07")).toMatchObject({

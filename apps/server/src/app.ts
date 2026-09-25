@@ -40,7 +40,6 @@ import { rosterRoutes } from "./routes/roster";
 import { salesRoutes } from "./routes/sales";
 import { scheduleTeamRoutes } from "./routes/schedule-teams";
 import { schedulesRoutes } from "./routes/schedules";
-import { squareRoutes } from "./routes/square";
 import { surfaceRoutes } from "./routes/surface";
 import { swapRoutes } from "./routes/swaps";
 import { templateRoutes } from "./routes/templates";
@@ -253,7 +252,6 @@ export function createApp(options: CreateAppOptions = {}) {
 		.use(coverageRoutes)
 		.use(emailDeliveryRoutes)
 		.use(integrationRoutes)
-		.use(squareRoutes)
 		.use(salesRoutes)
 		.use(integrationApiRoutes)
 		.use(notificationsRoutes)

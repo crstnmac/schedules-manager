@@ -17,22 +17,6 @@ Migrations are manual, not run automatically on server startup. Apply migrations
 
 For hosted PostgreSQL, use the connection URI supplied by the provider, enable its required TLS mode, and percent-encode reserved characters in the database password.
 
-## Square sales integration
-
-Create a Square Developer application and register the exact redirect URL
-`https://YOUR_API/v1/integrations/square/callback`. Set `SQUARE_APP_ID`,
-`SQUARE_APP_SECRET`, and `SQUARE_MODE` (`sandbox` for pilot testing,
-`production` for live sellers) on the server. Set
-`SQUARE_TOKEN_ENCRYPTION_KEY` to a stable 32-byte base64 key, generated with
-`openssl rand -base64 32`. Back it up securely: rotating it without re-encrypting
-stored tokens requires every workplace to reconnect. Apply the database
-migrations before enabling the connector.
-
-A manager connects Square in Settings → Integrations, maps Square and Jooling
-locations, then previews and confirms a date-range import. Existing sales
-changes require an explicit overwrite. Compare the first imported period with
-the Square Dashboard before using labor-to-sales figures for decisions.
-
 ## Local development notes
 
 The server uses `--watch` to restart on edits and release database connections and background timers; `--hot` preserves process state and can accumulate pools and dispatchers across reloads.

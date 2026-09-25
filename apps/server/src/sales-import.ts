@@ -21,7 +21,7 @@ import { writeAudit } from "./notify";
 
 /**
  * Daily sales import: a provider-neutral path into the same `location_sales`
- * figures the Square connector and the Schedule day drawer write. The CSV
+ * figures connector imports and the Schedule day drawer write. The CSV
  * carries one row per location and business date; dates are taken as the
  * location's own business dates with no timezone conversion.
  */
@@ -128,7 +128,7 @@ export interface SalesImportEntry {
 	date: string;
 	amountCents: number;
 	currentAmountCents: number | null;
-	/** Provenance of the current figure: "square", "csv", or null (manual). */
+	/** Provenance of the current figure: the importing connector, or null (manual). */
 	source: string | null;
 	change: boolean;
 }
@@ -259,7 +259,7 @@ export async function previewSalesImport(input: {
  * Commits a reviewed preview. The review hash must match a fresh preview of
  * the same file, and any row whose stored figure differs needs an explicit
  * overwrite. Every row's stored value is re-checked under a per-location
- * advisory lock, so concurrent Square imports or manual edits cannot be
+ * advisory lock, so concurrent imports or manual edits cannot be
  * silently replaced.
  */
 export async function commitSalesImport(input: {

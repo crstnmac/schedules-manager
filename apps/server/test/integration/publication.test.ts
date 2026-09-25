@@ -22,7 +22,6 @@ import { registerReminderTests } from "./reminder-cases";
 import { registerReportTests } from "./report-cases";
 import { registerReportsTests } from "./reports-cases";
 import { registerSalesImportTests } from "./sales-import-cases";
-import { registerSquareTests } from "./square-cases";
 import { registerStalePositionTests } from "./stale-position-cases";
 import { registerTimeClockTests } from "./time-clock-cases";
 import { registerTrialPolicyTests } from "./trial-policy-cases";
@@ -129,7 +128,6 @@ integrationDescribe("Schedule publication", () => {
 	registerOpsTests(() => ({ database, app, token: managerToken }));
 	registerKioskRateLimitTests(() => ({ database, app }));
 	registerReportTests(() => ({ database, app, token: managerToken }));
-	registerSquareTests(() => ({ database, app, token: managerToken }));
 	registerDirectoryImportTests(() => ({ database, app, token: managerToken }));
 	registerSalesImportTests(() => ({ database, app, token: managerToken }));
 	registerReportsTests(() => ({ database, app, token: managerToken }));

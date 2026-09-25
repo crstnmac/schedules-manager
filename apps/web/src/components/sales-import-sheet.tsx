@@ -38,7 +38,6 @@ interface SalesImportPreview {
 }
 
 const SOURCE_LABEL: Record<string, string> = {
-	square: "Square",
 	csv: "CSV import",
 };
 

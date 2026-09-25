@@ -152,7 +152,7 @@ export const salesImportSources = pgTable(
 			.notNull()
 			.references(() => locations.id, { onDelete: "cascade" }),
 		saleDate: date("sale_date").notNull(),
-		/** Which connector wrote the figure, e.g. "square" or "csv". */
+		/** Which connector wrote the figure, e.g. "csv". */
 		source: text("source").notNull(),
 		amountCents: integer("amount_cents").notNull(),
 		importedAt: timestamp("imported_at", { withTimezone: true })

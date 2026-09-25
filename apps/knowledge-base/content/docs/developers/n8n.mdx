@@ -114,4 +114,4 @@ For tools that prefer polling over webhooks:
 
 1. Trigger: **Schedule Trigger**, daily.
 2. Node: **HTTP Request** — `GET https://YOUR_API_URL/v1/integration/labor?from={{ $now.format('yyyy-LL-dd') }}&to={{ $now.format('yyyy-LL-dd') }}` with a **Header Auth** credential (`Authorization: Bearer jl_live_...`). Create the key with the `reports.read` [scope](/developers).
-3. Follow with a **Google Sheets** or **Postgres** node to store the day's labor, or a **Code** node to compare against Square-imported sales and alert when labor percentage drifts.
+3. Follow with a **Google Sheets** or **Postgres** node to store the day's labor, or a **Code** node to compare against imported sales and alert when labor percentage drifts.
