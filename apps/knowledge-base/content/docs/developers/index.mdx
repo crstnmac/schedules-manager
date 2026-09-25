@@ -1,0 +1,69 @@
+---
+title: API and automations overview
+description: Connect jooling to payroll, POS, HR, calendars, and automation platforms with scoped API keys and signed webhooks.
+---
+
+## What you can build
+
+jooling exposes every integration surface a workplace needs to sync with the
+systems around it:
+
+- **Payroll handoff** — download the approved-time and leave payroll CSVs from
+  Reports. Each row carries stable jooling entry and employment IDs, so your
+  payroll provider's employee IDs can be mapped outside jooling.
+- **POS and sales** — connect Square in **Settings → Integrations** to import
+  daily net sales per location for labor-to-sales reporting.
+- **Worker directory** — sync hires, role and location access, and
+  deactivations from your HR system with the reviewed CSV directory import on
+  the Workers page.
+- **Calendars** — workers subscribe to their published schedule and approved
+  leave with a personal calendar link (Worker → Availability → Calendar sync).
+- **Automation platforms** — Zapier, Make, and n8n recipes built on the API
+  keys and webhooks below.
+
+## Authentication
+
+Create an API key in **Settings → Integrations → API keys**. Keys are scoped,
+shown once, and bound to the Workplace they were created in.
+
+```bash
+curl "https://YOUR_API_URL/v1/integration/published" \
+  -H "Authorization: Bearer jl_live_..."
+```
+
+- Scopes: `schedule.read`, `schedule.write`, `workers.read`, `workers.write`,
+  `reports.read`, `requests.read`, `requests.write`. A request is allowed when
+  the key has **any** required scope for the endpoint.
+- Keys never see other workplaces; there is no cross-workplace header for API
+  keys.
+- Send `Idempotency-Key` (8–200 characters) with write requests you may retry.
+  Replaying the same key with the same body returns the stored response;
+  reusing it with a different body returns a conflict.
+
+## Endpoints for automations
+
+All integration endpoints live under `/v1/integration` and accept API keys:
+
+| Endpoint | Scope | What it returns |
+| --- | --- | --- |
+| `GET /v1/integration/context` | any | Workplace, locations, positions, and the key's scopes |
+| `GET /v1/integration/workers` | `workers.read` | Directory with employments and location/position access |
+| `GET /v1/integration/published` | `schedule.read` | Published schedule shifts |
+| `GET /v1/integration/open-shifts` | `schedule.read` | Released shifts and pickups |
+| `GET /v1/integration/time-off` | `requests.read` | Time-off requests |
+| `GET /v1/integration/labor` | `reports.read` | Labor hours and cost per day and worker |
+
+The interactive reference at `https://YOUR_API_URL/openapi` documents every
+route, including the manager-session endpoints.
+
+## Webhooks
+
+Register a webhook endpoint in **Settings → Integrations → Webhook endpoints**,
+optionally filtered by event type. Deliveries POST JSON with an HMAC-SHA256
+signature you verify — see [Webhooks](/developers/webhooks).
+
+## Recipes
+
+- [Zapier](/developers/zapier) — catch hook → filter → Slack, Sheets, email.
+- [Make](/developers/make) — importable scenario blueprint.
+- [n8n](/developers/n8n) — importable workflow with signature verification.

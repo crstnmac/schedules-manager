@@ -1,0 +1,1 @@
+ALTER TABLE "square_location_mappings" ADD CONSTRAINT "square_location_once_per_workplace" UNIQUE("workplace_id","square_location_id");

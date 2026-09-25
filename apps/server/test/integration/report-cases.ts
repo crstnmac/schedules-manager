@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 
 function required<T>(value: T | undefined): T {
 	if (value === undefined) throw new Error("Expected test fixture row");
@@ -137,6 +138,55 @@ function parseCsv(body: string): { header: string; rows: string[][] } {
 }
 
 export function registerReportTests(getContext: () => Context) {
+	test("payroll-time.csv exports only approved closed entries on the local work date", async () => {
+		const { database: d, app, token } = getContext();
+		const seed = await seedReportWorkplace(d, "Payroll Time Cafe", {
+			timezone: "Pacific/Auckland",
+		});
+		const approved = await addTimeEntry(
+			d,
+			seed,
+			new Date("2026-09-07T12:30:00.000Z"),
+			480,
+		);
+		const pending = await addTimeEntry(
+			d,
+			seed,
+			new Date("2026-09-08T12:30:00.000Z"),
+			480,
+		);
+		await d.db
+			.update(d.timeEntries)
+			.set({
+				approvalStatus: "approved",
+				approvedAt: new Date("2026-09-09T00:00:00Z"),
+			})
+			.where(eq(d.timeEntries.id, approved.id));
+		await d.db.insert(d.timeEntryBreaks).values({
+			timeEntryId: approved.id,
+			startedAt: new Date("2026-09-07T14:00:00Z"),
+			endedAt: new Date("2026-09-07T14:30:00Z"),
+		});
+		const access = await token(seed.managerProfileId, seed.managerEmail);
+		const url = `http://localhost/v1/workplaces/${seed.workplace.id}/reports/payroll-time.csv?from=2026-09-08&to=2026-09-08`;
+		const response = await app.handle(
+			new Request(url, { headers: { authorization: `Bearer ${access}` } }),
+		);
+		expect(response.status).toBe(200);
+		expect(response.headers.get("content-disposition")).toBe(
+			'attachment; filename="payroll-time-2026-09-08-2026-09-08.csv"',
+		);
+		const csv = parseCsv(await response.text());
+		expect(csv.header).toContain("entry_id,employment_id,worker,email");
+		expect(csv.rows).toHaveLength(1);
+		expect(csv.rows[0]?.[0]).toBe(approved.id);
+		expect(csv.rows[0]?.[6]).toBe("2026-09-08");
+		expect(csv.rows[0]?.[10]).toBe("30");
+		expect(csv.rows[0]?.[11]).toBe("450");
+		expect((await app.handle(new Request(url))).status).toBe(401);
+		expect(pending.id).not.toBe(approved.id);
+	});
+
 	test("hours.csv aggregates weekly overtime per employment-week", async () => {
 		const { database: d, app, token } = getContext();
 		const seed = await seedReportWorkplace(d, "Weekly OT CSV Cafe");

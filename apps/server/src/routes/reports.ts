@@ -44,6 +44,7 @@ type ReportEntry = {
 	breakMinutes: number;
 	laborCents: number;
 	approvalStatus: string;
+	approvedAt: Date | null;
 	attendance: string | null;
 };
 
@@ -172,6 +173,7 @@ async function loadReportEntries(input: {
 		breakMinutes: breakByEntry.get(row.entry.id) ?? 0,
 		laborCents: laborByEntry.get(row.entry.id) ?? 0,
 		approvalStatus: row.entry.approvalStatus,
+		approvedAt: row.entry.approvedAt,
 		attendance: markByShift.get(row.entry.versionShiftId) ?? null,
 	}));
 }
@@ -286,6 +288,90 @@ export const reportRoutes = new Elysia({
 	prefix: "/v1",
 	tags: ["Reports"],
 })
+	.get(
+		"/workplaces/:workplaceId/reports/payroll-time.csv",
+		async ({ headers, params, query, set }) => {
+			const { profile } = await requireSession(headers);
+			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
+			await requireSubscriptionCapability(params.workplaceId, "timesheets");
+			if (query.from > query.to) {
+				set.status = 400;
+				return {
+					error: "invalid_range",
+					message: "From must be on or before to",
+				};
+			}
+
+			// Widen the UTC query so locations on either side of the date line are
+			// included, then apply the pay-period dates in each location's timezone.
+			const from = new Date(
+				Date.parse(`${query.from}T00:00:00Z`) - 14 * 3_600_000,
+			);
+			const to = new Date(
+				Date.parse(`${query.to}T23:59:59.999Z`) + 12 * 3_600_000,
+			);
+			const entries = (
+				await loadReportEntries({
+					workplaceId: params.workplaceId,
+					from,
+					to,
+				})
+			)
+				.filter(
+					(entry) =>
+						entry.approvalStatus === "approved" &&
+						entry.clockedOutAt !== null &&
+						dateInTimezone(entry.clockedInAt, entry.timezone) >= query.from &&
+						dateInTimezone(entry.clockedInAt, entry.timezone) <= query.to,
+				)
+				.sort(
+					(a, b) =>
+						a.clockedInAt.getTime() - b.clockedInAt.getTime() ||
+						a.entryId.localeCompare(b.entryId),
+				);
+			const lines = [
+				"entry_id,employment_id,worker,email,location,position,local_work_date,timezone,clocked_in_utc,clocked_out_utc,break_minutes,worked_minutes,approved_at_utc",
+			];
+			for (const entry of entries) {
+				lines.push(
+					[
+						entry.entryId,
+						entry.employmentId,
+						csvEscape(entry.name ?? ""),
+						csvEscape(entry.email),
+						csvEscape(entry.locationName),
+						csvEscape(entry.positionName),
+						dateInTimezone(entry.clockedInAt, entry.timezone),
+						csvEscape(entry.timezone),
+						entry.clockedInAt.toISOString(),
+						entry.clockedOutAt?.toISOString() ?? "",
+						String(entry.breakMinutes),
+						String(entry.worked),
+						entry.approvedAt?.toISOString() ?? "",
+					].join(","),
+				);
+			}
+			set.headers["content-type"] = "text/csv; charset=utf-8";
+			set.headers["content-disposition"] =
+				`attachment; filename="payroll-time-${query.from}-${query.to}.csv"`;
+			return lines.join("\n");
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			query: t.Object({
+				from: t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+				to: t.String({ pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+			}),
+			detail: {
+				summary: "Approved timesheet payroll CSV (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
 	.get(
 		"/workplaces/:workplaceId/reports/hours.csv",
 		async ({ headers, params, query, set }) => {

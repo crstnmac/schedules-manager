@@ -60,6 +60,7 @@ import { LandingLink } from "./landing-link";
 import { PrivacyPolicyPage, TermsPage } from "./legal";
 import { usePathname } from "./router";
 import { entityLine, isSet, LEGAL_ENTITY, withPeriod } from "./site-config";
+import { SolutionPage, type SolutionSlug, solutions } from "./solutions";
 import {
 	ComparisonPage,
 	competitors,
@@ -159,7 +160,7 @@ const faqs = [
 ];
 function Brand() {
 	return (
-		<LandingLink className="brand" href="#" aria-label="jooling home">
+		<LandingLink className="brand" href="/" aria-label="jooling home">
 			<img src="/logo-mark.svg" alt="" />
 			jooling<span className="brand-dot">.</span>
 		</LandingLink>
@@ -657,6 +658,12 @@ function HomePage() {
 						<LandingLink href="#pricing" onClick={() => setMenuOpen(false)}>
 							Pricing
 						</LandingLink>
+						<LandingLink href="/restaurant" onClick={() => setMenuOpen(false)}>
+							Restaurants
+						</LandingLink>
+						<LandingLink href="/retail" onClick={() => setMenuOpen(false)}>
+							Retail
+						</LandingLink>
 						<LandingLink href="#faq" onClick={() => setMenuOpen(false)}>
 							FAQs
 						</LandingLink>
@@ -699,9 +706,9 @@ function HomePage() {
 						aria-hidden="true"
 					/>
 					<motion.h1 variants={fadeUp}>
-						Good weeks
+						Employee scheduling software.
 						<br />
-						start <span>here.</span>
+						<span>A clearer week.</span>
 						<svg
 							className="headline-spark"
 							viewBox="0 0 44 48"
@@ -711,7 +718,7 @@ function HomePage() {
 						</svg>
 					</motion.h1>
 					<motion.p className="hero-description" variants={fadeUp}>
-						Shift scheduling for hourly teams.
+						Build and publish employee schedules for hourly teams.
 						<br />
 						Plan shifts, handle changes, and keep everyone in sync.
 						<br />
@@ -734,12 +741,12 @@ function HomePage() {
 				</motion.section>
 				<section className="industries" aria-label="Built for hourly teams">
 					<div className="industry-list" ref={industriesListRef}>
-						<span>
-							<Coffee /> Cafés & restaurants
-						</span>
-						<span>
-							<ShoppingBag /> Retail
-						</span>
+						<LandingLink href="/restaurant">
+							<Coffee /> Cafés & restaurants <ArrowRight size={14} />
+						</LandingLink>
+						<LandingLink href="/retail">
+							<ShoppingBag /> Retail <ArrowRight size={14} />
+						</LandingLink>
 						<span>
 							<HeartPulse /> Healthcare
 						</span>
@@ -842,6 +849,9 @@ function HomePage() {
 							</li>
 						</ul>
 						<CTA>Get started</CTA>
+						<LandingLink className="team-app-link" href="/worker-app">
+							Explore the worker app <ArrowRight size={16} />
+						</LandingLink>
 					</motion.div>
 					<div className="phone-scene">
 						<img
@@ -1017,6 +1027,9 @@ function HomePage() {
 					<div className="footer-column">
 						<strong>For teams</strong>
 						<LandingLink href="#for-your-team">Team experience</LandingLink>
+						<LandingLink href="/worker-app">Worker app</LandingLink>
+						<LandingLink href="/restaurant">Restaurants</LandingLink>
+						<LandingLink href="/retail">Retail</LandingLink>
 						<LandingLink href={appUrl}>Log in</LandingLink>
 						<LandingLink href={signUpUrl.toString()}>Get started</LandingLink>
 					</div>
@@ -1050,10 +1063,10 @@ function HomePage() {
 }
 const siteUrl = "https://jooling.com";
 const defaultDescription =
-	"A calmer way to schedule hourly teams. Build shifts, handle changes, and keep everyone in sync with jooling. Start your 30-day free trial.";
+	"Employee scheduling software for hourly teams. Build and publish shifts, handle changes, and keep everyone in sync with jooling. Start your 30-day free trial.";
 const routeSeo: Record<string, { title: string; description: string }> = {
 	"/": {
-		title: "jooling — Shift scheduling for hourly teams",
+		title: "Employee Scheduling Software for Hourly Teams | jooling",
 		description: defaultDescription,
 	},
 	"/privacy": {
@@ -1070,6 +1083,21 @@ const routeSeo: Record<string, { title: string; description: string }> = {
 		title: "Data Processing Addendum — jooling",
 		description:
 			"How jooling processes workplace data on behalf of business customers: roles, subprocessors, security, and transfer safeguards.",
+	},
+	"/restaurant": {
+		title: "Restaurant Scheduling Software | jooling",
+		description:
+			"Publish restaurant shifts, manage swaps and time off, and keep front of house and kitchen teams informed. Explore jooling's restaurant scheduling software.",
+	},
+	"/retail": {
+		title: "Retail Scheduling Software | jooling",
+		description:
+			"Plan store coverage, publish retail shifts, and handle schedule changes across locations with jooling.",
+	},
+	"/worker-app": {
+		title: "Employee Scheduling App for Workers | jooling",
+		description:
+			"Give workers one app to check shifts, share availability, request time off, and stay updated when schedules change.",
 	},
 	...Object.fromEntries(
 		competitors.map((competitor) => [
@@ -1114,6 +1142,8 @@ function App() {
 	if (pathname === "/privacy") return <PrivacyPolicyPage />;
 	if (pathname === "/terms") return <TermsPage />;
 	if (pathname === "/dpa") return <DpaPage />;
+	if (pathname.slice(1) in solutions)
+		return <SolutionPage slug={pathname.slice(1) as SolutionSlug} />;
 	if (pathname.startsWith("/vs/")) {
 		const slug = pathname.slice(4);
 		return competitors.some((competitor) => competitor.slug === slug) ? (

@@ -1233,6 +1233,31 @@ export function useCreateMyCalendarToken(workplaceId: string | undefined) {
 	});
 }
 
+export interface CalendarTokenDiagnosticsDto {
+	feedOk: boolean;
+	revokedAt: string | null;
+	eventCount: number;
+	timezone: string;
+	fetchCount: number;
+	lastUsedAt: string | null;
+	lastFetchUserAgent: string | null;
+}
+
+/** Server-side feed self-check plus the token's real fetch statistics. */
+export function useCalendarTokenDiagnostics(
+	workplaceId: string | undefined,
+	tokenId: string | undefined,
+) {
+	return useQuery({
+		queryKey: ["calendar-token-diagnostics", workplaceId, tokenId],
+		queryFn: () =>
+			api<{ diagnostics: CalendarTokenDiagnosticsDto }>(
+				`/v1/workplaces/${workplaceId}/calendar-tokens/${tokenId}/diagnostics`,
+			).then((data) => data.diagnostics),
+		enabled: Boolean(workplaceId && tokenId),
+	});
+}
+
 export function useRevokeCalendarToken(workplaceId: string | undefined) {
 	const queryClient = useQueryClient();
 	return useMutation({

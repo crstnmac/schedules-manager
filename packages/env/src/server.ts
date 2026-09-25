@@ -19,6 +19,11 @@ export const env = createEnv({
 		POLAR_ACCESS_TOKEN: z.string().min(1).optional(),
 		POLAR_WEBHOOK_SECRET: z.string().min(16).optional(),
 		POLAR_MODE: z.enum(["sandbox", "production"]).default("production"),
+		SQUARE_APP_ID: z.string().min(1).optional(),
+		SQUARE_APP_SECRET: z.string().min(1).optional(),
+		/** Base64-encoded 32-byte key for AES-256-GCM provider-token storage. */
+		SQUARE_TOKEN_ENCRYPTION_KEY: z.string().min(43).optional(),
+		SQUARE_MODE: z.enum(["sandbox", "production"]).default("production"),
 		POLAR_SCHEDULE_MONTHLY_PRODUCT_ID: z.string().uuid().optional(),
 		POLAR_SCHEDULE_ANNUAL_PRODUCT_ID: z.string().uuid().optional(),
 		POLAR_OPERATIONS_MONTHLY_PRODUCT_ID: z.string().uuid().optional(),

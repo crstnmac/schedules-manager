@@ -11,6 +11,7 @@ export const defaultRateLimitPolicies = {
 	invitationCreate: { limit: 30, windowMs: 10 * 60 * 1000 },
 	invitationResend: { limit: 20, windowMs: 10 * 60 * 1000 },
 	invitationImport: { limit: 10, windowMs: 10 * 60 * 1000 },
+	directoryImport: { limit: 10, windowMs: 10 * 60 * 1000 },
 	zeptomailWebhook: { limit: 120, windowMs: 60 * 1000 },
 	placeSearch: { limit: 40, windowMs: 60 * 1000 },
 } as const satisfies Record<string, RateLimitPolicy>;

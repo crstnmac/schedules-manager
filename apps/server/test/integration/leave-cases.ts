@@ -641,7 +641,7 @@ export function registerLeaveTests(getContext: () => Context) {
 		);
 		expect(tokenResponse.status).toBe(200);
 		const calendarToken = (await tokenResponse.json()) as {
-			token: { url: string };
+			token: { id: string; url: string };
 		};
 		const feed = await app.handle(
 			new Request(`http://localhost${calendarToken.token.url}`),
@@ -651,6 +651,47 @@ export function registerLeaveTests(getContext: () => Context) {
 		const feedBody = await feed.text();
 		expect(feedBody).toContain("BEGIN:VCALENDAR");
 		expect(feedBody).toContain("VALUE=DATE");
+
+		// A second fetch records usage stats, surfaced by the diagnostics check.
+		const secondFeed = await app.handle(
+			new Request(`http://localhost${calendarToken.token.url}`, {
+				headers: { "user-agent": "TestCal/1.0" },
+			}),
+		);
+		expect(secondFeed.status).toBe(200);
+		const diagnosticsUrl = `http://localhost/v1/workplaces/${seed.workplace.id}/calendar-tokens/${calendarToken.token.id}/diagnostics`;
+		const diagnostics = await app.handle(
+			new Request(diagnosticsUrl, {
+				headers: { authorization: `Bearer ${workerAccess}` },
+			}),
+		);
+		expect(diagnostics.status).toBe(200);
+		const diagnosticsBody = (await diagnostics.json()) as {
+			diagnostics: {
+				feedOk: boolean;
+				eventCount: number;
+				timezone: string;
+				fetchCount: number;
+				lastUsedAt: string | null;
+				lastFetchUserAgent: string | null;
+			};
+		};
+		expect(diagnosticsBody.diagnostics.feedOk).toBe(true);
+		expect(diagnosticsBody.diagnostics.eventCount).toBeGreaterThan(0);
+		expect(diagnosticsBody.diagnostics.timezone.length).toBeGreaterThan(0);
+		expect(diagnosticsBody.diagnostics.fetchCount).toBe(2);
+		expect(diagnosticsBody.diagnostics.lastFetchUserAgent).toBe("TestCal/1.0");
+		expect(diagnosticsBody.diagnostics.lastUsedAt).not.toBeNull();
+
+		// A manager with settings.manage may inspect another member's feed,
+		// but unauthenticated callers cannot.
+		const managerDiagnostics = await app.handle(
+			new Request(diagnosticsUrl, {
+				headers: { authorization: `Bearer ${managerAccess}` },
+			}),
+		);
+		expect(managerDiagnostics.status).toBe(200);
+		expect((await app.handle(new Request(diagnosticsUrl))).status).toBe(401);
 
 		// Documents upload returns metadata and is visible to the worker.
 		const form = new FormData();

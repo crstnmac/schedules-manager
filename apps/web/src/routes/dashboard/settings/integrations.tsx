@@ -6,6 +6,7 @@ import {
 	WebhookEndpointsCard,
 } from "@/components/settings/integrations-card";
 import { SettingsPage } from "@/components/settings/page";
+import { SquareCard } from "@/components/settings/square-card";
 import { useWorkplace } from "@/lib/use-workplace";
 
 export const Route = createFileRoute("/dashboard/settings/integrations")({
@@ -18,10 +19,11 @@ function IntegrationsSettingsPage() {
 	return (
 		<SettingsPage
 			title="Integrations"
-			description="Connect AI assistants, issue scoped API keys, and send signed webhooks when scheduling data changes."
+			description="Connect sales and assistant services, issue scoped API keys, and send signed webhooks."
 		>
 			<div className="grid gap-6">
 				<McpConnectionsCard workplaceId={workplace?.id} />
+				<SquareCard workplaceId={workplace?.id} />
 				<ApiKeysCard workplaceId={workplace?.id} />
 				<WebhookEndpointsCard workplaceId={workplace?.id} />
 				<WebhookDeliveriesCard workplaceId={workplace?.id} />

@@ -47,7 +47,13 @@ import {
 } from "@SchedulesManager/ui/components/toggle-group";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { CopyIcon, PaperclipIcon, PlusIcon, XIcon } from "lucide-react";
+import {
+	CopyIcon,
+	PaperclipIcon,
+	PlusIcon,
+	RefreshCwIcon,
+	XIcon,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
@@ -73,6 +79,7 @@ import { api } from "@/lib/api";
 import { formatLeaveHours, hoursToMinutes, todayIsoDate } from "@/lib/leave";
 import {
 	type LeavePolicyDto,
+	useCalendarTokenDiagnostics,
 	useCalendarTokens,
 	useCreateMyCalendarToken,
 	useLeaveForecast,
@@ -581,6 +588,10 @@ function AvailabilityPage() {
 			token.employmentId === membershipEmploymentId && !token.revokedAt,
 	);
 	const activeCalendarToken = myCalendarTokens[0] ?? null;
+	const calendarDiagnostics = useCalendarTokenDiagnostics(
+		workplace?.id,
+		activeCalendarToken?.id,
+	);
 
 	async function copyCalendarLink() {
 		if (!calendarUrl) return;
@@ -1159,6 +1170,79 @@ function AvailabilityPage() {
 														Create a new link to copy its URL again.
 													</p>
 												)}
+												{calendarDiagnostics.data ? (
+													<div className="flex flex-col gap-1 rounded-lg border bg-muted/30 px-3 py-2 text-muted-foreground text-xs">
+														<div className="flex items-center gap-2">
+															<Badge
+																variant={
+																	calendarDiagnostics.data.feedOk
+																		? "secondary"
+																		: "destructive"
+																}
+															>
+																{calendarDiagnostics.data.feedOk
+																	? "Feed OK"
+																	: "Revoked"}
+															</Badge>
+															<span>
+																{calendarDiagnostics.data.eventCount} events ·{" "}
+																{calendarDiagnostics.data.timezone}
+															</span>
+															<Button
+																size="sm"
+																variant="ghost"
+																className="ml-auto h-6 px-2"
+																disabled={calendarDiagnostics.isFetching}
+																onClick={() =>
+																	void calendarDiagnostics.refetch()
+																}
+															>
+																<RefreshCwIcon data-icon="inline-start" />
+																Run feed check
+															</Button>
+														</div>
+														<p>
+															Fetched {calendarDiagnostics.data.fetchCount} time
+															{calendarDiagnostics.data.fetchCount === 1
+																? ""
+																: "s"}
+															{calendarDiagnostics.data.lastUsedAt
+																? ` · last fetched ${formatDay(calendarDiagnostics.data.lastUsedAt)}`
+																: " · not fetched by an app yet"}
+														</p>
+														{calendarDiagnostics.data.lastFetchUserAgent ? (
+															<p
+																className="truncate"
+																title={
+																	calendarDiagnostics.data.lastFetchUserAgent
+																}
+															>
+																Last app:{" "}
+																{calendarDiagnostics.data.lastFetchUserAgent}
+															</p>
+														) : null}
+													</div>
+												) : null}
+												<div className="rounded-lg border bg-muted/30 p-3 text-muted-foreground text-xs">
+													<p className="font-medium text-foreground">
+														Add the link to your calendar app
+													</p>
+													<ul className="mt-1 list-disc space-y-0.5 pl-4">
+														<li>
+															Google Calendar — Settings → Add calendar → From
+															URL. Google refreshes on its own schedule (about
+															once a day).
+														</li>
+														<li>
+															Apple Calendar — File → New Calendar Subscription
+															(Mac), or Settings → Calendar → Accounts → Add
+															Subscribed Calendar (iPhone).
+														</li>
+														<li>
+															Outlook — Add calendar → Subscribe from web.
+														</li>
+													</ul>
+												</div>
 												<ConfirmAction
 													trigger="Revoke link"
 													triggerVariant="outline"

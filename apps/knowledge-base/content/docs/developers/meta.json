@@ -1,0 +1,5 @@
+{
+  "title": "Developers",
+  "icon": "Terminal",
+  "pages": ["index", "webhooks", "zapier", "make", "n8n"]
+}
