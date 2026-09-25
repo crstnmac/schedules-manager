@@ -1,9 +1,10 @@
 import { env } from "@SchedulesManager/env/landing";
-import { ArrowDown, ArrowRight, Check, ChevronLeft } from "lucide-react";
+import { ArrowDown, ArrowRight, Check } from "lucide-react";
 import type { ReactNode } from "react";
 import { captureComparisonSignup } from "./analytics";
 import { LandingLink } from "./landing-link";
 import { isSet, LEGAL_ENTITY, withPeriod } from "./site-config";
+import "./comparison-redesign.css";
 
 export const competitors = [
 	{
@@ -199,26 +200,22 @@ const switchingDetails: Record<
 export function SwitchingSection() {
 	return (
 		<section className="switching-section" id="switching">
-			<div className="section-container">
-				<p className="eyebrow">Thinking about switching?</p>
-				<h2>A clearer next week starts here.</h2>
-				<p className="switching-lede">
-					Whatever you're moving from, next week works the same way: draft it,
-					review it, publish it once — and your team actually gets told.
-				</p>
-				<div className="switching-grid">
+			<div className="section-container switching-content">
+				<div className="switching-intro">
+					<p className="eyebrow">Making a move?</p>
+					<h2>Bring your next week with you.</h2>
+					<p className="switching-lede">
+						Move your schedule into a draft, review it, then publish when it's ready.
+					</p>
+				</div>
+				<nav className="switching-grid" aria-label="Switching guides">
 					{competitors.map((competitor) => (
-						<article className="switching-card" key={competitor.slug}>
-							<p className="switching-card-brand">{competitor.name}</p>
-							<h3>{competitor.hook.title}</h3>
-							<p className="switching-card-line">{competitor.hook.line}</p>
-							<LandingLink href={`/vs/${competitor.slug}`}>
-								Move from {competitor.name}{" "}
+						<LandingLink className="switching-guide" href={`/vs/${competitor.slug}`} key={competitor.slug}>
+							<span>From {competitor.name}</span>
 								<ArrowRight aria-hidden="true" size={18} />
 							</LandingLink>
-						</article>
 					))}
-				</div>
+				</nav>
 			</div>
 		</section>
 	);
@@ -272,22 +269,23 @@ export function ComparisonPage({ slug }: { slug: string }) {
 					<img src="/logo-mark.svg" alt="" />
 					jooling<span className="brand-dot">.</span>
 				</LandingLink>
+				<nav className="comparison-header-nav" aria-label="Page navigation">
+					<a href="#what-changes">Why jooling</a>
+					<a href="#switch-steps">Moving your schedule</a>
+				</nav>
 				<LandingLink
-					className="button button-primary"
+					className="comparison-header-cta"
 					href={signUp.toString()}
 					onClick={() => captureComparisonSignup(competitor.slug)}
 				>
-					{startFree}
+					Start free <ArrowRight aria-hidden="true" size={16} />
 				</LandingLink>
 			</header>
 			<main id="main-content" className="comparison-main">
 				<section className="comparison-hero section-container">
-					<LandingLink className="comparison-back" href="/">
-						<ChevronLeft aria-hidden="true" size={17} /> Back to jooling
-					</LandingLink>
-					<p className="eyebrow">{competitor.name} alternative</p>
+					<p className="eyebrow">Switching from {competitor.name}</p>
 					<h1>
-						Move your team forward with <span>jooling.</span>
+						A calmer way to run <span>next week.</span>
 					</h1>
 					<p className="comparison-lede">{competitor.detail}</p>
 					<div className="comparison-actions">
@@ -302,15 +300,25 @@ export function ComparisonPage({ slug }: { slug: string }) {
 							See how importing works <ArrowDown aria-hidden="true" size={18} />
 						</a>
 					</div>
-					<img
-						className="real-schedule-screenshot comparison-shot"
-						src="/schedule.webp"
-						alt="A jooling manager workspace showing one published week of shifts across the team"
-						loading="lazy"
-					/>
+					<figure className="comparison-product">
+						<div className="comparison-product-meta">
+							<span>Inside jooling</span>
+							<span>One schedule. One clear version.</span>
+						</div>
+						<img
+							className="real-schedule-screenshot comparison-shot"
+							src="/schedule.webp"
+							alt="A jooling manager workspace showing one published week of shifts across the team"
+							loading="lazy"
+						/>
+					</figure>
 				</section>
-				<section className="comparison-changes section-container">
-					<h2>What changes when you switch.</h2>
+				<section id="what-changes" className="comparison-changes section-container">
+					<div className="comparison-section-heading">
+						<p className="eyebrow">The difference</p>
+						<h2>Less chasing. More clarity.</h2>
+						<p>Keep the parts of scheduling that matter close to hand, from the first draft to the version your team sees.</p>
+					</div>
 					<div className="comparison-changes-grid">
 						{details.changes.map((change) => (
 							<article key={change.title}>
@@ -327,7 +335,11 @@ export function ComparisonPage({ slug }: { slug: string }) {
 					id="switch-steps"
 					className="comparison-steps section-container"
 				>
-					<h2>Switch in an afternoon.</h2>
+					<div className="comparison-section-heading">
+						<p className="eyebrow">The move</p>
+						<h2>Bring your next week over.</h2>
+						<p>Take a deliberate path from your existing schedule to a draft you can review before anyone is notified.</p>
+					</div>
 					<ol className="comparison-step-grid">
 						<li>
 							<span className="comparison-step-num" aria-hidden="true">
@@ -362,6 +374,7 @@ export function ComparisonPage({ slug }: { slug: string }) {
 				</section>
 				<section className="comparison-cta section-container">
 					<div>
+						<p className="eyebrow">Ready when you are</p>
 						<h2>Your clearest week yet.</h2>
 						<p>
 							Per-location pricing. Your whole team included. Cancel any time.

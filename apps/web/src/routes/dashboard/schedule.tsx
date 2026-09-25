@@ -185,16 +185,6 @@ export const Route = createFileRoute("/dashboard/schedule")({
 	component: SchedulePage,
 });
 
-const DAY_HEADERS = [
-	"Monday",
-	"Tuesday",
-	"Wednesday",
-	"Thursday",
-	"Friday",
-	"Saturday",
-	"Sunday",
-];
-
 /** Sentinel for "no policy group override" in the approval policy Select. */
 
 /** Sentinel for the Location's primary (team-less) schedule in the team Select. */
@@ -422,13 +412,6 @@ const changeColumns = changeHelper.columns([
 	}),
 	changeHelper.accessor("summary", { header: "Change" }),
 ]);
-
-function orderedDayHeaders(weekStartDay: number): string[] {
-	return Array.from(
-		{ length: 7 },
-		(_, index) => DAY_HEADERS[(weekStartDay + index) % 7],
-	);
-}
 
 function formatDayLabel(dateKey: string): string {
 	return new Date(`${dateKey}T12:00:00`).toLocaleDateString(undefined, {
@@ -1443,7 +1426,6 @@ function SchedulePage() {
 		setPunchStillOpen(timeclock?.status === "open");
 		setPunchReason("");
 	}
-	const dayHeaders = orderedDayHeaders(weekStartDay);
 	const onClockCount = (
 		viewMode === "month"
 			? (calendar.data?.timeclock ?? [])
@@ -4011,6 +3993,11 @@ function SchedulePage() {
 															constraints.length === 0;
 														const isToday = day === todayKey;
 														const dayIndex = days.indexOf(day);
+														const dayName = new Date(
+															`${day}T12:00:00`,
+														).toLocaleDateString(undefined, {
+															weekday: "long",
+														});
 														const isWeekend = dayIndex >= 5;
 														return (
 															<ScheduleDropCell
@@ -4069,7 +4056,7 @@ function SchedulePage() {
 																</div>
 																<Button
 																	type="button"
-																	aria-label={`Add shift for ${member.name} on ${dayHeaders[dayIndex]}`}
+																	aria-label={`Add shift for ${member.name} on ${dayName}`}
 																	variant={
 																		isEmptyCell ? "outline" : "secondary"
 																	}
@@ -4107,8 +4094,7 @@ function SchedulePage() {
 																		<span>Add</span>
 																	) : (
 																		<span className="sr-only">
-																			Add shift for {member.name} on{" "}
-																			{dayHeaders[dayIndex]}
+																			Add shift for {member.name} on {dayName}
 																		</span>
 																	)}
 																</Button>

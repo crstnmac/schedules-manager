@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import type React from "react";
 import { LandingLink } from "./landing-link";
 import { Link } from "./router";
+import "./legal-redesign.css";
 import {
 	ENTITY_DEFINITION,
 	entityLine,
@@ -109,20 +110,34 @@ export function LegalLayout({
 			<LegalHeader />
 			<main id="legal-content" className="legal-main">
 				<div className="section-container legal-container">
+					<nav className="legal-document-nav" aria-label="Legal documents">
+						<Link to="/privacy" aria-current={eyebrow === "Privacy Policy" ? "page" : undefined}>Privacy</Link>
+						<Link to="/terms" aria-current={eyebrow === "Terms & Conditions" ? "page" : undefined}>Terms</Link>
+						<Link to="/dpa" aria-current={eyebrow === "Data Processing Addendum" ? "page" : undefined}>Data processing</Link>
+					</nav>
 					<header className="legal-header">
-						<p className="eyebrow">{eyebrow}</p>
+						<div className="legal-header-meta"><p className="eyebrow">Legal / {eyebrow}</p><p className="legal-updated">Last updated {LAST_UPDATED}</p></div>
 						<h1>{title}</h1>
-						<p className="legal-updated">Last updated {LAST_UPDATED}</p>
 						<div className="legal-intro">{intro}</div>
 					</header>
-					<article className="legal-body">
-						{sections.map((section) => (
-							<section key={section.id} id={section.id}>
-								<h2>{section.heading}</h2>
-								{section.body}
-							</section>
-						))}
-					</article>
+					<div className="legal-document-grid">
+						<aside className="legal-contents" aria-label="On this page">
+							<p>On this page</p>
+							<nav>
+								{sections.map((section) => (
+									<a key={section.id} href={`#${section.id}`}>{section.heading}</a>
+								))}
+							</nav>
+						</aside>
+						<article className="legal-body">
+							{sections.map((section) => (
+								<section key={section.id} id={section.id}>
+									<h2>{section.heading}</h2>
+									{section.body}
+								</section>
+							))}
+						</article>
+					</div>
 				</div>
 			</main>
 			<LegalFooter />

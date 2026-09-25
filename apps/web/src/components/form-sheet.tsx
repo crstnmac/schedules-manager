@@ -1,17 +1,16 @@
 import {
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetFooter,
-	SheetHeader,
-	SheetTitle,
-} from "@SchedulesManager/ui/components/sheet";
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@SchedulesManager/ui/components/dialog";
 import { cn } from "@SchedulesManager/ui/lib/utils";
 import type { ReactNode } from "react";
 
 /**
- * Standard side sheet for create/edit forms. Keeps the underlying list in view
- * and gives the form room to breathe on small screens.
+ * Standard dialog for create/edit forms, with a scrollable body and visible actions.
  */
 export function FormSheet({
 	open,
@@ -31,22 +30,28 @@ export function FormSheet({
 	className?: string;
 }) {
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange}>
-			<SheetContent
-				side="right"
-				className={cn("w-full sm:max-w-md", className)}
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent
+				className={cn(
+					"flex max-h-[min(90dvh,48rem)] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-xl",
+					className,
+				)}
 			>
-				<SheetHeader>
-					<SheetTitle>{title}</SheetTitle>
+				<DialogHeader className="shrink-0 px-6 py-5 pr-12">
+					<DialogTitle>{title}</DialogTitle>
 					{description ? (
-						<SheetDescription>{description}</SheetDescription>
+						<DialogDescription>{description}</DialogDescription>
 					) : null}
-				</SheetHeader>
-				<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6">
+				</DialogHeader>
+				<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 pb-6">
 					{children}
 				</div>
-				{footer ? <SheetFooter>{footer}</SheetFooter> : null}
-			</SheetContent>
-		</Sheet>
+				{footer ? (
+					<DialogFooter className="mx-0 mb-0 shrink-0 rounded-none bg-background">
+						{footer}
+					</DialogFooter>
+				) : null}
+			</DialogContent>
+		</Dialog>
 	);
 }

@@ -194,7 +194,7 @@ function SectionEmpty({
 
 function WorkerHome() {
 	const { formatMinute, formatShiftRange } = useDisplayPrefs();
-	const { workplace } = useWorkplace();
+	const { workplace, capabilities } = useWorkplace();
 	const schedule = useMySchedule(workplace?.id);
 	const acknowledge = useAcknowledge();
 	const respond = useRespondToAcceptance();
@@ -316,7 +316,8 @@ function WorkerHome() {
 	const hasAnySchedule = Boolean(currentWeek || nextWeek) || history.length > 0;
 	const hasGlobalItems =
 		(!schedule.isLoading && !schedule.isError && !nextShift) ||
-		(needsAcknowledgement && currentWeek !== null);
+		(needsAcknowledgement && currentWeek !== null) ||
+		pendingAcceptances.length > 0;
 
 	const acceptanceColumns = useMemo(
 		() =>
@@ -631,14 +632,16 @@ function WorkerHome() {
 							<ToggleGroupItem value="week">Week</ToggleGroupItem>
 							<ToggleGroupItem value="calendar">Calendar</ToggleGroupItem>
 						</ToggleGroup>
-						<Button
-							size="sm"
-							variant="outline"
-							nativeButton={false}
-							render={<Link to="/worker/timecard" />}
-						>
-							My timecard
-						</Button>
+						{capabilities.operations ? (
+							<Button
+								size="sm"
+								variant="outline"
+								nativeButton={false}
+								render={<Link to="/worker/timecard" />}
+							>
+								My timecard
+							</Button>
+						) : null}
 					</div>
 				}
 			/>
@@ -668,6 +671,29 @@ function WorkerHome() {
 
 				{hasGlobalItems ? (
 					<div className="flex shrink-0 flex-col gap-4 px-4 py-4 md:px-6 md:py-6">
+						{pendingAcceptances.length > 0 ? (
+							<Alert>
+								<CircleAlertIcon />
+								<AlertTitle>
+									{pendingAcceptances.length === 1
+										? "A shift change needs your response"
+										: `${pendingAcceptances.length} shift changes need your response`}
+								</AlertTitle>
+								<AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+									<span>Review the change and accept or decline it.</span>
+									<Button
+										size="sm"
+										variant="outline"
+										onClick={() => {
+											setView("week");
+											setSection("pending");
+										}}
+									>
+										Review change
+									</Button>
+								</AlertDescription>
+							</Alert>
+						) : null}
 						{!schedule.isLoading && !schedule.isError && !nextShift ? (
 							<Card>
 								<CardHeader>
@@ -743,7 +769,7 @@ function WorkerHome() {
 											variant={active ? "secondary" : "ghost"}
 											size="sm"
 											aria-current={active ? "page" : undefined}
-											className="w-auto shrink-0 justify-start gap-2 md:w-full"
+											className="min-h-11 w-auto shrink-0 justify-start gap-2 md:min-h-9 md:w-full"
 											onClick={() => setSection(item.id)}
 										>
 											<item.icon />

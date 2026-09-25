@@ -34,13 +34,13 @@ import {
 	SelectValue,
 } from "@SchedulesManager/ui/components/select";
 import {
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetFooter,
-	SheetHeader,
-	SheetTitle,
-} from "@SchedulesManager/ui/components/sheet";
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@SchedulesManager/ui/components/dialog";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import {
@@ -1583,15 +1583,15 @@ function DelegationsSection({
 				</ul>
 			)}
 
-			<Sheet open={open} onOpenChange={onOpenChange}>
-				<SheetContent side="right" className="w-full sm:max-w-md">
-					<SheetHeader>
-						<SheetTitle>Delegate my approvals</SheetTitle>
-						<SheetDescription>
+			<Dialog open={open} onOpenChange={onOpenChange}>
+				<DialogContent className="flex max-h-[min(90dvh,48rem)] w-full flex-col overflow-y-auto sm:max-w-xl">
+					<DialogHeader>
+						<DialogTitle>Delegate my approvals</DialogTitle>
+						<DialogDescription>
 							During this window, your pending approval steps are also available
 							to the delegate.
-						</SheetDescription>
-					</SheetHeader>
+						</DialogDescription>
+					</DialogHeader>
 					<div className="flex flex-col gap-4 overflow-y-auto px-6">
 						<Field>
 							<FieldLabel htmlFor="delegation-person">Delegate</FieldLabel>
@@ -1657,14 +1657,14 @@ function DelegationsSection({
 							/>
 						</Field>
 					</div>
-					<SheetFooter>
+					<DialogFooter>
 						<Button disabled={creating || !workplaceId} onClick={submit}>
 							{creating ? <Spinner data-icon="inline-start" /> : null}
 							Delegate
 						</Button>
-					</SheetFooter>
-				</SheetContent>
-			</Sheet>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }
@@ -2383,14 +2383,14 @@ function LeaveLedgerSheet({
 	const workerName = row.employmentName ?? row.employmentEmail;
 
 	return (
-		<Sheet open onOpenChange={onOpenChange}>
-			<SheetContent side="right" className="w-full sm:max-w-lg">
-				<SheetHeader>
-					<SheetTitle>Balance history</SheetTitle>
-					<SheetDescription>
+		<Dialog open onOpenChange={onOpenChange}>
+			<DialogContent className="flex max-h-[min(90dvh,48rem)] w-full flex-col overflow-y-auto sm:max-w-2xl">
+				<DialogHeader>
+					<DialogTitle>Balance history</DialogTitle>
+					<DialogDescription>
 						{workerName} · {row.leaveTypeName}
-					</SheetDescription>
-				</SheetHeader>
+					</DialogDescription>
+				</DialogHeader>
 				<div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
 					<LeaveLedgerList
 						entries={ledger.data}
@@ -2398,8 +2398,8 @@ function LeaveLedgerSheet({
 						emptyLabel="No ledger entries for this balance yet."
 					/>
 				</div>
-			</SheetContent>
-		</Sheet>
+			</DialogContent>
+		</Dialog>
 	);
 }
 
@@ -2446,14 +2446,14 @@ function AdjustLeaveSheet({
 	const workerName = row.employmentName ?? row.employmentEmail;
 
 	return (
-		<Sheet open onOpenChange={onOpenChange}>
-			<SheetContent side="right" className="w-full sm:max-w-md">
-				<SheetHeader>
-					<SheetTitle>Adjust balance</SheetTitle>
-					<SheetDescription>
+		<Dialog open onOpenChange={onOpenChange}>
+			<DialogContent className="flex max-h-[min(90dvh,48rem)] w-full flex-col overflow-y-auto sm:max-w-xl">
+				<DialogHeader>
+					<DialogTitle>Adjust balance</DialogTitle>
+					<DialogDescription>
 						{workerName} · Enter positive hours to add, negative to remove.
-					</SheetDescription>
-				</SheetHeader>
+					</DialogDescription>
+				</DialogHeader>
 				<div className="flex flex-col gap-4 overflow-y-auto px-6">
 					<Field>
 						<FieldLabel htmlFor="adjust-type">Leave type</FieldLabel>
@@ -2515,7 +2515,7 @@ function AdjustLeaveSheet({
 						/>
 					</Field>
 				</div>
-				<SheetFooter>
+				<DialogFooter>
 					<Button
 						disabled={adjust.isPending || minutes === 0 || !leaveTypeId}
 						onClick={() => adjust.mutate()}
@@ -2523,9 +2523,9 @@ function AdjustLeaveSheet({
 						{adjust.isPending ? <Spinner data-icon="inline-start" /> : null}
 						Save adjustment
 					</Button>
-				</SheetFooter>
-			</SheetContent>
-		</Sheet>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }
 
@@ -2572,14 +2572,14 @@ function TransferLeaveSheet({
 	const workerName = row.employmentName ?? row.employmentEmail;
 
 	return (
-		<Sheet open onOpenChange={onOpenChange}>
-			<SheetContent side="right" className="w-full sm:max-w-md">
-				<SheetHeader>
-					<SheetTitle>Transfer balance</SheetTitle>
-					<SheetDescription>
+		<Dialog open onOpenChange={onOpenChange}>
+			<DialogContent className="flex max-h-[min(90dvh,48rem)] w-full flex-col overflow-y-auto sm:max-w-xl">
+				<DialogHeader>
+					<DialogTitle>Transfer balance</DialogTitle>
+					<DialogDescription>
 						{workerName} · Moves hours between two leave types.
-					</SheetDescription>
-				</SheetHeader>
+					</DialogDescription>
+				</DialogHeader>
 				<div className="flex flex-col gap-4 overflow-y-auto px-6">
 					<Field>
 						<FieldLabel htmlFor="transfer-from">From leave type</FieldLabel>
@@ -2657,7 +2657,7 @@ function TransferLeaveSheet({
 						/>
 					</Field>
 				</div>
-				<SheetFooter>
+				<DialogFooter>
 					<Button
 						disabled={
 							transfer.isPending ||
@@ -2671,9 +2671,9 @@ function TransferLeaveSheet({
 						{transfer.isPending ? <Spinner data-icon="inline-start" /> : null}
 						Save transfer
 					</Button>
-				</SheetFooter>
-			</SheetContent>
-		</Sheet>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }
 
@@ -2999,15 +2999,15 @@ function EncashmentRequestSheet({
 	const minutes = hoursToMinutes(hours);
 
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange}>
-			<SheetContent side="right" className="w-full sm:max-w-md">
-				<SheetHeader>
-					<SheetTitle>Request encashment</SheetTitle>
-					<SheetDescription>
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className="flex max-h-[min(90dvh,48rem)] w-full flex-col overflow-y-auto sm:max-w-xl">
+				<DialogHeader>
+					<DialogTitle>Request encashment</DialogTitle>
+					<DialogDescription>
 						Creates a requested encashment for a worker. It deducts minutes when
 						approved.
-					</SheetDescription>
-				</SheetHeader>
+					</DialogDescription>
+				</DialogHeader>
 				<div className="flex flex-col gap-4 overflow-y-auto px-6">
 					<Field>
 						<FieldLabel htmlFor="encash-person">Worker</FieldLabel>
@@ -3100,7 +3100,7 @@ function EncashmentRequestSheet({
 						/>
 					</Field>
 				</div>
-				<SheetFooter>
+				<DialogFooter>
 					<Button
 						disabled={
 							creating ||
@@ -3121,9 +3121,9 @@ function EncashmentRequestSheet({
 						{creating ? <Spinner data-icon="inline-start" /> : null}
 						Request encashment
 					</Button>
-				</SheetFooter>
-			</SheetContent>
-		</Sheet>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }
 
@@ -3297,15 +3297,15 @@ function RecordLeaveSheet({
 	});
 
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange}>
-			<SheetContent side="right" className="w-full sm:max-w-md">
-				<SheetHeader>
-					<SheetTitle>Record time off</SheetTitle>
-					<SheetDescription>
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className="flex max-h-[min(90dvh,48rem)] w-full flex-col overflow-y-auto sm:max-w-xl">
+				<DialogHeader>
+					<DialogTitle>Record time off</DialogTitle>
+					<DialogDescription>
 						Approved immediately for a worker or manager. Deducts paid hours
 						when a leave type is set.
-					</SheetDescription>
-				</SheetHeader>
+					</DialogDescription>
+				</DialogHeader>
 				<div className="flex flex-col gap-4 overflow-y-auto px-6">
 					<div className="grid gap-1.5">
 						<label className="font-medium text-sm" htmlFor="record-person">
@@ -3367,7 +3367,7 @@ function RecordLeaveSheet({
 						recording.
 					</FieldDescription>
 				</div>
-				<SheetFooter>
+				<DialogFooter>
 					<Button
 						disabled={
 							record.isPending || !employmentId || !leaveTypeId || charge <= 0
@@ -3377,9 +3377,9 @@ function RecordLeaveSheet({
 						{record.isPending ? <Spinner data-icon="inline-start" /> : null}
 						Record {charge > 0 ? formatLeaveHours(charge) : "time off"}
 					</Button>
-				</SheetFooter>
-			</SheetContent>
-		</Sheet>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }
 
@@ -3464,15 +3464,15 @@ function RequestMyLeaveSheet({
 	});
 
 	return (
-		<Sheet open={open} onOpenChange={onOpenChange}>
-			<SheetContent side="right" className="w-full sm:max-w-md">
-				<SheetHeader>
-					<SheetTitle>Request my leave</SheetTitle>
-					<SheetDescription>
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className="flex max-h-[min(90dvh,48rem)] w-full flex-col overflow-y-auto sm:max-w-xl">
+				<DialogHeader>
+					<DialogTitle>Request my leave</DialogTitle>
+					<DialogDescription>
 						Creates a pending request for this workplace. Record time off
 						instead if you want it approved immediately.
-					</SheetDescription>
-				</SheetHeader>
+					</DialogDescription>
+				</DialogHeader>
 				<div className="flex flex-col gap-4 overflow-y-auto px-6">
 					{employmentId ? null : (
 						<p className="text-destructive text-sm">
@@ -3501,7 +3501,7 @@ function RequestMyLeaveSheet({
 						onIsEmergencyChange={setIsEmergency}
 					/>
 				</div>
-				<SheetFooter>
+				<DialogFooter>
 					<Button
 						disabled={
 							request.isPending || !employmentId || !leaveTypeId || charge <= 0
@@ -3511,9 +3511,9 @@ function RequestMyLeaveSheet({
 						{request.isPending ? <Spinner data-icon="inline-start" /> : null}
 						Request {charge > 0 ? formatLeaveHours(charge) : "leave"}
 					</Button>
-				</SheetFooter>
-			</SheetContent>
-		</Sheet>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }
 
@@ -3583,17 +3583,17 @@ function EditLeaveSheet({
 	});
 
 	return (
-		<Sheet open onOpenChange={onOpenChange}>
-			<SheetContent side="right" className="w-full sm:max-w-md">
-				<SheetHeader>
-					<SheetTitle>Edit time off</SheetTitle>
-					<SheetDescription>
+		<Dialog open onOpenChange={onOpenChange}>
+			<DialogContent className="flex max-h-[min(90dvh,48rem)] w-full flex-col overflow-y-auto sm:max-w-xl">
+				<DialogHeader>
+					<DialogTitle>Edit time off</DialogTitle>
+					<DialogDescription>
 						{formatPerson(request.worker.fullName, request.worker.email)}
 						{request.status === "approved"
 							? " · Changing dates or type adjusts paid hours."
 							: " · Pending until approved."}
-					</SheetDescription>
-				</SheetHeader>
+					</DialogDescription>
+				</DialogHeader>
 				<div className="flex flex-col gap-4 overflow-y-auto px-6">
 					<LeaveWindowFields
 						idPrefix="edit"
@@ -3620,7 +3620,7 @@ function EditLeaveSheet({
 						onChanged={onChanged}
 					/>
 				</div>
-				<SheetFooter>
+				<DialogFooter>
 					<Button
 						disabled={save.isPending || !leaveTypeId || charge <= 0}
 						onClick={() => save.mutate()}
@@ -3628,8 +3628,8 @@ function EditLeaveSheet({
 						{save.isPending ? <Spinner data-icon="inline-start" /> : null}
 						Save changes
 					</Button>
-				</SheetFooter>
-			</SheetContent>
-		</Sheet>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }

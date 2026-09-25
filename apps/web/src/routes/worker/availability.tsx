@@ -25,13 +25,13 @@ import {
 	SelectValue,
 } from "@SchedulesManager/ui/components/select";
 import {
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetFooter,
-	SheetHeader,
-	SheetTitle,
-} from "@SchedulesManager/ui/components/sheet";
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@SchedulesManager/ui/components/dialog";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import {
@@ -1895,14 +1895,14 @@ function WorkerEditLeaveSheet({
 	});
 
 	return (
-		<Sheet open onOpenChange={onOpenChange}>
-			<SheetContent side="right" className="w-full sm:max-w-md">
-				<SheetHeader>
-					<SheetTitle>Edit request</SheetTitle>
-					<SheetDescription>
+		<Dialog open onOpenChange={onOpenChange}>
+			<DialogContent className="flex max-h-[min(90dvh,48rem)] w-full flex-col overflow-y-auto sm:max-w-xl">
+				<DialogHeader>
+					<DialogTitle>Edit request</DialogTitle>
+					<DialogDescription>
 						Pending until your manager reviews it.
-					</SheetDescription>
-				</SheetHeader>
+					</DialogDescription>
+				</DialogHeader>
 				<div className="flex flex-col gap-4 overflow-y-auto px-6">
 					<LeaveWindowFields
 						idPrefix="edit-off"
@@ -1924,7 +1924,7 @@ function WorkerEditLeaveSheet({
 						remainingMinutes={remainingMinutes}
 					/>
 				</div>
-				<SheetFooter>
+				<DialogFooter>
 					<Button
 						disabled={save.isPending || !leaveTypeId || charge <= 0}
 						onClick={() => save.mutate()}
@@ -1932,8 +1932,8 @@ function WorkerEditLeaveSheet({
 						{save.isPending ? <Spinner data-icon="inline-start" /> : null}
 						Save changes
 					</Button>
-				</SheetFooter>
-			</SheetContent>
-		</Sheet>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }

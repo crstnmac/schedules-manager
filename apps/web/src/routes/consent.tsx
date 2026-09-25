@@ -150,7 +150,7 @@ function ConsentComponent() {
 				</CardHeader>
 				<CardFooter className="flex-col items-start gap-4">
 					<fieldset
-						className="w-full space-y-3"
+						className="flex w-full flex-col gap-3"
 						disabled={decision === "working"}
 					>
 						<OAuthConsentScopes
