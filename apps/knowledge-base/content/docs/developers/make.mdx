@@ -1,0 +1,99 @@
+---
+title: Make recipes
+description: Importable Make (Integromat) blueprint that receives signed jooling webhooks and forwards filtered events.
+---
+
+Make needs no developer account: the built-in **Webhooks** app (`Custom
+webhook`) receives jooling events, and filters route them to any module.
+
+## Recipe — notify a channel when a schedule is published
+
+Import this blueprint (**Scenario builder → ⋯ menu → Import Blueprint**), then
+open each module once: Make provisions a fresh webhook URL on import — point a
+new jooling webhook endpoint at it in **Settings → Integrations**, and set the
+destination URL in the last module.
+
+```json
+{
+  "name": "jooling — schedule published",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": { "maxResults": 1 },
+      "metadata": {
+        "designer": { "x": 0, "y": 0 },
+        "restore": { "parameters": { "hook": { "label": "jooling events" } } },
+        "parameters": [
+          { "name": "hook", "type": "hook:jooling-webhook", "label": "Webhook" },
+          { "name": "maxResults", "type": "number", "label": "Maximum number of results" }
+        ],
+        "interface": [
+          { "name": "action", "type": "any" },
+          { "name": "summary", "type": "any" },
+          { "name": "entityId", "type": "any" }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "filter": {
+        "name": "only schedule.published",
+        "conditions": [
+          [{ "a": "{{1.action}}", "o": "text:equal", "b": "schedule.published" }]
+        ]
+      },
+      "parameters": { "handleErrors": true },
+      "mapper": {
+        "url": "https://hooks.slack.com/services/YOUR/WEBHOOK/URL",
+        "method": "post",
+        "headers": [],
+        "qs": [],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "data": "{\"text\": \"{{1.summary}}\"}",
+        "parseResponse": false
+      },
+      "metadata": { "designer": { "x": 300, "y": 0 } }
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "timezone": "Etc/UTC",
+      "maxErrors": 3,
+      "autoCommit": true
+    }
+  }
+}
+```
+
+The filter on module 2 decides what flows through — change
+`only schedule.published` to another
+[event type](/developers/webhooks) such as `time_off.approved` or
+`timesheet.approved`, or duplicate the HTTP module with different filters to
+route several events into different branches.
+
+## Calling the jooling API
+
+Add an **HTTP → Make a request** module with a header
+`Authorization: Bearer jl_live_...` to call any
+[integration endpoint](/developers) — for example
+`GET https://YOUR_API_URL/v1/integration/labor?from=2026-09-07&to=2026-09-13`
+with the `reports.read` scope to push daily labor into your BI tool on a
+schedule.
+
+## Signature verification
+
+Make's custom webhook does not verify HMAC signatures natively. Practical
+options, in order of effort:
+
+1. Keep the webhook URL secret and rely on the jooling-side endpoint switch
+   (delete the endpoint to stop deliveries immediately).
+2. Put a small proxy (for example a Cloudflare Worker) in front that verifies
+   `X-Jooling-Signature` per the [webhook docs](/developers/webhooks) and
+   forwards verified events to your Make webhook.

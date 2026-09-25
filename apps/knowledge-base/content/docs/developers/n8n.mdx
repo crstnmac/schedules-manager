@@ -1,0 +1,117 @@
+---
+title: n8n recipes
+description: Importable n8n workflow that verifies jooling webhook signatures and routes events, plus a scheduled API poll.
+---
+
+n8n is self-hostable, so this recipe can verify jooling's HMAC signatures
+properly before doing anything with an event.
+
+## Recipe 1 — verified webhook receiver
+
+Import this workflow (**Workflows → Import from File / Clipboard**). It
+receives the webhook, verifies `X-Jooling-Signature`, and forwards
+`schedule.published` events to a Slack-compatible endpoint.
+
+```json
+{
+  "name": "jooling — verified events",
+  "nodes": [
+    {
+      "id": "6b1f3f7e-0000-4000-8000-000000000001",
+      "name": "jooling webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "webhookId": "6b1f3f7e-58cc-4372-a567-0e02b2c3d479",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jooling-events",
+        "responseMode": "onReceived",
+        "options": { "rawBody": true }
+      }
+    },
+    {
+      "id": "6b1f3f7e-0000-4000-8000-000000000002",
+      "name": "verify signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const crypto = require('node:crypto');\nconst secret = $env.JOOLING_WEBHOOK_SECRET;\nconst rawBody = $json.body;\nconst signature = $json.headers['x-jooling-signature'] ?? '';\nconst expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');\nconst a = Buffer.from(expected);\nconst b = Buffer.from(signature);\nconst ok = a.length === b.length && crypto.timingSafeEqual(a, b);\nif (!ok) throw new Error('Invalid jooling signature');\nreturn { json: { event: JSON.parse(rawBody) } };"
+      }
+    },
+    {
+      "id": "6b1f3f7e-0000-4000-8000-000000000003",
+      "name": "published only",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [440, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "event-type",
+              "leftValue": "={{ $json.event.action }}",
+              "rightValue": "schedule.published",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "6b1f3f7e-0000-4000-8000-000000000004",
+      "name": "notify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [660, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://hooks.slack.com/services/YOUR/WEBHOOK/URL",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.event.summary }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "jooling webhook": {
+      "main": [[{ "node": "verify signature", "type": "main", "index": 0 }]]
+    },
+    "verify signature": {
+      "main": [[{ "node": "published only", "type": "main", "index": 0 }]]
+    },
+    "published only": {
+      "main": [
+        [{ "node": "notify", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": {}
+}
+```
+
+Setup:
+
+1. Set the environment variable `JOOLING_WEBHOOK_SECRET` on your n8n instance
+   to the endpoint secret jooling showed when you created the webhook
+   (starts with `whsec_`).
+2. Register `https://YOUR_N8N/webhook/jooling-events` in jooling under
+   **Settings → Integrations → Webhook endpoints**, filtered to the
+   [events](/developers/webhooks) you want.
+3. Point the **notify** node at your destination. The signature node throws on
+   tampered or unknown requests; n8n records the failed execution.
+4. Deduplicate retries on jooling's `X-Jooling-Delivery` header if your
+   destination is not idempotent.
+
+## Recipe 2 — daily labor poll
+
+For tools that prefer polling over webhooks:
+
+1. Trigger: **Schedule Trigger**, daily.
+2. Node: **HTTP Request** — `GET https://YOUR_API_URL/v1/integration/labor?from={{ $now.format('yyyy-LL-dd') }}&to={{ $now.format('yyyy-LL-dd') }}` with a **Header Auth** credential (`Authorization: Bearer jl_live_...`). Create the key with the `reports.read` [scope](/developers).
+3. Follow with a **Google Sheets** or **Postgres** node to store the day's labor, or a **Code** node to compare against Square-imported sales and alert when labor percentage drifts.

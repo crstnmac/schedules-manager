@@ -41,6 +41,7 @@ import {
 import {
 	type LeaveApprovalDto,
 	type LeaveTypeDto,
+	useCalendarTokenDiagnostics,
 	useCalendarTokens,
 	useCreateMyCalendarToken,
 	useCreateMyLeaveEncashment,
@@ -282,6 +283,10 @@ export default function AvailabilityScreen() {
 		(calendarTokens.data ?? []).find(
 			(token) => token.employmentId === employment?.id && !token.revokedAt,
 		) ?? null;
+	const calendarDiagnostics = useCalendarTokenDiagnostics(
+		selected ?? undefined,
+		myCalendarToken?.id,
+	);
 	const encashableTypes = (leaveTypes.data?.leaveTypes ?? []).filter(
 		(type) => type.policy?.encashmentEnabled,
 	);
@@ -1058,6 +1063,18 @@ export default function AvailabilityScreen() {
 						) : (
 							<Hint>Create a new link to share its URL again.</Hint>
 						)}
+						{calendarDiagnostics.data ? (
+							<Hint>
+								{calendarDiagnostics.data.feedOk
+									? `Feed OK · ${calendarDiagnostics.data.eventCount} events · ${calendarDiagnostics.data.timezone} · fetched ${calendarDiagnostics.data.fetchCount} time${calendarDiagnostics.data.fetchCount === 1 ? "" : "s"}${calendarDiagnostics.data.lastUsedAt ? " · last fetched recently" : " · not fetched by an app yet"}`
+									: "This link was revoked; create a new one."}
+							</Hint>
+						) : null}
+						<Hint>
+							Google Calendar: Settings → Add calendar → From URL (refreshes
+							about daily). Apple Calendar: add a subscribed calendar. Outlook:
+							Add calendar → Subscribe from web.
+						</Hint>
 						<View style={styles.actionsRow}>
 							{calendarUrl ? (
 								<View style={{ flex: 1 }}>

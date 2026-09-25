@@ -46,7 +46,10 @@ import {
 	runLeaveAccruals,
 	runLeaveCarryForward,
 } from "../leave-accrual";
-import { buildLeaveCalendarFeed } from "../leave-calendar";
+import {
+	buildLeaveCalendarFeed,
+	calendarFeedTimezone,
+} from "../leave-calendar";
 import {
 	LEAVE_DOCUMENT_MAX_BYTES,
 	removeLeaveDocument,
@@ -1715,7 +1718,7 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 	)
 	.get(
 		"/calendar/:token/feed.ics",
-		async ({ params, set }) => {
+		async ({ params, set, request }) => {
 			const [token] = await db
 				.select()
 				.from(calendarFeedTokens)
@@ -1737,7 +1740,11 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 			});
 			await db
 				.update(calendarFeedTokens)
-				.set({ lastUsedAt: new Date() })
+				.set({
+					lastUsedAt: new Date(),
+					fetchCount: sql`${calendarFeedTokens.fetchCount} + 1`,
+					lastFetchUserAgent: request.headers.get("user-agent")?.slice(0, 200),
+				})
 				.where(eq(calendarFeedTokens.id, token.id));
 			set.headers["content-type"] = "text/calendar; charset=utf-8";
 			set.headers["cache-control"] = "private, max-age=300";
@@ -1745,6 +1752,70 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		},
 		{
 			params: t.Object({ token: t.String({ minLength: 16, maxLength: 64 }) }),
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/calendar-tokens/:tokenId/diagnostics",
+		async ({ headers, params }) => {
+			const { profile } = await requireSession(headers);
+			const member = await requireWorkplaceMember(
+				profile.id,
+				params.workplaceId,
+			);
+			const [token] = await db
+				.select()
+				.from(calendarFeedTokens)
+				.where(
+					and(
+						eq(calendarFeedTokens.id, params.tokenId),
+						eq(calendarFeedTokens.workplaceId, params.workplaceId),
+					),
+				)
+				.limit(1);
+			if (!token) throw new NotFoundError("Calendar token not found");
+			if (token.employmentId !== member.id) {
+				await requirePrivilege(
+					profile.id,
+					params.workplaceId,
+					"settings.manage",
+				);
+			}
+			const revoked = token.revokedAt !== null;
+			let eventCount = 0;
+			if (!revoked) {
+				const body = await buildLeaveCalendarFeed({
+					workplaceId: token.workplaceId,
+					employmentId: token.employmentId,
+					label: token.label,
+				});
+				eventCount = body.split("BEGIN:VEVENT").length - 1;
+			}
+			return {
+				diagnostics: {
+					feedOk: !revoked,
+					revokedAt: token.revokedAt?.toISOString() ?? null,
+					eventCount,
+					timezone: await calendarFeedTimezone(
+						token.workplaceId,
+						token.employmentId,
+					),
+					fetchCount: token.fetchCount,
+					lastUsedAt: token.lastUsedAt?.toISOString() ?? null,
+					lastFetchUserAgent: token.lastFetchUserAgent,
+				},
+			};
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ workplaceId: uuid, tokenId: uuid }),
+			detail: {
+				summary:
+					"Run a calendar feed self-check: verify the feed builds and report usage (Member)",
+				security: [{ bearerAuth: [] }],
+			},
 		},
 	)
 	.post(

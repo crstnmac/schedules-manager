@@ -4,6 +4,7 @@ import { registerAcceptanceRaceTests } from "./acceptance-race-cases";
 import { registerAutoClockOutBreaksTests } from "./auto-clock-out-breaks-cases";
 import { registerCoverageTests } from "./coverage-cases";
 import { resetAndMigrateDatabase } from "./database";
+import { registerDirectoryImportTests } from "./directory-import-cases";
 import { registerDstRouteTests } from "./dst-route-cases";
 import { registerEmailDeliveryTests } from "./email-delivery-cases";
 import { registerEnsureProfileCollisionTests } from "./ensure-profile-collision-cases";
@@ -20,6 +21,7 @@ import { registerReadinessTests } from "./readiness-cases";
 import { registerReminderTests } from "./reminder-cases";
 import { registerReportTests } from "./report-cases";
 import { registerReportsTests } from "./reports-cases";
+import { registerSquareTests } from "./square-cases";
 import { registerStalePositionTests } from "./stale-position-cases";
 import { registerTimeClockTests } from "./time-clock-cases";
 import { registerTrialPolicyTests } from "./trial-policy-cases";
@@ -126,6 +128,8 @@ integrationDescribe("Schedule publication", () => {
 	registerOpsTests(() => ({ database, app, token: managerToken }));
 	registerKioskRateLimitTests(() => ({ database, app }));
 	registerReportTests(() => ({ database, app, token: managerToken }));
+	registerSquareTests(() => ({ database, app, token: managerToken }));
+	registerDirectoryImportTests(() => ({ database, app, token: managerToken }));
 	registerReportsTests(() => ({ database, app, token: managerToken }));
 	registerStalePositionTests(() => ({ database, app, token: managerToken }));
 	registerLeaveTests(() => ({ database, app, token: managerToken }));
@@ -729,6 +733,13 @@ integrationDescribe("Schedule publication", () => {
 	});
 
 	test("simultaneous swap proposals cannot reserve the same Shift", async () => {
+		const nextWeek = new Date();
+		nextWeek.setUTCHours(0, 0, 0, 0);
+		nextWeek.setUTCDate(
+			nextWeek.getUTCDate() + ((8 - nextWeek.getUTCDay()) % 7) + 7,
+		);
+		const shiftAt = (day: number, hour: number) =>
+			new Date(nextWeek.getTime() + day * 86_400_000 + hour * 3_600_000);
 		const managerProfileId = crypto.randomUUID();
 		const workerProfileIds = [
 			crypto.randomUUID(),
@@ -777,7 +788,7 @@ integrationDescribe("Schedule publication", () => {
 			.insert(database.schedules)
 			.values({
 				locationId: location?.id ?? "",
-				weekStartDate: "2026-09-21",
+				weekStartDate: nextWeek.toISOString().slice(0, 10),
 			})
 			.returning();
 		await database.db.insert(database.shifts).values(
@@ -785,8 +796,8 @@ integrationDescribe("Schedule publication", () => {
 				scheduleId: schedule?.id ?? "",
 				employmentId: worker.id,
 				positionId: position?.id ?? "",
-				startsAt: new Date(`2026-09-${22 + index}T16:00:00.000Z`),
-				endsAt: new Date(`2026-09-${22 + index}T22:00:00.000Z`),
+				startsAt: shiftAt(index + 1, 16),
+				endsAt: shiftAt(index + 1, 22),
 			})),
 		);
 		const publication = await publishScheduleNow(
@@ -1052,7 +1063,7 @@ integrationDescribe("Schedule publication", () => {
 			.where(eq(database.employments.id, sharedWorker?.id ?? ""));
 		await database.db
 			.update(database.shifts)
-			.set({ endsAt: new Date("2026-09-22T23:00:00.000Z") })
+			.set({ endsAt: shiftAt(1, 23) })
 			.where(eq(database.shifts.id, firstShift?.shiftId ?? ""));
 		expect((await decideSwap("approved", "edited-draft-decision")).status).toBe(
 			409,

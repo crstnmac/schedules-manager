@@ -1,0 +1,66 @@
+---
+title: Zapier recipes
+description: Trigger Zaps from jooling webhooks and call the jooling API from Zapier — no developer account required.
+---
+
+Zapier needs no published integration: use the built-in **Webhooks by Zapier**
+app together with a jooling API key.
+
+## Recipe 1 — announce a published schedule in Slack
+
+1. Create a Zap with the trigger **Webhooks by Zapier → Catch Hook**. Zapier
+   gives you a hook URL.
+2. In jooling, open **Settings → Integrations → Webhook endpoints** and register
+   the hook URL, filtered to `schedule.published`.
+3. Add an action **Slack → Send Channel Message** and map fields:
+   - **Message text**: `{{summary}}` (for example "Published version 4 for
+     Downtown, week of Sep 7").
+   - Channel: your managers' channel.
+
+Every event jooling sends arrives as JSON with `action`, `summary`, and
+`entityId`, so the same pattern works for `time_off.approved`,
+`timesheet.approved`, `swap.proposed`, and the rest of the
+[event catalog](/developers/webhooks). Add a **Filter by Zapier** step
+(`action` text equals your event) when one hook URL receives several event
+types.
+
+## Recipe 2 — log approved time off in Google Sheets
+
+1. Trigger: **Webhooks by Zapier → Catch Hook**, filtered in jooling to
+   `time_off.approved`.
+2. Action: **Google Sheets → Create Spreadsheet Row**. Map `summary` to a note
+   column and `entityId` to a reference column; jooling IDs are stable, so
+   repeated deliveries of the same event can be deduplicated on them.
+
+## Recipe 3 — call the jooling API from Zapier
+
+Use the action **Webhooks by Zapier → Custom Request** to call any
+[integration endpoint](/developers):
+
+- **URL**: `https://YOUR_API_URL/v1/integration/time-off`
+- **Method**: `GET`
+- **Headers**: `Authorization: Bearer jl_live_...`
+- **Payload type**: `json`
+
+Give the Zap only the [scopes](/developers) it needs and set an
+expiry on the key. Rotate the key from the same page when staff change.
+
+## Verifying signatures in Zapier
+
+Plain **Catch Hook** parses and reshapes the payload, which breaks byte-exact
+HMAC verification. If you need signature verification inside Zapier, use
+**Catch Raw Hook** (it exposes the raw body and headers) and verify in a
+**Code by Zapier** step:
+
+```js
+const crypto = require("crypto");
+const expected = "sha256=" + crypto
+  .createHmac("sha256", inputData.secret)
+  .update(inputData.rawBody)
+  .digest("hex");
+// compare against the x-jooling-signature header with timingSafeEqual
+```
+
+For most recipes the simpler protection is enough: the hook URL is secret, and
+the endpoint you register in jooling can be deleted at any time to cut
+deliveries off.

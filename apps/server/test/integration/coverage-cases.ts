@@ -28,6 +28,13 @@ export function registerCoverageTests(getContext: () => Context) {
 	test("coverage endpoints return empty releases/pickups while a pending_manager swap is queued", async () => {
 		const { database: d, app, token } = getContext();
 		const { publishScheduleNow } = await import("../../src/routes/publication");
+		const nextWeek = new Date();
+		nextWeek.setUTCHours(0, 0, 0, 0);
+		nextWeek.setUTCDate(
+			nextWeek.getUTCDate() + ((8 - nextWeek.getUTCDay()) % 7) + 7,
+		);
+		const shiftAt = (day: number, hour: number) =>
+			new Date(nextWeek.getTime() + day * 86_400_000 + hour * 3_600_000);
 
 		const managerProfileId = crypto.randomUUID();
 		const workerAProfileId = crypto.randomUUID();
@@ -87,7 +94,7 @@ export function registerCoverageTests(getContext: () => Context) {
 			.insert(d.schedules)
 			.values({
 				locationId: required(location).id,
-				weekStartDate: "2026-09-21",
+				weekStartDate: nextWeek.toISOString().slice(0, 10),
 			})
 			.returning();
 		await d.db.insert(d.shifts).values([
@@ -95,15 +102,15 @@ export function registerCoverageTests(getContext: () => Context) {
 				scheduleId: required(schedule).id,
 				employmentId: workerA.id,
 				positionId: required(position).id,
-				startsAt: new Date("2026-09-22T16:00:00.000Z"),
-				endsAt: new Date("2026-09-22T22:00:00.000Z"),
+				startsAt: shiftAt(1, 16),
+				endsAt: shiftAt(1, 22),
 			},
 			{
 				scheduleId: required(schedule).id,
 				employmentId: workerB.id,
 				positionId: required(position).id,
-				startsAt: new Date("2026-09-23T16:00:00.000Z"),
-				endsAt: new Date("2026-09-23T22:00:00.000Z"),
+				startsAt: shiftAt(2, 16),
+				endsAt: shiftAt(2, 22),
 			},
 		]);
 		const publication = await publishScheduleNow(

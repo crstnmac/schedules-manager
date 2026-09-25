@@ -151,6 +151,7 @@ function ReportsPage() {
 	const [to, setTo] = useState(() => new Date().toLocaleDateString("sv-SE"));
 	const [isDownloading, setIsDownloading] = useState(false);
 	const [isDownloadingLeave, setIsDownloadingLeave] = useState(false);
+	const [isDownloadingPayroll, setIsDownloadingPayroll] = useState(false);
 	const [tab, setTab] = useState<
 		"attendance" | "hours" | "coverage" | "requests" | "leave"
 	>("attendance");
@@ -316,6 +317,39 @@ function ReportsPage() {
 		}
 	}
 
+	async function downloadPayrollTime() {
+		if (invalidRange || isDownloadingPayroll || !workplace) return;
+		setIsDownloadingPayroll(true);
+		try {
+			const response = await fetch(
+				`${env.VITE_SERVER_URL}/v1/workplaces/${workplace.id}/reports/payroll-time.csv?from=${from}&to=${to}`,
+				{ credentials: "include" },
+			);
+			if (!response.ok) {
+				const payload = (await response.json().catch(() => null)) as {
+					message?: string;
+				} | null;
+				throw new Error(payload?.message ?? "Couldn’t download payroll time.");
+			}
+			const blob = await response.blob();
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = `payroll-time-${from}-${to}.csv`;
+			link.click();
+			URL.revokeObjectURL(url);
+			toast.success("Approved time downloaded");
+		} catch (error) {
+			toast.error(
+				error instanceof Error
+					? error.message
+					: "Couldn’t download payroll time.",
+			);
+		} finally {
+			setIsDownloadingPayroll(false);
+		}
+	}
+
 	function rangeActions(includeLeavePayroll = false) {
 		return (
 			<>
@@ -345,13 +379,22 @@ function ReportsPage() {
 					{isDownloading ? "Downloading…" : "Download CSV"}
 				</Button>
 				{includeLeavePayroll ? (
-					<Button
-						variant="outline"
-						disabled={isDownloadingLeave}
-						onClick={() => void downloadLeavePayroll()}
-					>
-						{isDownloadingLeave ? "Downloading…" : "Leave payroll CSV"}
-					</Button>
+					<>
+						<Button
+							variant="outline"
+							disabled={invalidRange || isDownloadingPayroll || !workplace}
+							onClick={() => void downloadPayrollTime()}
+						>
+							{isDownloadingPayroll ? "Downloading…" : "Approved time CSV"}
+						</Button>
+						<Button
+							variant="outline"
+							disabled={invalidRange || isDownloadingLeave || !workplace}
+							onClick={() => void downloadLeavePayroll()}
+						>
+							{isDownloadingLeave ? "Downloading…" : "Leave payroll CSV"}
+						</Button>
+					</>
 				) : null}
 			</>
 		);

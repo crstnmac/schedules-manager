@@ -85,6 +85,7 @@ import {
 	TableToolbar,
 	useTablePagination,
 } from "@/components/table-toolbar";
+import { WorkerDirectoryImportSheet } from "@/components/worker-directory-import-sheet";
 import { WorkerImportSheet } from "@/components/worker-import-sheet";
 import { api } from "@/lib/api";
 import {
@@ -147,6 +148,7 @@ function WorkersPage() {
 
 	const [inviteOpen, setInviteOpen] = useState(false);
 	const [importOpen, setImportOpen] = useState(false);
+	const [directoryOpen, setDirectoryOpen] = useState(false);
 	const [deactivateTarget, setDeactivateTarget] = useState<WorkerDto | null>(
 		null,
 	);
@@ -609,6 +611,14 @@ function WorkersPage() {
 						<Button
 							variant="outline"
 							size="sm"
+							onClick={() => setDirectoryOpen(true)}
+						>
+							<RefreshCwIcon data-icon="inline-start" />
+							Sync directory
+						</Button>
+						<Button
+							variant="outline"
+							size="sm"
 							onClick={() => setImportOpen(true)}
 						>
 							<FileUpIcon data-icon="inline-start" />
@@ -1008,6 +1018,15 @@ function WorkersPage() {
 						setTab("invitations");
 						invalidate();
 					}}
+				/>
+			) : null}
+
+			{workplace ? (
+				<WorkerDirectoryImportSheet
+					open={directoryOpen}
+					onOpenChange={setDirectoryOpen}
+					workplaceId={workplace.id}
+					onImported={invalidate}
 				/>
 			) : null}
 

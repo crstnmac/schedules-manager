@@ -91,6 +91,33 @@ function event(input: {
 	return lines.map(foldLine).join("\r\n");
 }
 
+/**
+ * The timezone the feed's local-date logic uses for this scope, exposed for
+ * the calendar diagnostics endpoint. Mirrors the resolution in
+ * buildLeaveCalendarFeed: the person's first assigned location, else the
+ * workplace's first location, else a default.
+ */
+export async function calendarFeedTimezone(
+	workplaceId: string,
+	employmentId: string | null,
+): Promise<string> {
+	if (employmentId) {
+		const [scoped] = await db
+			.select({ timezone: locations.timezone })
+			.from(employmentLocations)
+			.innerJoin(locations, eq(locations.id, employmentLocations.locationId))
+			.where(eq(employmentLocations.employmentId, employmentId))
+			.limit(1);
+		if (scoped) return scoped.timezone;
+	}
+	const [fallbackLocation] = await db
+		.select({ timezone: locations.timezone })
+		.from(locations)
+		.where(eq(locations.workplaceId, workplaceId))
+		.limit(1);
+	return fallbackLocation?.timezone ?? "America/Chicago";
+}
+
 export async function buildLeaveCalendarFeed(
 	scope: CalendarFeedScope,
 ): Promise<string> {

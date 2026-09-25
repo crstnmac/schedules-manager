@@ -15,11 +15,16 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { requirePrivilege, requireSession } from "../context";
+import { csvAttachment } from "../csv-import";
 import { enqueueInvitationEmail } from "../email-outbox";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { consumeRateLimitOrThrow } from "../rate-limit";
 import { firstRow } from "../rows";
+import {
+	DIRECTORY_IMPORT_TEMPLATE,
+	importWorkerDirectory,
+} from "../worker-directory-import";
 
 const INVITATION_TTL_DAYS = 14;
 
@@ -308,6 +313,84 @@ export const workersRoutes = new Elysia({
 			}),
 			detail: {
 				summary: "Invite a Worker, Viewer, or Manager by email (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.post(
+		"/workplaces/:workplaceId/workers/directory/import",
+		async ({ headers, params, body }) => {
+			const { profile } = await requireSession(headers);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const dryRun = body.dryRun ?? false;
+			if (dryRun) {
+				return {
+					import: await importWorkerDirectory({
+						workplaceId: params.workplaceId,
+						profileId: profile.id,
+						csv: body.csv,
+						dryRun: true,
+					}),
+				};
+			}
+			return withIdempotency({
+				actorProfileId: profile.id,
+				scope: `workers.directory-import:${params.workplaceId}`,
+				key: headers["idempotency-key"],
+				request: { csv: body.csv },
+				execute: async () => {
+					consumeRateLimitOrThrow(
+						`workers.directory-import:${profile.id}`,
+						"directoryImport",
+					);
+					return {
+						import: await importWorkerDirectory({
+							workplaceId: params.workplaceId,
+							profileId: profile.id,
+							csv: body.csv,
+							dryRun: false,
+						}),
+					};
+				},
+			});
+		},
+		{
+			headers: t.Object(
+				{
+					authorization: t.Optional(t.String()),
+					"idempotency-key": t.Optional(
+						t.String({ minLength: 8, maxLength: 200 }),
+					),
+				},
+				{ additionalProperties: true },
+			),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			body: t.Object({
+				csv: t.String({ minLength: 1, maxLength: 2_000_000 }),
+				dryRun: t.Optional(t.Boolean()),
+			}),
+			detail: {
+				summary: "Preview or commit a worker directory sync from CSV (Manager)",
+				security: [{ bearerAuth: [] }],
+			},
+		},
+	)
+	.get(
+		"/workplaces/:workplaceId/workers/directory/import/template.csv",
+		async ({ headers, params, set }) => {
+			const { profile } = await requireSession(headers);
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			csvAttachment(set, "worker-directory-template.csv");
+			return DIRECTORY_IMPORT_TEMPLATE;
+		},
+		{
+			headers: t.Object(
+				{ authorization: t.Optional(t.String()) },
+				{ additionalProperties: true },
+			),
+			params: t.Object({ workplaceId: t.String({ format: "uuid" }) }),
+			detail: {
+				summary: "Download the worker directory sync CSV template (Manager)",
 				security: [{ bearerAuth: [] }],
 			},
 		},

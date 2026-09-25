@@ -1,0 +1,96 @@
+---
+title: Webhooks
+description: Event catalog, payload shape, signature verification, and retry behavior for jooling webhooks.
+---
+
+## Register an endpoint
+
+1. Open **Settings → Integrations → Webhook endpoints**.
+2. Add your HTTPS URL and optionally filter by event type (an empty filter
+   receives every event).
+3. Copy the signing secret — it starts with `whsec_` and is shown once.
+
+Every delivery is logged with its attempts and response status on the same
+page, so failed deliveries stay visible.
+
+## Delivery format
+
+Deliveries POST JSON with these headers:
+
+| Header | Meaning |
+| --- | --- |
+| `X-Jooling-Event` | Event type, e.g. `schedule.published` |
+| `X-Jooling-Delivery` | Unique delivery ID; use it to deduplicate retries |
+| `X-Jooling-Signature` | `sha256=<hex HMAC-SHA256 of the raw body>` using the endpoint secret |
+
+The payload is the same JSON object the audit log records:
+
+```json
+{
+  "action": "schedule.published",
+  "entityType": "schedule_version",
+  "entityId": "…",
+  "summary": "Published the schedule for Downtown, week of Sep 7.",
+  "actorProfileId": "…"
+}
+```
+
+## Event catalog
+
+| Event | Fired when |
+| --- | --- |
+| `schedule.published` | A schedule version is published |
+| `schedule.reminder` | A manager reminds workers to review a schedule |
+| `time_entry.clocked_in` / `clocked_out` / `edited` / `auto_clocked_out` | Time clock activity |
+| `timesheet.approved` / `timesheet.declined` | A manager decides a timesheet entry |
+| `time_off.approved` / `declined` / `recorded` / `cancelled` | Time-off decisions |
+| `swap.proposed` / `approved` / `declined` | Shift swaps |
+| `workers.imported` | A worker CSV import or directory sync commits |
+| `attendance.marked` | An attendance mark is recorded |
+| `announcement.posted` | A workplace announcement is posted |
+| `integration.square_connected` / `square_location_mapped` / `square_sales_imported` / `square_disconnected` | Square sales connector changes |
+
+Events are emitted after the underlying change commits, in the same process
+that handled the request.
+
+## Verify the signature
+
+Compute HMAC-SHA256 over the **raw request body** (the exact bytes jooling
+sent) with your endpoint secret, and compare it against the
+`X-Jooling-Signature` header using a constant-time comparison.
+
+**Node.js**
+
+```js
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+export function verifyJoolingSignature(rawBody, secret, signatureHeader) {
+  const expected =
+    "sha256=" + createHmac("sha256", secret).update(rawBody).digest("hex");
+  const a = Buffer.from(expected);
+  const b = Buffer.from(signatureHeader ?? "");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+```
+
+**Python**
+
+```python
+import hashlib, hmac
+
+def verify_jooling_signature(raw_body: bytes, secret: str, signature: str) -> bool:
+    expected = "sha256=" + hmac.new(
+        secret.encode(), raw_body, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature or "")
+```
+
+Parse the body only after the signature verifies, and deduplicate on
+`X-Jooling-Delivery` — retries are possible.
+
+## Retries
+
+A delivery succeeds on any `2xx` response. Failures retry with exponential
+backoff (30 seconds doubling up to one hour) for up to eight attempts before
+the delivery is marked `failed` in the dashboard. Handlers should respond
+quickly; enqueue your own work and return `202` if processing takes long.

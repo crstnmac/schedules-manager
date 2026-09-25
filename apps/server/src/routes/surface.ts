@@ -20,6 +20,7 @@ import {
 	shiftTaskCompletions,
 	shiftTasks,
 	shiftTemplates,
+	squareSalesImports,
 	timeBlocks,
 	timeEntries,
 	timeEntryBreaks,
@@ -27,7 +28,17 @@ import {
 	workerGroups,
 	workplaceMessages,
 } from "@SchedulesManager/db";
-import { and, desc, eq, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
+import {
+	and,
+	desc,
+	eq,
+	inArray,
+	isNotNull,
+	isNull,
+	lt,
+	or,
+	sql,
+} from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { requireSubscriptionCapability } from "../billing";
 
@@ -1012,18 +1023,31 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				params.locationId,
 				"settings.manage",
 			);
-			await db
-				.insert(locationSales)
-				.values({
-					locationId: params.locationId,
-					saleDate: params.saleDate,
-					amountCents: body.amountCents,
-					updatedAt: new Date(),
-				})
-				.onConflictDoUpdate({
-					target: [locationSales.locationId, locationSales.saleDate],
-					set: { amountCents: body.amountCents, updatedAt: new Date() },
-				});
+			await db.transaction(async (tx) => {
+				await tx.execute(
+					sql`select pg_advisory_xact_lock(hashtext(${params.locationId}))`,
+				);
+				await tx
+					.insert(locationSales)
+					.values({
+						locationId: params.locationId,
+						saleDate: params.saleDate,
+						amountCents: body.amountCents,
+						updatedAt: new Date(),
+					})
+					.onConflictDoUpdate({
+						target: [locationSales.locationId, locationSales.saleDate],
+						set: { amountCents: body.amountCents, updatedAt: new Date() },
+					});
+				await tx
+					.delete(squareSalesImports)
+					.where(
+						and(
+							eq(squareSalesImports.locationId, params.locationId),
+							eq(squareSalesImports.saleDate, params.saleDate),
+						),
+					);
+			});
 			return { ok: true as const };
 		},
 		{

@@ -550,6 +550,10 @@ export const calendarFeedTokens = pgTable(
 		label: text("label"),
 		createdByProfileId: uuid("created_by_profile_id"),
 		lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+		/** How many times calendar apps have fetched the feed (diagnostics). */
+		fetchCount: integer("fetch_count").notNull().default(0),
+		/** Truncated User-Agent of the last calendar client that fetched. */
+		lastFetchUserAgent: text("last_fetch_user_agent"),
 		revokedAt: timestamp("revoked_at", { withTimezone: true }),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
