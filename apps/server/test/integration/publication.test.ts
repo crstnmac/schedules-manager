@@ -1554,7 +1554,10 @@ integrationDescribe("Schedule publication", () => {
 		const managerEmail = "pickup-manager@example.test";
 		const [workplace] = await database.db
 			.insert(database.workplaces)
-			.values({ name: "Competing Pickup Restaurant" })
+			// The shifts below use fixed dates, so a notice window would turn
+			// the pickup into a late change (with its own acceptance) once the
+			// wall clock nears them. This test inserts its acceptance explicitly.
+			.values({ name: "Competing Pickup Restaurant", noticeWindowHours: 0 })
 			.returning();
 		const [location] = await database.db
 			.insert(database.locations)
