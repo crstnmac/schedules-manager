@@ -21,10 +21,12 @@ export type NotificationPreferences = {
 	timeClock: boolean;
 };
 
+// Keys follow jsonb's stored order (length, then bytes) so the column default
+// round-trips through introspection unchanged.
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
-	schedule: true,
-	messages: true,
 	timeOff: true,
+	messages: true,
+	schedule: true,
 	timeClock: true,
 };
 

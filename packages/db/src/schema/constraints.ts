@@ -3,6 +3,7 @@ import {
 	boolean,
 	check,
 	date,
+	foreignKey,
 	index,
 	integer,
 	pgEnum,
@@ -321,10 +322,7 @@ export const leaveRequestApprovals = pgTable(
 			.references(() => timeOffRequests.id, { onDelete: "cascade" }),
 		stepOrder: integer("step_order").notNull(),
 		approverKind: leaveApproverKindEnum("approver_kind").notNull(),
-		approverEmploymentId: uuid("approver_employment_id").references(
-			() => employments.id,
-			{ onDelete: "set null" },
-		),
+		approverEmploymentId: uuid("approver_employment_id"),
 		approverPrivilege: text("approver_privilege"),
 		status: leaveApprovalStepStatusEnum("status").notNull().default("pending"),
 		decidedByProfileId: uuid("decided_by_profile_id"),
@@ -334,10 +332,7 @@ export const leaveRequestApprovals = pgTable(
 		dueAt: timestamp("due_at", { withTimezone: true }),
 		escalateAfterHours: integer("escalate_after_hours"),
 		escalationKind: leaveApproverKindEnum("escalation_kind"),
-		escalationEmploymentId: uuid("escalation_employment_id").references(
-			() => employments.id,
-			{ onDelete: "set null" },
-		),
+		escalationEmploymentId: uuid("escalation_employment_id"),
 		escalatedAt: timestamp("escalated_at", { withTimezone: true }),
 		createdAt: timestamp("created_at", { withTimezone: true })
 			.defaultNow()
@@ -349,6 +344,18 @@ export const leaveRequestApprovals = pgTable(
 			table.stepOrder,
 		),
 		index("leave_request_approvals_pending_idx").on(table.status, table.dueAt),
+		// Explicit names: the generated ones exceed PostgreSQL's 63-byte
+		// identifier limit, get truncated, and never match the schema again.
+		foreignKey({
+			name: "leave_request_approvals_approver_fk",
+			columns: [table.approverEmploymentId],
+			foreignColumns: [employments.id],
+		}).onDelete("set null"),
+		foreignKey({
+			name: "leave_request_approvals_escalation_fk",
+			columns: [table.escalationEmploymentId],
+			foreignColumns: [employments.id],
+		}).onDelete("set null"),
 	],
 );
 
@@ -511,12 +518,8 @@ export const leaveApprovalDelegations = pgTable(
 		workplaceId: uuid("workplace_id")
 			.notNull()
 			.references(() => workplaces.id, { onDelete: "cascade" }),
-		delegatorEmploymentId: uuid("delegator_employment_id")
-			.notNull()
-			.references(() => employments.id, { onDelete: "cascade" }),
-		delegateEmploymentId: uuid("delegate_employment_id")
-			.notNull()
-			.references(() => employments.id, { onDelete: "cascade" }),
+		delegatorEmploymentId: uuid("delegator_employment_id").notNull(),
+		delegateEmploymentId: uuid("delegate_employment_id").notNull(),
 		startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
 		endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
 		reason: text("reason"),
@@ -527,6 +530,18 @@ export const leaveApprovalDelegations = pgTable(
 			.notNull(),
 	},
 	(table) => [
+		// Explicit names: the generated ones exceed PostgreSQL's 63-byte
+		// identifier limit, get truncated, and never match the schema again.
+		foreignKey({
+			name: "leave_approval_delegations_delegator_fk",
+			columns: [table.delegatorEmploymentId],
+			foreignColumns: [employments.id],
+		}).onDelete("cascade"),
+		foreignKey({
+			name: "leave_approval_delegations_delegate_fk",
+			columns: [table.delegateEmploymentId],
+			foreignColumns: [employments.id],
+		}).onDelete("cascade"),
 		index("leave_approval_delegations_window_idx").on(
 			table.workplaceId,
 			table.startsAt,

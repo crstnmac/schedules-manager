@@ -84,9 +84,10 @@ EXPO_PUBLIC_SERVER_URL=http://localhost:3000
 EOF
 log "wrote local .env files"
 
-# 5. Apply the Drizzle schema to the local database.
-( cd packages/db && bun run drizzle-kit push --force )
-log "database schema applied"
+# 5. Apply the committed migrations to the local database. `push` would build
+#    the schema without recording migrations, after which `migrate` fails.
+( cd packages/db && bun run drizzle-kit migrate )
+log "database migrations applied"
 
 # 6. Launch the API and web dev servers in the background (idempotent).
 if ! curl -sf http://localhost:3000/health >/dev/null 2>&1; then
