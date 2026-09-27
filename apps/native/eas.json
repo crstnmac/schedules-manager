@@ -24,6 +24,12 @@
 				"track": "production",
 				"releaseStatus": "completed"
 			}
+		},
+		"production-draft": {
+			"android": {
+				"track": "production",
+				"releaseStatus": "draft"
+			}
 		}
 	}
 }
