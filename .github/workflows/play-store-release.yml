@@ -1,0 +1,83 @@
+name: Release Android to Google Play
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: play-store-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check tag and app version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          git fetch origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "Release tags must point to a commit on main." >&2
+            exit 1
+          }
+          node <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const tag = process.env.RELEASE_TAG;
+          const version = tag.match(/^v(\d+\.\d+\.\d+)$/)?.[1];
+          const appVersion = JSON.parse(readFileSync('apps/native/app.json', 'utf8')).expo.version;
+          if (!version || version !== appVersion) {
+            console.error(`Tag ${tag} must match apps/native/app.json version ${appVersion} (vMAJOR.MINOR.PATCH).`);
+            process.exit(1);
+          }
+          NODE
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check native types
+        run: bun --cwd apps/native check-types
+
+      - name: Set up Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: bun
+
+      - name: Build Android App Bundle
+        working-directory: apps/native
+        run: eas build --platform android --profile production --non-interactive --wait --json > "$RUNNER_TEMP/eas-build.json"
+
+      - name: Submit tagged build to Google Play
+        working-directory: apps/native
+        run: |
+          BUILD_ID=$(node -e '
+            const { readFileSync } = require("node:fs");
+            const result = JSON.parse(readFileSync(process.env.RUNNER_TEMP + "/eas-build.json", "utf8"));
+            const build = Array.isArray(result) ? result[0] : result;
+            if (!build?.id) {
+              console.error("EAS did not return an Android build ID.");
+              process.exit(1);
+            }
+            process.stdout.write(build.id);
+          ')
+          eas submit --platform android --profile production --id "$BUILD_ID" --non-interactive --wait
