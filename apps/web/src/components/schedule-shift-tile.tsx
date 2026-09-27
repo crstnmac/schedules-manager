@@ -89,7 +89,7 @@ export function ShiftTile({
 				onOpen(shift);
 			}}
 			className={cn(
-				"h-auto w-full cursor-grab touch-none flex-col items-stretch gap-1 overflow-hidden whitespace-normal rounded-md border px-2 py-1.5 text-left shadow-xs transition-[box-shadow] active:cursor-grabbing motion-reduce:transition-none [@media(hover:hover)]:hover:shadow-sm",
+				"h-auto w-full cursor-grab touch-none flex-col items-stretch gap-1 overflow-hidden whitespace-normal rounded-md border px-2 py-1.5 text-left active:cursor-grabbing motion-reduce:transition-none [@media(hover:hover)]:hover:shadow-sm",
 				compact ? "min-h-9 gap-0.5 py-1" : "min-h-11",
 				(isDragging || isDropping) && "opacity-45 ring-2 ring-primary/30",
 				selected && "ring-2 ring-primary",
@@ -100,21 +100,19 @@ export function ShiftTile({
 						: cn("border-transparent", color.block),
 			)}
 		>
-			<span className="w-full shrink-0 font-medium text-xs tabular-nums leading-none">
-				{timeLabel}
-			</span>
 			<span className="flex w-full min-w-0 items-center gap-1">
-				<span className="min-w-0 truncate text-xs leading-tight">
-					{showWorker ? workerLabel : shift.positionName}
+				<span className="min-w-0 truncate font-semibold text-xs tabular-nums leading-tight">
+					{timeLabel}
 				</span>
 				{status ? (
 					<Badge
 						variant={statusVariant(status.tone)}
 						className={cn(
-							"ml-auto h-4 shrink-0 px-1.5 font-medium text-xs",
+							"ml-auto h-4 shrink-0 rounded-sm px-1 font-medium text-xs",
 							hasConflicts && "border-transparent",
 							status.tone === "warning" &&
 								"border-warning-border bg-background/70 text-warning-foreground",
+							status.tone === "info" && "bg-background/70",
 						)}
 					>
 						{status.kind === "conflict" ? (
@@ -124,8 +122,19 @@ export function ShiftTile({
 					</Badge>
 				) : null}
 			</span>
+			<span className="flex w-full min-w-0 items-center gap-1.5">
+				{hasConflicts || isOpen ? null : (
+					<span
+						aria-hidden="true"
+						className={cn("size-1.5 shrink-0 rounded-full", color.dot)}
+					/>
+				)}
+				<span className="min-w-0 truncate text-xs leading-tight opacity-90">
+					{showWorker ? workerLabel : shift.positionName}
+				</span>
+			</span>
 			{showWorker ? (
-				<span className="w-full truncate text-xs leading-tight opacity-80">
+				<span className="w-full truncate text-xs leading-tight opacity-75">
 					{shift.positionName}
 				</span>
 			) : null}

@@ -21,6 +21,11 @@ import { Button } from "@SchedulesManager/ui/components/button";
 import { Card, CardHeader } from "@SchedulesManager/ui/components/card";
 import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
 import {
+	Collapsible,
+	CollapsibleContent,
+	CollapsibleTrigger,
+} from "@SchedulesManager/ui/components/collapsible";
+import {
 	Dialog,
 	DialogContent,
 	DialogDescription,
@@ -73,6 +78,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@SchedulesManager/ui/components/select";
+import { Separator } from "@SchedulesManager/ui/components/separator";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { Textarea } from "@SchedulesManager/ui/components/textarea";
@@ -98,6 +104,7 @@ import {
 	AlertTriangleIcon,
 	BanIcon,
 	CalendarOffIcon,
+	ChevronDownIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
 	CopyIcon,
@@ -112,6 +119,7 @@ import {
 	TagsIcon,
 	Trash2Icon,
 	UserPlusIcon,
+	UserRoundXIcon,
 	UsersIcon,
 	XIcon,
 } from "lucide-react";
@@ -3139,101 +3147,120 @@ function SchedulePage() {
 												</div>
 											</div>
 											{form.shiftId ? (
-												<details className="group rounded-lg border border-border/70">
-													<summary className="cursor-pointer list-none px-3 py-2 font-medium text-sm marker:content-none [&::-webkit-details-marker]:hidden">
-														<span className="flex items-center justify-between gap-2">
+												<Field className="rounded-lg border border-border/70">
+													<Collapsible className="group/more">
+														<CollapsibleTrigger
+															render={
+																<Button
+																	type="button"
+																	variant="ghost"
+																	className="h-auto w-full justify-between gap-2 rounded-lg px-3 py-2"
+																/>
+															}
+														>
 															More options
-															<span className="font-normal text-muted-foreground text-xs group-open:hidden">
-																Tags, tasks, repeat…
+															<span className="flex items-center gap-1.5 font-normal text-muted-foreground text-xs">
+																<span className="group-data-[open]/more:hidden">
+																	Tags, tasks, repeat…
+																</span>
+																<ChevronDownIcon className="size-4 transition-transform group-data-[open]/more:rotate-180" />
 															</span>
-														</span>
-													</summary>
-													<div className="flex flex-col gap-4 border-t px-3 py-3">
-														{(tags.data?.tags ?? []).length > 0 ? (
-															<Field>
-																<FieldLabel>Shift Tags</FieldLabel>
-																<div className="flex flex-wrap gap-2">
-																	{(tags.data?.tags ?? []).map((tag) => (
-																		<Button
-																			key={tag.id}
-																			type="button"
-																			size="sm"
-																			variant={
-																				form.tagIds.includes(tag.id)
-																					? "secondary"
-																					: "outline"
-																			}
-																			onClick={() =>
-																				setForm({
-																					...form,
-																					tagIds: form.tagIds.includes(tag.id)
-																						? form.tagIds.filter(
-																								(id) => id !== tag.id,
+														</CollapsibleTrigger>
+														<CollapsibleContent>
+															<Separator />
+															<FieldGroup className="gap-4 px-3 py-3">
+																{(tags.data?.tags ?? []).length > 0 ? (
+																	<Field>
+																		<FieldLabel>Shift Tags</FieldLabel>
+																		<div className="flex flex-wrap gap-2">
+																			{(tags.data?.tags ?? []).map((tag) => (
+																				<Button
+																					key={tag.id}
+																					type="button"
+																					size="sm"
+																					variant={
+																						form.tagIds.includes(tag.id)
+																							? "secondary"
+																							: "outline"
+																					}
+																					onClick={() =>
+																						setForm({
+																							...form,
+																							tagIds: form.tagIds.includes(
+																								tag.id,
 																							)
-																						: [...form.tagIds, tag.id],
+																								? form.tagIds.filter(
+																										(id) => id !== tag.id,
+																									)
+																								: [...form.tagIds, tag.id],
+																						})
+																					}
+																				>
+																					{tag.name}
+																				</Button>
+																			))}
+																		</div>
+																	</Field>
+																) : null}
+																<Field>
+																	<FieldLabel htmlFor="shift-tasks">
+																		Shift Tasks
+																	</FieldLabel>
+																	<Textarea
+																		id="shift-tasks"
+																		value={form.taskTitles}
+																		onChange={(event) =>
+																			setForm({
+																				...form,
+																				taskTitles: event.target.value,
+																			})
+																		}
+																		placeholder="One checklist item per line"
+																	/>
+																	<FieldDescription>
+																		Saving replaces the checklist on this Shift.
+																	</FieldDescription>
+																</Field>
+																<Field>
+																	<FieldLabel htmlFor="shift-repeat">
+																		Repeat into later weeks
+																	</FieldLabel>
+																	<div className="flex gap-2">
+																		<Input
+																			id="shift-repeat"
+																			type="number"
+																			min={1}
+																			max={12}
+																			value={repeatWeeks}
+																			onChange={(event) =>
+																				setRepeatWeeks(event.target.value)
+																			}
+																		/>
+																		<Button
+																			type="button"
+																			variant="outline"
+																			disabled={repeatShift.isPending}
+																			onClick={() =>
+																				repeatShift.mutate({
+																					shiftId: form.shiftId ?? "",
+																					weeks: Math.max(
+																						1,
+																						Math.min(
+																							12,
+																							Number(repeatWeeks) || 1,
+																						),
+																					),
 																				})
 																			}
 																		>
-																			{tag.name}
+																			Copy forward
 																		</Button>
-																	))}
-																</div>
-															</Field>
-														) : null}
-														<Field>
-															<FieldLabel htmlFor="shift-tasks">
-																Shift Tasks
-															</FieldLabel>
-															<Textarea
-																id="shift-tasks"
-																value={form.taskTitles}
-																onChange={(event) =>
-																	setForm({
-																		...form,
-																		taskTitles: event.target.value,
-																	})
-																}
-																placeholder="One checklist item per line"
-															/>
-															<FieldDescription>
-																Saving replaces the checklist on this Shift.
-															</FieldDescription>
-														</Field>
-														<Field>
-															<FieldLabel htmlFor="shift-repeat">
-																Repeat into later weeks
-															</FieldLabel>
-															<div className="flex gap-2">
-																<Input
-																	id="shift-repeat"
-																	type="number"
-																	min={1}
-																	max={12}
-																	value={repeatWeeks}
-																	onChange={(event) =>
-																		setRepeatWeeks(event.target.value)
-																	}
-																/>
-																<Button
-																	type="button"
-																	variant="outline"
-																	disabled={repeatShift.isPending}
-																	onClick={() =>
-																		repeatShift.mutate({
-																			shiftId: form.shiftId ?? "",
-																			weeks: Math.max(
-																				1,
-																				Math.min(12, Number(repeatWeeks) || 1),
-																			),
-																		})
-																	}
-																>
-																	Copy forward
-																</Button>
-															</div>
-														</Field>
-													</div>
-												</details>
+																	</div>
+																</Field>
+															</FieldGroup>
+														</CollapsibleContent>
+													</Collapsible>
+												</Field>
 											) : null}
 											{needsOverride ? (
 												<Field>
@@ -3760,14 +3787,13 @@ function SchedulePage() {
 											} as CSSProperties
 										}
 									>
-										<div className="sticky top-0 left-0 z-30 flex items-center border-border border-r border-b bg-background px-3 py-2">
+										<div className="sticky top-0 left-0 z-30 flex items-end border-border border-r border-b bg-muted px-3 py-2">
 											<span className="font-medium text-muted-foreground text-xs">
 												Staff
 											</span>
 										</div>
 										{visibleDays.map((day) => {
 											const isToday = day === todayKey;
-											const isWeekend = isWeekendDate(day);
 											const summary = daySummaries.get(day);
 											const daySalesCents = salesByDate.get(day) ?? 0;
 											const holiday = holidayByDate.get(day);
@@ -3779,8 +3805,8 @@ function SchedulePage() {
 												<div
 													key={day}
 													className={cn(
-														"group/day sticky top-0 z-20 flex flex-col items-center gap-0.5 border-border border-r border-b bg-background px-1.5 py-2 last:border-r-0",
-														isWeekend && "bg-muted",
+														"group/day sticky top-0 z-20 flex flex-col items-center gap-0.5 border-border border-r border-b bg-muted px-1.5 py-2 last:border-r-0",
+														isToday && "bg-primary/10",
 													)}
 												>
 													<span
@@ -4009,8 +4035,8 @@ function SchedulePage() {
 																	gridDensity === "compact"
 																		? "min-h-[4.5rem]"
 																		: "min-h-24",
-																	isWeekend && "bg-muted/20",
-																	isToday && "bg-accent/20",
+																	isWeekend && "bg-muted/30",
+																	isToday && "bg-primary/[0.035]",
 																)}
 															>
 																{constraints.length > 0 ? (
@@ -4139,12 +4165,19 @@ function SchedulePage() {
 
 										{data.positions.length > 0 ? (
 											<>
-												<div className="sticky left-0 z-10 flex min-h-20 items-center border-border border-r border-b bg-accent px-3 py-3">
+												<div className="sticky left-0 z-10 flex min-h-20 items-center gap-2.5 border-border border-r border-b bg-warning px-3 py-3 text-warning-foreground">
+													<span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-background/70">
+														<UserRoundXIcon
+															className="size-3.5"
+															aria-hidden="true"
+														/>
+													</span>
 													<div className="flex flex-col gap-0.5">
 														<p className="font-medium text-sm leading-tight">
 															Open shifts
+															{openShiftCount > 0 ? ` · ${openShiftCount}` : ""}
 														</p>
-														<p className="text-muted-foreground text-xs leading-tight">
+														<p className="text-warning-foreground/80 text-xs leading-tight">
 															{openShiftCount > 0
 																? "Needs a worker"
 																: "Drop here to unassign"}
@@ -4152,16 +4185,12 @@ function SchedulePage() {
 													</div>
 												</div>
 												{visibleDays.map((day) => {
-													const isWeekend = days.indexOf(day) >= 5;
 													return (
 														<ScheduleDropCell
 															key={day}
 															employmentId={null}
 															date={day}
-															className={cn(
-																"min-h-20 border-border/70 border-r border-b bg-accent/20 p-1.5 last:border-r-0",
-																isWeekend && "bg-muted/20",
-															)}
+															className="min-h-20 border-border/70 border-r border-b bg-warning/25 p-1.5 last:border-r-0"
 														>
 															<div className="flex flex-col gap-1">
 																{(

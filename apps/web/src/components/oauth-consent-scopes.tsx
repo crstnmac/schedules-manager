@@ -37,10 +37,7 @@ export function OAuthConsentScopes({
 					onCheckedChange={(checked) => onToggle(scope, checked === true)}
 				/>
 				<div className="grid gap-0.5">
-					<Label
-						htmlFor={`scope-${scope}`}
-						className="font-normal leading-snug"
-					>
+					<Label htmlFor={`scope-${scope}`}>
 						{OAUTH_SCOPE_LABELS[scope] ?? scope}
 					</Label>
 					{required ? (

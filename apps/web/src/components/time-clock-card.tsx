@@ -9,6 +9,7 @@ import {
 	AlertDialogTitle,
 } from "@SchedulesManager/ui/components/alert-dialog";
 import { Button } from "@SchedulesManager/ui/components/button";
+import { Label } from "@SchedulesManager/ui/components/label";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { Textarea } from "@SchedulesManager/ui/components/textarea";
 import { Link } from "@tanstack/react-router";
@@ -246,9 +247,7 @@ export function TimeClockCard({
 					</AlertDialogHeader>
 					{notesEnabled ? (
 						<div className="grid gap-2 px-1">
-							<label htmlFor="clock-out-note" className="font-medium text-sm">
-								Note (optional)
-							</label>
+							<Label htmlFor="clock-out-note">Note (optional)</Label>
 							<Textarea
 								id="clock-out-note"
 								value={workerNote}

@@ -98,7 +98,7 @@ export function AppPageHeader({
 	return (
 		<header
 			className={cn(
-				"flex shrink-0 flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b bg-background px-4 py-4 md:px-6",
+				"flex shrink-0 flex-wrap items-end justify-between gap-x-6 gap-y-3 px-4 pt-5 pb-4 md:px-6 md:pt-6",
 				className,
 			)}
 		>
@@ -106,7 +106,7 @@ export function AppPageHeader({
 				<div className="flex min-w-0 flex-col gap-1">
 					{title ? (
 						<div className="flex flex-wrap items-center gap-2">
-							<h1 className="text-balance font-heading font-semibold text-lg tracking-tight">
+							<h1 className="text-balance font-heading font-semibold text-xl tracking-tight md:text-2xl">
 								{title}
 							</h1>
 							{badge}
@@ -129,19 +129,43 @@ export function AppPageHeader({
 	);
 }
 
+/**
+ * The working area below a page header. Fixed-height bodies (tables, lists)
+ * render as one framed panel so the toolbar, rows, and empty state read as a
+ * single surface; scrolling bodies keep the page gutter and hold their own
+ * cards.
+ */
 export function AppPageBody({
 	children,
 	className,
 	scroll = true,
+	panel = !scroll,
 }: {
 	children: ReactNode;
 	className?: string;
 	scroll?: boolean;
+	panel?: boolean;
 }) {
+	if (panel) {
+		return (
+			<div className="flex min-h-0 min-w-0 flex-1 flex-col px-4 pb-4 md:px-6 md:pb-6">
+				<div
+					data-slot="app-panel"
+					className={cn(
+						"flex min-h-0 min-w-0 flex-1 flex-col rounded-xl bg-card shadow-xs ring-1 ring-foreground/10",
+						scroll ? "overflow-y-auto" : "overflow-hidden",
+						className,
+					)}
+				>
+					{children}
+				</div>
+			</div>
+		);
+	}
 	return (
 		<div
 			className={cn(
-				"flex min-h-0 min-w-0 flex-1 flex-col",
+				"flex min-h-0 min-w-0 flex-1 flex-col px-4 pb-6 md:px-6",
 				scroll ? "overflow-y-auto" : "overflow-hidden",
 				className,
 			)}
@@ -164,7 +188,7 @@ export function AppDocument({
 		<section className="min-h-0 flex-1 overflow-y-auto">
 			<div
 				className={cn(
-					"mx-auto flex w-full flex-col gap-8 px-4 py-6 md:px-6 md:py-8",
+					"mx-auto flex w-full flex-col gap-6 px-4 py-5 md:px-6 md:py-6",
 					widthClassName,
 					className,
 				)}

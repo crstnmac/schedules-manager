@@ -1,5 +1,11 @@
 import { Avatar, AvatarFallback } from "@SchedulesManager/ui/components/avatar";
 import {
+	Breadcrumb,
+	BreadcrumbItem,
+	BreadcrumbList,
+	BreadcrumbPage,
+} from "@SchedulesManager/ui/components/breadcrumb";
+import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuGroup,
@@ -9,6 +15,7 @@ import {
 	DropdownMenuTrigger,
 } from "@SchedulesManager/ui/components/dropdown-menu";
 import { PageFade } from "@SchedulesManager/ui/components/motion";
+import { Separator } from "@SchedulesManager/ui/components/separator";
 import {
 	Sidebar,
 	SidebarContent,
@@ -52,7 +59,7 @@ import { toast } from "sonner";
 import { profileInitials } from "@/components/current-profile";
 import { DocsLink } from "@/components/docs-link";
 import { LogoMark } from "@/components/logo-mark";
-import { NextShiftBar } from "@/components/next-shift-bar";
+
 import { PilotFeedback } from "@/components/pilot-feedback";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
@@ -214,7 +221,9 @@ function WorkerLayout() {
 									>
 										{workplace.name}
 									</span>
-									<span className="truncate text-xs">Worker</span>
+									<span className="truncate text-muted-foreground text-xs">
+										Worker
+									</span>
 								</div>
 							</SidebarMenuButton>
 						</SidebarMenuItem>
@@ -251,13 +260,10 @@ function WorkerLayout() {
 														>
 															<item.icon />
 															<span>{item.label}</span>
-															{item.to === "/worker/inbox" &&
-															unreadCount > 0 ? (
-																<SidebarMenuBadge>
-																	{unreadCount}
-																</SidebarMenuBadge>
-															) : null}
 														</SidebarMenuButton>
+														{item.to === "/worker/inbox" && unreadCount > 0 ? (
+															<SidebarMenuBadge>{unreadCount}</SidebarMenuBadge>
+														) : null}
 													</SidebarMenuItem>
 												);
 											})}
@@ -357,15 +363,20 @@ function WorkerLayout() {
 				</SidebarFooter>
 			</Sidebar>
 			<SidebarInset className="flex h-svh min-h-0! min-w-0 flex-col overflow-hidden md:h-[calc(100svh-1rem)]">
-				<header className="sticky top-0 z-40 flex h-14 min-h-14 shrink-0 items-center gap-2 border-b bg-background px-3 shadow-xs">
+				<header className="sticky top-0 z-40 flex h-14 min-h-14 shrink-0 items-center gap-2 border-b bg-background px-3 md:px-4">
 					<SidebarTrigger className="-ml-1 shrink-0" />
-					<span className="shrink-0 font-medium text-sm">{activePage}</span>
+					<Separator
+						orientation="vertical"
+						className="mx-1 data-[orientation=vertical]:h-4"
+					/>
+					<Breadcrumb className="min-w-0">
+						<BreadcrumbList>
+							<BreadcrumbItem>
+								<BreadcrumbPage>{activePage}</BreadcrumbPage>
+							</BreadcrumbItem>
+						</BreadcrumbList>
+					</Breadcrumb>
 					<div className="ml-auto flex min-w-0 items-center gap-2">
-						{pathname === "/worker" ? (
-							<div className="min-w-0">
-								<NextShiftBar />
-							</div>
-						) : null}
 						<DocsLink />
 					</div>
 				</header>

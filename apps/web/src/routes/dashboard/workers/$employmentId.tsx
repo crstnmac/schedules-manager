@@ -775,18 +775,20 @@ function EmploymentPage() {
 				<Button
 					variant="ghost"
 					size="sm"
-					className="w-fit"
+					className="-ml-2 w-fit text-muted-foreground"
 					nativeButton={false}
 					render={<Link to="/dashboard/workers" />}
 				>
 					<ArrowLeftIcon data-icon="inline-start" />
 					Workers
 				</Button>
-				<div>
-					<h1 className="font-heading font-medium text-xl tracking-tight">
-						Employment
+				<div className="flex flex-col gap-1">
+					<h1 className="font-heading font-semibold text-xl tracking-tight md:text-2xl">
+						{displayName || "Employment"}
 					</h1>
-					<p className="text-muted-foreground text-sm">{displayName}</p>
+					<p className="text-muted-foreground text-sm">
+						Employment profile, pay, leave, and documents.
+					</p>
 				</div>
 			</div>
 

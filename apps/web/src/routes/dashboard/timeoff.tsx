@@ -13,6 +13,14 @@ import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
 import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@SchedulesManager/ui/components/dialog";
+import {
 	Empty,
 	EmptyDescription,
 	EmptyHeader,
@@ -25,6 +33,7 @@ import {
 	FieldLabel,
 } from "@SchedulesManager/ui/components/field";
 import { Input } from "@SchedulesManager/ui/components/input";
+import { Label } from "@SchedulesManager/ui/components/label";
 import {
 	Select,
 	SelectContent,
@@ -33,16 +42,16 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@SchedulesManager/ui/components/select";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "@SchedulesManager/ui/components/dialog";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@SchedulesManager/ui/components/table";
 import {
 	Tabs,
 	TabsContent,
@@ -659,7 +668,7 @@ function TimeOffPage() {
 					</div>
 				}
 			/>
-			<AppPageBody>
+			<AppPageBody scroll={false}>
 				<Tabs
 					value={tab}
 					onValueChange={(value) => setTab(value as LeaveTab)}
@@ -1762,7 +1771,7 @@ function RequestDocuments({
 					</Button>
 				</div>
 			))}
-			<label className="inline-flex w-fit cursor-pointer items-center gap-1.5 text-muted-foreground text-xs [@media(hover:hover)]:hover:text-foreground">
+			<Label className="w-fit cursor-pointer">
 				{upload.isPending ? (
 					<Spinner data-icon="inline-start" />
 				) : (
@@ -1782,7 +1791,7 @@ function RequestDocuments({
 						event.target.value = "";
 					}}
 				/>
-			</label>
+			</Label>
 		</div>
 	);
 }
@@ -2152,57 +2161,56 @@ function BalancesPanel({
 				</p>
 			) : (
 				<div className="overflow-x-auto rounded-lg border">
-					<table className="w-full min-w-[56rem] border-collapse text-sm">
-						<thead>
-							<tr className="border-b text-left">
-								<th className="px-3 py-2 font-medium">Worker</th>
-								<th className="px-3 py-2 font-medium">Type</th>
-								<th className="px-3 py-2 font-medium">Balance</th>
-								<th className="px-3 py-2 font-medium">Accrued</th>
-								<th className="px-3 py-2 font-medium">Used</th>
-								<th className="px-3 py-2 font-medium">Carried</th>
-								<th className="px-3 py-2 font-medium">Pending</th>
-								<th className="px-3 py-2 font-medium">Encashed</th>
-								<th className="px-3 py-2 text-right font-medium">Actions</th>
-							</tr>
-						</thead>
-						<tbody>
+					<Table className="min-w-[56rem]">
+						<TableHeader>
+							<TableRow>
+								<TableHead className="font-medium">Worker</TableHead>
+								<TableHead className="font-medium">Type</TableHead>
+								<TableHead className="font-medium">Balance</TableHead>
+								<TableHead className="font-medium">Accrued</TableHead>
+								<TableHead className="font-medium">Used</TableHead>
+								<TableHead className="font-medium">Carried</TableHead>
+								<TableHead className="font-medium">Pending</TableHead>
+								<TableHead className="font-medium">Encashed</TableHead>
+								<TableHead className="text-right font-medium">
+									Actions
+								</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
 							{overview.map((row) => (
-								<tr
-									key={`${row.employmentId}:${row.leaveTypeId}`}
-									className="border-b last:border-b-0"
-								>
-									<td className="px-3 py-2">
+								<TableRow key={`${row.employmentId}:${row.leaveTypeId}`}>
+									<TableCell>
 										<span className="font-medium">{workerName(row)}</span>
 										{row.employmentKind === "manager" ? (
 											<span className="text-muted-foreground"> · Manager</span>
 										) : null}
-									</td>
-									<td className="px-3 py-2">
+									</TableCell>
+									<TableCell>
 										{row.leaveTypeName}
 										{row.leaveTypePaid ? null : (
 											<span className="text-muted-foreground"> · unpaid</span>
 										)}
-									</td>
-									<td className="px-3 py-2 font-medium tabular-nums">
+									</TableCell>
+									<TableCell className="font-medium tabular-nums">
 										{formatLeaveHours(row.balanceMinutes)}
-									</td>
-									<td className="px-3 py-2 text-muted-foreground tabular-nums">
+									</TableCell>
+									<TableCell className="text-muted-foreground tabular-nums">
 										{formatLeaveHours(row.accruedMinutes)}
-									</td>
-									<td className="px-3 py-2 text-muted-foreground tabular-nums">
+									</TableCell>
+									<TableCell className="text-muted-foreground tabular-nums">
 										{formatLeaveHours(row.usedMinutes)}
-									</td>
-									<td className="px-3 py-2 text-muted-foreground tabular-nums">
+									</TableCell>
+									<TableCell className="text-muted-foreground tabular-nums">
 										{formatLeaveHours(row.carriedMinutes)}
-									</td>
-									<td className="px-3 py-2 text-muted-foreground tabular-nums">
+									</TableCell>
+									<TableCell className="text-muted-foreground tabular-nums">
 										{formatLeaveHours(row.pendingMinutes)}
-									</td>
-									<td className="px-3 py-2 text-muted-foreground tabular-nums">
+									</TableCell>
+									<TableCell className="text-muted-foreground tabular-nums">
 										{formatLeaveHours(row.encashedMinutes)}
-									</td>
-									<td className="px-3 py-2">
+									</TableCell>
+									<TableCell>
 										<div className="flex flex-wrap justify-end gap-1.5">
 											<Button
 												size="sm"
@@ -2226,11 +2234,11 @@ function BalancesPanel({
 												Transfer
 											</Button>
 										</div>
-									</td>
-								</tr>
+									</TableCell>
+								</TableRow>
 							))}
-						</tbody>
-					</table>
+						</TableBody>
+					</Table>
 				</div>
 			)}
 
@@ -2248,24 +2256,24 @@ function BalancesPanel({
 					</p>
 				) : (
 					<div className="overflow-x-auto">
-						<table className="w-full min-w-[36rem] border-collapse text-sm">
-							<thead>
-								<tr className="border-b text-left">
-									<th className="py-2 pr-3 font-medium">Person</th>
+						<Table className="min-w-[36rem]">
+							<TableHeader>
+								<TableRow>
+									<TableHead className="font-medium">Person</TableHead>
 									{leaveTypes.map((type) => (
-										<th key={type.id} className="px-2 py-2 font-medium">
+										<TableHead key={type.id} className="font-medium">
 											{type.name}
 											<span className="block font-normal text-muted-foreground text-xs">
 												{type.paid ? "Paid · hours" : "Unpaid · hours"}
 											</span>
-										</th>
+										</TableHead>
 									))}
-								</tr>
-							</thead>
-							<tbody>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
 								{people.map((person) => (
-									<tr key={person.employmentId} className="border-b">
-										<td className="py-2 pr-3 font-medium">
+									<TableRow key={person.employmentId}>
+										<TableCell className="font-medium">
 											{person.name}
 											{person.kind === "manager" ? (
 												<span className="font-normal text-muted-foreground">
@@ -2273,7 +2281,7 @@ function BalancesPanel({
 													· Manager
 												</span>
 											) : null}
-										</td>
+										</TableCell>
 										{leaveTypes.map((type) => {
 											const key = `${person.employmentId}:${type.id}`;
 											const current =
@@ -2283,7 +2291,7 @@ function BalancesPanel({
 														row.leaveTypeId === type.id,
 												)?.minutes ?? 0;
 											return (
-												<td key={type.id} className="px-2 py-2">
+												<TableCell key={type.id}>
 													<div className="flex items-center gap-2">
 														<Input
 															aria-label={`${person.name} ${type.name} hours`}
@@ -2316,13 +2324,13 @@ function BalancesPanel({
 															Save
 														</Button>
 													</div>
-												</td>
+												</TableCell>
 											);
 										})}
-									</tr>
+									</TableRow>
 								))}
-							</tbody>
-						</table>
+							</TableBody>
+						</Table>
 					</div>
 				)}
 			</div>
@@ -3308,9 +3316,7 @@ function RecordLeaveSheet({
 				</DialogHeader>
 				<div className="flex flex-col gap-4 overflow-y-auto px-6">
 					<div className="grid gap-1.5">
-						<label className="font-medium text-sm" htmlFor="record-person">
-							Person
-						</label>
+						<Label htmlFor="record-person">Person</Label>
 						<Select
 							items={people.map((person) => ({
 								label:

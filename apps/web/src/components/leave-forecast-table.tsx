@@ -1,4 +1,12 @@
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@SchedulesManager/ui/components/table";
 
 import { formatLeaveHours } from "@/lib/leave";
 import type { LeaveForecastDto } from "@/lib/queries";
@@ -59,34 +67,36 @@ export function LeaveForecastTable({
 						</div>
 					</header>
 					<div className="overflow-x-auto">
-						<table className="w-full text-sm">
-							<thead>
-								<tr className="border-b text-left text-muted-foreground text-xs">
-									<th className="px-3 py-2 font-medium">Month</th>
-									<th className="px-3 py-2 font-medium">Accrued</th>
-									<th className="px-3 py-2 font-medium">Planned usage</th>
-									<th className="px-3 py-2 font-medium">Projected balance</th>
-								</tr>
-							</thead>
-							<tbody>
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead className="font-medium">Month</TableHead>
+									<TableHead className="font-medium">Accrued</TableHead>
+									<TableHead className="font-medium">Planned usage</TableHead>
+									<TableHead className="font-medium">
+										Projected balance
+									</TableHead>
+								</TableRow>
+							</TableHeader>
+							<TableBody>
 								{section.points.map((point) => (
-									<tr key={point.month} className="border-b last:border-0">
-										<td className="whitespace-nowrap px-3 py-2">
+									<TableRow key={point.month}>
+										<TableCell className="whitespace-nowrap">
 											{formatMonth(point.month)}
-										</td>
-										<td className="px-3 py-2 tabular-nums">
+										</TableCell>
+										<TableCell className="tabular-nums">
 											{formatLeaveHours(point.accruedMinutes)}
-										</td>
-										<td className="px-3 py-2 tabular-nums">
+										</TableCell>
+										<TableCell className="tabular-nums">
 											{formatLeaveHours(point.plannedUsageMinutes)}
-										</td>
-										<td className="px-3 py-2 font-medium tabular-nums">
+										</TableCell>
+										<TableCell className="font-medium tabular-nums">
 											{formatLeaveHours(point.balanceMinutes)}
-										</td>
-									</tr>
+										</TableCell>
+									</TableRow>
 								))}
-							</tbody>
-						</table>
+							</TableBody>
+						</Table>
 					</div>
 				</section>
 			))}

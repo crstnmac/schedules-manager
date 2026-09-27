@@ -2,6 +2,15 @@ import { Button } from "@SchedulesManager/ui/components/button";
 import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
 import { Field, FieldLabel } from "@SchedulesManager/ui/components/field";
 import { Input } from "@SchedulesManager/ui/components/input";
+import { Label } from "@SchedulesManager/ui/components/label";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@SchedulesManager/ui/components/table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -262,43 +271,40 @@ export function SquareCard({
 								would change.
 							</p>
 							<div className="max-h-56 overflow-auto rounded-md border">
-								<table className="w-full text-left text-sm">
-									<thead>
-										<tr>
-											<th className="p-2">Date</th>
-											<th className="p-2">Square net sales</th>
-											<th className="p-2">Current</th>
-										</tr>
-									</thead>
-									<tbody>
+								<Table>
+									<TableHeader>
+										<TableRow>
+											<TableHead>Date</TableHead>
+											<TableHead>Square net sales</TableHead>
+											<TableHead>Current</TableHead>
+										</TableRow>
+									</TableHeader>
+									<TableBody>
 										{preview.map((row) => (
-											<tr key={row.date}>
-												<td className="p-2">{row.date}</td>
-												<td className="p-2">
+											<TableRow key={row.date}>
+												<TableCell>{row.date}</TableCell>
+												<TableCell>
 													{(row.amountCents / 100).toFixed(2)}
-												</td>
-												<td className="p-2">
+												</TableCell>
+												<TableCell>
 													{row.currentAmountCents === null
 														? "—"
 														: (row.currentAmountCents / 100).toFixed(2)}
-												</td>
-											</tr>
+												</TableCell>
+											</TableRow>
 										))}
-									</tbody>
-								</table>
+									</TableBody>
+								</Table>
 							</div>
 							{preview.some((row) => row.change) ? (
-								<label
-									htmlFor="square-overwrite"
-									className="flex items-center gap-2 text-sm"
-								>
+								<Label htmlFor="square-overwrite">
 									<Checkbox
 										id="square-overwrite"
 										checked={overwrite}
 										onCheckedChange={(value) => setOverwrite(value === true)}
 									/>{" "}
 									Replace the differing sales values shown above
-								</label>
+								</Label>
 							) : null}
 							<Button
 								disabled={

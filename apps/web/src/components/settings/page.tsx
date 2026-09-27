@@ -1,4 +1,13 @@
 import { Badge } from "@SchedulesManager/ui/components/badge";
+import {
+	Card,
+	CardAction,
+	CardContent,
+	CardDescription,
+	CardFooter,
+	CardHeader,
+	CardTitle,
+} from "@SchedulesManager/ui/components/card";
 import { cn } from "@SchedulesManager/ui/lib/utils";
 import type { ReactNode } from "react";
 
@@ -24,9 +33,11 @@ export function SettingsPage({
 		(query) => query.data === undefined && (query.isLoading || query.isError),
 	);
 	return (
-		<div className={cn("flex w-full flex-col gap-8", className)}>
+		<div
+			className={cn("mx-auto flex w-full max-w-5xl flex-col gap-6", className)}
+		>
 			<header className="flex flex-col gap-1.5">
-				<h1 className="text-balance font-heading font-semibold text-xl tracking-tight">
+				<h1 className="text-balance font-heading font-semibold text-xl tracking-tight md:text-2xl">
 					{title}
 				</h1>
 				{description ? (
@@ -58,7 +69,7 @@ export function SettingsColumns({
 	return (
 		<div
 			className={cn(
-				"grid items-start gap-6 xl:grid-cols-2 [&>*]:min-w-0",
+				"grid items-start gap-4 xl:grid-cols-2 [&>*]:min-w-0",
 				className,
 			)}
 		>
@@ -93,36 +104,32 @@ export function SettingsSection({
 		Boolean(action);
 
 	return (
-		<section className={cn("flex min-w-0 flex-col gap-4", className)}>
+		<Card className={cn("min-w-0", className)}>
 			{hasHeader ? (
-				<header className="flex flex-wrap items-start justify-between gap-3 border-b pb-3">
-					<div className="flex min-w-0 flex-col gap-1">
-						{title || typeof count === "number" ? (
-							<div className="flex min-w-0 items-center gap-2">
-								{title ? (
-									<h2 className="text-balance font-semibold text-base tracking-tight">
-										{title}
-									</h2>
-								) : null}
-								{typeof count === "number" ? (
-									<Badge variant="secondary">{count}</Badge>
-								) : null}
-							</div>
-						) : null}
-						{description ? (
-							<p className="max-w-prose text-pretty text-muted-foreground text-sm/relaxed">
-								{description}
-							</p>
-						) : null}
-					</div>
-					{action}
-				</header>
+				<CardHeader className="border-b">
+					{title || typeof count === "number" ? (
+						<CardTitle className="flex min-w-0 items-center gap-2 font-semibold">
+							{title ? <h2 className="text-balance">{title}</h2> : null}
+							{typeof count === "number" ? (
+								<Badge variant="secondary" className="tabular-nums">
+									{count}
+								</Badge>
+							) : null}
+						</CardTitle>
+					) : null}
+					{description ? (
+						<CardDescription>{description}</CardDescription>
+					) : null}
+					{action ? <CardAction>{action}</CardAction> : null}
+				</CardHeader>
 			) : null}
-			<div className={contentClassName}>{children}</div>
+			<CardContent className={cn("min-w-0", contentClassName)}>
+				{children}
+			</CardContent>
 			{footer ? (
-				<div className="flex justify-end border-t pt-4">{footer}</div>
+				<CardFooter className="justify-end gap-2 py-3">{footer}</CardFooter>
 			) : null}
-		</section>
+		</Card>
 	);
 }
 

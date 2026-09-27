@@ -100,7 +100,7 @@ function ConsentComponent() {
 			<main
 				id="main-content"
 				tabIndex={-1}
-				className="grid min-h-svh place-items-center px-4"
+				className="grid min-h-svh place-items-center bg-muted/50 px-4"
 			>
 				<Card className="w-full max-w-md">
 					<CardHeader>
@@ -120,7 +120,7 @@ function ConsentComponent() {
 			<main
 				id="main-content"
 				tabIndex={-1}
-				className="grid min-h-svh place-items-center px-4"
+				className="grid min-h-svh place-items-center bg-muted/50 px-4"
 			>
 				<Card className="w-full max-w-md">
 					<CardHeader>
@@ -138,7 +138,7 @@ function ConsentComponent() {
 		<main
 			id="main-content"
 			tabIndex={-1}
-			className="grid min-h-svh place-items-center px-4 py-16"
+			className="grid min-h-svh place-items-center bg-muted/50 px-4 py-16"
 		>
 			<Card className="w-full max-w-md">
 				<CardHeader>

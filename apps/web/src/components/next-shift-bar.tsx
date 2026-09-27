@@ -9,8 +9,10 @@ import {
 	AlertDialogTitle,
 } from "@SchedulesManager/ui/components/alert-dialog";
 import { Button } from "@SchedulesManager/ui/components/button";
+import { Label } from "@SchedulesManager/ui/components/label";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { Textarea } from "@SchedulesManager/ui/components/textarea";
+import { cn } from "@SchedulesManager/ui/lib/utils";
 import { TimerIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -20,12 +22,21 @@ import { CLOCK_IN_EARLY_MS, formatDay, formatTimerMs } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
 
+const HERO_BUTTON =
+	"bg-primary-foreground text-primary [@media(hover:hover)]:hover:bg-primary-foreground/90";
+
 /**
  * Compact next-shift and time-clock control for the workspace top bar. Keeps
  * the worker's immediate action (clock in/out) always visible without the
  * large card on the schedule page.
  */
-export function NextShiftBar() {
+export function NextShiftBar({
+	variant = "bar",
+}: {
+	/** "hero" drops the summary and sits on the primary next-shift panel. */
+	variant?: "bar" | "hero";
+} = {}) {
+	const hero = variant === "hero";
 	const { workplace } = useWorkplace();
 	const schedule = useMySchedule(workplace?.id);
 	const shift = schedule.data?.nextShift ?? null;
@@ -62,8 +73,13 @@ export function NextShiftBar() {
 
 	return (
 		<>
-			<div className="flex min-w-0 items-center gap-3">
-				<div className="hidden min-w-0 text-right sm:block">
+			<div className="flex min-w-0 flex-wrap items-center gap-3">
+				<div
+					className={cn(
+						"hidden min-w-0 text-right sm:block",
+						hero && "sm:hidden",
+					)}
+				>
 					<p className="truncate text-muted-foreground text-xs">
 						{onClock
 							? "On the clock"
@@ -82,14 +98,18 @@ export function NextShiftBar() {
 				{onClock && entry ? (
 					<div className="flex items-center gap-2">
 						<span
-							className="hidden font-mono text-sm tabular-nums sm:inline"
+							className={cn(
+								"hidden font-medium text-sm tabular-nums sm:inline",
+								hero && "inline",
+							)}
 							aria-live="off"
 						>
 							{formatTimerMs(nowMs - new Date(entry.clockedInAt).getTime())}
 						</span>
 						<Button
 							size="sm"
-							variant="outline"
+							variant={hero ? "secondary" : "outline"}
+							className={cn(hero && HERO_BUTTON)}
 							disabled={clockOut.isPending}
 							onClick={() => {
 								setWorkerNote("");
@@ -109,6 +129,8 @@ export function NextShiftBar() {
 				{canStart ? (
 					<Button
 						size="sm"
+						variant={hero ? "secondary" : "default"}
+						className={cn(hero && HERO_BUTTON)}
 						disabled={clockIn.isPending}
 						onClick={() => setConfirmingIn(true)}
 					>
@@ -122,7 +144,12 @@ export function NextShiftBar() {
 				) : null}
 
 				{!onClock && !canStart && !shift.planned ? (
-					<span className="hidden text-muted-foreground text-xs md:inline">
+					<span
+						className={cn(
+							"hidden text-muted-foreground text-xs md:inline",
+							hero && "inline text-primary-foreground/80",
+						)}
+					>
 						Clock-in opens{" "}
 						{formatClockTime(
 							new Date(
@@ -132,7 +159,7 @@ export function NextShiftBar() {
 					</span>
 				) : null}
 
-				{shift.planned ? (
+				{shift.planned && !hero ? (
 					<span className="hidden text-muted-foreground text-xs md:inline">
 						Planned — not yet published
 					</span>
@@ -193,12 +220,7 @@ export function NextShiftBar() {
 					</AlertDialogHeader>
 					{notesEnabled ? (
 						<div className="grid gap-2 px-1">
-							<label
-								htmlFor="clock-bar-out-note"
-								className="font-medium text-sm"
-							>
-								Note (optional)
-							</label>
+							<Label htmlFor="clock-bar-out-note">Note (optional)</Label>
 							<Textarea
 								id="clock-bar-out-note"
 								value={workerNote}

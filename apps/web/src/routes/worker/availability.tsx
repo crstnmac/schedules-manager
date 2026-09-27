@@ -10,12 +10,21 @@ import {
 	CardTitle,
 } from "@SchedulesManager/ui/components/card";
 import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@SchedulesManager/ui/components/dialog";
+import {
 	Field,
 	FieldDescription,
 	FieldGroup,
 	FieldLabel,
 } from "@SchedulesManager/ui/components/field";
 import { Input } from "@SchedulesManager/ui/components/input";
+import { Label } from "@SchedulesManager/ui/components/label";
 import {
 	Select,
 	SelectContent,
@@ -24,14 +33,6 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@SchedulesManager/ui/components/select";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "@SchedulesManager/ui/components/dialog";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import {
@@ -814,7 +815,7 @@ function AvailabilityPage() {
 									</span>
 								)}
 								{attachable ? (
-									<label className="inline-flex w-fit cursor-pointer items-center gap-1 text-muted-foreground text-xs [@media(hover:hover)]:hover:text-foreground">
+									<Label className="w-fit cursor-pointer">
 										<PaperclipIcon className="size-3" />
 										<span>
 											{uploadDocument.isPending ? "Uploading…" : "Attach"}
@@ -834,7 +835,7 @@ function AvailabilityPage() {
 												});
 											}}
 										/>
-									</label>
+									</Label>
 								) : null}
 							</div>
 						);

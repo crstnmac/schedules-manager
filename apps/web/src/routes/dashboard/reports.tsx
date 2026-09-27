@@ -24,6 +24,15 @@ import {
 import { Field, FieldLabel } from "@SchedulesManager/ui/components/field";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import {
+	Table,
+	TableBody,
+	TableCell,
+	TableFooter,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@SchedulesManager/ui/components/table";
+import {
 	Tabs,
 	TabsContent,
 	TabsList,
@@ -408,11 +417,11 @@ function ReportsPage() {
 
 	return (
 		<AppDocument widthClassName="max-w-none">
-			<div>
-				<h2 className="font-heading font-medium text-sm">
-					Operational reports
-				</h2>
-				<p className="text-muted-foreground text-xs/relaxed">
+			<div className="flex flex-col gap-1">
+				<h1 className="font-heading font-semibold text-xl tracking-tight md:text-2xl">
+					Reports
+				</h1>
+				<p className="text-muted-foreground text-sm">
 					Attendance, labor, coverage, requests, and leave in one place.
 				</p>
 			</div>
@@ -876,43 +885,50 @@ function ReportsPage() {
 								</CardHeader>
 								<CardContent>
 									<div className="overflow-x-auto">
-										<table className="w-full text-sm">
-											<thead>
-												<tr className="border-b text-left text-muted-foreground text-xs">
-													<th className="py-2 pr-4 font-medium">Location</th>
-													<th className="py-2 pr-4 font-medium">Scheduled</th>
-													<th className="py-2 pr-4 font-medium">Assigned</th>
-													<th className="py-2 pr-4 font-medium">Open</th>
-													<th className="py-2 pr-4 font-medium">Fill rate</th>
-													<th className="py-2 font-medium">Utilization</th>
-												</tr>
-											</thead>
-											<tbody>
+										<Table>
+											<TableHeader>
+												<TableRow>
+													<TableHead className="font-medium">
+														Location
+													</TableHead>
+													<TableHead className="font-medium">
+														Scheduled
+													</TableHead>
+													<TableHead className="font-medium">
+														Assigned
+													</TableHead>
+													<TableHead className="font-medium">Open</TableHead>
+													<TableHead className="font-medium">
+														Fill rate
+													</TableHead>
+													<TableHead className="font-medium">
+														Utilization
+													</TableHead>
+												</TableRow>
+											</TableHeader>
+											<TableBody>
 												{coverageLocations.map((location) => (
-													<tr
-														key={location.locationId}
-														className="border-b last:border-0"
-													>
-														<td className="py-2 pr-4">{location.name}</td>
-														<td className="py-2 pr-4 tabular-nums">
+													<TableRow key={location.locationId}>
+														<TableCell>{location.name}</TableCell>
+														<TableCell className="tabular-nums">
 															{location.scheduledShifts}
-														</td>
-														<td className="py-2 pr-4 tabular-nums">
+														</TableCell>
+														<TableCell className="tabular-nums">
 															{location.assignedShifts}
-														</td>
-														<td className="py-2 pr-4 tabular-nums">
+														</TableCell>
+														<TableCell className="tabular-nums">
 															{location.openShifts}
-														</td>
-														<td className="py-2 pr-4 tabular-nums">
+														</TableCell>
+														<TableCell className="tabular-nums">
 															{formatRatio(location.fillRate)}
-														</td>
-														<td className="py-2 tabular-nums">
+														</TableCell>
+														<TableCell className="tabular-nums">
 															{formatRatio(location.utilization)}
-														</td>
-													</tr>
+														</TableCell>
+													</TableRow>
 												))}
-											</tbody>
-										</table>
+											</TableBody>
+										</Table>
 									</div>
 								</CardContent>
 							</Card>
@@ -1040,48 +1056,52 @@ function ReportsPage() {
 								</CardHeader>
 								<CardContent>
 									<div className="overflow-x-auto">
-										<table className="w-full text-sm">
-											<thead>
-												<tr className="border-b text-left text-muted-foreground text-xs">
-													<th className="py-2 pr-4 font-medium">Type</th>
-													<th className="py-2 pr-4 font-medium">Total</th>
-													<th className="py-2 pr-4 font-medium">Approved</th>
-													<th className="py-2 pr-4 font-medium">Declined</th>
-													<th className="py-2 pr-4 font-medium">Pending</th>
-													<th className="py-2 pr-4 font-medium">
+										<Table>
+											<TableHeader>
+												<TableRow>
+													<TableHead className="font-medium">Type</TableHead>
+													<TableHead className="font-medium">Total</TableHead>
+													<TableHead className="font-medium">
+														Approved
+													</TableHead>
+													<TableHead className="font-medium">
+														Declined
+													</TableHead>
+													<TableHead className="font-medium">Pending</TableHead>
+													<TableHead className="font-medium">
 														Approval rate
-													</th>
-													<th className="py-2 font-medium">Avg decision</th>
-												</tr>
-											</thead>
-											<tbody>
+													</TableHead>
+													<TableHead className="font-medium">
+														Avg decision
+													</TableHead>
+												</TableRow>
+											</TableHeader>
+											<TableBody>
 												{requestRows.map((row) => (
-													<tr key={row.type} className="border-b last:border-0">
-														<td className="py-2 pr-4">
-															{REQUEST_LABELS[row.type]}
-														</td>
-														<td className="py-2 pr-4 tabular-nums">
+													<TableRow key={row.type}>
+														<TableCell>{REQUEST_LABELS[row.type]}</TableCell>
+														<TableCell className="tabular-nums">
 															{row.total}
-														</td>
-														<td className="py-2 pr-4 tabular-nums">
+														</TableCell>
+														<TableCell className="tabular-nums">
 															{row.approved}
-														</td>
-														<td className="py-2 pr-4 tabular-nums">
+														</TableCell>
+														<TableCell className="tabular-nums">
 															{row.declined}
-														</td>
-														<td className="py-2 pr-4 tabular-nums">
+														</TableCell>
+														<TableCell className="tabular-nums">
 															{row.pending}
-														</td>
-														<td className="py-2 pr-4 tabular-nums">
+														</TableCell>
+														<TableCell className="tabular-nums">
 															{formatRatio(row.approvalRate)}
-														</td>
-														<td className="py-2 tabular-nums">
+														</TableCell>
+														<TableCell className="tabular-nums">
 															{row.averageDecisionHours.toFixed(1)}h
-														</td>
-													</tr>
+														</TableCell>
+													</TableRow>
 												))}
-											</tbody>
-										</table>
+											</TableBody>
+										</Table>
 									</div>
 								</CardContent>
 							</Card>
@@ -1174,27 +1194,36 @@ function ReportsPage() {
 									</CardHeader>
 									<CardContent>
 										<div className="overflow-x-auto">
-											<table className="w-full text-sm">
-												<thead>
-													<tr className="border-b text-left text-muted-foreground text-xs">
-														<th className="py-2 pr-4 font-medium">Worker</th>
-														<th className="py-2 pr-4 font-medium">
+											<Table>
+												<TableHeader>
+													<TableRow>
+														<TableHead className="font-medium">
+															Worker
+														</TableHead>
+														<TableHead className="font-medium">
 															Leave type
-														</th>
-														<th className="py-2 pr-4 font-medium">Approved</th>
-														<th className="py-2 pr-4 font-medium">Unpaid</th>
-														<th className="py-2 pr-4 font-medium">Overdrawn</th>
-														<th className="py-2 pr-4 font-medium">Encashed</th>
-														<th className="py-2 font-medium">Value</th>
-													</tr>
-												</thead>
-												<tbody>
+														</TableHead>
+														<TableHead className="font-medium">
+															Approved
+														</TableHead>
+														<TableHead className="font-medium">
+															Unpaid
+														</TableHead>
+														<TableHead className="font-medium">
+															Overdrawn
+														</TableHead>
+														<TableHead className="font-medium">
+															Encashed
+														</TableHead>
+														<TableHead className="font-medium">Value</TableHead>
+													</TableRow>
+												</TableHeader>
+												<TableBody>
 													{leave.data.rows.map((row) => (
-														<tr
+														<TableRow
 															key={`${row.employmentId}:${row.leaveTypeName}`}
-															className="border-b last:border-0"
 														>
-															<td className="py-2 pr-4">
+															<TableCell>
 																<div className="flex flex-col">
 																	<span>
 																		{row.employmentName ?? row.employmentEmail}
@@ -1205,8 +1234,8 @@ function ReportsPage() {
 																		</span>
 																	) : null}
 																</div>
-															</td>
-															<td className="py-2 pr-4">
+															</TableCell>
+															<TableCell>
 																{row.leaveTypeName}
 																{row.leaveTypePaid ? null : (
 																	<span className="text-muted-foreground">
@@ -1214,57 +1243,57 @@ function ReportsPage() {
 																		· unpaid
 																	</span>
 																)}
-															</td>
-															<td className="py-2 pr-4 tabular-nums">
+															</TableCell>
+															<TableCell className="tabular-nums">
 																{formatLeaveHours(row.approvedMinutes)}
-															</td>
-															<td className="py-2 pr-4 tabular-nums">
+															</TableCell>
+															<TableCell className="tabular-nums">
 																{formatLeaveHours(row.unpaidMinutes)}
-															</td>
-															<td className="py-2 pr-4 tabular-nums">
+															</TableCell>
+															<TableCell className="tabular-nums">
 																{formatLeaveHours(row.overdrawnMinutes)}
-															</td>
-															<td className="py-2 pr-4 tabular-nums">
+															</TableCell>
+															<TableCell className="tabular-nums">
 																{formatLeaveHours(row.encashmentMinutes)}
-															</td>
-															<td className="py-2 tabular-nums">
+															</TableCell>
+															<TableCell className="tabular-nums">
 																{formatCurrency(row.encashmentCents)}
-															</td>
-														</tr>
+															</TableCell>
+														</TableRow>
 													))}
-												</tbody>
-												<tfoot>
-													<tr className="border-t font-medium">
-														<td className="py-2 pr-4">Total</td>
-														<td className="py-2 pr-4" />
-														<td className="py-2 pr-4 tabular-nums">
+												</TableBody>
+												<TableFooter>
+													<TableRow>
+														<TableCell>Total</TableCell>
+														<TableCell />
+														<TableCell className="tabular-nums">
 															{formatLeaveHours(
 																leave.data.totals.approvedMinutes,
 															)}
-														</td>
-														<td className="py-2 pr-4 tabular-nums">
+														</TableCell>
+														<TableCell className="tabular-nums">
 															{formatLeaveHours(
 																leave.data.totals.unpaidMinutes,
 															)}
-														</td>
-														<td className="py-2 pr-4 tabular-nums">
+														</TableCell>
+														<TableCell className="tabular-nums">
 															{formatLeaveHours(
 																leave.data.totals.overdrawnMinutes,
 															)}
-														</td>
-														<td className="py-2 pr-4 tabular-nums">
+														</TableCell>
+														<TableCell className="tabular-nums">
 															{formatLeaveHours(
 																leave.data.totals.encashmentMinutes,
 															)}
-														</td>
-														<td className="py-2 tabular-nums">
+														</TableCell>
+														<TableCell className="tabular-nums">
 															{formatCurrency(
 																leave.data.totals.encashmentCents,
 															)}
-														</td>
-													</tr>
-												</tfoot>
-											</table>
+														</TableCell>
+													</TableRow>
+												</TableFooter>
+											</Table>
 										</div>
 									</CardContent>
 								</Card>

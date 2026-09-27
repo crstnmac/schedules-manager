@@ -47,7 +47,7 @@ export function FormSheet({
 					{children}
 				</div>
 				{footer ? (
-					<DialogFooter className="mx-0 mb-0 shrink-0 rounded-none bg-background">
+					<DialogFooter className="mx-0 mb-0 shrink-0 rounded-none">
 						{footer}
 					</DialogFooter>
 				) : null}

@@ -101,10 +101,7 @@ export function TablePagination({
 				value={String(pageSize)}
 				onValueChange={(value) => value && setPageSize(Number(value))}
 			>
-				<SelectTrigger
-					className="h-7 w-[104px] text-xs"
-					aria-label="Rows per page"
-				>
+				<SelectTrigger className="h-8 w-[108px]" aria-label="Rows per page">
 					<SelectValue />
 				</SelectTrigger>
 				<SelectContent>
@@ -121,7 +118,7 @@ export function TablePagination({
 				<Button
 					type="button"
 					variant="outline"
-					size="icon-sm"
+					size="icon"
 					disabled={page <= 1}
 					onClick={() => setPage(page - 1)}
 					aria-label="Previous page"
@@ -134,7 +131,7 @@ export function TablePagination({
 				<Button
 					type="button"
 					variant="outline"
-					size="icon-sm"
+					size="icon"
 					disabled={page >= pageCount}
 					onClick={() => setPage(page + 1)}
 					aria-label="Next page"
@@ -169,7 +166,7 @@ export function TableToolbar({
 		<div
 			className={cn(
 				"flex shrink-0 flex-wrap items-center gap-2",
-				embedded ? "py-2" : "border-b bg-card/40 px-4 py-2",
+				embedded ? "py-2" : "border-b px-3 py-2.5",
 				className,
 			)}
 		>
@@ -195,7 +192,7 @@ export function TableSearch({
 	className?: string;
 }) {
 	return (
-		<InputGroup className={cn("h-7 w-full max-w-xs", className)}>
+		<InputGroup className={cn("h-8 w-full max-w-xs", className)}>
 			<InputGroupAddon>
 				<SearchIcon />
 			</InputGroupAddon>
@@ -241,7 +238,7 @@ export function TableFilter({
 			onValueChange={(next) => next && onValueChange(next)}
 		>
 			<SelectTrigger
-				className={cn("h-7 w-auto min-w-[150px] text-xs", className)}
+				className={cn("h-8 w-auto min-w-[150px]", className)}
 				aria-label={ariaLabel}
 			>
 				<SelectValue />

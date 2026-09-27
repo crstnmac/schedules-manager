@@ -31,6 +31,7 @@ import {
 	ItemSeparator,
 	ItemTitle,
 } from "@SchedulesManager/ui/components/item";
+import { Progress } from "@SchedulesManager/ui/components/progress";
 import {
 	Select,
 	SelectContent,
@@ -46,14 +47,18 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
 	AlarmClockIcon,
 	BellRingIcon,
+	CalendarDaysIcon,
 	ChevronRightIcon,
 	CircleCheckIcon,
 	CircleIcon,
 	ClipboardListIcon,
+	Clock3Icon,
 	MapPinIcon,
+	PercentIcon,
 	TagsIcon,
 	TriangleAlertIcon,
 	UserPlusIcon,
+	UserRoundXIcon,
 	UsersIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -104,28 +109,43 @@ function StatCard({
 	label,
 	value,
 	hint,
+	icon: Icon,
 	tone = "default",
 }: {
 	label: string;
 	value: ReactNode;
 	hint?: ReactNode;
+	icon: typeof MapPinIcon;
 	tone?: "default" | "amber" | "destructive";
 }) {
 	return (
-		<Card>
+		<Card size="sm" className="gap-2">
 			<CardHeader>
 				<CardDescription>{label}</CardDescription>
-				<CardTitle
+				<CardAction>
+					<span
+						className={cn(
+							"flex size-7 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:size-4",
+							tone === "amber" && "bg-warning text-warning-foreground",
+							tone === "destructive" && "bg-destructive/10 text-destructive",
+						)}
+					>
+						<Icon aria-hidden="true" />
+					</span>
+				</CardAction>
+			</CardHeader>
+			<CardContent className="flex flex-col gap-1">
+				<p
 					className={cn(
-						"text-2xl tabular-nums",
+						"font-heading font-semibold text-3xl tabular-nums tracking-tight",
 						tone === "amber" && "text-warning-foreground",
 						tone === "destructive" && "text-destructive",
 					)}
 				>
 					{value}
-				</CardTitle>
-				{hint ? <CardDescription>{hint}</CardDescription> : null}
-			</CardHeader>
+				</p>
+				{hint ? <p className="text-muted-foreground text-xs">{hint}</p> : null}
+			</CardContent>
 		</Card>
 	);
 }
@@ -346,11 +366,6 @@ function Overview() {
 			<PageHeader
 				title="Overview"
 				description="Your week, your team, and what needs your attention."
-				actions={
-					<span className="text-muted-foreground text-sm">
-						{workplace?.name}
-					</span>
-				}
 			/>
 			{nextShift ? (
 				<Card className={cn(onClock && "border-primary/40 bg-primary/5")}>
@@ -390,12 +405,16 @@ function Overview() {
 						<div className="flex flex-wrap items-center gap-2">
 							<h2
 								id="overview-week-heading"
-								className="font-heading font-medium text-sm"
+								className="font-heading font-semibold text-base"
 							>
 								This week
 							</h2>
 							<Badge
-								variant={scheduleStatus.published ? "default" : "secondary"}
+								variant={scheduleStatus.published ? "outline" : "secondary"}
+								className={cn(
+									scheduleStatus.published &&
+										"border-success/30 bg-success-muted text-success-foreground",
+								)}
 							>
 								{scheduleStatus.published ? (
 									<CircleCheckIcon data-icon="inline-start" />
@@ -405,7 +424,7 @@ function Overview() {
 								{scheduleStatus.label}
 							</Badge>
 						</div>
-						<p className="text-muted-foreground text-xs">
+						<p className="text-muted-foreground text-sm tabular-nums">
 							{weekStart ? formatWeekLabel(weekStart) : "Loading week"}
 							{focusLocation ? ` · ${focusLocation.name}` : ""}
 						</p>
@@ -445,6 +464,7 @@ function Overview() {
 							nativeButton={false}
 							render={<Link to="/dashboard/schedule" />}
 						>
+							<CalendarDaysIcon data-icon="inline-start" />
 							Open schedule
 						</Button>
 					</div>
@@ -472,12 +492,13 @@ function Overview() {
 				) : isLoading || settings.isLoading || currentSchedule.isLoading ? (
 					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 						{["hours", "labor", "open", "conflicts"].map((key) => (
-							<Skeleton key={key} className="h-24" />
+							<Skeleton key={key} className="h-[7.5rem] rounded-xl" />
 						))}
 					</div>
 				) : (
 					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 						<StatCard
+							icon={Clock3Icon}
 							label="Scheduled"
 							value={formatHours(scheduledMinutes)}
 							hint={
@@ -487,11 +508,13 @@ function Overview() {
 							}
 						/>
 						<StatCard
-							label="Labor %"
+							icon={PercentIcon}
+							label="Labor cost"
 							value={laborPercent == null ? "—" : `${laborPercent.toFixed(1)}%`}
-							hint={laborGoal == null ? undefined : `Goal ${laborGoal}%`}
+							hint={laborGoal == null ? "No goal set" : `Goal ${laborGoal}%`}
 						/>
 						<StatCard
+							icon={UserRoundXIcon}
 							label="Open shifts"
 							value={openShiftCount}
 							tone={openShiftCount > 0 ? "amber" : "default"}
@@ -504,6 +527,7 @@ function Overview() {
 							}
 						/>
 						<StatCard
+							icon={TriangleAlertIcon}
 							label="Conflicts"
 							value={conflictCount}
 							tone={conflictCount > 0 ? "destructive" : "default"}
@@ -516,9 +540,9 @@ function Overview() {
 			{scheduleData && weekStart ? (
 				<Card>
 					<CardHeader>
-						<CardTitle>Daily shifts</CardTitle>
+						<CardTitle>Daily coverage</CardTitle>
 						<CardDescription>
-							Shifts scheduled each day this week.
+							Assigned and open shifts for each day this week.
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
@@ -528,7 +552,7 @@ function Overview() {
 							// biome-ignore lint/a11y/noNoninteractiveTabindex: Keyboard users need to scroll this region.
 							tabIndex={0}
 						>
-							<div className="grid min-w-[42rem] grid-cols-7 divide-x rounded-lg border">
+							<ol className="grid min-w-[42rem] grid-cols-7 gap-2">
 								{Array.from({ length: 7 }, (_, index) => {
 									const date = addDays(weekStart, index);
 									const day = new Date(`${date}T12:00:00`);
@@ -538,52 +562,70 @@ function Overview() {
 									const open = shifts.filter(
 										(shift) => shift.employmentId === null,
 									).length;
+									const assigned = shifts.length - open;
 									const today =
 										new Date().toDateString() === day.toDateString();
 									return (
-										<div
+										<li
 											key={date}
-											className={cn("px-4 py-4", today && "bg-primary/5")}
+											aria-current={today ? "date" : undefined}
+											className={cn(
+												"flex flex-col gap-3 rounded-lg border p-3",
+												today && "border-primary/40 bg-primary/5",
+											)}
 										>
-											<div className="flex items-center justify-between gap-1 text-xs">
+											<div className="flex items-baseline justify-between gap-1">
 												<span
 													className={cn(
-														"text-muted-foreground",
-														today && "font-semibold text-primary",
+														"font-medium text-muted-foreground text-xs",
+														today && "text-primary",
 													)}
 												>
 													{day.toLocaleDateString(undefined, {
 														weekday: "short",
 													})}
 												</span>
-												<span className="font-medium tabular-nums">
+												<span
+													className={cn(
+														"font-heading font-semibold text-sm tabular-nums",
+														today && "text-primary",
+													)}
+												>
 													{day.getDate()}
 												</span>
 											</div>
-											<p className="mt-3 font-medium text-sm tabular-nums">
-												{shifts.length}{" "}
-												{shifts.length === 1 ? "shift" : "shifts"}
+											<p className="font-heading font-semibold text-2xl tabular-nums leading-none">
+												{shifts.length}
+												<span className="ml-1 font-normal font-sans text-muted-foreground text-xs">
+													{shifts.length === 1 ? "shift" : "shifts"}
+												</span>
 											</p>
+											<Progress
+												value={
+													shifts.length === 0
+														? 0
+														: Math.round((assigned / shifts.length) * 100)
+												}
+												aria-label={`${assigned} of ${shifts.length} shifts assigned`}
+											/>
 											<p
 												className={cn(
-													"mt-1 text-xs",
+													"text-xs",
 													open
-														? "text-warning-foreground"
+														? "font-medium text-warning-foreground"
 														: "text-muted-foreground",
 												)}
 											>
 												{open
 													? `${open} open`
-													: today
-														? "Today"
-														: shifts.length
-															? "All assigned"
-															: "—"}
+													: shifts.length
+														? "All assigned"
+														: "Nothing scheduled"}
 											</p>
-										</div>
+										</li>
 									);
 								})}
-							</div>
+							</ol>
 						</section>
 					</CardContent>
 				</Card>
@@ -610,7 +652,7 @@ function Overview() {
 				</Alert>
 			) : null}
 
-			<div className="grid min-w-0 items-start gap-8 xl:grid-cols-[minmax(0,1fr)_18rem]">
+			<div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
 				<Card>
 					<CardHeader>
 						<CardTitle className="flex items-center gap-2">
@@ -659,9 +701,12 @@ function Overview() {
 								</AlertAction>
 							</Alert>
 						) : !hasAttentionItems ? (
-							<Empty className="min-h-48">
+							<Empty className="min-h-48 border border-dashed">
 								<EmptyHeader>
-									<EmptyMedia variant="icon" className="text-primary">
+									<EmptyMedia
+										variant="icon"
+										className="bg-success-muted text-success-foreground"
+									>
 										<CircleCheckIcon />
 									</EmptyMedia>
 									<EmptyTitle>You're all caught up</EmptyTitle>
@@ -706,10 +751,7 @@ function Overview() {
 					</CardContent>
 				</Card>
 
-				<aside
-					aria-label="Workplace summary"
-					className="grid min-w-0 gap-6 border-t pt-6 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6"
-				>
+				<aside aria-label="Workplace summary" className="grid min-w-0 gap-4">
 					{pilot.data && completedSteps < checklist.length ? (
 						<Card>
 							<CardHeader>
@@ -734,7 +776,7 @@ function Overview() {
 										>
 											<ItemMedia variant="icon">
 												{step.done ? (
-													<CircleCheckIcon className="text-primary" />
+													<CircleCheckIcon className="text-success" />
 												) : (
 													<CircleIcon />
 												)}

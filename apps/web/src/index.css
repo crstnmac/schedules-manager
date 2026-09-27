@@ -49,24 +49,10 @@ main :is([data-slot="badge"], [data-slot="table-head"]) {
 	}
 }
 
-.auth-canvas {
-	background-color: #f3f8fd;
-}
-
 .location-map-marker,
 .location-map-radius {
 	stroke: var(--primary);
 	fill: var(--primary);
-}
-
-.auth-fallback-gradient {
-	background-image:
-		radial-gradient(
-			120% 120% at 82% 85%,
-			rgb(0 110 220 / 35%) 0%,
-			transparent 60%
-		),
-		linear-gradient(135deg, #f3f8fd 0%, #d8e9fb 55%, #bbd7f6 100%);
 }
 
 /*
@@ -146,4 +132,34 @@ main :is([data-slot="badge"], [data-slot="table-head"]) {
 	[class*="shadow-"] {
 		box-shadow: none;
 	}
+}
+
+/*
+ * Framed panels (AppPageBody) own the surface: tables inside them get a tinted
+ * heading row, and empty states drop their dashed frame so there is one box,
+ * not a box inside a box.
+ */
+[data-slot="app-panel"] [data-slot="table-header"] {
+	background: color-mix(in oklab, var(--muted) 60%, transparent);
+}
+
+[data-slot="app-panel"] [data-slot="table-head"]:first-child,
+[data-slot="app-panel"] [data-slot="table-cell"]:first-child {
+	padding-inline-start: 0.875rem;
+}
+
+[data-slot="app-panel"] [data-slot="table-head"]:last-child,
+[data-slot="app-panel"] [data-slot="table-cell"]:last-child {
+	padding-inline-end: 0.875rem;
+}
+
+[data-slot="app-panel"] [data-slot="empty"] {
+	border: 0;
+	padding-block: 3rem;
+}
+
+[data-slot="app-panel"]
+	[data-slot="table-body"]
+	[data-slot="table-row"]:last-child {
+	border-bottom: 0;
 }

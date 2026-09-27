@@ -1,5 +1,13 @@
 import { Avatar, AvatarFallback } from "@SchedulesManager/ui/components/avatar";
 import {
+	Breadcrumb,
+	BreadcrumbItem,
+	BreadcrumbLink,
+	BreadcrumbList,
+	BreadcrumbPage,
+	BreadcrumbSeparator,
+} from "@SchedulesManager/ui/components/breadcrumb";
+import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuGroup,
@@ -9,6 +17,7 @@ import {
 	DropdownMenuTrigger,
 } from "@SchedulesManager/ui/components/dropdown-menu";
 import { PageFade } from "@SchedulesManager/ui/components/motion";
+import { Separator } from "@SchedulesManager/ui/components/separator";
 import {
 	Sidebar,
 	SidebarContent,
@@ -79,30 +88,40 @@ const navigation = [
 		label: "Overview",
 		icon: LayoutDashboardIcon,
 		exact: true,
+		group: "Plan",
 	},
 	{
 		to: "/dashboard/clock",
 		label: "Clock",
 		icon: AlarmClockIcon,
 		operations: true,
+		group: "Time",
 	},
 	{
 		to: "/dashboard/schedule",
 		label: "Schedule",
 		icon: CalendarDaysIcon,
+		group: "Plan",
 		capability: "schedule.view",
 	},
-	{ to: "/dashboard/roster", label: "Roster", icon: ClipboardListIcon },
+	{
+		to: "/dashboard/roster",
+		label: "Roster",
+		icon: ClipboardListIcon,
+		group: "Plan",
+	},
 	{
 		to: "/dashboard/workers",
 		label: "Workers",
 		icon: UsersIcon,
+		group: "Team",
 		capability: "workers.manage",
 	},
 	{
 		to: "/dashboard/timeoff",
 		label: "Time off",
 		icon: Clock3Icon,
+		group: "Team",
 		capability: "approvals.review",
 	},
 	{
@@ -110,19 +129,27 @@ const navigation = [
 		label: "Timesheets",
 		icon: TimerIcon,
 		operations: true,
+		group: "Time",
 		capability: "approvals.review",
 	},
 	{
 		to: "/dashboard/coverage",
 		label: "Coverage",
 		icon: WorkflowIcon,
+		group: "Plan",
 		capability: "approvals.review",
 	},
-	{ to: "/dashboard/messages", label: "Messages", icon: MessageSquareIcon },
+	{
+		to: "/dashboard/messages",
+		label: "Messages",
+		icon: MessageSquareIcon,
+		group: "Team",
+	},
 	{
 		to: "/dashboard/announcements",
 		label: "Announcements",
 		icon: MegaphoneIcon,
+		group: "Team",
 		capability: "settings.manage",
 	},
 	{
@@ -130,18 +157,21 @@ const navigation = [
 		label: "Reports",
 		icon: BarChart3Icon,
 		operations: true,
+		group: "Time",
 		capability: "reports.view",
 	},
 	{
 		to: "/dashboard/activity",
 		label: "Activity",
 		icon: BellIcon,
+		group: "Workspace",
 		capability: "reports.view",
 	},
 	{
 		to: "/dashboard/settings/workplace",
 		label: "Settings",
 		icon: Settings2Icon,
+		group: "Workspace",
 		match: "/dashboard/settings",
 		anyCapability: [
 			"settings.manage",
@@ -152,6 +182,8 @@ const navigation = [
 		],
 	},
 ] as const;
+
+const navigationGroups = ["Plan", "Team", "Time", "Workspace"] as const;
 
 function navigationVisibleFor(
 	item: (typeof navigation)[number],
@@ -288,63 +320,81 @@ function DashboardLayout() {
 									>
 										{workplace.name}
 									</span>
-									<span className="truncate text-xs">Manager workspace</span>
+									<span className="truncate text-muted-foreground text-xs">
+										Manager workspace
+									</span>
 								</div>
 							</SidebarMenuButton>
 						</SidebarMenuItem>
 					</SidebarMenu>
 				</SidebarHeader>
 				<SidebarContent>
-					<SidebarGroup>
-						<SidebarGroupLabel>Operations</SidebarGroupLabel>
-						<SidebarGroupContent>
-							<nav aria-label="Manager navigation">
-								<SidebarMenu>
-									{visibleNavigation.map((item) => {
-										const locked =
-											"operations" in item &&
-											item.operations &&
-											!billing.data?.capabilities.operations;
-										const exact = "exact" in item && item.exact;
-										const matchPath =
-											"match" in item && item.match ? item.match : item.to;
-										const active = exact
-											? pathname === matchPath
-											: pathname.startsWith(matchPath);
-										return (
-											<SidebarMenuItem key={item.to}>
-												<SidebarMenuButton
-													isActive={active}
-													aria-current={active ? "page" : undefined}
-													tooltip={item.label}
-													render={
-														<Link
-															to={
-																locked
-																	? "/dashboard/settings/subscription"
-																	: item.to
+					<nav aria-label="Manager navigation" className="contents">
+						{navigationGroups.map((group) => {
+							const items = visibleNavigation.filter(
+								(item) => item.group === group,
+							);
+							if (items.length === 0) return null;
+							return (
+								<SidebarGroup
+									key={group}
+									className={group === "Workspace" ? "mt-auto" : undefined}
+								>
+									{group === "Workspace" ? null : (
+										<SidebarGroupLabel>{group}</SidebarGroupLabel>
+									)}
+									<SidebarGroupContent>
+										<SidebarMenu>
+											{items.map((item) => {
+												const locked =
+													"operations" in item &&
+													item.operations &&
+													!billing.data?.capabilities.operations;
+												const exact = "exact" in item && item.exact;
+												const matchPath =
+													"match" in item && item.match ? item.match : item.to;
+												const active = exact
+													? pathname === matchPath
+													: pathname.startsWith(matchPath);
+												return (
+													<SidebarMenuItem key={item.to}>
+														<SidebarMenuButton
+															isActive={active}
+															aria-current={active ? "page" : undefined}
+															tooltip={item.label}
+															render={
+																<Link
+																	to={
+																		locked
+																			? "/dashboard/settings/subscription"
+																			: item.to
+																	}
+																	activeOptions={{ exact: Boolean(exact) }}
+																/>
 															}
-															activeOptions={{ exact: Boolean(exact) }}
-														/>
-													}
-												>
-													<item.icon />
-													<span>{item.label}</span>
-													{locked ? (
-														<LockIcon className="ml-auto size-3.5" />
-													) : null}
-													{item.to === "/dashboard/activity" &&
-													unreadCount > 0 ? (
-														<SidebarMenuBadge>{unreadCount}</SidebarMenuBadge>
-													) : null}
-												</SidebarMenuButton>
-											</SidebarMenuItem>
-										);
-									})}
-								</SidebarMenu>
-							</nav>
-						</SidebarGroupContent>
-					</SidebarGroup>
+														>
+															<item.icon />
+															<span>{item.label}</span>
+															{locked ? (
+																<LockIcon
+																	className="ml-auto size-3.5 text-muted-foreground"
+																	aria-label="Needs the Operations plan"
+																/>
+															) : null}
+														</SidebarMenuButton>
+														{item.to === "/dashboard/activity" &&
+														unreadCount > 0 ? (
+															<SidebarMenuBadge>{unreadCount}</SidebarMenuBadge>
+														) : null}
+													</SidebarMenuItem>
+												);
+											})}
+										</SidebarMenu>
+									</SidebarGroupContent>
+								</SidebarGroup>
+							);
+						})}
+					</nav>
 				</SidebarContent>
 				<SidebarFooter>
 					<div className="px-1 group-data-[collapsible=icon]:hidden">
@@ -437,13 +487,38 @@ function DashboardLayout() {
 			<SidebarInset
 				className={cn(
 					"flex h-svh min-h-0! min-w-0 flex-col overflow-hidden md:h-[calc(100svh-1rem)]",
-					isSchedule && "bg-muted/20",
 				)}
 			>
-				<header className="sticky top-0 z-40 flex min-h-14 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-background px-3 py-2 shadow-xs md:h-14 md:py-0">
+				<header className="sticky top-0 z-40 flex min-h-14 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-background px-3 py-2 md:h-14 md:px-4 md:py-0">
 					<SidebarTrigger className="-ml-1 shrink-0" />
+					<Separator
+						orientation="vertical"
+						className="mx-1 data-[orientation=vertical]:h-4"
+					/>
 					{isSchedule ? null : (
-						<span className="shrink-0 font-medium text-sm">{headerLabel}</span>
+						<Breadcrumb className="min-w-0">
+							<BreadcrumbList>
+								{isSettings && settingsLabel ? (
+									<>
+										<BreadcrumbItem className="hidden sm:inline-flex">
+											<BreadcrumbLink
+												render={<Link to="/dashboard/settings/workplace" />}
+											>
+												Settings
+											</BreadcrumbLink>
+										</BreadcrumbItem>
+										<BreadcrumbSeparator className="hidden sm:inline-flex" />
+										<BreadcrumbItem>
+											<BreadcrumbPage>{settingsLabel}</BreadcrumbPage>
+										</BreadcrumbItem>
+									</>
+								) : (
+									<BreadcrumbItem>
+										<BreadcrumbPage>{activePage}</BreadcrumbPage>
+									</BreadcrumbItem>
+								)}
+							</BreadcrumbList>
+						</Breadcrumb>
 					)}
 					{isSchedule ? (
 						<div

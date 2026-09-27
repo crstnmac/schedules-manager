@@ -1,5 +1,6 @@
 import { Button } from "@SchedulesManager/ui/components/button";
 import { Separator } from "@SchedulesManager/ui/components/separator";
+import { cn } from "@SchedulesManager/ui/lib/utils";
 import {
 	createFileRoute,
 	Link,
@@ -34,7 +35,7 @@ function SettingsLayout() {
 	return (
 		<UnsavedChangesProvider>
 			<section className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
-				<aside className="shrink-0 border-b bg-muted/30 md:w-56 md:overflow-y-auto md:border-r md:border-b-0 lg:w-60">
+				<aside className="shrink-0 border-b md:w-56 md:overflow-y-auto md:border-r md:border-b-0 lg:w-60">
 					<nav
 						aria-label="Settings sections"
 						className="flex gap-3 overflow-x-auto overscroll-x-contain p-3 md:flex-col md:gap-4 md:overflow-visible"
@@ -56,7 +57,10 @@ function SettingsLayout() {
 													variant={active ? "secondary" : "ghost"}
 													size="sm"
 													aria-current={active ? "page" : undefined}
-													className="w-auto justify-start md:w-full"
+													className={cn(
+														"w-auto justify-start font-normal md:w-full",
+														active && "font-medium",
+													)}
 													nativeButton={false}
 													render={
 														<Link
@@ -75,7 +79,7 @@ function SettingsLayout() {
 						))}
 					</nav>
 				</aside>
-				<div className="min-h-0 min-w-0 flex-1 overflow-auto p-4 md:p-6">
+				<div className="min-h-0 min-w-0 flex-1 overflow-auto px-4 py-5 md:px-8 md:py-6">
 					<Outlet />
 				</div>
 			</section>
