@@ -481,6 +481,11 @@ export function PrivacyPolicyPage() {
 								UK Information Commissioner's Office).
 							</p>
 							<p>
+								For step-by-step instructions and information about retained
+								records, see our{" "}
+								<Link to="/account-deletion">account deletion page</Link>.
+							</p>
+							<p>
 								Workplace members should direct requests about work records to
 								their employer first, since the employer controls much of that
 								data. We support employers in responding to valid requests.
@@ -581,6 +586,89 @@ export function PrivacyPolicyPage() {
 								? ` or by post to ${LEGAL_ENTITY.address}`
 								: ""}
 							. We will respond as required by applicable law.
+						</p>
+					),
+				},
+			]}
+		/>
+	);
+}
+
+export function AccountDeletionPage() {
+	return (
+		<LegalLayout
+			eyebrow="Account deletion"
+			title="Request deletion of your jooling account"
+			intro={
+				<p>
+					You can request deletion of your jooling account and associated
+					account data at any time. Email our privacy team from the email
+					address on your account to verify the request.
+				</p>
+			}
+			sections={[
+				{
+					id: "request",
+					heading: "How to request deletion",
+					body: (
+						<ol>
+							<li>
+								Email{" "}
+								<a href={`mailto:${LEGAL_ENTITY.privacyEmail}`}>
+									{LEGAL_ENTITY.privacyEmail}
+								</a>
+								from the email address associated with your jooling account.
+							</li>
+							<li>
+								Use the subject line{" "}
+								<strong>jooling account deletion request</strong>.
+							</li>
+							<li>
+								Tell us you want your account deleted. Do not include your
+								password.
+							</li>
+						</ol>
+					),
+				},
+				{
+					id: "data",
+					heading: "Data deleted and data retained",
+					body: (
+						<>
+							<p>
+								After we verify and process the request, we close the account
+								and delete or anonymize its account and profile data within{" "}
+								{RETENTION.accountDataDays} days. This includes account
+								identifiers and profile details such as your name and contact
+								information.
+							</p>
+							<p>
+								Workplace records, including schedules, shifts, time entries,
+								and workplace messages, are controlled by your employer. Contact
+								your employer to request deletion of those records. They are
+								kept while the workplace is active and deleted or anonymized
+								within {RETENTION.workplaceDataDays} days after workplace
+								closure so the workplace can export its records first.
+							</p>
+							<p>
+								We retain billing and tax records for up to{" "}
+								{RETENTION.billingYears} years where required by law, consent
+								records for at least {RETENTION.consentYears} years, and
+								application and device logs for up to {RETENTION.logDays} days.
+								We keep other information only as needed for legal obligations
+								or an open dispute.
+							</p>
+						</>
+					),
+				},
+				{
+					id: "timing",
+					heading: "Response time",
+					body: (
+						<p>
+							We respond within 45 days of a verifiable request. Complex
+							requests may take up to an additional 45 days; we will explain any
+							extension.
 						</p>
 					),
 				},

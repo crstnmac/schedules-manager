@@ -57,7 +57,7 @@ import { captureComparisonVisit } from "./analytics";
 import { CookieConsent } from "./cookie-consent";
 import { DpaPage } from "./dpa";
 import { LandingLink } from "./landing-link";
-import { PrivacyPolicyPage, TermsPage } from "./legal";
+import { AccountDeletionPage, PrivacyPolicyPage, TermsPage } from "./legal";
 import { usePathname } from "./router";
 import { entityLine, isSet, LEGAL_ENTITY, withPeriod } from "./site-config";
 import { SolutionPage, type SolutionSlug, solutions } from "./solutions";
@@ -1074,6 +1074,11 @@ const routeSeo: Record<string, { title: string; description: string }> = {
 		description:
 			"Learn how jooling collects, uses, shares, and protects information when you use its scheduling products and services.",
 	},
+	"/account-deletion": {
+		title: "Account Deletion — jooling",
+		description:
+			"Request deletion of your jooling account and learn what data is deleted or retained.",
+	},
 	"/terms": {
 		title: "Terms & Conditions — jooling",
 		description:
@@ -1140,6 +1145,7 @@ function App() {
 	}, [pathname]);
 
 	if (pathname === "/privacy") return <PrivacyPolicyPage />;
+	if (pathname === "/account-deletion") return <AccountDeletionPage />;
 	if (pathname === "/terms") return <TermsPage />;
 	if (pathname === "/dpa") return <DpaPage />;
 	if (pathname.slice(1) in solutions)
