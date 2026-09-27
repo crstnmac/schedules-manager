@@ -111,12 +111,34 @@ export function LegalLayout({
 			<main id="legal-content" className="legal-main">
 				<div className="section-container legal-container">
 					<nav className="legal-document-nav" aria-label="Legal documents">
-						<Link to="/privacy" aria-current={eyebrow === "Privacy Policy" ? "page" : undefined}>Privacy</Link>
-						<Link to="/terms" aria-current={eyebrow === "Terms & Conditions" ? "page" : undefined}>Terms</Link>
-						<Link to="/dpa" aria-current={eyebrow === "Data Processing Addendum" ? "page" : undefined}>Data processing</Link>
+						<Link
+							to="/privacy"
+							aria-current={eyebrow === "Privacy Policy" ? "page" : undefined}
+						>
+							Privacy
+						</Link>
+						<Link
+							to="/terms"
+							aria-current={
+								eyebrow === "Terms & Conditions" ? "page" : undefined
+							}
+						>
+							Terms
+						</Link>
+						<Link
+							to="/dpa"
+							aria-current={
+								eyebrow === "Data Processing Addendum" ? "page" : undefined
+							}
+						>
+							Data processing
+						</Link>
 					</nav>
 					<header className="legal-header">
-						<div className="legal-header-meta"><p className="eyebrow">Legal / {eyebrow}</p><p className="legal-updated">Last updated {LAST_UPDATED}</p></div>
+						<div className="legal-header-meta">
+							<p className="eyebrow">Legal / {eyebrow}</p>
+							<p className="legal-updated">Last updated {LAST_UPDATED}</p>
+						</div>
 						<h1>{title}</h1>
 						<div className="legal-intro">{intro}</div>
 					</header>
@@ -125,7 +147,9 @@ export function LegalLayout({
 							<p>On this page</p>
 							<nav>
 								{sections.map((section) => (
-									<a key={section.id} href={`#${section.id}`}>{section.heading}</a>
+									<a key={section.id} href={`#${section.id}`}>
+										{section.heading}
+									</a>
 								))}
 							</nav>
 						</aside>

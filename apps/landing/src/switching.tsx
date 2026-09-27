@@ -205,15 +205,20 @@ export function SwitchingSection() {
 					<p className="eyebrow">Making a move?</p>
 					<h2>Bring your next week with you.</h2>
 					<p className="switching-lede">
-						Move your schedule into a draft, review it, then publish when it's ready.
+						Move your schedule into a draft, review it, then publish when it's
+						ready.
 					</p>
 				</div>
 				<nav className="switching-grid" aria-label="Switching guides">
 					{competitors.map((competitor) => (
-						<LandingLink className="switching-guide" href={`/vs/${competitor.slug}`} key={competitor.slug}>
+						<LandingLink
+							className="switching-guide"
+							href={`/vs/${competitor.slug}`}
+							key={competitor.slug}
+						>
 							<span>From {competitor.name}</span>
-								<ArrowRight aria-hidden="true" size={18} />
-							</LandingLink>
+							<ArrowRight aria-hidden="true" size={18} />
+						</LandingLink>
 					))}
 				</nav>
 			</div>
@@ -313,11 +318,17 @@ export function ComparisonPage({ slug }: { slug: string }) {
 						/>
 					</figure>
 				</section>
-				<section id="what-changes" className="comparison-changes section-container">
+				<section
+					id="what-changes"
+					className="comparison-changes section-container"
+				>
 					<div className="comparison-section-heading">
 						<p className="eyebrow">The difference</p>
 						<h2>Less chasing. More clarity.</h2>
-						<p>Keep the parts of scheduling that matter close to hand, from the first draft to the version your team sees.</p>
+						<p>
+							Keep the parts of scheduling that matter close to hand, from the
+							first draft to the version your team sees.
+						</p>
 					</div>
 					<div className="comparison-changes-grid">
 						{details.changes.map((change) => (
@@ -338,7 +349,10 @@ export function ComparisonPage({ slug }: { slug: string }) {
 					<div className="comparison-section-heading">
 						<p className="eyebrow">The move</p>
 						<h2>Bring your next week over.</h2>
-						<p>Take a deliberate path from your existing schedule to a draft you can review before anyone is notified.</p>
+						<p>
+							Take a deliberate path from your existing schedule to a draft you
+							can review before anyone is notified.
+						</p>
 					</div>
 					<ol className="comparison-step-grid">
 						<li>
