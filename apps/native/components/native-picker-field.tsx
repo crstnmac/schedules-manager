@@ -10,7 +10,6 @@ import {
 	Text,
 	View,
 } from "react-native";
-import { NAV_THEME } from "@/lib/constants";
 import {
 	dateTimeValue,
 	formatPickerValue,
@@ -18,7 +17,7 @@ import {
 	isoDate,
 	type PickerMode,
 } from "@/lib/datetime";
-import { useColorScheme } from "@/lib/use-color-scheme";
+import { radius, spacing, useAppTheme } from "@/theme";
 
 /**
  * Web fallback for the native picker fields: tappable field that opens a
@@ -38,8 +37,7 @@ export default function NativeDateTimeField({
 	onChange: (value: string) => void;
 	minimumDate?: Date;
 }) {
-	const { colorScheme } = useColorScheme();
-	const theme = colorScheme === "dark" ? NAV_THEME.dark : NAV_THEME.light;
+	const { theme } = useAppTheme();
 	const [open, setOpen] = useState(false);
 	// staged while open: scroll buffers into pending, Done commits, Cancel discards
 	const [pending, setPending] = useState<Date | null>(null);
@@ -84,20 +82,22 @@ export default function NativeDateTimeField({
 
 	return (
 		<View style={{ gap: 6 }}>
-			<Text style={[styles.fieldLabel, { color: theme.text }]}>{label}</Text>
+			<Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+				{label}
+			</Text>
 			<Pressable
 				accessibilityRole="button"
 				accessibilityLabel={label}
 				accessibilityValue={{ text: displayText }}
 				onPress={() => setOpen(true)}
-				style={styles.nativeField}
+				style={[styles.nativeField, { backgroundColor: theme.surfaceMuted }]}
 			>
 				<Text
 					style={{
 						fontSize: 16,
 						fontVariant:
 							mode === "date" ? undefined : (["tabular-nums"] as never),
-						color: value ? theme.text : theme.muted,
+						color: value ? theme.text : theme.textTertiary,
 					}}
 				>
 					{displayText}
@@ -160,17 +160,19 @@ export default function NativeDateTimeField({
 }
 
 const styles = StyleSheet.create({
-	fieldLabel: { fontSize: 13, fontWeight: "600" },
+	fieldLabel: {
+		fontSize: 13,
+		lineHeight: 18,
+		fontWeight: "600",
+		paddingHorizontal: 2,
+	},
 	nativeField: {
-		minHeight: 52,
-		borderWidth: 1,
-		borderRadius: 12,
+		minHeight: 50,
+		borderRadius: radius.md,
 		borderCurve: "continuous",
-		paddingHorizontal: 14,
-		paddingVertical: 12,
-		fontSize: 16,
+		paddingHorizontal: spacing.md + 2,
+		paddingVertical: spacing.md,
 		justifyContent: "center",
-		borderColor: "#CBD5E1",
 	},
 	pickerScrim: { flex: 1, backgroundColor: "rgba(0,0,0,0.3)" },
 	pickerSheetIOS: {

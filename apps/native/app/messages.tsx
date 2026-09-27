@@ -1,185 +1,157 @@
-import { useEffect, useState } from "react";
-import {
-	ActivityIndicator,
-	Pressable,
-	StyleSheet,
-	Text,
-	View,
-} from "react-native";
+import { useRouter } from "expo-router";
+import { View } from "react-native";
 
 import {
-	AppScreen,
+	Appear,
+	AppText,
+	Avatar,
 	Card,
-	NativeField,
-	PrimaryButton,
-	useAppTheme,
+	CardListSkeleton,
+	Divider,
+	EmptyState,
+	ErrorState,
+	Icon,
+	IconTile,
+	PressableScale,
+	Screen,
 } from "@/components/ui";
+import { positionColor } from "@/lib/position-color";
 import {
-	useConversationMessages,
 	useConversations,
 	useCurrentEmployment,
-	useSendConversationMessage,
+	type WorkplaceConversation,
 } from "@/lib/queries";
+import { spacing, useAppTheme } from "@/theme";
 
+/** Conversation list; each row opens its thread. */
 export default function MessagesScreen() {
-	const { theme } = useAppTheme();
-	const { workplaceId } = useCurrentEmployment();
+	const router = useRouter();
+	const { workplaceId, employment } = useCurrentEmployment();
 	const conversations = useConversations(workplaceId);
-	const [conversationId, setConversationId] = useState<string>();
-	const [body, setBody] = useState("");
-	const messages = useConversationMessages(conversationId);
-	const send = useSendConversationMessage(conversationId);
-
-	useEffect(() => {
-		if (!conversationId && conversations.data?.[0]) {
-			setConversationId(conversations.data[0].id);
-		}
-	}, [conversationId, conversations.data]);
-
-	const selected = conversations.data?.find(
-		(conversation) => conversation.id === conversationId,
-	);
+	const items = conversations.data ?? [];
 
 	return (
-		<AppScreen safeTop={false}>
-			{conversations.isLoading ? (
-				<ActivityIndicator color={theme.primary} />
-			) : null}
-			{conversations.data && conversations.data.length > 1 ? (
-				<View style={styles.conversationRow}>
-					{conversations.data.map((conversation) => {
-						const active = conversation.id === conversationId;
-						return (
-							<Pressable
-								key={conversation.id}
-								accessibilityRole="button"
-								accessibilityState={{ selected: active }}
-								onPress={() => setConversationId(conversation.id)}
-								style={[
-									styles.conversationChip,
-									{
-										borderColor: active ? theme.primary : theme.border,
-										backgroundColor: active ? theme.primary : "transparent",
-									},
-								]}
-							>
-								<Text
-									style={{
-										color: active ? theme.onPrimary : theme.text,
-										fontWeight: "700",
-									}}
-								>
-									{conversation.title}
-								</Text>
-							</Pressable>
-						);
-					})}
-				</View>
+		<Screen onRefresh={() => conversations.refetch()}>
+			{conversations.isLoading ? <CardListSkeleton count={2} /> : null}
+			{conversations.isError ? (
+				<ErrorState
+					error={conversations.error}
+					onRetry={() => void conversations.refetch()}
+				/>
 			) : null}
 
-			{selected ? (
-				<Text style={[styles.sectionTitle, { color: theme.muted }]}>
-					{selected.title.toUpperCase()}
-				</Text>
-			) : null}
-			{messages.isLoading ? <ActivityIndicator color={theme.primary} /> : null}
-			{!messages.isLoading && messages.hasMore ? (
-				<Pressable
-					accessibilityRole="button"
-					accessibilityLabel="Load earlier messages"
-					disabled={messages.isFetchingPreviousPage}
-					onPress={messages.loadOlder}
-					style={styles.loadOlder}
-				>
-					<Text style={{ color: theme.primary, fontWeight: "700" }}>
-						{messages.isFetchingPreviousPage
-							? "Loading earlier messages…"
-							: "Load earlier messages"}
-					</Text>
-				</Pressable>
-			) : null}
-			{messages.messages.map((message) => (
-				<Card key={message.id}>
-					<View style={styles.messageMeta}>
-						<Text style={[styles.author, { color: theme.text }]}>
-							{message.author}
-						</Text>
-						<Text style={[styles.date, { color: theme.muted }]}>
-							{new Date(message.createdAt).toLocaleString(undefined, {
-								month: "short",
-								day: "numeric",
-								hour: "numeric",
-								minute: "2-digit",
-							})}
-						</Text>
-					</View>
-					<Text style={[styles.messageBody, { color: theme.text }]}>
-						{message.body}
-					</Text>
-				</Card>
-			))}
-			{conversationId &&
-			messages.messages.length === 0 &&
-			!messages.isLoading ? (
-				<Card>
-					<Text style={[styles.messageBody, { color: theme.muted }]}>
-						No messages yet. Start the conversation below.
-					</Text>
-				</Card>
-			) : null}
-			{conversations.isError || messages.isError || send.isError ? (
-				<Text style={[styles.error, { color: theme.notification }]}>
-					{
-						((conversations.error ?? messages.error ?? send.error) as Error)
-							.message
-					}
-				</Text>
+			{!conversations.isLoading &&
+			!conversations.isError &&
+			items.length === 0 ? (
+				<EmptyState
+					icon="message"
+					title="No conversations yet"
+					body="Workplace conversations appear here once your Manager starts one."
+				/>
 			) : null}
 
-			{conversationId ? (
-				<Card>
-					<NativeField
-						label="Message"
-						value={body}
-						onChange={setBody}
-						placeholder="Write a Workplace Message"
-						multiline
-					/>
-					<PrimaryButton
-						label={send.isPending ? "Sending…" : "Send Message"}
-						loading={send.isPending}
-						disabled={!body.trim()}
-						onPress={() =>
-							send.mutate(body.trim(), {
-								onSuccess: () => setBody(""),
-							})
-						}
-					/>
-				</Card>
+			{items.length > 0 ? (
+				<Appear>
+					<Card padded={false} style={{ gap: 0 }}>
+						{items.map((conversation, index) => (
+							<View key={conversation.id}>
+								{index > 0 ? <Divider inset={72} /> : null}
+								<ConversationRow
+									conversation={conversation}
+									workplaceName={employment?.workplace.name}
+									onPress={() =>
+										router.push({
+											pathname: "/conversation/[id]",
+											params: {
+												id: conversation.id,
+												title: conversation.title,
+											},
+										})
+									}
+								/>
+							</View>
+						))}
+					</Card>
+				</Appear>
 			) : null}
-		</AppScreen>
+		</Screen>
 	);
 }
 
-const styles = StyleSheet.create({
-	conversationRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-	conversationChip: {
-		minHeight: 40,
-		borderWidth: 1,
-		borderRadius: 999,
-		paddingHorizontal: 14,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-	sectionTitle: { fontSize: 11, fontWeight: "800", letterSpacing: 1.1 },
-	messageMeta: {
-		flexDirection: "row",
-		justifyContent: "space-between",
-		gap: 12,
-	},
-	author: { flex: 1, fontSize: 14, fontWeight: "700" },
-	date: { fontSize: 11 },
-	messageBody: { fontSize: 14, lineHeight: 21 },
-	loadOlder: { alignItems: "center", paddingVertical: 10 },
-	error: { fontSize: 14, lineHeight: 20 },
-});
+function shortTime(iso: string) {
+	const date = new Date(iso);
+	const now = new Date();
+	if (date.toDateString() === now.toDateString())
+		return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+	const days = (now.getTime() - date.getTime()) / 86_400_000;
+	if (days < 7) return date.toLocaleDateString(undefined, { weekday: "short" });
+	return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function ConversationRow({
+	conversation,
+	workplaceName,
+	onPress,
+}: {
+	conversation: WorkplaceConversation;
+	workplaceName?: string;
+	onPress: () => void;
+}) {
+	const { theme } = useAppTheme();
+	const everyone = conversation.kind === "workplace";
+	const last = conversation.lastMessage;
+	const preview = last
+		? `${last.mine ? "You" : everyone ? last.author.split(" ")[0] : ""}${last.mine || everyone ? ": " : ""}${last.body}`
+		: everyone
+			? `Everyone at ${workplaceName ?? "your workplace"}`
+			: (conversation.subtitle ?? "Direct message");
+	return (
+		<PressableScale
+			accessibilityRole="button"
+			accessibilityLabel={`${conversation.title}. ${preview}`}
+			haptic
+			pressedScale={0.985}
+			onPress={onPress}
+			style={{
+				flexDirection: "row",
+				alignItems: "center",
+				gap: spacing.md,
+				paddingHorizontal: spacing.lg,
+				paddingVertical: spacing.md,
+				minHeight: 76,
+			}}
+		>
+			{everyone ? (
+				<IconTile icon="people" size={48} />
+			) : (
+				<Avatar
+					name={conversation.title}
+					size={48}
+					color={positionColor(conversation.title)}
+				/>
+			)}
+			<View style={{ flex: 1, gap: 3 }}>
+				<View
+					style={{
+						flexDirection: "row",
+						alignItems: "baseline",
+						gap: spacing.sm,
+					}}
+				>
+					<AppText variant="headline" numberOfLines={1} style={{ flex: 1 }}>
+						{conversation.title}
+					</AppText>
+					{last ? (
+						<AppText variant="caption" tone="tertiary" tabular>
+							{shortTime(last.createdAt)}
+						</AppText>
+					) : null}
+				</View>
+				<AppText variant="footnote" tone="secondary" numberOfLines={2}>
+					{preview}
+				</AppText>
+			</View>
+			<Icon name="chevronRight" size={13} color={theme.textTertiary} />
+		</PressableScale>
+	);
+}

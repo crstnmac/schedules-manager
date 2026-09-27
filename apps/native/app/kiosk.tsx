@@ -9,10 +9,10 @@ import {
 } from "react-native";
 
 import {
-	AppScreen,
+	Button,
 	Card,
 	NativeField,
-	PrimaryButton,
+	Screen,
 	useAppTheme,
 } from "@/components/ui";
 import { ApiError } from "@/lib/api";
@@ -78,7 +78,7 @@ export default function KioskScreen() {
 	}
 
 	return (
-		<AppScreen safeTop={false}>
+		<Screen>
 			{locations.isLoading ? <ActivityIndicator color={theme.primary} /> : null}
 			<Card>
 				{locations.data && locations.data.length > 0 ? (
@@ -173,7 +173,7 @@ export default function KioskScreen() {
 						);
 					})}
 				</View>
-				<PrimaryButton
+				<Button
 					label={action === "in" ? "Clock in Worker" : "Clock out Worker"}
 					loading={submitting}
 					disabled={!selectedLocationId || !locationPin || !workerPin}
@@ -185,7 +185,7 @@ export default function KioskScreen() {
 					</Text>
 				) : null}
 			</Card>
-		</AppScreen>
+		</Screen>
 	);
 }
 

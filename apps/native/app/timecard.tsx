@@ -1,23 +1,33 @@
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
+import { Alert, View } from "react-native";
 
 import {
-	AppScreen,
+	Appear,
+	AppText,
+	Badge,
+	Button,
 	Card,
-	PrimaryButton,
-	SecondaryButton,
-	useAppTheme,
+	CardListSkeleton,
+	Divider,
+	EmptyState,
+	ErrorState,
+	Screen,
+	Section,
+	Skeleton,
 } from "@/components/ui";
+import { useDisplayPrefs } from "@/lib/display";
 import { positionColor } from "@/lib/position-color";
 import {
+	type PayPeriodInfo,
 	useCurrentEmployment,
 	useEndBreak,
 	useMyTimeEntries,
 	usePayPeriod,
 	useStartBreak,
 } from "@/lib/queries";
+import { spacing } from "@/theme";
 
 export default function TimecardScreen() {
-	const { theme } = useAppTheme();
+	const { formatClockTime } = useDisplayPrefs();
 	const { workplaceId } = useCurrentEmployment();
 	const timecard = useMyTimeEntries(workplaceId);
 	const payPeriod = usePayPeriod(workplaceId);
@@ -26,187 +36,194 @@ export default function TimecardScreen() {
 
 	const entries = timecard.data?.timeEntries ?? [];
 	const groups = groupByDay(entries);
-	const week = currentWeekTotals(entries, payPeriod.data?.weekStartDay ?? 1);
-	const lastWeek = weekTotals(entries, -1, payPeriod.data?.weekStartDay ?? 1);
-	const periodTotal = payPeriod.data ? payPeriod.data.periodTotalMs : null;
-	const weekLabel = `Week of ${new Date(week.startsAt).toLocaleDateString(
-		undefined,
-		{ month: "short", day: "numeric" },
-	)}`;
-	const lastWeekLabel = `Week of ${new Date(
-		lastWeek.startsAt,
-	).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+	const weekStartDay = payPeriod.data?.weekStartDay ?? 1;
+	const week = currentWeekTotals(entries, weekStartDay);
+	const lastWeek = weekTotals(entries, -1, weekStartDay);
+	const period = payPeriod.data;
+	const shortDate = (iso: string) =>
+		new Date(iso).toLocaleDateString(undefined, {
+			month: "short",
+			day: "numeric",
+		});
 
 	return (
-		<AppScreen safeTop={false}>
-			{timecard.isLoading ? (
-				<ActivityIndicator color={theme.primary} style={{ marginTop: 8 }} />
-			) : null}
-
+		<Screen
+			onRefresh={() => Promise.all([timecard.refetch(), payPeriod.refetch()])}
+		>
 			{timecard.isError ? (
-				<Card>
-					<Text style={[styles.errorText, { color: theme.notification }]}>
-						{(timecard.error as Error).message}
-					</Text>
-				</Card>
+				<ErrorState
+					error={timecard.error}
+					onRetry={() => void timecard.refetch()}
+				/>
 			) : null}
 
-			{payPeriod.data && periodTotal !== null ? (
-				<Card>
-					<Text style={[styles.weekLabel, { color: theme.muted }]}>
-						{`PAY PERIOD · ${new Date(
-							payPeriod.data.startsAt,
-						).toLocaleDateString(undefined, {
-							month: "short",
-							day: "numeric",
-						})} – ${new Date(payPeriod.data.endsAt).toLocaleDateString(
-							undefined,
-							{ month: "short", day: "numeric" },
-						)}`.toUpperCase()}
-					</Text>
-					<Text style={[styles.weekTotal, { color: theme.text }]}>
-						{formatHours(periodTotal)}
-					</Text>
-					<Text style={[styles.entryMeta, { color: theme.muted }]}>
-						{payPeriod.data.type === "weekly"
-							? "Weekly"
-							: payPeriod.data.type === "biweekly"
-								? "Every two weeks"
-								: payPeriod.data.type === "semimonthly"
-									? "Twice a month"
-									: "Monthly"}{" "}
-						pay period
-					</Text>
-				</Card>
-			) : null}
-
-			<View style={styles.totalsRow}>
-				<Card style={styles.totalsCell}>
-					<Text style={[styles.weekLabel, { color: theme.muted }]}>
-						{weekLabel.toUpperCase()}
-					</Text>
-					<Text style={[styles.weekTotal, { color: theme.text }]}>
-						{formatHours(week.totalMs)}
-					</Text>
-				</Card>
-				<Card style={styles.totalsCell}>
-					<Text style={[styles.weekLabel, { color: theme.muted }]}>
-						{lastWeekLabel.toUpperCase()}
-					</Text>
-					<Text style={[styles.weekTotal, { color: theme.text }]}>
-						{formatHours(lastWeek.totalMs)}
-					</Text>
-				</Card>
-			</View>
-
-			{entries.length === 0 && !timecard.isLoading ? (
-				<Card>
-					<Text style={[styles.dayHeading, { color: theme.text }]}>
-						No punches yet
-					</Text>
-					<Text style={[styles.entryMeta, { color: theme.muted }]}>
-						Clock in from your schedule when your shift starts — your punches
-						will show up here.
-					</Text>
-				</Card>
-			) : null}
-
-			{groups.map((group) => (
-				<Card key={group.dateKey}>
-					<View style={styles.dayRow}>
-						<Text style={[styles.dayHeading, { color: theme.text }]}>
-							{group.dayLabel}
-						</Text>
-						<Text style={[styles.dayTotal, { color: theme.muted }]}>
-							{formatHours(group.totalMs)}
-						</Text>
+			<Appear>
+				<Card style={{ gap: spacing.lg }}>
+					<View style={{ gap: spacing.xxs }}>
+						<AppText variant="overline" tone="secondary">
+							This week · from {shortDate(week.startsAt)}
+						</AppText>
+						{timecard.isLoading ? (
+							<Skeleton width={140} height={40} />
+						) : (
+							<AppText variant="display">{formatHours(week.totalMs)}</AppText>
+						)}
 					</View>
-					{group.entries.map((entry) => {
-						const open = entry.clockedOutAt === null;
-						const durationMs = open
-							? Date.now() - new Date(entry.clockedInAt).getTime()
-							: new Date(entry.clockedOutAt ?? "").getTime() -
-								new Date(entry.clockedInAt).getTime();
-						return (
-							<View key={entry.id}>
-								<View style={styles.entryRow}>
-									<View
-										style={[
-											styles.positionDot,
-											{ backgroundColor: positionColor(entry.positionName) },
-										]}
-										aria-hidden
-									/>
-									<View style={styles.entryCopy}>
-										<Text style={[styles.entryTitle, { color: theme.text }]}>
-											{entry.positionName}
-										</Text>
-										<Text style={[styles.entryMeta, { color: theme.muted }]}>
-											{formatClock(entry.clockedInAt)} –{" "}
-											{open
-												? "on the clock"
-												: formatClock(entry.clockedOutAt ?? undefined)}
-											{" · "}
-											{formatHours(durationMs)}
-										</Text>
-									</View>
-									{open ? (
-										<View
-											style={[styles.pill, { backgroundColor: theme.primary }]}
-										>
-											<Text
-												style={[styles.pillText, { color: theme.onPrimary }]}
-											>
-												OPEN
-											</Text>
-										</View>
-									) : null}
-								</View>
-								{open ? (
-									<View style={styles.breakActions}>
-										<PrimaryButton
-											label="Start Break"
-											loading={startBreak.isPending}
-											disabled={endBreak.isPending}
-											onPress={() =>
-												startBreak.mutate(entry.id, {
-													onError: (error) =>
-														Alert.alert(
-															"Could not start Break",
-															(error as Error).message,
-														),
-												})
-											}
-											style={{ flex: 1 }}
-										/>
-										<SecondaryButton
-											label="End Break"
-											disabled={startBreak.isPending || endBreak.isPending}
-											onPress={() =>
-												endBreak.mutate(entry.id, {
-													onError: (error) =>
-														Alert.alert(
-															"Could not end Break",
-															(error as Error).message,
-														),
-												})
-											}
-											style={{ flex: 1 }}
-										/>
-									</View>
-								) : null}
-							</View>
-						);
-					})}
+					<Divider />
+					<View style={{ flexDirection: "row" }}>
+						<Stat label="Last week" value={formatHours(lastWeek.totalMs)} />
+						{period ? (
+							<Stat
+								label={`${PERIOD_LABEL[period.type]} · ${shortDate(period.startsAt)}–${shortDate(period.endsAt)}`}
+								value={formatHours(period.periodTotalMs)}
+							/>
+						) : null}
+					</View>
 				</Card>
+			</Appear>
+
+			{timecard.isLoading ? <CardListSkeleton count={2} /> : null}
+
+			{entries.length === 0 && !timecard.isLoading && !timecard.isError ? (
+				<EmptyState
+					icon="stopwatch"
+					tone="success"
+					title="No punches yet"
+					body="Clock in from Today when your shift starts — your punches will show up here."
+				/>
+			) : null}
+
+			{groups.map((group, groupIndex) => (
+				<Appear key={group.dateKey} index={groupIndex + 1}>
+					<Section
+						title={group.dayLabel}
+						action={
+							<AppText variant="callout" weight="600" tone="secondary" tabular>
+								{formatHours(group.totalMs)}
+							</AppText>
+						}
+					>
+						<Card padded={false} style={{ gap: 0 }}>
+							{group.entries.map((entry, index) => {
+								const open = entry.clockedOutAt === null;
+								const durationMs =
+									(open
+										? Date.now()
+										: new Date(entry.clockedOutAt ?? "").getTime()) -
+									new Date(entry.clockedInAt).getTime();
+								return (
+									<View key={entry.id}>
+										{index > 0 ? <Divider inset={spacing.lg} /> : null}
+										<View style={{ padding: spacing.lg, gap: spacing.md }}>
+											<View
+												style={{
+													flexDirection: "row",
+													alignItems: "center",
+													gap: spacing.md,
+												}}
+											>
+												<View
+													style={{
+														width: 4,
+														alignSelf: "stretch",
+														borderRadius: 2,
+														backgroundColor: positionColor(entry.positionName),
+													}}
+												/>
+												<View style={{ flex: 1, gap: 2 }}>
+													<AppText variant="headline">
+														{entry.positionName}
+													</AppText>
+													<AppText variant="footnote" tone="secondary" tabular>
+														{formatClockTime(entry.clockedInAt)} –{" "}
+														{open
+															? "now"
+															: formatClockTime(
+																	entry.clockedOutAt ?? undefined,
+																)}
+													</AppText>
+												</View>
+												{open ? (
+													<Badge label="On the clock" tone="primary" dot />
+												) : (
+													<AppText variant="callout" weight="600" tabular>
+														{formatHours(durationMs)}
+													</AppText>
+												)}
+											</View>
+											{open ? (
+												<View style={{ flexDirection: "row", gap: spacing.sm }}>
+													<Button
+														label="Start break"
+														icon="cup"
+														variant="tinted"
+														loading={startBreak.isPending}
+														disabled={endBreak.isPending}
+														onPress={() =>
+															startBreak.mutate(entry.id, {
+																onError: (error) =>
+																	Alert.alert(
+																		"Could not start break",
+																		(error as Error).message,
+																	),
+															})
+														}
+														style={{ flex: 1 }}
+													/>
+													<Button
+														label="End break"
+														icon="play"
+														variant="secondary"
+														loading={endBreak.isPending}
+														disabled={startBreak.isPending}
+														onPress={() =>
+															endBreak.mutate(entry.id, {
+																onError: (error) =>
+																	Alert.alert(
+																		"Could not end break",
+																		(error as Error).message,
+																	),
+															})
+														}
+														style={{ flex: 1 }}
+													/>
+												</View>
+											) : null}
+										</View>
+									</View>
+								);
+							})}
+						</Card>
+					</Section>
+				</Appear>
 			))}
 
 			{entries.length > 0 ? (
-				<Text style={[styles.footer, { color: theme.muted }]}>
-					Showing your last {entries.length} punches.
-				</Text>
+				<AppText variant="caption" tone="tertiary" align="center">
+					Showing your last {entries.length} punches
+				</AppText>
 			) : null}
-		</AppScreen>
+		</Screen>
+	);
+}
+
+const PERIOD_LABEL: Record<PayPeriodInfo["type"], string> = {
+	weekly: "Pay week",
+	biweekly: "Pay period",
+	semimonthly: "Pay period",
+	monthly: "Pay month",
+};
+
+function Stat({ label, value }: { label: string; value: string }) {
+	return (
+		<View style={{ flex: 1, gap: 2 }}>
+			<AppText variant="title3" tabular>
+				{value}
+			</AppText>
+			<AppText variant="caption" tone="secondary" numberOfLines={2}>
+				{label}
+			</AppText>
+		</View>
 	);
 }
 
@@ -295,53 +312,3 @@ function formatHours(ms: number): string {
 	if (h === 0 && m === 0) return "0m";
 	return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
-
-function formatClock(iso?: string): string {
-	if (!iso) return "";
-	return new Date(iso).toLocaleTimeString([], {
-		hour: "numeric",
-		minute: "2-digit",
-	});
-}
-
-const styles = StyleSheet.create({
-	pill: {
-		borderRadius: 999,
-		paddingHorizontal: 8,
-		paddingVertical: 3,
-	},
-	weekLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 1 },
-	totalsRow: { flexDirection: "row", gap: 12 },
-	totalsCell: { flex: 1 },
-	weekTotal: {
-		fontSize: 26,
-		fontWeight: "800",
-		letterSpacing: -0.5,
-		marginTop: 4,
-		fontVariant: ["tabular-nums"],
-	},
-	positionDot: { width: 8, height: 8, borderRadius: 4, marginTop: 5 },
-	dayRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		marginBottom: 8,
-	},
-	dayHeading: { fontSize: 16, fontWeight: "700" },
-	dayTotal: { fontSize: 14, fontWeight: "600" },
-	entryRow: {
-		flexDirection: "row",
-		alignItems: "center",
-		justifyContent: "space-between",
-		borderTopWidth: StyleSheet.hairlineWidth,
-		paddingVertical: 10,
-		gap: 10,
-	},
-	entryCopy: { flex: 1, gap: 2 },
-	breakActions: { flexDirection: "row", gap: 10, paddingBottom: 6 },
-	entryTitle: { fontSize: 15, fontWeight: "600" },
-	entryMeta: { fontSize: 13, lineHeight: 19 },
-	pillText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.8 },
-	footer: { fontSize: 12, textAlign: "center", paddingVertical: 8 },
-	errorText: { fontSize: 14 },
-});

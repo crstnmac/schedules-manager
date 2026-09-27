@@ -135,7 +135,11 @@ const authOptions: BetterAuthOptions = {
 			});
 		},
 	},
-	trustedOrigins: [env.APP_URL, "jooling://"],
+	trustedOrigins: [
+		env.APP_URL,
+		"jooling://",
+		...(process.env.NODE_ENV === "development" ? ["exp://**"] : []),
+	],
 	advanced: { database: { generateId: "uuid" as const } },
 	databaseHooks: {
 		user: {

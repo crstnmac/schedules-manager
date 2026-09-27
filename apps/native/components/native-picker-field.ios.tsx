@@ -1,14 +1,13 @@
 import { Host } from "@expo/ui";
 import { DatePicker } from "@expo/ui/swift-ui";
 import { StyleSheet, Text, View } from "react-native";
-import { NAV_THEME } from "@/lib/constants";
 import {
 	dateTimeValue,
 	hhmmFrom,
 	isoDate,
 	type PickerMode,
 } from "@/lib/datetime";
-import { useColorScheme } from "@/lib/use-color-scheme";
+import { useAppTheme } from "@/theme";
 
 /**
  * iOS native date/time field: SwiftUI's compact `DatePicker` — tapping opens
@@ -28,13 +27,14 @@ export default function NativeDateTimeField({
 	onChange: (value: string) => void;
 	minimumDate?: Date;
 }) {
-	const { colorScheme } = useColorScheme();
-	const theme = colorScheme === "dark" ? NAV_THEME.dark : NAV_THEME.light;
+	const { theme, colorScheme } = useAppTheme();
 	const selection = dateTimeValue(value, mode);
 
 	return (
 		<View style={{ gap: 6 }}>
-			<Text style={[styles.fieldLabel, { color: theme.text }]}>{label}</Text>
+			<Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+				{label}
+			</Text>
 			<View
 				accessible
 				accessibilityRole="button"
@@ -62,6 +62,11 @@ export default function NativeDateTimeField({
 }
 
 const styles = StyleSheet.create({
-	fieldLabel: { fontSize: 13, fontWeight: "600" },
+	fieldLabel: {
+		fontSize: 13,
+		lineHeight: 18,
+		fontWeight: "600",
+		paddingHorizontal: 2,
+	},
 	host: { minHeight: 44, justifyContent: "center" },
 });

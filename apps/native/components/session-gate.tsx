@@ -1,27 +1,34 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { type PropsWithChildren, useState } from "react";
-import {
-	ActivityIndicator,
-	Pressable,
-	ScrollView,
-	StyleSheet,
-	Text,
-	TextInput,
-	View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { type PropsWithChildren, type ReactNode, useState } from "react";
+import { ActivityIndicator, View } from "react-native";
+
 import { AuthScreen } from "@/components/auth-screen";
+import { LogoMark } from "@/components/logo-mark";
+import {
+	Appear,
+	AppText,
+	Avatar,
+	Button,
+	Callout,
+	Card,
+	type IconName,
+	IconTile,
+	ListGroup,
+	ListRow,
+	NativeField,
+	PressableScale,
+	Screen,
+} from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { NAV_THEME } from "@/lib/constants";
 import { useDisplayPrefs } from "@/lib/display";
 import {
 	useAcceptInvitation,
 	useMe,
 	usePendingInvitations,
 } from "@/lib/queries";
-import { useColorScheme } from "@/lib/use-color-scheme";
 import { useSelectedWorkplaceId } from "@/lib/workplace-store";
+import { spacing, useAppTheme } from "@/theme";
 
 export function SessionGate({ children }: PropsWithChildren) {
 	const { isLoading: authLoading, user, signOut } = useAuth();
@@ -93,94 +100,136 @@ export function SessionGate({ children }: PropsWithChildren) {
 	return <>{children}</>;
 }
 
+/** Shared frame for every pre-app step: centred column, brand eyebrow, title. */
+function GateFrame({
+	eyebrow,
+	title,
+	body,
+	children,
+}: {
+	eyebrow?: string;
+	title: string;
+	body?: string;
+	children: ReactNode;
+}) {
+	return (
+		<Screen headerless contentStyle={{ flexGrow: 1, justifyContent: "center" }}>
+			<View
+				style={{
+					width: "100%",
+					maxWidth: 440,
+					alignSelf: "center",
+					gap: spacing.xxl,
+				}}
+			>
+				<Appear style={{ gap: spacing.sm }}>
+					<LogoMark size={40} />
+					{eyebrow ? (
+						<AppText
+							variant="overline"
+							tone="tint"
+							style={{ marginTop: spacing.sm }}
+						>
+							{eyebrow}
+						</AppText>
+					) : null}
+					<AppText variant="title1" accessibilityRole="header">
+						{title}
+					</AppText>
+					{body ? (
+						<AppText variant="body" tone="secondary">
+							{body}
+						</AppText>
+					) : null}
+				</Appear>
+				<Appear index={1} style={{ gap: spacing.lg }}>
+					{children}
+				</Appear>
+			</View>
+		</Screen>
+	);
+}
+
 function OnboardingChoice({
 	onChoose,
 }: {
 	onChoose: (path: "manager" | "worker") => void;
 }) {
-	const { colorScheme } = useColorScheme();
-	const theme = colorScheme === "dark" ? NAV_THEME.dark : NAV_THEME.light;
-	const insets = useSafeAreaInsets();
 	const { signOut } = useAuth();
-
 	return (
-		<View
-			style={[
-				styles.centered,
-				{
-					backgroundColor: theme.background,
-					paddingTop: insets.top,
-					paddingBottom: insets.bottom,
-				},
-			]}
+		<GateFrame
+			eyebrow="Get started"
+			title="How are you joining?"
+			body="Pick the option that matches your role. You can belong to more than one workplace later."
 		>
-			<View style={styles.messageContent}>
-				<Text style={[styles.eyebrow, { color: theme.primary }]}>
-					GET STARTED
-				</Text>
-				<Text style={[styles.title, { color: theme.text }]}>
-					How are you joining?
-				</Text>
-				<Text style={[styles.body, { color: theme.muted }]}>
-					Choose the option that matches your role. You can belong to more than
-					one workplace later.
-				</Text>
-				<Pressable
-					accessibilityRole="button"
-					onPress={() => onChoose("worker")}
-					style={({ pressed }) => [
-						styles.choiceCard,
-						{
-							backgroundColor: theme.card,
-							borderColor: theme.primary,
-							opacity: pressed ? 0.75 : 1,
-						},
-					]}
-				>
-					<Text style={[styles.cardTitle, { color: theme.text }]}>
-						I’m a team member
-					</Text>
-					<Text style={[styles.cardBody, { color: theme.muted }]}>
-						Join a workplace using the invitation from your manager.
-					</Text>
-				</Pressable>
-				<Pressable
-					accessibilityRole="button"
-					onPress={() => onChoose("manager")}
-					style={({ pressed }) => [
-						styles.choiceCard,
-						{
-							backgroundColor: theme.card,
-							borderColor: theme.border,
-							opacity: pressed ? 0.75 : 1,
-						},
-					]}
-				>
-					<Text style={[styles.cardTitle, { color: theme.text }]}>
-						I manage a workplace
-					</Text>
-					<Text style={[styles.cardBody, { color: theme.muted }]}>
-						Create a new workplace and invite your team.
-					</Text>
-				</Pressable>
-				<Pressable
-					accessibilityRole="button"
-					onPress={() => void signOut()}
-					style={styles.signOutLink}
-				>
-					<Text style={[styles.secondaryButtonText, { color: theme.muted }]}>
-						Sign out
-					</Text>
-				</Pressable>
+			<ChoiceCard
+				icon="person"
+				title="I’m a team member"
+				body="Join with the invitation from your manager."
+				onPress={() => onChoose("worker")}
+				emphasis
+			/>
+			<ChoiceCard
+				icon="building"
+				title="I manage a workplace"
+				body="Create a workplace and invite your team."
+				onPress={() => onChoose("manager")}
+			/>
+			<Button
+				label="Sign out"
+				variant="ghost"
+				onPress={() => void signOut()}
+				style={{ alignSelf: "center" }}
+			/>
+		</GateFrame>
+	);
+}
+
+function ChoiceCard({
+	icon,
+	title,
+	body,
+	onPress,
+	emphasis,
+}: {
+	icon: IconName;
+	title: string;
+	body: string;
+	onPress: () => void;
+	emphasis?: boolean;
+}) {
+	const { theme } = useAppTheme();
+	return (
+		<PressableScale
+			accessibilityRole="button"
+			accessibilityLabel={`${title}. ${body}`}
+			haptic
+			onPress={onPress}
+			style={{
+				flexDirection: "row",
+				alignItems: "center",
+				gap: spacing.lg,
+				padding: spacing.xl,
+				borderRadius: 16,
+				borderCurve: "continuous",
+				backgroundColor: theme.surface,
+				borderWidth: 1.5,
+				borderColor: emphasis ? theme.primary : theme.border,
+				boxShadow: theme.cardShadow,
+			}}
+		>
+			<IconTile icon={icon} tone={emphasis ? "primary" : "neutral"} size={44} />
+			<View style={{ flex: 1, gap: 2 }}>
+				<AppText variant="headline">{title}</AppText>
+				<AppText variant="footnote" tone="secondary">
+					{body}
+				</AppText>
 			</View>
-		</View>
+		</PressableScale>
 	);
 }
 
 function WorkerJoin({ onBack }: { onBack: () => void }) {
-	const { colorScheme } = useColorScheme();
-	const theme = colorScheme === "dark" ? NAV_THEME.dark : NAV_THEME.light;
-	const insets = useSafeAreaInsets();
 	const invitations = usePendingInvitations(true);
 	const accept = useAcceptInvitation();
 	const [invite, setInvite] = useState("");
@@ -188,110 +237,52 @@ function WorkerJoin({ onBack }: { onBack: () => void }) {
 	const validToken = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(token);
 
 	return (
-		<ScrollView
-			style={[styles.screen, { backgroundColor: theme.background }]}
-			contentContainerStyle={[
-				styles.scrollContent,
-				{
-					paddingTop: Math.max(insets.top, 12) + 24,
-					paddingBottom: Math.max(insets.bottom, 12) + 24,
-				},
-			]}
-			keyboardShouldPersistTaps="handled"
-			keyboardDismissMode="on-drag"
-			automaticallyAdjustKeyboardInsets
+		<GateFrame
+			eyebrow="Team member setup"
+			title="Join your workplace"
+			body="Ask your manager to invite this account’s email. New invitations appear automatically."
 		>
-			<Text style={[styles.eyebrow, { color: theme.primary }]}>
-				TEAM MEMBER SETUP
-			</Text>
-			<Text style={[styles.title, { color: theme.text }]}>
-				Join your workplace
-			</Text>
-			<Text style={[styles.body, { color: theme.muted }]}>
-				Ask your manager to invite this account’s email. New invitations will
-				appear automatically.
-			</Text>
-			<View
-				style={[
-					styles.card,
-					{ backgroundColor: theme.card, borderColor: theme.border },
-				]}
-			>
-				<Text style={[styles.cardTitle, { color: theme.text }]}>
-					Have an invite link or code?
-				</Text>
-				<TextInput
-					accessibilityLabel="Invitation link or code"
-					autoCapitalize="none"
-					autoCorrect={false}
+			<Card style={{ gap: spacing.lg }}>
+				<NativeField
+					label="Invite link or code"
 					value={invite}
-					onChangeText={setInvite}
-					placeholder="Paste invitation link or code"
-					placeholderTextColor={theme.muted}
-					style={[
-						styles.input,
-						{ color: theme.text, borderColor: theme.border },
-					]}
+					onChange={setInvite}
+					placeholder="Paste your invitation link"
+					onSubmit={() => validToken && accept.mutate(token)}
 				/>
-				<Pressable
-					accessibilityRole="button"
-					disabled={!validToken || accept.isPending}
+				<Button
+					label="Join workplace"
+					size="lg"
+					disabled={!validToken}
+					loading={accept.isPending}
 					onPress={() => accept.mutate(token)}
-					style={({ pressed }) => [
-						styles.primaryButton,
-						{
-							backgroundColor: theme.primary,
-							opacity:
-								!validToken || accept.isPending ? 0.45 : pressed ? 0.8 : 1,
-						},
-					]}
-				>
-					{accept.isPending ? (
-						<ActivityIndicator color={theme.onPrimary} />
-					) : (
-						<Text
-							style={[styles.primaryButtonText, { color: theme.onPrimary }]}
-						>
-							Join workplace
-						</Text>
-					)}
-				</Pressable>
+				/>
 				{accept.isError ? (
-					<Text
-						accessibilityRole="alert"
-						style={[styles.error, { color: theme.notification }]}
-					>
-						{(accept.error as Error).message}
-					</Text>
+					<Callout
+						tone="danger"
+						title="Couldn’t join"
+						body={(accept.error as Error).message}
+					/>
 				) : null}
-			</View>
-			<Pressable
-				accessibilityRole="button"
+			</Card>
+			<Button
+				label={invitations.isFetching ? "Checking…" : "Check for invitations"}
+				icon="switch"
+				variant="secondary"
 				disabled={invitations.isFetching}
 				onPress={() => void invitations.refetch()}
-				style={[styles.secondaryButton, { borderColor: theme.border }]}
-			>
-				<Text style={[styles.secondaryButtonText, { color: theme.text }]}>
-					{invitations.isFetching ? "Checking…" : "Check for invitation"}
-				</Text>
-			</Pressable>
-			<Pressable
-				accessibilityRole="button"
+			/>
+			<Button
+				label="Back"
+				variant="ghost"
 				onPress={onBack}
-				style={styles.signOutLink}
-			>
-				<Text style={[styles.secondaryButtonText, { color: theme.muted }]}>
-					Back
-				</Text>
-			</Pressable>
-		</ScrollView>
+				style={{ alignSelf: "center" }}
+			/>
+		</GateFrame>
 	);
 }
 
 function WorkplaceSetup({ onBack }: { onBack: () => void }) {
-	const { colorScheme } = useColorScheme();
-	const theme = colorScheme === "dark" ? NAV_THEME.dark : NAV_THEME.light;
-	const insets = useSafeAreaInsets();
 	const client = useQueryClient();
 	const [workplace, setWorkplace] = useState("");
 	const [location, setLocation] = useState("");
@@ -330,152 +321,74 @@ function WorkplaceSetup({ onBack }: { onBack: () => void }) {
 	}
 
 	return (
-		<ScrollView
-			style={[styles.screen, { backgroundColor: theme.background }]}
-			contentContainerStyle={[
-				styles.scrollContent,
-				{
-					paddingTop: Math.max(insets.top, 12) + 24,
-					paddingBottom: Math.max(insets.bottom, 12) + 24,
-				},
-			]}
-			keyboardShouldPersistTaps="handled"
-			keyboardDismissMode="on-drag"
-			automaticallyAdjustKeyboardInsets
+		<GateFrame
+			eyebrow="Manager setup"
+			title="Create your workplace"
+			body="Set up the basics now. You can invite workers and add more positions later."
 		>
-			<Text style={[styles.eyebrow, { color: theme.primary }]}>
-				MANAGER SETUP
-			</Text>
-			<Text style={[styles.title, { color: theme.text }]}>
-				Create your workplace
-			</Text>
-			<Text style={[styles.body, { color: theme.muted }]}>
-				Set up the basics now. You can invite workers and add more positions
-				later.
-			</Text>
-			<View
-				style={[
-					styles.card,
-					{ backgroundColor: theme.card, borderColor: theme.border },
-				]}
-			>
-				<SetupField
+			<Card style={{ gap: spacing.lg }}>
+				<NativeField
 					label="Workplace name"
 					placeholder="Northside Operations"
 					value={workplace}
 					onChange={setWorkplace}
-					theme={theme}
 				/>
-				<SetupField
+				<NativeField
 					label="First location"
 					placeholder="Downtown"
 					value={location}
 					onChange={setLocation}
-					theme={theme}
 				/>
-				<SetupField
+				<NativeField
 					label="First position"
 					placeholder="Associate"
 					value={position}
 					onChange={setPosition}
-					theme={theme}
 				/>
 				{error ? (
-					<Text
-						accessibilityRole="alert"
-						style={[styles.error, { color: theme.notification }]}
-					>
-						{error}
-					</Text>
+					<Callout
+						tone="danger"
+						title="Couldn’t create workplace"
+						body={error}
+					/>
 				) : null}
-				<Pressable
-					accessibilityRole="button"
+				<Button
+					label="Create workplace"
+					size="lg"
 					disabled={!valid}
+					loading={saving}
 					onPress={() => void create()}
-					style={({ pressed }) => [
-						styles.primaryButton,
-						{
-							backgroundColor: theme.primary,
-							opacity: !valid ? 0.45 : pressed ? 0.8 : 1,
-						},
-					]}
-				>
-					{saving ? (
-						<ActivityIndicator color={theme.onPrimary} />
-					) : (
-						<Text
-							style={[styles.primaryButtonText, { color: theme.onPrimary }]}
-						>
-							Create workplace
-						</Text>
-					)}
-				</Pressable>
-			</View>
-			<Pressable
-				accessibilityRole="button"
+				/>
+			</Card>
+			<Button
+				label="Back"
+				variant="ghost"
 				onPress={onBack}
-				style={styles.signOutLink}
-			>
-				<Text style={[styles.secondaryButtonText, { color: theme.muted }]}>
-					Back
-				</Text>
-			</Pressable>
-		</ScrollView>
-	);
-}
-
-function SetupField({
-	label,
-	placeholder,
-	value,
-	onChange,
-	theme,
-}: {
-	label: string;
-	placeholder: string;
-	value: string;
-	onChange: (value: string) => void;
-	theme: typeof NAV_THEME.light;
-}) {
-	return (
-		<View style={styles.field}>
-			<Text style={[styles.fieldLabel, { color: theme.text }]}>{label}</Text>
-			<TextInput
-				accessibilityLabel={label}
-				value={value}
-				onChangeText={onChange}
-				placeholder={placeholder}
-				placeholderTextColor={theme.muted}
-				style={[styles.input, { color: theme.text, borderColor: theme.border }]}
+				style={{ alignSelf: "center" }}
 			/>
-		</View>
+		</GateFrame>
 	);
 }
 
 function Splash() {
-	const { colorScheme } = useColorScheme();
-	const theme = colorScheme === "dark" ? NAV_THEME.dark : NAV_THEME.light;
-	const insets = useSafeAreaInsets();
+	const { theme } = useAppTheme();
 	return (
 		<View
-			style={[
-				styles.centered,
-				{
-					backgroundColor: theme.background,
-					paddingTop: insets.top,
-					paddingBottom: insets.bottom,
-				},
-			]}
+			style={{
+				flex: 1,
+				alignItems: "center",
+				justifyContent: "center",
+				gap: spacing.xl,
+				backgroundColor: theme.background,
+			}}
 		>
-			<ActivityIndicator color={theme.primary} />
+			<LogoMark size={64} />
+			<ActivityIndicator color={theme.textSecondary} />
 		</View>
 	);
 }
 
 function InvitationView() {
-	const { colorScheme } = useColorScheme();
-	const theme = colorScheme === "dark" ? NAV_THEME.dark : NAV_THEME.light;
-	const insets = useSafeAreaInsets();
 	const { formatPerson } = useDisplayPrefs();
 	const me = useMe(true);
 	const invitations = usePendingInvitations(true);
@@ -483,163 +396,92 @@ function InvitationView() {
 	const profile = me.data?.profile;
 
 	return (
-		<ScrollView
-			style={[styles.screen, { backgroundColor: theme.background }]}
-			contentContainerStyle={[
-				styles.scrollContent,
-				{
-					paddingTop: Math.max(insets.top, 12) + 24,
-					paddingBottom: Math.max(insets.bottom, 12) + 24,
-				},
-			]}
+		<GateFrame
+			eyebrow="Invitation"
+			title="You’ve been invited"
+			body="Accept an invitation to join your workplace and see your schedule."
 		>
-			<Text style={[styles.title, { color: theme.text }]}>
-				You've been invited
-			</Text>
-			<Text style={[styles.body, { color: theme.text }]}>
-				Accept an invitation below to join your workplace and see your schedule.
-			</Text>
 			{profile ? (
 				<View
-					style={[
-						styles.card,
-						{ backgroundColor: theme.card, borderColor: theme.border },
-					]}
+					style={{
+						flexDirection: "row",
+						alignItems: "center",
+						gap: spacing.md,
+					}}
 				>
-					<Text style={[styles.cardTitle, { color: theme.text }]}>
-						{formatPerson(profile.fullName, profile.email)}
-					</Text>
-					{profile.fullName ? (
-						<Text style={[styles.cardBody, { color: theme.text }]}>
-							{profile.email}
-						</Text>
-					) : (
-						<Text style={[styles.cardBody, { color: theme.text }]}>
-							Signed in
-						</Text>
-					)}
+					<Avatar name={profile.fullName || profile.email} />
+					<View style={{ flex: 1 }}>
+						<AppText variant="callout" weight="600">
+							{formatPerson(profile.fullName, profile.email)}
+						</AppText>
+						<AppText variant="footnote" tone="secondary">
+							{profile.fullName ? profile.email : "Signed in"}
+						</AppText>
+					</View>
 				</View>
 			) : null}
 			{(invitations.data?.invitations ?? []).map((invitation) => (
-				<View
-					key={invitation.id}
-					style={[
-						styles.card,
-						{ backgroundColor: theme.card, borderColor: theme.border },
-					]}
-				>
-					<Text style={[styles.cardTitle, { color: theme.text }]}>
-						{invitation.workplaceName}
-					</Text>
-					<Text style={[styles.cardBody, { color: theme.text }]}>
-						Invited as {invitation.kind} · expires{" "}
-						{new Date(invitation.expiresAt).toLocaleDateString()}
-					</Text>
-					<Pressable
-						accessibilityRole="button"
-						disabled={accept.isPending}
-						onPress={() => accept.mutate(invitation.token)}
-						style={({ pressed }) => [
-							styles.primaryButton,
-							{
-								backgroundColor: theme.primary,
-								opacity: accept.isPending ? 0.5 : pressed ? 0.85 : 1,
-							},
-						]}
+				<Card key={invitation.id}>
+					<View
+						style={{
+							flexDirection: "row",
+							alignItems: "center",
+							gap: spacing.md,
+						}}
 					>
-						{accept.isPending ? (
-							<ActivityIndicator color={theme.onPrimary} />
-						) : (
-							<Text
-								style={[styles.primaryButtonText, { color: theme.onPrimary }]}
-							>
-								Accept invitation
-							</Text>
-						)}
-					</Pressable>
-					{accept.isError ? (
-						<Text style={[styles.error, { color: theme.notification }]}>
-							{(accept.error as Error).message}
-						</Text>
-					) : null}
-				</View>
+						<IconTile icon="building" size={40} />
+						<View style={{ flex: 1, gap: 2 }}>
+							<AppText variant="headline">{invitation.workplaceName}</AppText>
+							<AppText variant="footnote" tone="secondary">
+								Invited as {invitation.kind} · expires{" "}
+								{new Date(invitation.expiresAt).toLocaleDateString()}
+							</AppText>
+						</View>
+					</View>
+					<Button
+						label="Accept invitation"
+						icon="check"
+						loading={accept.isPending}
+						onPress={() => accept.mutate(invitation.token)}
+					/>
+				</Card>
 			))}
-		</ScrollView>
+			{accept.isError ? (
+				<Callout
+					tone="danger"
+					title="Couldn’t accept"
+					body={(accept.error as Error).message}
+				/>
+			) : null}
+		</GateFrame>
 	);
 }
 
 function Message({
 	title,
 	body,
-	profile,
 	actions,
 }: {
 	title: string;
 	body: string;
-	profile?: { email: string; fullName: string | null };
 	actions?: {
 		label: string;
 		kind: "primary" | "secondary";
 		onPress: () => void;
 	}[];
 }) {
-	const { colorScheme } = useColorScheme();
-	const theme = colorScheme === "dark" ? NAV_THEME.dark : NAV_THEME.light;
-	const insets = useSafeAreaInsets();
-	const { formatPerson } = useDisplayPrefs();
-
 	return (
-		<View
-			style={[
-				styles.centered,
-				{
-					backgroundColor: theme.background,
-					paddingTop: insets.top,
-					paddingBottom: insets.bottom,
-				},
-			]}
-		>
-			<View style={styles.messageContent}>
-				<Text style={[styles.title, { color: theme.text }]}>{title}</Text>
-				<Text style={[styles.body, { color: theme.text }]}>{body}</Text>
-				{profile ? (
-					<Text style={[styles.body, { color: theme.text }]}>
-						Signed in as {formatPerson(profile.fullName, profile.email)}
-					</Text>
-				) : null}
-				{actions?.map((item) => (
-					<Pressable
-						key={item.label}
-						accessibilityRole="button"
-						onPress={item.onPress}
-						style={({ pressed }) =>
-							item.kind === "primary"
-								? [
-										styles.primaryButton,
-										{
-											backgroundColor: theme.primary,
-											opacity: pressed ? 0.8 : 1,
-										},
-									]
-								: [
-										styles.secondaryButton,
-										{ borderColor: theme.border, opacity: pressed ? 0.6 : 1 },
-									]
-						}
-					>
-						<Text
-							style={
-								item.kind === "primary"
-									? [styles.primaryButtonText, { color: theme.onPrimary }]
-									: [styles.secondaryButtonText, { color: theme.text }]
-							}
-						>
-							{item.label}
-						</Text>
-					</Pressable>
-				))}
-			</View>
-		</View>
+		<GateFrame title={title}>
+			<Callout tone="danger" title="We couldn’t reach jooling" body={body} />
+			{actions?.map((item) => (
+				<Button
+					key={item.label}
+					label={item.label}
+					variant={item.kind === "primary" ? "primary" : "secondary"}
+					onPress={item.onPress}
+				/>
+			))}
+		</GateFrame>
 	);
 }
 
@@ -650,122 +492,21 @@ function PickerView({
 	items: { id: string; name: string }[];
 	onSelect: (id: string) => void;
 }) {
-	const { colorScheme } = useColorScheme();
-	const theme = colorScheme === "dark" ? NAV_THEME.dark : NAV_THEME.light;
-	const insets = useSafeAreaInsets();
-
 	return (
-		<ScrollView
-			style={[styles.screen, { backgroundColor: theme.background }]}
-			contentContainerStyle={[
-				styles.scrollContent,
-				{
-					paddingTop: Math.max(insets.top, 12) + 24,
-					paddingBottom: Math.max(insets.bottom, 12) + 24,
-				},
-			]}
+		<GateFrame
+			title="Choose a workplace"
+			body="You work at more than one workplace. Pick one to continue — you can switch any time from More."
 		>
-			<Text style={[styles.title, { color: theme.text }]}>
-				Choose a workplace
-			</Text>
-			<Text style={[styles.body, { color: theme.text }]}>
-				You work at more than one workplace. Pick one to continue.
-			</Text>
-			{items.map((item) => (
-				<Pressable
-					key={item.id}
-					accessibilityRole="button"
-					onPress={() => onSelect(item.id)}
-					style={({ pressed }) => [
-						styles.card,
-						{
-							backgroundColor: theme.card,
-							borderColor: theme.border,
-							opacity: pressed ? 0.7 : 1,
-						},
-					]}
-				>
-					<Text style={[styles.cardTitle, { color: theme.text }]}>
-						{item.name}
-					</Text>
-				</Pressable>
-			))}
-		</ScrollView>
+			<ListGroup>
+				{items.map((item) => (
+					<ListRow
+						key={item.id}
+						icon="building"
+						title={item.name}
+						onPress={() => onSelect(item.id)}
+					/>
+				))}
+			</ListGroup>
+		</GateFrame>
 	);
 }
-
-const styles = StyleSheet.create({
-	centered: { flex: 1, alignItems: "center", justifyContent: "center" },
-	screen: { flex: 1 },
-	scrollContent: { padding: 20, paddingTop: 20, gap: 16 },
-	messageContent: {
-		width: "100%",
-		maxWidth: 420,
-		alignSelf: "center",
-		padding: 24,
-		gap: 12,
-	},
-	title: {
-		fontSize: 30,
-		lineHeight: 36,
-		fontWeight: "800",
-		letterSpacing: -0.6,
-	},
-	body: { fontSize: 14, lineHeight: 21 },
-	card: {
-		borderWidth: 1,
-		borderRadius: 14,
-		padding: 16,
-		gap: 10,
-	},
-	choiceCard: {
-		borderWidth: 1.5,
-		borderRadius: 16,
-		padding: 18,
-		gap: 4,
-		minHeight: 88,
-		justifyContent: "center",
-	},
-	cardTitle: { fontSize: 17, fontWeight: "700", lineHeight: 24 },
-	cardBody: { fontSize: 14, lineHeight: 21 },
-	primaryButton: {
-		minHeight: 46,
-		borderRadius: 10,
-		alignItems: "center",
-		justifyContent: "center",
-		paddingHorizontal: 16,
-		marginTop: 8,
-	},
-	primaryButtonText: { fontSize: 15, fontWeight: "700" },
-	secondaryButton: {
-		minHeight: 46,
-		borderWidth: 1,
-		borderRadius: 10,
-		alignItems: "center",
-		justifyContent: "center",
-		paddingHorizontal: 16,
-		marginTop: 8,
-	},
-	secondaryButtonText: { fontSize: 15, fontWeight: "600" },
-	error: { fontSize: 13, lineHeight: 19 },
-	eyebrow: {
-		fontSize: 11,
-		fontWeight: "800",
-		letterSpacing: 1.1,
-		textTransform: "uppercase",
-	},
-	field: { gap: 6 },
-	fieldLabel: { fontSize: 13, fontWeight: "700" },
-	input: {
-		minHeight: 46,
-		borderWidth: 1,
-		borderRadius: 10,
-		paddingHorizontal: 14,
-		fontSize: 16,
-	},
-	signOutLink: {
-		minHeight: 44,
-		alignItems: "center",
-		justifyContent: "center",
-	},
-});

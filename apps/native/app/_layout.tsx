@@ -6,14 +6,13 @@ import {
 	ThemeProvider,
 } from "expo-router/react-navigation";
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { useStackScreenOptions } from "@/components/navigation/stack";
 import { SessionGate } from "@/components/session-gate";
-import { useAppTheme } from "@/components/ui";
 import { AuthProvider } from "@/lib/auth";
-import { useColorScheme } from "@/lib/use-color-scheme";
+import { useAppTheme } from "@/theme";
 
 export const unstable_settings = {
 	initialRouteName: "(tabs)",
@@ -33,67 +32,79 @@ const queryClient = new QueryClient({
 	},
 });
 
-const styles = StyleSheet.create({
-	container: {
-		flex: 1,
-	},
-});
-
 export default function RootLayout() {
-	const { colorScheme } = useColorScheme();
-	const { theme } = useAppTheme();
-	// Native navigation bar with back button + title for every pushed screen.
-	const header = {
-		headerShadowVisible: false,
-		headerStyle: { backgroundColor: theme.background },
-		headerTintColor: theme.primary,
-		headerTitleStyle: { color: theme.text, fontWeight: "600" as const },
-	};
+	const { theme, colorScheme } = useAppTheme();
+	const screenOptions = useStackScreenOptions();
+	const navigationTheme = colorScheme === "dark" ? DarkTheme : DefaultTheme;
 
 	return (
-		<ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+		<ThemeProvider
+			value={{
+				...navigationTheme,
+				colors: {
+					...navigationTheme.colors,
+					primary: theme.tint,
+					background: theme.background,
+					card: theme.surface,
+					text: theme.text,
+					border: theme.border,
+					notification: theme.danger,
+				},
+			}}
+		>
 			<QueryClientProvider client={queryClient}>
 				<AuthProvider>
 					<StatusBar style="auto" />
 					<SafeAreaProvider>
-						<GestureHandlerRootView style={styles.container}>
+						<GestureHandlerRootView
+							style={{ flex: 1, backgroundColor: theme.background }}
+						>
 							<SessionGate>
-								<Stack>
+								<Stack screenOptions={screenOptions}>
 									<Stack.Screen
 										name="(tabs)"
 										options={{ headerShown: false }}
 									/>
 									<Stack.Screen
+										name="shift-detail"
+										options={{ title: "Shift" }}
+									/>
+									<Stack.Screen
 										name="worker-availability"
-										options={{ title: "Time Off", ...header }}
+										options={{ title: "Time Off" }}
 									/>
 									<Stack.Screen
 										name="timecard"
-										options={{ title: "My Timecard", ...header }}
+										options={{ title: "Timecard" }}
 									/>
 									<Stack.Screen
 										name="team"
-										options={{ title: "Team", ...header }}
+										options={{ title: "Team", headerLargeTitleEnabled: true }}
 									/>
 									<Stack.Screen
 										name="announcements"
-										options={{ title: "Announcements", ...header }}
+										options={{ title: "Announcements" }}
 									/>
 									<Stack.Screen
 										name="messages"
-										options={{ title: "Messages", ...header }}
-									/>
-									<Stack.Screen
-										name="kiosk"
-										options={{ title: "Kiosk", ...header }}
-									/>
-									<Stack.Screen
-										name="shift-detail"
 										options={{
-											title: "Shift",
-											presentation: "card",
-											...header,
+											title: "Messages",
+											headerLargeTitleEnabled: true,
 										}}
+									/>
+									<Stack.Screen name="conversation/[id]" />
+									<Stack.Screen name="kiosk" options={{ title: "Kiosk" }} />
+									<Stack.Screen
+										name="time-off-sheet"
+										options={{
+											title: "Add time off",
+											presentation: "modal",
+											headerLargeTitleEnabled: false,
+										}}
+									/>
+									<Stack.Screen
+										name="+not-found"
+										options={{ title: "Not found" }}
 									/>
 								</Stack>
 							</SessionGate>

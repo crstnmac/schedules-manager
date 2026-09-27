@@ -1,68 +1,80 @@
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { View } from "react-native";
 
-import { AppScreen, Card, useAppTheme } from "@/components/ui";
+import {
+	Appear,
+	AppText,
+	Avatar,
+	Card,
+	CardListSkeleton,
+	EmptyState,
+	ErrorState,
+	Screen,
+} from "@/components/ui";
 import { useAnnouncements, useCurrentEmployment } from "@/lib/queries";
+import { spacing } from "@/theme";
 
 export default function AnnouncementsScreen() {
-	const { theme } = useAppTheme();
 	const { workplaceId } = useCurrentEmployment();
 	const announcements = useAnnouncements(workplaceId);
 
 	return (
-		<AppScreen safeTop={false}>
-			{announcements.isLoading ? (
-				<ActivityIndicator color={theme.primary} />
-			) : null}
+		<Screen onRefresh={() => announcements.refetch()}>
+			{announcements.isLoading ? <CardListSkeleton count={2} /> : null}
 			{announcements.isError ? (
-				<Card>
-					<Text style={{ color: theme.notification }}>
-						{(announcements.error as Error).message}
-					</Text>
-				</Card>
+				<ErrorState
+					error={announcements.error}
+					onRetry={() => void announcements.refetch()}
+				/>
 			) : null}
-			{announcements.data?.map((announcement) => (
-				<Card key={announcement.id}>
-					<Text style={[styles.title, { color: theme.text }]}>
-						{announcement.title}
-					</Text>
-					<Text style={[styles.body, { color: theme.text }]}>
-						{announcement.body}
-					</Text>
-					<View style={styles.metaRow}>
-						<Text style={[styles.meta, { color: theme.muted }]}>
-							{announcement.author}
-						</Text>
-						<Text style={[styles.meta, { color: theme.muted }]}>
-							{new Date(announcement.createdAt).toLocaleDateString(undefined, {
-								month: "short",
-								day: "numeric",
-								year: "numeric",
-							})}
-						</Text>
-					</View>
-				</Card>
+
+			{announcements.data?.map((announcement, index) => (
+				<Appear key={announcement.id} index={index}>
+					<Card>
+						<View
+							style={{
+								flexDirection: "row",
+								alignItems: "center",
+								gap: spacing.md,
+							}}
+						>
+							<Avatar name={announcement.author} size={36} />
+							<View style={{ flex: 1 }}>
+								<AppText variant="footnote" weight="600">
+									{announcement.author}
+								</AppText>
+								<AppText variant="caption" tone="tertiary">
+									{new Date(announcement.createdAt).toLocaleDateString(
+										undefined,
+										{
+											weekday: "short",
+											month: "short",
+											day: "numeric",
+											year: "numeric",
+										},
+									)}
+								</AppText>
+							</View>
+						</View>
+						<View style={{ gap: spacing.xs }}>
+							<AppText variant="headline" selectable>
+								{announcement.title}
+							</AppText>
+							<AppText variant="subhead" tone="secondary" selectable>
+								{announcement.body}
+							</AppText>
+						</View>
+					</Card>
+				</Appear>
 			))}
+
 			{announcements.data?.length === 0 ? (
-				<Card>
-					<Text style={[styles.title, { color: theme.text }]}>
-						No Announcements
-					</Text>
-					<Text style={[styles.body, { color: theme.muted }]}>
-						Workplace updates will appear here.
-					</Text>
-				</Card>
+				<EmptyState
+					icon="megaphone"
+					tone="warning"
+					title="No announcements"
+					body="Workplace updates from your Managers will appear here."
+				/>
 			) : null}
-		</AppScreen>
+		</Screen>
 	);
 }
-
-const styles = StyleSheet.create({
-	title: { fontSize: 17, lineHeight: 23, fontWeight: "700" },
-	body: { fontSize: 14, lineHeight: 21 },
-	metaRow: {
-		flexDirection: "row",
-		justifyContent: "space-between",
-		gap: 12,
-	},
-	meta: { fontSize: 12, lineHeight: 17 },
-});

@@ -306,12 +306,22 @@ export interface WorkplaceConversation {
 	id: string;
 	kind: "workplace" | "direct";
 	title: string;
+	subtitle?: string;
+	lastMessage?: {
+		id: string;
+		body: string;
+		author: string;
+		createdAt: string;
+		mine: boolean;
+	} | null;
 }
 
 export interface WorkplaceMessage {
 	id: string;
 	body: string;
 	author: string;
+	/** Lets the thread tell the viewer's own messages apart. */
+	authorEmploymentId?: string;
 	createdAt: string;
 }
 
@@ -947,8 +957,9 @@ export interface PendingApprovalDto {
 	chargeMinutes: number;
 	isEmergency: boolean;
 	reason: string | null;
-	startsAt: string;
-	endsAt: string;
+	/** Not sent by /my/pending-approvals today; derive from startDate. */
+	startsAt?: string;
+	endsAt?: string;
 	startDate: string;
 	endDate: string;
 	allDay: boolean;

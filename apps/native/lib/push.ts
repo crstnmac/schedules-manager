@@ -118,11 +118,11 @@ export function usePushResponseNavigation() {
 }
 
 export type PushDestination =
-	| "/(tabs)"
-	| "/(tabs)/inbox"
-	| "/(tabs)/openshifts"
-	| "/(tabs)/manager-requests"
-	| "/(tabs)/manager-schedule"
+	| "/"
+	| "/inbox"
+	| "/openshifts"
+	| "/manager-requests"
+	| "/manager-schedule"
 	| "/worker-availability"
 	| "/announcements"
 	| "/messages";
@@ -137,11 +137,11 @@ export function destinationForNotification(
 	kind: string | undefined,
 	isManager: boolean,
 ): PushDestination {
-	if (!kind) return "/(tabs)/inbox";
+	if (!kind) return "/inbox";
 
 	if (isManager) {
 		if (kind === "acceptance_response") {
-			return "/(tabs)/manager-schedule";
+			return "/manager-schedule";
 		}
 		if (
 			kind === "release_requested" ||
@@ -150,12 +150,12 @@ export function destinationForNotification(
 			kind.startsWith("unavailability") ||
 			kind.startsWith("swap")
 		) {
-			return "/(tabs)/manager-requests";
+			return "/manager-requests";
 		}
 	}
 
 	if (kind === "open_shift" || kind.startsWith("pickup")) {
-		return "/(tabs)/openshifts";
+		return "/openshifts";
 	}
 	if (kind.startsWith("time_off") || kind.startsWith("unavailability")) {
 		return "/worker-availability";
@@ -164,5 +164,5 @@ export function destinationForNotification(
 	if (kind.includes("message")) return "/messages";
 	// schedule_published, late_change, schedule_reminder, acceptance_response,
 	// release_*, swap_*, coverage_filled all surface on the worker schedule.
-	return "/(tabs)";
+	return "/";
 }

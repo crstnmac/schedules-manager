@@ -1,6 +1,7 @@
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 
-import { ShiftDetailScreen, type WeekShift } from "@/components/worker-shifts";
+import type { WeekShift } from "@/components/worker/shift-card";
+import { ShiftDetailScreen } from "@/components/worker/shift-detail-screen";
 import { useCurrentEmployment } from "@/lib/queries";
 
 export default function ShiftDetailRoute() {
@@ -18,16 +19,13 @@ export default function ShiftDetailRoute() {
 		shift = null;
 	}
 
-	if (!shift) {
-		router.back();
-		return null;
-	}
+	if (!shift) return <Redirect href="/" />;
 
 	return (
 		<ShiftDetailScreen
 			shift={shift}
 			workplaceId={workplaceId}
-			locationName={params.locationName ?? null}
+			locationName={params.locationName || null}
 			onClose={() => router.back()}
 		/>
 	);

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { acceptanceHeadline } from "./acceptance-headline";
 
 // Regression guard for the pending-acceptance card headline on the native
-// worker Home tab (apps/native/app/(tabs)/index.tsx). `a.date` is a
+// worker Home tab (apps/native/components/worker/worker-home.tsx). `a.date` is a
 // YYYY-MM-DD date-key routed through formatDateKey (noon-anchor) so a
 // west-of-UTC device tz does not shift it back a calendar day. The timezone
 // matrix for formatDateKey itself is covered by leave.test.ts; here we pin

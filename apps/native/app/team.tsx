@@ -1,1 +1,3 @@
-export { default } from "./(tabs)/manager-team";
+import { TeamScreen } from "@/components/manager/team-screen";
+
+export default TeamScreen;

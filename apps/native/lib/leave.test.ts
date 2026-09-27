@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { formatDateKey, formatLeaveRange, leavePolicySummary } from "./leave";
 
 // Regression guard for the native worker home screen date-key off-by-one.
-// See apps/native/app/(tabs)/index.tsx — date-key call sites route through
+// See apps/native/components/worker/worker-home.tsx — date-key call sites route through
 // formatDateKey (noon-anchor) so a YYYY-MM-DD key is not re-shifted across
 // timezones. Bun honors runtime TZ changes, so each test sets process.env.TZ.
 describe("formatDateKey (date-only keys, noon-anchor)", () => {

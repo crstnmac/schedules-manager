@@ -104,6 +104,18 @@ Cards use a 1px ring plus a 1px soft shadow (set through `--tw-shadow` so ring a
 - **Overview stat cards:** label, icon chip (tinted amber or red only when the value is an exception), a large Geist value, and a hint. Daily coverage uses a `Progress` bar per day for assigned vs. total.
 - **Kiosk:** a large live clock above a single card, with 44–48px touch targets.
 
+## Native app (`apps/native`)
+
+The same system, expressed with native parts. Tokens live in `apps/native/theme/index.ts` (colors for light and dark, spacing, radius, type ramp, motion); primitives live in `apps/native/components/ui/`. Screens compose primitives and never set raw colors or font sizes.
+
+- **Navigation:** `NativeTabs` with a native Stack inside every tab (`TabStack`), so iOS gets collapsing large titles and a translucent bar. Header actions use `headerRight`, not in-page headers.
+- **Screen:** every route starts with `Screen` (a ScrollView with `contentInsetAdjustmentBehavior="automatic"` and optional pull-to-refresh).
+- **Surfaces:** `Card`, `Callout` (tone = meaning: warning is a response owed, danger is a failure), `Badge` (status always has words), `ListGroup`/`ListRow` with `IconTile`, `Section` for titled groups.
+- **Controls:** `Button` (primary, secondary, tinted, outline, ghost, destructive, and inverse variants for the hero), `SegmentedControl`, `ChoiceChips`. Form fields are native: SwiftUI date pickers and `@expo/ui` switches and checkboxes on iOS, Compose text fields, pickers, and chips on Android (`form-controls.android.tsx`).
+- **Icons:** `Icon` from one registry, rendering SF Symbols on iOS (expo-image) and Material icons elsewhere.
+- **Motion:** Reanimated only. `PressableScale` is the shared press spring; `Appear` staggers blocks in as data arrives; `Skeleton` holds space while loading. All motion honours Reduce Motion.
+- **Worker home order:** next-shift hero with the time clock, then responses owed (late-change acceptance, "I saw this"), then swaps, then the week grouped by day (My shifts / Everyone), then next week, then history.
+
 ## Do / Don't
 
 - **Do** add variants to `packages/ui` instead of overriding component styles in pages.

@@ -115,7 +115,7 @@ export function useShiftStartResponseHandler() {
 				if (data.kind !== "shift_start") return;
 				queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 				// HotSchedules-style: land on the schedule so the worker confirms the punch themselves.
-				router.navigate("/(tabs)");
+				router.navigate("/");
 			},
 		);
 

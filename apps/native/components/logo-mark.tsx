@@ -1,4 +1,5 @@
-import { Image, type ImageStyle, type StyleProp } from "react-native";
+import { Image, type ImageStyle } from "expo-image";
+import type { StyleProp } from "react-native";
 
 const logo = require("@/assets/images/logo-mark.png");
 
@@ -13,6 +14,7 @@ export function LogoMark({
 		<Image
 			source={logo}
 			style={[{ width: size, height: size }, style]}
+			contentFit="contain"
 			accessibilityRole="image"
 			accessibilityLabel="jooling"
 		/>
