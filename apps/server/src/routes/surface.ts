@@ -20,7 +20,6 @@ import {
 	shiftTaskCompletions,
 	shiftTasks,
 	shiftTemplates,
-	squareSalesImports,
 	timeBlocks,
 	timeEntries,
 	timeEntryBreaks,
@@ -1039,14 +1038,6 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 						target: [locationSales.locationId, locationSales.saleDate],
 						set: { amountCents: body.amountCents, updatedAt: new Date() },
 					});
-				await tx
-					.delete(squareSalesImports)
-					.where(
-						and(
-							eq(squareSalesImports.locationId, params.locationId),
-							eq(squareSalesImports.saleDate, params.saleDate),
-						),
-					);
 			});
 			return { ok: true as const };
 		},

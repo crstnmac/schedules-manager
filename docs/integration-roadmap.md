@@ -19,31 +19,7 @@ and overnight work are correct; repeated downloads contain no duplicate rows;
 CSV text is safe to open in spreadsheet software; integration tests cover
 approval filtering, breaks, authorization, and timezone boundaries.
 
-## 2. Square sales connector
-
-Square is the first provider requested for pilot use. The connector uses server-side OAuth
-code flow and store refresh credentials encrypted at rest, scoped to one
-Workplace. A manager explicitly maps each Square Location to one Jooling
-Location. Import Square Reporting API `Sales.net_sales`, grouped by
-`Sales.local_reporting_timestamp` day and Square Location, into Jooling's
-existing `location_sales` rows. The query uses `Orders.net_sales`,
-`Orders.local_date`, and `Orders.location_id` for closed checks. Do not use order creation timestamps as a
-proxy for local sales dates, and do not import tips or taxes as net sales.
-
-Before committing a sync, show its date range and proposed changes. Track the
-source, provider location ID, and import time so manual
-entries are never silently replaced. Re-running the same range must be
-idempotent. Preserve the last good figures on provider errors. Include a
-disconnect action that revokes provider access and removes stored credentials.
-
-Acceptance: OAuth state, token refresh, empty days, changed sales,
-manual override, provider failure, cross-Workplace authorization, and disconnect
-are tested against mocked Square HTTP responses. A pilot manager must verify figures against
-their Square Dashboard before production enablement. Square application ID,
-secret, redirect URL, and a pilot seller authorization are required for that
-last live check.
-
-## 3. Worker directory and payroll providers
+## 2. Worker directory and payroll providers
 
 The reviewed CSV directory sync is shipped: Workers → **Sync directory** maps
 every row to a hire (pending invitation), an update of role and
@@ -54,15 +30,14 @@ approved time and leave after a manager reviews the pay period. Persist
 provider employee ID mapping and delivery receipts. Payroll remains the source
 of truth for pay.
 
-## 4. Calendar and automation
+## 3. Calendar and automation
 
 The personal calendar feed now ships with per-app setup guidance and a feed
 self-check (fetch counts, last fetcher, event counts, timezone) on the token.
 Offer Google or Microsoft account sync only when customers need faster updates
 than calendar subscription polling. Zapier, Make, and n8n recipes live in the
 knowledge base Developers section, on top of the existing scoped API keys and
-signed webhooks; connector changes (Square connect, mapping, import,
-disconnect, directory syncs) are also emitted as webhook events.
+signed webhooks; directory syncs are also emitted as webhook events.
 
 ## Release checks for every connector
 

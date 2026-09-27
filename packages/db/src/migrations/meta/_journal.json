@@ -288,6 +288,13 @@
       "when": 1790492037858,
       "tag": "0040_name_long_foreign_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790502353298,
+      "tag": "0041_drop_square_integration",
+      "breakpoints": true
     }
   ]
 }

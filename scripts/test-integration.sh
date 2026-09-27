@@ -29,8 +29,4 @@ BETTER_AUTH_URL="http://localhost:3000" \
 BETTER_AUTH_SECRET="integration-test-secret-at-least-32-characters" \
 ZEPTOMAIL_TOKEN="integration-test-token" \
 ZEPTOMAIL_FROM_ADDRESS="schedules@example.test" \
-SQUARE_APP_ID="integration-square-app" \
-SQUARE_APP_SECRET="integration-square-secret" \
-SQUARE_TOKEN_ENCRYPTION_KEY="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" \
-SQUARE_MODE="sandbox" \
 bun test apps/server/test/integration
