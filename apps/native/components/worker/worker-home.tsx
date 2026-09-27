@@ -22,7 +22,6 @@ import {
 import { acceptanceHeadline } from "@/lib/acceptance-headline";
 import { confirmAction } from "@/lib/confirm-action";
 import { useDisplayPrefs } from "@/lib/display";
-import { formatDayShort } from "@/lib/format-day";
 import { friendlyMessage } from "@/lib/friendly-message";
 import { tapSuccess } from "@/lib/haptics";
 import { formatDateKey } from "@/lib/leave";
@@ -515,7 +514,7 @@ function HistorySection({
 }: {
 	history: MyScheduleResponse["history"];
 }) {
-	const { formatShiftRange } = useDisplayPrefs();
+	const { formatShiftRange, formatDayShort } = useDisplayPrefs();
 	const [openId, setOpenId] = useState<string | null>(null);
 	const version = usePublishedVersion(openId);
 

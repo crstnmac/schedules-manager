@@ -11,7 +11,6 @@ import {
 } from "@/components/ui";
 import { confirmAction } from "@/lib/confirm-action";
 import { useDisplayPrefs } from "@/lib/display";
-import { formatDayShort } from "@/lib/format-day";
 import { friendlyMessage } from "@/lib/friendly-message";
 import {
 	type SwapDetail,
@@ -175,7 +174,7 @@ function SwapLeg({
 	highlight?: boolean;
 }) {
 	const { theme } = useAppTheme();
-	const { formatClockTime } = useDisplayPrefs();
+	const { formatClockTime, formatDayShort } = useDisplayPrefs();
 	return (
 		<View
 			style={{

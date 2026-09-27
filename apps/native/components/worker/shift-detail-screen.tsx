@@ -22,7 +22,6 @@ import {
 import { api } from "@/lib/api";
 import { confirmAction } from "@/lib/confirm-action";
 import { useDisplayPrefs } from "@/lib/display";
-import { formatDayLong, formatDayShort } from "@/lib/format-day";
 import { friendlyMessage } from "@/lib/friendly-message";
 import { tapSuccess } from "@/lib/haptics";
 import { positionColor } from "@/lib/position-color";
@@ -52,7 +51,7 @@ export function ShiftDetailScreen({
 	locationName: string | null;
 	onClose: () => void;
 }) {
-	const { formatShiftRange } = useDisplayPrefs();
+	const { formatShiftRange, formatDayLong, formatDayShort } = useDisplayPrefs();
 	const queryClient = useQueryClient();
 	const [mode, setMode] = useState<"info" | "swap">("info");
 	const roster = useDayRoster(workplaceId, shift.date);
@@ -363,7 +362,8 @@ function SwapProposer({
 	onCancel: () => void;
 }) {
 	const { theme } = useAppTheme();
-	const { formatClockTime, formatShiftRange } = useDisplayPrefs();
+	const { formatClockTime, formatShiftRange, formatDayShort } =
+		useDisplayPrefs();
 	const [selected, setSelected] = useState<DayRosterEntry | null>(null);
 	const propose = useProposeSwap();
 

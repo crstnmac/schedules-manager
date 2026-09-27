@@ -1,6 +1,15 @@
-import { useMe } from "./queries";
+import {
+	formatClockTime,
+	formatDayLong,
+	formatDayShort,
+	type TimeFormat,
+} from "./format-day";
+import { useMe, useMySchedule } from "./queries";
+import { useSelectedWorkplaceId } from "./workplace-store";
 
-export type TimeFormat = "12h" | "24h";
+export type { TimeFormat };
+export { formatClockTime };
+
 export type NameFormat = "full" | "first_last_initial" | "first";
 
 export function formatMinute(
@@ -16,18 +25,6 @@ export function formatMinute(
 	const suffix = hours >= 12 ? "PM" : "AM";
 	const display = hours % 12 === 0 ? 12 : hours % 12;
 	return `${display}:${String(mins).padStart(2, "0")} ${suffix}`;
-}
-
-export function formatClockTime(
-	iso: string | undefined,
-	format: TimeFormat = "12h",
-): string {
-	if (!iso) return "";
-	return new Date(iso).toLocaleTimeString([], {
-		hour: "numeric",
-		minute: "2-digit",
-		hour12: format !== "24h",
-	});
 }
 
 export function formatShiftRange(
@@ -63,14 +60,29 @@ export function formatPersonName(
 
 export function useDisplayPrefs() {
 	const me = useMe();
+	const { selected } = useSelectedWorkplaceId();
 	const timeFormat: TimeFormat = me.data?.profile.timeFormat ?? "12h";
 	const nameFormat: NameFormat = me.data?.profile.nameFormat ?? "full";
+
+	// Same workplace resolution as the home screens; the schedule query is
+	// shared through the query cache, so this adds no request.
+	const employments = me.data?.employments ?? [];
+	const workplaceId = (
+		employments.find((e) => e.workplace.id === selected) ?? employments[0]
+	)?.workplace.id;
+	const schedule = useMySchedule(workplaceId).data;
+	const timeZone =
+		schedule?.currentWeek?.timezone ?? schedule?.nextWeek?.timezone;
 
 	return {
 		timeFormat,
 		nameFormat,
+		timeZone,
 		formatMinute: (minute: number) => formatMinute(minute, timeFormat),
-		formatClockTime: (iso?: string) => formatClockTime(iso, timeFormat),
+		formatClockTime: (iso?: string) =>
+			formatClockTime(iso, timeFormat, timeZone),
+		formatDayShort: (iso: string) => formatDayShort(iso, timeZone),
+		formatDayLong: (iso: string) => formatDayLong(iso, timeZone),
 		formatShiftRange: (
 			startMinute: number,
 			endMinute: number,

@@ -5,7 +5,6 @@ import { AppText, Badge, Icon } from "@/components/ui";
 import { showActionSheet } from "@/lib/action-sheet";
 import { confirmAction } from "@/lib/confirm-action";
 import { useDisplayPrefs } from "@/lib/display";
-import { formatDayShort } from "@/lib/format-day";
 import { tapSuccess } from "@/lib/haptics";
 import { formatLeaveHours, formatLeaveRange } from "@/lib/leave";
 import { positionColor } from "@/lib/position-color";
@@ -112,7 +111,7 @@ function StepCard({
 	item: Extract<QueueItem, { kind: "step" }>;
 	workplaceId: string | undefined;
 }) {
-	const { timeFormat, formatPerson } = useDisplayPrefs();
+	const { timeFormat, formatPerson, formatDayShort } = useDisplayPrefs();
 	const decideStep = useDecideApprovalStep(workplaceId);
 	const expedite = useExpediteLeaveRequest(workplaceId);
 	const { step, request } = item;
@@ -341,7 +340,7 @@ function ShiftWindow({
 	endsAt: string | null;
 	positionName: string;
 }) {
-	const { formatClockTime } = useDisplayPrefs();
+	const { formatClockTime, formatDayShort } = useDisplayPrefs();
 	return (
 		<DetailWell>
 			<AppText variant="callout" weight="600" tabular>
@@ -519,7 +518,7 @@ function SwapCard({
 	workplaceId: string | undefined;
 }) {
 	const { theme } = useAppTheme();
-	const { formatClockTime } = useDisplayPrefs();
+	const { formatClockTime, formatDayShort } = useDisplayPrefs();
 	const { swap } = item;
 	const decideSwap = useSwapDecision(workplaceId);
 	const busy =
