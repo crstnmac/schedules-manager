@@ -12,10 +12,9 @@ function copyGoogleServicesFile(config) {
 	return withDangerousMod(config, [
 		"android",
 		(config) => {
-			const source = path.join(
-				config.modRequest.projectRoot,
-				"google-services.json",
-			);
+			const source =
+				process.env.GOOGLE_SERVICES_JSON ??
+				path.join(config.modRequest.projectRoot, "google-services.json");
 			const destination = path.join(
 				config.modRequest.platformProjectRoot,
 				"app",
@@ -24,8 +23,8 @@ function copyGoogleServicesFile(config) {
 			if (fs.existsSync(source)) {
 				fs.copyFileSync(source, destination);
 			} else {
-				console.warn(
-					"[with-firebase] google-services.json not found at project root; Android push will not work",
+				throw new Error(
+					`[with-firebase] google-services.json not found at ${source}`,
 				);
 			}
 			return config;

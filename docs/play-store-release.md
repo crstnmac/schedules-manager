@@ -24,6 +24,9 @@ remotely for each production build.
    to `https://api.jooling.com/`. `EXPO_PUBLIC_APP_URL` defaults to
    `https://app.jooling.com`; set it in the same environment if production uses
    another URL. These values are embedded in the app bundle.
+   The Firebase `google-services.json` file is uploaded separately as the
+   secret file variable `GOOGLE_SERVICES_JSON`; the Android build needs it for
+   push notification registration.
 5. Create an [Expo access token](https://docs.expo.dev/accounts/programmatic-access/)
    for an account with access to the EAS project. Add it as the repository Actions
    secret `EXPO_TOKEN` (GitHub → Settings → Secrets and variables → Actions).
