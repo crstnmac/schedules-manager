@@ -53,6 +53,8 @@ export interface MeEmployment {
 	workplace: {
 		id: string;
 		name: string;
+		/** IANA zone of the workplace's first Location; null before one exists. */
+		timezone: string | null;
 		policies: WorkplaceWorkerPolicies;
 	};
 }

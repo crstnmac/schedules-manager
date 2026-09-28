@@ -19,11 +19,12 @@ import {
 	monthStartOf,
 	positionColor,
 } from "@/lib/schedule-calendar";
+import { workplaceTodayKey } from "@/lib/time";
 
 const VISIBLE_CHIPS = 3;
 
 function todayKey(): string {
-	return new Date().toLocaleDateString("sv-SE");
+	return workplaceTodayKey();
 }
 
 /**

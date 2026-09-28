@@ -113,7 +113,12 @@ import {
 	useWorkers,
 	useWorkplacePto,
 } from "@/lib/queries";
-import { formatDay, shiftDays, WEEKDAY_NAMES } from "@/lib/time";
+import {
+	formatDay,
+	getWorkplaceTimeZone,
+	shiftDays,
+	WEEKDAY_NAMES,
+} from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -230,6 +235,7 @@ function formatDateTime(value: string): string {
 		day: "numeric",
 		hour: "numeric",
 		minute: "2-digit",
+		timeZone: getWorkplaceTimeZone(),
 	});
 }
 

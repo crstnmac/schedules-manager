@@ -1,3 +1,5 @@
+import { getWorkplaceTimeZone } from "./time";
+
 export function addDays(dateKey: string, days: number): string {
 	const date = new Date(`${dateKey}T12:00:00`);
 	date.setDate(date.getDate() + days);
@@ -149,6 +151,7 @@ export function shiftDisplayStatus(input: {
 				? `since ${new Date(input.clockedInAt).toLocaleTimeString([], {
 						hour: "numeric",
 						minute: "2-digit",
+						timeZone: getWorkplaceTimeZone(),
 					})}`
 				: undefined,
 			tone: "info",

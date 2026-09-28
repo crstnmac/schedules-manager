@@ -75,6 +75,10 @@ function KioskPage() {
 		locations.data,
 	);
 	const activeLocationId = selectedLocationId;
+	// The kiosk shows the clock of the Location it stands in.
+	const locationTimeZone = locations.data?.find(
+		(location) => location.id === selectedLocationId,
+	)?.timezone;
 	const pinPattern = /^\d{4,8}$/;
 	const locationError =
 		attempted && !pinPattern.test(locationPin)
@@ -127,8 +131,8 @@ function KioskPage() {
 			}
 			const text =
 				action === "in"
-					? `Clocked in at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
-					: `Clocked out at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+					? `Clocked in at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: locationTimeZone })}`
+					: `Clocked out at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: locationTimeZone })}`;
 			setLastResult({ kind: "success", text });
 			toast.success(action === "in" ? "Clocked in" : "Clocked out");
 			setWorkerPin("");
@@ -166,6 +170,7 @@ function KioskPage() {
 						{now.toLocaleTimeString(undefined, {
 							hour: "numeric",
 							minute: "2-digit",
+							timeZone: locationTimeZone,
 						})}
 					</time>
 					<p className="text-muted-foreground">
@@ -173,6 +178,7 @@ function KioskPage() {
 							weekday: "long",
 							month: "long",
 							day: "numeric",
+							timeZone: locationTimeZone,
 						})}
 					</p>
 				</div>

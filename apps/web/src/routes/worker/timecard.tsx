@@ -29,7 +29,7 @@ import {
 	useMySchedule,
 	useMyTimeEntries,
 } from "@/lib/queries";
-import { formatDurationMs } from "@/lib/time";
+import { formatDurationMs, getWorkplaceTimeZone } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -302,6 +302,7 @@ function formatDayLabel(iso: string): string {
 		weekday: "long",
 		month: "short",
 		day: "numeric",
+		timeZone: getWorkplaceTimeZone(),
 	});
 }
 

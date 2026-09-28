@@ -183,8 +183,10 @@ import {
 import { shiftOverlapsTimeOff, timeOffCoversDay } from "@/lib/schedule-timeoff";
 import {
 	datetimeLocalToIso,
+	formatDay,
 	isoToDatetimeLocal,
 	WEEKDAY_NAMES,
+	workplaceTodayKey,
 } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
@@ -232,7 +234,7 @@ function staffConstraintText(
 			(member.timeOff ?? [])
 				.map(
 					(request) =>
-						`${request.status} time off ${new Date(request.startsAt).toLocaleDateString()}–${new Date(request.endsAt).toLocaleDateString()}`,
+						`${request.status} time off ${formatDay(request.startsAt)}–${formatDay(request.endsAt)}`,
 				)
 				.join(" · "),
 		);
@@ -640,7 +642,7 @@ function shiftRangeMinutes(
 }
 
 function defaultAddDate(weekStart: string): string {
-	const today = new Date().toLocaleDateString("sv-SE");
+	const today = workplaceTodayKey();
 	const last = addDays(weekStart, 6);
 	if (today >= weekStart && today <= last) return today;
 	return weekStart;
@@ -884,7 +886,9 @@ function SchedulePage() {
 	const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
 	const settings = useWorkplaceSettings(workplace?.id);
 	const weekStartDay = settings.data?.weekStartDay ?? 1;
-	const [weekStart, setWeekStart] = useState(() => weekStartOf(new Date(), 1));
+	const [weekStart, setWeekStart] = useState(() =>
+		weekStartOf(new Date(`${workplaceTodayKey()}T12:00:00`), 1),
+	);
 
 	useEffect(() => {
 		setWeekStart((current) =>
@@ -897,11 +901,9 @@ function SchedulePage() {
 	const [todayFocus, setTodayFocus] = useState(false);
 	const [viewMode, setViewMode] = useState<"week" | "day" | "month">("week");
 	const [monthAnchor, setMonthAnchor] = useState(() =>
-		monthStartOf(new Date().toLocaleDateString("sv-SE")),
+		monthStartOf(workplaceTodayKey()),
 	);
-	const [selectedDay, setSelectedDay] = useState(() =>
-		new Date().toLocaleDateString("sv-SE"),
-	);
+	const [selectedDay, setSelectedDay] = useState(() => workplaceTodayKey());
 	const [groupFilter, setGroupFilter] = useState("all");
 	const [tagFilter, setTagFilter] = useState("all");
 	const [timeBlockFilter, setTimeBlockFilter] = useState("all");
@@ -1599,7 +1601,7 @@ function SchedulePage() {
 	const days = Array.from({ length: 7 }, (_, index) =>
 		addDays(weekStart, index),
 	);
-	const todayKey = new Date().toLocaleDateString("sv-SE");
+	const todayKey = workplaceTodayKey();
 	const visibleDays =
 		viewMode === "day"
 			? days.includes(selectedDay)
@@ -2062,12 +2064,15 @@ function SchedulePage() {
 											variant="ghost"
 											size="sm"
 											onClick={() => {
-												const today = new Date();
-												setWeekStart(weekStartOf(today, weekStartDay));
-												setMonthAnchor(
-													monthStartOf(today.toLocaleDateString("sv-SE")),
+												const todayKey = workplaceTodayKey();
+												setWeekStart(
+													weekStartOf(
+														new Date(`${todayKey}T12:00:00`),
+														weekStartDay,
+													),
 												);
-												setSelectedDay(today.toLocaleDateString("sv-SE"));
+												setMonthAnchor(monthStartOf(todayKey));
+												setSelectedDay(todayKey);
 												setViewMode((current) =>
 													current === "month" ? "week" : current,
 												);

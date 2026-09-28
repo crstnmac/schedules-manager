@@ -28,6 +28,7 @@ import { AttendanceTable } from "@/components/attendance-table";
 import { MonthPicker } from "@/components/month-picker";
 import { ReportSectionHeader } from "@/components/report-layout";
 import { type AttendanceStatus, useAttendanceReport } from "@/lib/queries";
+import { workplaceTodayKey } from "@/lib/time";
 
 const statusMeta: Record<
 	AttendanceStatus,
@@ -89,9 +90,7 @@ export function AttendanceReportView({
 }: {
 	workplaceId?: string;
 }) {
-	const [month, setMonth] = useState(() =>
-		new Date().toLocaleDateString("sv-SE").slice(0, 7),
-	);
+	const [month, setMonth] = useState(() => workplaceTodayKey().slice(0, 7));
 	const [search, setSearch] = useState("");
 	const range = useMemo(() => rangeForMonth(month), [month]);
 	const report = useAttendanceReport(workplaceId, range.from, range.to);

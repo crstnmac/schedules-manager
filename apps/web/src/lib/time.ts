@@ -16,6 +16,38 @@ export function formatMinute(
 	return `${display}:${String(mins).padStart(2, "0")} ${suffix}`;
 }
 
+let workplaceTimeZone: string | undefined;
+
+/**
+ * Shift, punch, and leave times are shown in the workplace's time zone, so a
+ * manager or worker travelling (or a browser set to another zone) sees the
+ * same wall clock as the schedule. The app shell sets this from /v1/me before
+ * rendering pages; without it the browser's zone is used.
+ */
+export function setWorkplaceTimeZone(timeZone: string | null | undefined) {
+	workplaceTimeZone = timeZone ?? undefined;
+}
+
+export function getWorkplaceTimeZone(): string | undefined {
+	return workplaceTimeZone;
+}
+
+/** The workplace's calendar date (YYYY-MM-DD) for an instant, default now. */
+export function workplaceDateKey(instant: Date | string = new Date()): string {
+	return new Date(instant).toLocaleDateString("sv-SE", {
+		timeZone: workplaceTimeZone,
+	});
+}
+
+/** Today's date (YYYY-MM-DD) where the workplace is. */
+export function workplaceTodayKey(): string {
+	return workplaceDateKey();
+}
+
+export function isSameWorkplaceDay(a: string, b: string): boolean {
+	return workplaceDateKey(a) === workplaceDateKey(b);
+}
+
 export function formatClockTime(
 	iso?: string,
 	format: TimeFormat = "12h",
@@ -25,6 +57,7 @@ export function formatClockTime(
 		hour: "numeric",
 		minute: "2-digit",
 		hour12: format !== "24h",
+		timeZone: workplaceTimeZone,
 	});
 }
 
@@ -78,13 +111,21 @@ export function formatShiftRange(
 }
 
 export function formatDay(isoOrDate: string): string {
-	const value = isoOrDate.includes("T")
-		? new Date(isoOrDate)
-		: new Date(`${isoOrDate}T12:00:00`);
-	return value.toLocaleDateString(undefined, {
+	// A date key is already a calendar date; an instant is shown on the
+	// workplace's calendar.
+	if (!isoOrDate.includes("T")) {
+		return new Date(`${isoOrDate}T12:00:00Z`).toLocaleDateString(undefined, {
+			weekday: "short",
+			month: "short",
+			day: "numeric",
+			timeZone: "UTC",
+		});
+	}
+	return new Date(isoOrDate).toLocaleDateString(undefined, {
 		weekday: "short",
 		month: "short",
 		day: "numeric",
+		timeZone: workplaceTimeZone,
 	});
 }
 

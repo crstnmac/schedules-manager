@@ -79,7 +79,7 @@ import {
 	useWorkplaceSettings,
 } from "@/lib/queries";
 import { addDays, weekStartOf } from "@/lib/schedule-calendar";
-import { formatDay } from "@/lib/time";
+import { formatDay, workplaceTodayKey } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -235,7 +235,10 @@ function Overview() {
 		locations.data?.find((location) => location.id === focusLocationId) ??
 		locations.data?.[0];
 	const weekStart = settings.data
-		? weekStartOf(new Date(), settings.data.weekStartDay)
+		? weekStartOf(
+				new Date(`${workplaceTodayKey()}T12:00:00`),
+				settings.data.weekStartDay,
+			)
 		: undefined;
 	const currentSchedule = useSchedule(focusLocation?.id, weekStart);
 	const scheduleLabor = useScheduleLabor(focusLocation?.id, weekStart);
@@ -563,8 +566,7 @@ function Overview() {
 										(shift) => shift.employmentId === null,
 									).length;
 									const assigned = shifts.length - open;
-									const today =
-										new Date().toDateString() === day.toDateString();
+									const today = date === workplaceTodayKey();
 									return (
 										<li
 											key={date}

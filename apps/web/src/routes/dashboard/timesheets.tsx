@@ -23,7 +23,12 @@ import {
 } from "@/components/list-view";
 import { api } from "@/lib/api";
 import { useTimesheets } from "@/lib/queries";
-import { formatClockTime, formatDay, formatDurationMs } from "@/lib/time";
+import {
+	formatClockTime,
+	formatDay,
+	formatDurationMs,
+	isSameWorkplaceDay,
+} from "@/lib/time";
 import { useWorkplace } from "@/lib/use-workplace";
 
 export const Route = createFileRoute("/dashboard/timesheets")({
@@ -34,8 +39,7 @@ function formatClockWindow(inIso: string, outIso: string | null) {
 	if (!outIso) {
 		return `On the clock since ${formatDay(inIso)} · ${formatClockTime(inIso)}`;
 	}
-	const sameDay =
-		new Date(inIso).toDateString() === new Date(outIso).toDateString();
+	const sameDay = isSameWorkplaceDay(inIso, outIso);
 	return sameDay
 		? `${formatDay(inIso)} · ${formatClockTime(inIso)} – ${formatClockTime(outIso)}`
 		: `${formatDay(inIso)} ${formatClockTime(inIso)} → ${formatDay(outIso)} ${formatClockTime(outIso)}`;

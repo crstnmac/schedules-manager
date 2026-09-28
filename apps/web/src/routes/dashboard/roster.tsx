@@ -26,7 +26,7 @@ import {
 	useListView,
 } from "@/components/list-view";
 import { useDayRoster } from "@/lib/queries";
-import { formatDay, shiftDays } from "@/lib/time";
+import { formatDay, shiftDays, workplaceTodayKey } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -35,7 +35,7 @@ export const Route = createFileRoute("/dashboard/roster")({
 });
 
 function todayKey() {
-	return new Date().toLocaleDateString("sv-SE");
+	return workplaceTodayKey();
 }
 
 type RosterRow = {

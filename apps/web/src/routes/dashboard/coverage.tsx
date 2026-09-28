@@ -36,7 +36,12 @@ import {
 	useCoverageSwaps,
 	useSwapDecision,
 } from "@/lib/queries";
-import { formatClockTime, formatDay, formatDurationMs } from "@/lib/time";
+import {
+	formatClockTime,
+	formatDay,
+	formatDurationMs,
+	isSameWorkplaceDay,
+} from "@/lib/time";
 import { useWorkplace } from "@/lib/use-workplace";
 
 interface CoverageResponse {
@@ -143,8 +148,7 @@ function formatShiftWindow(startsAt: string, endsAt?: string | null) {
 	if (!endsAt || new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
 		return `${formatDay(startsAt)} · ${formatClockTime(startsAt)}`;
 	}
-	const sameDay =
-		new Date(startsAt).toDateString() === new Date(endsAt).toDateString();
+	const sameDay = isSameWorkplaceDay(startsAt, endsAt);
 	const duration = formatDurationMs(
 		new Date(endsAt).getTime() - new Date(startsAt).getTime(),
 	);

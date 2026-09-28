@@ -70,6 +70,7 @@ import {
 	useReportSummary,
 	useRequestAnalytics,
 } from "@/lib/queries";
+import { shiftDays, workplaceTodayKey } from "@/lib/time";
 import { useWorkplace } from "@/lib/use-workplace";
 
 export const Route = createFileRoute("/dashboard/reports")({
@@ -152,12 +153,8 @@ function ReportsPage() {
 		{ kind: kind ?? "viewer", privileges },
 		"reports.view",
 	);
-	const [from, setFrom] = useState(() => {
-		const date = new Date();
-		date.setDate(date.getDate() - 14);
-		return date.toLocaleDateString("sv-SE");
-	});
-	const [to, setTo] = useState(() => new Date().toLocaleDateString("sv-SE"));
+	const [from, setFrom] = useState(() => shiftDays(workplaceTodayKey(), -14));
+	const [to, setTo] = useState(() => workplaceTodayKey());
 	const [isDownloading, setIsDownloading] = useState(false);
 	const [isDownloadingLeave, setIsDownloadingLeave] = useState(false);
 	const [isDownloadingPayroll, setIsDownloadingPayroll] = useState(false);
