@@ -230,7 +230,9 @@ async function canViewEmployment(
 	if (!subject) return false;
 	if (member.kind !== "manager" && member.kind !== "viewer") return false;
 	try {
-		await requirePrivilege(profileId, workplaceId, "approvals.review");
+		await requirePrivilege(profileId, workplaceId, "approvals.review", {
+			withoutSubscription: true,
+		});
 		return true;
 	} catch {
 		return false;
@@ -799,6 +801,7 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
+				{ withoutSubscription: true },
 			);
 			const [employmentsList, types, balances, ledgerSums, pendingSums] =
 				await Promise.all([
@@ -1064,6 +1067,7 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
+				{ withoutSubscription: true },
 			);
 			const rows = await db
 				.select({
@@ -1502,6 +1506,7 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
+				{ withoutSubscription: true },
 			);
 			csvAttachment(set, "leave-import-template.csv");
 			return LEAVE_RECORDS_TEMPLATE;
@@ -1551,7 +1556,9 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/leave-balances/import/template.csv",
 		async ({ headers, params, set }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage", {
+				withoutSubscription: true,
+			});
 			csvAttachment(set, "leave-balance-import-template.csv");
 			return LEAVE_BALANCES_TEMPLATE;
 		},
@@ -1778,6 +1785,7 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 					profile.id,
 					params.workplaceId,
 					"settings.manage",
+					{ withoutSubscription: true },
 				);
 			}
 			const revoked = token.revokedAt !== null;
@@ -1974,7 +1982,12 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 				row.employmentId ===
 				(await requireWorkplaceMember(profile.id, row.workplaceId)).id;
 			if (!isOwner) {
-				await requirePrivilege(profile.id, row.workplaceId, "approvals.review");
+				await requirePrivilege(
+					profile.id,
+					row.workplaceId,
+					"approvals.review",
+					{ withoutSubscription: true },
+				);
 			}
 			const path = resolveLeaveDocumentPath(row.document.storageKey);
 			const file = Bun.file(path);

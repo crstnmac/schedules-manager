@@ -328,7 +328,9 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 		"/workplaces/:workplaceId/invitations/import/template.csv",
 		async ({ headers, params, set }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage", {
+				withoutSubscription: true,
+			});
 			csvAttachment(set, "worker-import-template.csv");
 			return WORKER_IMPORT_TEMPLATE;
 		},

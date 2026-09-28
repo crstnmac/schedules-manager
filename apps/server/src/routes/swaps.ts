@@ -952,6 +952,7 @@ export const swapRoutes = new Elysia({
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
+				{ withoutSubscription: true },
 			);
 
 			const rows = await db

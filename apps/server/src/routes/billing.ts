@@ -166,7 +166,12 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing/cancellation",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+				{ withoutSubscription: true },
+			);
 			const [subscription] = await db
 				.select()
 				.from(workplaceSubscriptions)
@@ -248,7 +253,12 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+				{ withoutSubscription: true },
+			);
 			const [subscription] = await db
 				.select()
 				.from(workplaceSubscriptions)
@@ -314,7 +324,12 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing/plan-state",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+				{ withoutSubscription: true },
+			);
 			const [subscription] = await db
 				.select()
 				.from(workplaceSubscriptions)
@@ -339,7 +354,12 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing/plan-change",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+				{ withoutSubscription: true },
+			);
 			return db.transaction(async (tx) => {
 				const [subscription] = await tx
 					.select()
@@ -454,7 +474,12 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing/plan-change/cancel",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+				{ withoutSubscription: true },
+			);
 			return db.transaction(async (tx) => {
 				const [subscription] = await tx
 					.select()
@@ -510,7 +535,12 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing/location-seats",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+				{ withoutSubscription: true },
+			);
 			return purchaseLocationSeats(
 				params.workplaceId,
 				body.expectedPaidLocationCount,
@@ -537,7 +567,12 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing/checkout",
 		async ({ headers, params, body, request }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+				{ withoutSubscription: true },
+			);
 			const [existing] = await db
 				.select()
 				.from(workplaceSubscriptions)
@@ -614,7 +649,12 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing/portal",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+				{ withoutSubscription: true },
+			);
 			const [subscription] = await db
 				.select({
 					id: workplaceSubscriptions.id,

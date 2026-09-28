@@ -29,14 +29,23 @@ function serializeTeam(
 	};
 }
 
-async function locationWithSettings(profileId: string, locationId: string) {
+async function locationWithSettings(
+	profileId: string,
+	locationId: string,
+	options?: { withoutSubscription?: boolean },
+) {
 	const [location] = await db
 		.select()
 		.from(locations)
 		.where(eq(locations.id, locationId))
 		.limit(1);
 	if (!location) throw new NotFoundError("Location not found");
-	await requirePrivilege(profileId, location.workplaceId, "settings.manage");
+	await requirePrivilege(
+		profileId,
+		location.workplaceId,
+		"settings.manage",
+		options,
+	);
 	return location;
 }
 
@@ -51,6 +60,7 @@ export const scheduleTeamRoutes = new Elysia({
 			const location = await locationWithSettings(
 				profile.id,
 				params.locationId,
+				{ withoutSubscription: true },
 			);
 			const teams = await db
 				.select()

@@ -37,6 +37,7 @@ import {
 	lte,
 } from "drizzle-orm";
 import { Elysia, t } from "elysia";
+import { requireSubscriptionCapability } from "../billing";
 import { enqueueInvitationEmail } from "../email-outbox";
 import {
 	BadRequestError,
@@ -1160,6 +1161,7 @@ export const integrationApiRoutes = new Elysia({
 			const actor = await requireIntegrationActor(headers, "requests.write");
 			if (!actor.profileId)
 				throw new ForbiddenError("A human manager must own this credential");
+			await requireSubscriptionCapability(actor.workplaceId, "timesheets");
 			const [updated] = await db
 				.update(timeEntries)
 				.set({

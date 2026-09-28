@@ -835,6 +835,7 @@ export const constraintsRoutes = new Elysia({
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
+				{ withoutSubscription: true },
 			);
 			const timeZone = await workplaceTimeZone(params.workplaceId);
 
@@ -999,6 +1000,7 @@ export const constraintsRoutes = new Elysia({
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
+				{ withoutSubscription: true },
 			);
 			const rows = await db
 				.select({

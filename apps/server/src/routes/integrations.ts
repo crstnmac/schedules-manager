@@ -71,6 +71,7 @@ export const integrationRoutes = new Elysia({
 				profile.id,
 				params.workplaceId,
 				"integrations.manage",
+				{ withoutSubscription: true },
 			);
 			const keys = await db
 				.select({
@@ -108,6 +109,7 @@ export const integrationRoutes = new Elysia({
 				profile.id,
 				params.workplaceId,
 				"integrations.manage",
+				{ withoutSubscription: true },
 			);
 			const connections = await db
 				.select({
@@ -293,6 +295,7 @@ export const integrationRoutes = new Elysia({
 				profile.id,
 				params.workplaceId,
 				"integrations.manage",
+				{ withoutSubscription: true },
 			);
 			const endpoints = await db
 				.select({
@@ -457,6 +460,7 @@ export const integrationRoutes = new Elysia({
 				profile.id,
 				params.workplaceId,
 				"integrations.manage",
+				{ withoutSubscription: true },
 			);
 			const limit = Math.min(100, Math.max(1, query.limit ?? 100));
 			const deliveries = await db

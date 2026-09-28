@@ -15,6 +15,7 @@ import {
 import { and, eq } from "drizzle-orm";
 
 import { type AuthenticatedUser, AuthenticationError, auth } from "./auth";
+import { requireActiveSubscription } from "./billing";
 import { ForbiddenError, NotFoundError } from "./errors";
 
 export interface SessionContext {
@@ -154,16 +155,41 @@ export function hasPrivilege(
 	return explicit.includes(privilege);
 }
 
+/**
+ * Privileges that change a Workplace. Using them needs an active
+ * subscription (ADR 0016); viewing privileges never do, so history stays
+ * readable after a downgrade or lapse.
+ */
+const SUBSCRIPTION_PRIVILEGES = new Set<EmploymentPrivilege>([
+	"schedule.manage",
+	"schedule.publish",
+	"approvals.review",
+	"policies.manage",
+	"workers.manage",
+	"settings.manage",
+	"integrations.manage",
+]);
+
 export async function requirePrivilege(
 	profileId: string,
 	workplaceId: string,
 	privilege: EmploymentPrivilege,
+	options?: {
+		/**
+		 * Skip the subscription check: read-only routes (history must survive
+		 * a lapse) and billing routes (so an unpaid Workplace can subscribe).
+		 */
+		withoutSubscription?: boolean;
+	},
 ): Promise<Employment> {
 	const employment = await requireWorkplaceMember(profileId, workplaceId);
 	if (!hasPrivilege(employment, privilege)) {
 		throw new ForbiddenError(
 			`This action requires the ${privilege} capability`,
 		);
+	}
+	if (!options?.withoutSubscription && SUBSCRIPTION_PRIVILEGES.has(privilege)) {
+		await requireActiveSubscription(workplaceId);
 	}
 	return employment;
 }

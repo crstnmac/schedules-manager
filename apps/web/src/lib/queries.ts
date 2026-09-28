@@ -530,6 +530,8 @@ export function useScheduleTimeclock(
 	locationId: string | undefined,
 	weekStart: string | undefined,
 	teamId?: string | null,
+	/** Time clock state is an Operations feature; skip the call otherwise. */
+	enabled = true,
 ) {
 	const team = teamQueryParam(teamId);
 	return useQuery({
@@ -543,7 +545,7 @@ export function useScheduleTimeclock(
 			api<{ timeclock: ScheduleTimeclockEntry[] }>(
 				`/v1/locations/${locationId}/schedules/${weekStart}/timeclock${team ? `?${team}` : ""}`,
 			).then((data) => data.timeclock),
-		enabled: Boolean(locationId && weekStart),
+		enabled: Boolean(locationId && weekStart) && enabled,
 		staleTime: SCHEDULE_STALE_TIME,
 		gcTime: SCHEDULE_CACHE_TIME,
 		refetchOnMount: false,

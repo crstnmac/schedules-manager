@@ -415,7 +415,12 @@ export const patternRoutes = new Elysia({
 		"/workplaces/:workplaceId/shift-patterns",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "schedule.manage");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"schedule.manage",
+				{ withoutSubscription: true },
+			);
 			const patterns = await db
 				.select()
 				.from(shiftPatterns)
@@ -475,7 +480,12 @@ export const patternRoutes = new Elysia({
 		"/workplaces/:workplaceId/shift-patterns/:patternId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "schedule.manage");
+			await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"schedule.manage",
+				{ withoutSubscription: true },
+			);
 			const [pattern] = await db
 				.select()
 				.from(shiftPatterns)

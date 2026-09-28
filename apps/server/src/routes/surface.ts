@@ -61,6 +61,7 @@ async function locationForManager(
 	profileId: string,
 	locationId: string,
 	privilege: "schedule.manage" | "settings.manage" = "schedule.manage",
+	options?: { withoutSubscription?: boolean },
 ) {
 	const [location] = await db
 		.select()
@@ -68,7 +69,7 @@ async function locationForManager(
 		.where(eq(locations.id, locationId))
 		.limit(1);
 	if (!location) throw new NotFoundError("Location not found");
-	await requirePrivilege(profileId, location.workplaceId, privilege);
+	await requirePrivilege(profileId, location.workplaceId, privilege, options);
 	return location;
 }
 
@@ -614,7 +615,9 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/pto",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage", {
+				withoutSubscription: true,
+			});
 			const rows = await db
 				.select({
 					employmentId: ptoBalances.employmentId,
@@ -727,7 +730,12 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/locations/:locationId/time-blocks",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			const location = await locationForManager(profile.id, params.locationId);
+			const location = await locationForManager(
+				profile.id,
+				params.locationId,
+				"schedule.manage",
+				{ withoutSubscription: true },
+			);
 			const [blocks, templates] = await Promise.all([
 				db
 					.select()
@@ -1587,7 +1595,9 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/employments/:employmentId/documents",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage", {
+				withoutSubscription: true,
+			});
 			const [employment] = await db
 				.select({ id: employments.id })
 				.from(employments)
@@ -2086,6 +2096,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
+				{ withoutSubscription: true },
 			);
 			await requireSubscriptionCapability(params.workplaceId, "timesheets");
 			const rows = await db

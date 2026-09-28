@@ -61,7 +61,9 @@ export const workersRoutes = new Elysia({
 		"/workplaces/:workplaceId/workers",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage", {
+				withoutSubscription: true,
+			});
 
 			const employmentRows = await db
 				.select({
@@ -379,7 +381,9 @@ export const workersRoutes = new Elysia({
 		"/workplaces/:workplaceId/workers/directory/import/template.csv",
 		async ({ headers, params, set }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			await requirePrivilege(profile.id, params.workplaceId, "workers.manage", {
+				withoutSubscription: true,
+			});
 			csvAttachment(set, "worker-directory-template.csv");
 			return DIRECTORY_IMPORT_TEMPLATE;
 		},

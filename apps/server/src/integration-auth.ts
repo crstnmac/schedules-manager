@@ -15,6 +15,7 @@ import { createLocalJWKSet, type JWK, jwtVerify } from "jose";
 
 import { requireApiKey } from "./api-key-auth";
 import { auth } from "./auth";
+import { requireActiveSubscription } from "./billing";
 import { hasPrivilege } from "./context";
 import { AuthenticationError, ForbiddenError } from "./errors";
 
@@ -277,12 +278,14 @@ export async function requireIntegrationActor(
 	}
 
 	if (token.startsWith("jl_live_")) {
-		const actor = await requireApiKey(headers, requiredScope);
-		return apiKeyActor(
-			actor.workplaceId,
-			actor.apiKey.scopes,
-			actor.apiKey.createdBy,
+		const key = await requireApiKey(headers, requiredScope);
+		const actor = apiKeyActor(
+			key.workplaceId,
+			key.apiKey.scopes,
+			key.apiKey.createdBy,
 		);
+		await requireSubscriptionForScope(actor.workplaceId, requiredScope);
+		return actor;
 	}
 
 	let principal: { profileId: string; scopes: string[] } | null = null;
@@ -314,7 +317,17 @@ export async function requireIntegrationActor(
 			`This credential is missing the ${requiredScope} scope`,
 		);
 	}
+	await requireSubscriptionForScope(actor.workplaceId, requiredScope);
 	return actor;
+}
+
+/** Write scopes change the Workplace, so they need an active subscription
+ * (ADR 0016); read scopes keep history available after a lapse. */
+async function requireSubscriptionForScope(
+	workplaceId: string,
+	scope: ApiKeyScope | undefined,
+) {
+	if (scope?.endsWith(".write")) await requireActiveSubscription(workplaceId);
 }
 
 export function mcpResourceUrl(): string | null {

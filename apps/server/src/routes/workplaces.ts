@@ -223,23 +223,30 @@ export const workplacesRoutes = new Elysia({
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
 			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const existing = await loadWorkplace(params.workplaceId);
+			// Time clock settings are Operations features. Only a changed value
+			// needs the plan: forms send every field back, and a Schedule plan
+			// Workplace must still be able to save its other settings. Planned
+			// labor cost (goal and visibility) is part of the Schedule plan.
+			const timeClockSettings = [
+				"earlyClockInMinutes",
+				"clockRoundMinutes",
+				"autoClockOutGraceMinutes",
+				"overtimeWeeklyMinutes",
+				"overtimeDailyMinutes",
+				"breaksEnabled",
+				"geofenceRequired",
+				"lateArrivalGraceMinutes",
+				"timesheetNotesEnabled",
+			] as const;
 			if (
-				body.earlyClockInMinutes !== undefined ||
-				body.clockRoundMinutes !== undefined ||
-				body.autoClockOutGraceMinutes !== undefined ||
-				body.overtimeWeeklyMinutes !== undefined ||
-				body.overtimeDailyMinutes !== undefined ||
-				body.laborCostPercentGoal !== undefined ||
-				body.managersCanViewLaborCost !== undefined ||
-				body.breaksEnabled !== undefined ||
-				body.geofenceRequired !== undefined ||
-				body.lateArrivalGraceMinutes !== undefined ||
-				body.timesheetNotesEnabled !== undefined
+				timeClockSettings.some(
+					(key) => body[key] !== undefined && body[key] !== existing[key],
+				)
 			) {
 				await requireSubscriptionCapability(params.workplaceId, "time_clock");
 			}
 
-			const existing = await loadWorkplace(params.workplaceId);
 			if (body.weekendDays !== undefined) {
 				const unique = [...new Set(body.weekendDays)];
 				if (unique.length !== body.weekendDays.length || unique.length > 6) {

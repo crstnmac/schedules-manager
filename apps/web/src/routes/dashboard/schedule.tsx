@@ -99,7 +99,7 @@ import {
 } from "@dnd-kit/react";
 import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
 	AlertTriangleIcon,
 	BanIcon,
@@ -870,7 +870,8 @@ function ScheduleMetric({
 }
 
 function SchedulePage() {
-	const { workplace, kind, privileges } = useWorkplace();
+	const { workplace, kind, privileges, capabilities } = useWorkplace();
+	const navigate = useNavigate();
 	const subject = kind ? { kind, privileges: privileges ?? null } : null;
 	const canManage = hasCapability(subject, "schedule.manage");
 	const canPublish = hasCapability(subject, "schedule.publish");
@@ -1399,6 +1400,7 @@ function SchedulePage() {
 		activeLocationId,
 		weekStart,
 		activeTeamId,
+		capabilities.operations,
 	);
 	const laborQuery = useScheduleLabor(
 		activeLocationId,
@@ -2184,17 +2186,29 @@ function SchedulePage() {
 													<LayoutTemplateIcon />
 													Apply pattern
 												</DropdownMenuItem>
-												<DropdownMenuItem
-													disabled={
-														!canManage ||
-														autoAssign.isPending ||
-														!data ||
-														openShiftCount === 0
-													}
-													onClick={() => autoAssign.mutate()}
-												>
-													Auto-assign open shifts
-												</DropdownMenuItem>
+												{capabilities.operations ? (
+													<DropdownMenuItem
+														disabled={
+															!canManage ||
+															autoAssign.isPending ||
+															!data ||
+															openShiftCount === 0
+														}
+														onClick={() => autoAssign.mutate()}
+													>
+														Auto-assign open shifts
+													</DropdownMenuItem>
+												) : (
+													<DropdownMenuItem
+														onClick={() =>
+															navigate({
+																to: "/dashboard/settings/subscription",
+															})
+														}
+													>
+														Auto-assign open shifts (Operations plan)
+													</DropdownMenuItem>
+												)}
 											</DropdownMenuGroup>
 											<DropdownMenuSeparator />
 											<DropdownMenuGroup>

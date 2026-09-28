@@ -23,6 +23,7 @@ import { registerReportTests } from "./report-cases";
 import { registerReportsTests } from "./reports-cases";
 
 import { registerStalePositionTests } from "./stale-position-cases";
+import { registerSubscriptionGatingTests } from "./subscription-gating-cases";
 import { registerTimeClockTests } from "./time-clock-cases";
 import { registerTrialPolicyTests } from "./trial-policy-cases";
 import { registerWorkspaceAutoAcceptTests } from "./workspace-auto-accept-cases";
@@ -135,6 +136,11 @@ integrationDescribe("Schedule publication", () => {
 	registerLeaveTests(() => ({ database, app, token: managerToken }));
 	registerLocationBillingTests(() => ({ database, app, token: managerToken }));
 	registerTrialPolicyTests(() => ({ database, app, token: managerToken }));
+	registerSubscriptionGatingTests(() => ({
+		database,
+		app,
+		token: managerToken,
+	}));
 	registerOwnReleaseTests(() => ({ database, app, token: managerToken }));
 	registerAcceptanceRaceTests(() => ({ database, app, token: managerToken }));
 	registerAutoClockOutBreaksTests(() => ({

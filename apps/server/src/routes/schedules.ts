@@ -1448,6 +1448,7 @@ export const schedulesRoutes = new Elysia({
 				profile.id,
 				location.workplaceId,
 				"schedule.manage",
+				{ withoutSubscription: true },
 			);
 			csvAttachment(set, "schedule-import-template.csv");
 			return SCHEDULE_IMPORT_TEMPLATE;

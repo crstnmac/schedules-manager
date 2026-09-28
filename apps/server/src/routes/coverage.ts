@@ -507,6 +507,7 @@ export const coverageRoutes = new Elysia({
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
+				{ withoutSubscription: true },
 			);
 
 			const releaseRows = await db

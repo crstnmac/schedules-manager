@@ -32,7 +32,9 @@ export const portabilityRoutes = new Elysia({
 	"/workplaces/:workplaceId/export/:dataset",
 	async ({ headers, params, set }) => {
 		const { profile } = await requireSession(headers);
-		await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+		await requirePrivilege(profile.id, params.workplaceId, "settings.manage", {
+			withoutSubscription: true,
+		});
 		const workplaceId = params.workplaceId;
 		const dataset = params.dataset;
 		csvAttachment(set, `jooling-${dataset}.csv`);
