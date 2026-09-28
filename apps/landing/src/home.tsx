@@ -5,13 +5,8 @@ import { cn } from "@SchedulesManager/ui/lib/utils";
 import {
 	ArrowRight,
 	ArrowUpRight,
-	Bell,
 	CalendarDays,
 	Check,
-	CheckCheck,
-	ChevronDown,
-	ChevronLeft,
-	ChevronRight,
 	CircleDollarSign,
 	Clock,
 	Coffee,
@@ -20,17 +15,16 @@ import {
 	Layers,
 	MapPin,
 	Menu,
-	MessageSquare,
 	Plus,
 	Repeat,
 	Send,
 	ShoppingBag,
-	Smartphone,
 	Users,
 	Utensils,
 	X,
 } from "lucide-react";
-import React, { useEffect, useId, useRef, useState } from "react";
+import type React from "react";
+import { useEffect, useId, useState } from "react";
 import { Link } from "./router";
 import { entityLine, isSet, LEGAL_ENTITY, withPeriod } from "./site-config";
 import { competitors } from "./switching";
@@ -42,61 +36,6 @@ const signUpUrl = new URL(appUrl);
 signUpUrl.searchParams.set("mode", "sign-up");
 const restaurantSignUpUrl = new URL(signUpUrl);
 restaurantSignUpUrl.searchParams.set("opening_restaurant", "1");
-
-const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
-
-const people = [
-	{
-		name: "Olivia Chen",
-		role: "Shift lead",
-		initials: "OC",
-		hours: 32,
-		shifts: ["07:00–15:00", "07:00–15:00", "", "07:00–15:00", "07:00–15:00"],
-	},
-	{
-		name: "James Wilson",
-		role: "Barista",
-		initials: "JW",
-		hours: 32,
-		shifts: [
-			"08:00–16:00",
-			"",
-			"08:00–16:00",
-			"08:00–16:00",
-			"",
-			"08:00–16:00",
-		],
-	},
-	{
-		name: "Amara Okafor",
-		role: "Barista",
-		initials: "AO",
-		hours: 32,
-		shifts: [
-			"",
-			"09:00–17:00",
-			"09:00–17:00",
-			"",
-			"09:00–17:00",
-			"09:00–17:00",
-		],
-	},
-	{
-		name: "Leo Martinez",
-		role: "Front of house",
-		initials: "LM",
-		hours: 32,
-		shifts: [
-			"10:00–18:00",
-			"10:00–18:00",
-			"",
-			"10:00–18:00",
-			"",
-			"",
-			"10:00–18:00",
-		],
-	},
-];
 
 const faqs = [
 	[
@@ -221,10 +160,11 @@ function Reveal({
 }: {
 	children: React.ReactNode;
 	className?: string;
-	as?: "div" | "header";
+	as?: "div" | "header" | "li";
 	id?: string;
 }) {
-	const Component = as === "header" ? motion.header : motion.div;
+	const Component =
+		as === "header" ? motion.header : as === "li" ? motion.li : motion.div;
 	return (
 		<Component
 			id={id}
@@ -354,260 +294,15 @@ function Header() {
 	);
 }
 
-function ScheduleMockup() {
-	const [published, setPublished] = useState(false);
-	const [week, setWeek] = useState(0);
-	const start = new Date(2026, 8, 7 + week * 7);
-	const end = new Date(2026, 8, 13 + week * 7);
-	const fmt = (date: Date) =>
-		date.toLocaleDateString("en", { month: "short", day: "numeric" });
-	const shiftWeek = (delta: number) => {
-		setWeek((w) => w + delta);
-		setPublished(false);
-	};
-
+function ScheduleShot() {
 	return (
-		<div className="dk-mockup" id="product-demo">
-			<div className="dk-mockup-tabs" aria-hidden="true">
-				<span className="dk-mockup-dots">
-					<i />
-					<i />
-					<i />
-				</span>
-				<span className="is-active">
-					<CalendarDays size={12} /> Schedule
-				</span>
-				<span>
-					<Users size={12} /> Team
-				</span>
-				<span>
-					<MessageSquare size={12} /> Requests <b>3</b>
-				</span>
-				<span className="dk-mockup-example">Example workspace</span>
-			</div>
-			<div className="dk-mockup-body">
-				<aside className="dk-mockup-side" aria-hidden="true">
-					<div className="dk-workspace">
-						<span>
-							<Coffee size={13} />
-						</span>
-						<strong>Daybreak Café</strong>
-						<ChevronDown size={12} />
-					</div>
-					<p className="dk-side-label">Workspace</p>
-					{[
-						{ icon: CalendarDays, name: "Schedule", active: true },
-						{ icon: Users, name: "Team" },
-						{ icon: MessageSquare, name: "Requests", count: 3 },
-						{ icon: Bell, name: "Activity" },
-						{ icon: Clock, name: "Time clock" },
-					].map(({ icon: Icon, name, active, count }) => (
-						<div
-							className={cn("dk-side-item", active && "is-active")}
-							key={name}
-						>
-							<Icon size={13} />
-							<span>{name}</span>
-							{count ? <b>{count}</b> : null}
-						</div>
-					))}
-				</aside>
-				<div className="dk-mockup-main">
-					<div className="dk-mockup-toolbar">
-						<div>
-							<h3>Team schedule</h3>
-							<p>
-								<MapPin size={11} /> Downtown · Europe/Lisbon
-							</p>
-						</div>
-						<div className="dk-mockup-toolbar-actions">
-							<div className="dk-week-nav">
-								<button
-									type="button"
-									aria-label="Previous week"
-									onClick={() => shiftWeek(-1)}
-								>
-									<ChevronLeft size={13} />
-								</button>
-								<strong>
-									{fmt(start)} – {fmt(end)}
-								</strong>
-								<button
-									type="button"
-									aria-label="Next week"
-									onClick={() => shiftWeek(1)}
-								>
-									<ChevronRight size={13} />
-								</button>
-							</div>
-							<span
-								className={cn("dk-badge", published ? "is-live" : "is-draft")}
-							>
-								<i />
-								{published ? "Published · v1" : "Draft"}
-							</span>
-							<button
-								type="button"
-								className={cn("dk-publish", published && "is-published")}
-								onClick={() => setPublished(!published)}
-								aria-pressed={published}
-							>
-								{published ? <CheckCheck size={13} /> : <Send size={13} />}
-								{published ? "Published" : "Publish"}
-							</button>
-						</div>
-					</div>
-					<section
-						className="dk-grid-scroll"
-						aria-label="Example weekly schedule, scroll to see all days"
-						// biome-ignore lint/a11y/noNoninteractiveTabindex: scrollable region must be keyboard reachable
-						tabIndex={0}
-					>
-						<div className="dk-grid">
-							<div className="dk-grid-head dk-grid-team">
-								Team <span>4</span>
-							</div>
-							{days.map((day, i) => (
-								<div
-									key={day}
-									className={cn("dk-grid-head", i === 1 && "is-today")}
-								>
-									{day}
-									<b>{new Date(2026, 8, 7 + week * 7 + i).getDate()}</b>
-								</div>
-							))}
-							{people.map((person) => (
-								<React.Fragment key={person.name}>
-									<div className="dk-grid-person">
-										<span className="dk-avatar">{person.initials}</span>
-										<div>
-											<strong>{person.name}</strong>
-											<small>
-												{person.role} · {person.hours}h
-											</small>
-										</div>
-									</div>
-									{days.map((day, i) => (
-										<div
-											className={cn("dk-grid-cell", i === 1 && "is-today")}
-											key={`${person.initials}-${day}`}
-										>
-											{person.shifts[i] ? (
-												<div className="dk-shift">
-													<strong>{person.shifts[i]}</strong>
-													<span>{person.role}</span>
-												</div>
-											) : null}
-										</div>
-									))}
-								</React.Fragment>
-							))}
-							<div className="dk-grid-person dk-grid-open">
-								<span className="dk-avatar dk-avatar-open">
-									<Plus size={12} />
-								</span>
-								<strong>Open shifts</strong>
-							</div>
-							{days.map((day, i) => (
-								<div
-									className={cn("dk-grid-cell", i === 1 && "is-today")}
-									key={`open-${day}`}
-								>
-									{i === 3 ? (
-										<div className="dk-shift is-open">
-											<strong>12:00–18:00</strong>
-											<span>Barista · Open</span>
-										</div>
-									) : null}
-								</div>
-							))}
-						</div>
-					</section>
-					<div className="dk-mockup-status">
-						<span>
-							<i className="dk-dot" /> All changes saved
-						</span>
-						<span>16 assigned · 1 open</span>
-					</div>
-				</div>
-				<aside className="dk-mockup-activity" aria-live="polite">
-					<p className="dk-side-label">Activity</p>
-					{published ? (
-						<>
-							<ActivityRow
-								initials="OC"
-								name="Olivia Chen"
-								text="acknowledged v1"
-								status="Seen"
-							/>
-							<ActivityRow
-								initials="JW"
-								name="James Wilson"
-								text="acknowledged v1"
-								status="Seen"
-							/>
-							<ActivityRow
-								initials="AO"
-								name="Amara Okafor"
-								text="notified"
-								status="Sent"
-								pending
-							/>
-							<p className="dk-activity-note">
-								Preview only — no notifications were sent.
-							</p>
-						</>
-					) : (
-						<>
-							<ActivityRow
-								initials="LM"
-								name="Leo Martinez"
-								text="requested time off · Sat"
-								status="New"
-								pending
-							/>
-							<ActivityRow
-								initials="AO"
-								name="Amara Okafor"
-								text="updated availability"
-								status="New"
-								pending
-							/>
-							<p className="dk-activity-note">
-								Publish the week to notify the team.
-							</p>
-						</>
-					)}
-				</aside>
-			</div>
-		</div>
-	);
-}
-
-function ActivityRow({
-	initials,
-	name,
-	text,
-	status,
-	pending,
-}: {
-	initials: string;
-	name: string;
-	text: string;
-	status: string;
-	pending?: boolean;
-}) {
-	return (
-		<div className="dk-activity-row">
-			<span className="dk-avatar">{initials}</span>
-			<div>
-				<strong>{name}</strong>
-				<small>{text}</small>
-			</div>
-			<span className={cn("dk-badge", pending ? "is-info" : "is-live")}>
-				<i />
-				{status}
-			</span>
+		<div className="dk-shot" id="product-demo">
+			<img
+				src="/schedule.webp"
+				width={2940}
+				height={1674}
+				alt="The jooling weekly schedule in the web product, showing shifts by person and role, published version, open shifts and a conflict"
+			/>
 		</div>
 	);
 }
@@ -638,7 +333,7 @@ function Hero() {
 				</motion.div>
 			</div>
 			<motion.div variants={fadeUp}>
-				<ScheduleMockup />
+				<ScheduleShot />
 			</motion.div>
 		</motion.section>
 	);
@@ -700,152 +395,7 @@ const workflowSteps = [
 	},
 ] as const;
 
-function WorkflowPanel({ id }: { id: (typeof workflowSteps)[number]["id"] }) {
-	if (id === "setup") {
-		return (
-			<div className="dk-panel-table">
-				<div className="dk-table-head">
-					<span>Location</span>
-					<span>Roles</span>
-					<span>Team</span>
-					<span>Time zone</span>
-				</div>
-				{[
-					["Downtown", "Barista, Shift lead", "12", "Europe/Lisbon"],
-					["Riverside", "Barista, Kitchen", "9", "Europe/Lisbon"],
-					["Airport", "Front of house", "15", "Europe/Madrid"],
-				].map(([name, roles, team, tz]) => (
-					<div className="dk-table-row" key={name}>
-						<span className="dk-table-name">
-							<i>
-								<MapPin size={11} />
-							</i>
-							{name}
-						</span>
-						<span>{roles}</span>
-						<span className="dk-num">{team}</span>
-						<span>{tz}</span>
-					</div>
-				))}
-				<div className="dk-table-add">
-					<Plus size={12} /> Add location
-				</div>
-			</div>
-		);
-	}
-	if (id === "build") {
-		return (
-			<div className="dk-panel-build">
-				{people.slice(0, 3).map((person) => (
-					<div className="dk-build-row" key={person.name}>
-						<span className="dk-avatar">{person.initials}</span>
-						<strong>{person.name}</strong>
-						<div className="dk-build-days">
-							{days.slice(0, 5).map((day, i) => (
-								<span
-									key={day}
-									className={cn(
-										person.shifts[i] ? "is-assigned" : "is-free",
-										person.name === "James Wilson" && i === 4 && "is-unavail",
-									)}
-								>
-									{day[0]}
-								</span>
-							))}
-						</div>
-					</div>
-				))}
-				<div className="dk-build-alert">
-					<span className="dk-badge is-warn">
-						<i />1 uncovered
-					</span>
-					Thu 12:00–18:00 · Barista — 2 teammates available
-				</div>
-			</div>
-		);
-	}
-	if (id === "publish") {
-		return (
-			<div className="dk-flow">
-				{[
-					{
-						icon: FileClock,
-						title: "Draft",
-						text: "Week of Sep 7",
-						tone: "blue",
-					},
-					{ icon: Check, title: "Review", text: "0 conflicts", tone: "blue" },
-					{
-						icon: Send,
-						title: "Publish v1",
-						text: "4 teammates",
-						tone: "green",
-					},
-					{ icon: Bell, title: "Notify", text: "Push + email", tone: "green" },
-				].map(({ icon: Icon, title, text, tone }, index) => (
-					<React.Fragment key={title}>
-						{index > 0 ? <span className="dk-flow-line" /> : null}
-						<div className="dk-node">
-							<span className={cn("dk-node-icon", `is-${tone}`)}>
-								<Icon size={13} />
-							</span>
-							<strong>{title}</strong>
-							<small>{text}</small>
-						</div>
-					</React.Fragment>
-				))}
-			</div>
-		);
-	}
-	return (
-		<div className="dk-panel-table">
-			<div className="dk-table-head dk-table-head-changes">
-				<span>Change</span>
-				<span>Version</span>
-				<span>Status</span>
-			</div>
-			{[
-				["Olivia · Thu 07:00 → 09:00", "v2", "Accepted", "live"],
-				["Open shift Thu picked up by James", "v2", "Seen", "live"],
-				["Leo · Sat time off approved", "v3", "Pending", "info"],
-			].map(([change, version, status, tone]) => (
-				<div className="dk-table-row dk-table-row-changes" key={change}>
-					<span className="dk-table-name">{change}</span>
-					<span className="dk-num">{version}</span>
-					<span>
-						<span className={cn("dk-badge", `is-${tone}`)}>
-							<i />
-							{status}
-						</span>
-					</span>
-				</div>
-			))}
-		</div>
-	);
-}
-
 function Workflow() {
-	const [active, setActive] = useState(0);
-	const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
-	const baseId = useId();
-
-	const onKeyDown = (event: React.KeyboardEvent) => {
-		const last = workflowSteps.length - 1;
-		let next: number | null = null;
-		if (event.key === "ArrowDown" || event.key === "ArrowRight")
-			next = active === last ? 0 : active + 1;
-		if (event.key === "ArrowUp" || event.key === "ArrowLeft")
-			next = active === 0 ? last : active - 1;
-		if (event.key === "Home") next = 0;
-		if (event.key === "End") next = last;
-		if (next === null) return;
-		event.preventDefault();
-		setActive(next);
-		tabRefs.current[next]?.focus();
-	};
-
-	const step = workflowSteps[active];
-
 	return (
 		<section className="dk-section dk-container" id="how-it-works">
 			<SectionHeading
@@ -853,64 +403,18 @@ function Workflow() {
 				title="Set up. Schedule. Send."
 				lede="Take the week from an empty workplace to a published schedule — and keep it right as the week moves."
 			/>
-			<Reveal className="dk-tabbed">
-				<div
-					className="dk-tablist"
-					role="tablist"
-					aria-orientation="vertical"
-					aria-label="Workflow steps"
-				>
-					{workflowSteps.map(({ id, icon: Icon, title, body }, index) => (
-						<button
-							key={id}
-							ref={(el) => {
-								tabRefs.current[index] = el;
-							}}
-							type="button"
-							role="tab"
-							id={`${baseId}-tab-${id}`}
-							aria-selected={index === active}
-							aria-controls={`${baseId}-panel`}
-							tabIndex={index === active ? 0 : -1}
-							className={cn("dk-tab", index === active && "is-active")}
-							onClick={() => setActive(index)}
-							onKeyDown={onKeyDown}
-						>
-							<span className="dk-tab-index">0{index + 1}</span>
-							<span className="dk-tab-copy">
-								<strong>
-									<Icon size={14} /> {title}
-								</strong>
-								<small>{body}</small>
-							</span>
-						</button>
-					))}
-				</div>
-				<div
-					className="dk-tabpanel"
-					role="tabpanel"
-					id={`${baseId}-panel`}
-					aria-labelledby={`${baseId}-tab-${step.id}`}
-				>
-					<div className="dk-tabpanel-bar" aria-hidden="true">
-						<span className="dk-mockup-dots">
-							<i />
-							<i />
-							<i />
+			<ol className="dk-steps">
+				{workflowSteps.map(({ id, icon: Icon, title, body }, index) => (
+					<Reveal as="li" className="dk-step" key={id}>
+						<span className="dk-step-index">0{index + 1}</span>
+						<span className="dk-icon-tile">
+							<Icon size={16} />
 						</span>
-						<span>{step.title}</span>
-					</div>
-					<motion.div
-						key={step.id}
-						className="dk-tabpanel-body"
-						initial={{ opacity: 0, y: 6 }}
-						animate={{ opacity: 1, y: 0 }}
-						transition={{ duration: 0.25 }}
-					>
-						<WorkflowPanel id={step.id} />
-					</motion.div>
-				</div>
-			</Reveal>
+						<h3>{title}</h3>
+						<p>{body}</p>
+					</Reveal>
+				))}
+			</ol>
 		</section>
 	);
 }
@@ -939,66 +443,14 @@ function Capabilities() {
 
 function PhoneMockup() {
 	return (
-		<div className="dk-phone" aria-hidden="true">
-			<div className="dk-phone-top">
-				<span>9:41</span>
-				<span className="dk-phone-island" />
-				<span>100%</span>
-			</div>
-			<div className="dk-phone-greeting">
-				<img src="/logo-mark.svg" alt="" />
-				<Bell size={15} />
-			</div>
-			<p className="dk-phone-date">Monday, September 7</p>
-			<h3>Hey, Olivia</h3>
-			<div className="dk-phone-card">
-				<div className="dk-phone-card-head">
-					<span>Next shift</span>
-					<span className="dk-badge is-info">
-						<i />
-						Tomorrow
-					</span>
-				</div>
-				<strong>07:00 – 15:00</strong>
-				<small>Shift lead</small>
-				<p>
-					<MapPin size={11} /> Daybreak Café · Downtown
-				</p>
-			</div>
-			<div className="dk-phone-week">
-				<span>Your week</span>
-				<span>32 hours</span>
-			</div>
-			<div className="dk-phone-days">
-				{days.map((day, i) => (
-					<div key={day} className={cn(i === 1 && "is-active")}>
-						{day[0]}
-						<b>{7 + i}</b>
-						<i className={cn(people[0].shifts[i] && "has-shift")} />
-					</div>
-				))}
-			</div>
-			<div className="dk-phone-confirm">
-				<CheckCheck size={14} />
-				<div>
-					<strong>You’re up to date</strong>
-					<small>You’ve seen the latest schedule.</small>
-				</div>
-			</div>
-			<div className="dk-phone-nav">
-				<span className="is-active">
-					<CalendarDays size={14} />
-					Schedule
-				</span>
-				<span>
-					<Repeat size={14} />
-					Requests
-				</span>
-				<span>
-					<Users size={14} />
-					Profile
-				</span>
-			</div>
+		<div className="dk-phone">
+			<img
+				src="/worker-home-mobile.webp"
+				width={1170}
+				height={2000}
+				loading="lazy"
+				alt="The jooling worker app showing the next shift, a published-schedule notice, and a shift change to accept"
+			/>
 		</div>
 	);
 }
@@ -1034,15 +486,6 @@ function Team() {
 					</div>
 				</Reveal>
 				<Reveal className="dk-team-visual">
-					<div className="dk-float-note">
-						<span className="dk-node-icon is-blue">
-							<Smartphone size={13} />
-						</span>
-						<div>
-							<strong>Schedule updated</strong>
-							<small>Thu 07:00 → 09:00 · tap to accept</small>
-						</div>
-					</div>
 					<PhoneMockup />
 				</Reveal>
 			</div>

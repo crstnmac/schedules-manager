@@ -2287,3 +2287,96 @@ html.dk-theme body {
 		transition-duration: 0.01ms;
 	}
 }
+
+/* Real product screenshots */
+.dk .dk-shot {
+	scroll-margin-top: 96px;
+	border-radius: var(--radius-card);
+	background: var(--color-charcoal);
+	box-shadow:
+		0 0 0 0.5px rgba(255, 255, 255, 0.12),
+		var(--shadow-mockup);
+	padding: 8px;
+	overflow: hidden;
+}
+.dk .dk-shot img {
+	display: block;
+	width: 100%;
+	height: auto;
+	border-radius: 8px;
+}
+.dk .dk-phone {
+	width: min(264px, 100%);
+	padding: 0;
+	border-radius: 30px;
+	overflow: hidden;
+	background: #fff;
+	max-height: 520px;
+	box-shadow:
+		0 0 0 6px var(--color-charcoal),
+		0 0 0 6.5px rgba(255, 255, 255, 0.08),
+		var(--shadow-mockup);
+}
+.dk .dk-phone img {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+.dk .dk-team-visual {
+	padding: 48px 16px;
+}
+.dk .dk-steps {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 16px;
+}
+.dk .dk-step {
+	position: relative;
+	padding: 28px;
+	border-radius: var(--radius-lg);
+	background: var(--color-graphite);
+	box-shadow: var(--shadow-card);
+}
+.dk .dk-step-index {
+	position: absolute;
+	top: 28px;
+	right: 28px;
+	font-size: 12px;
+	color: var(--color-fog);
+}
+.dk .dk-step .dk-icon-tile {
+	margin-bottom: 20px;
+}
+.dk .dk-step h3 {
+	margin: 0 0 8px;
+	font-size: 17px;
+	font-weight: 400;
+}
+.dk .dk-step p {
+	margin: 0;
+	font-size: 14px;
+	line-height: 1.5;
+	color: var(--color-fog);
+}
+@media (max-width: 960px) {
+	.dk .dk-steps {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+@media (max-width: 560px) {
+	.dk .dk-steps {
+		grid-template-columns: 1fr;
+	}
+}
+@media (max-width: 720px) {
+	.dk .dk-shot {
+		overflow-x: auto;
+	}
+	.dk .dk-shot img {
+		width: 760px;
+		max-width: none;
+	}
+}
