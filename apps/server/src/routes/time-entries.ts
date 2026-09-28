@@ -362,6 +362,7 @@ export const timeEntryRoutes = new Elysia({
 					positionName: positions.name,
 					shiftStartsAt: versionShifts.startsAt,
 					shiftEndsAt: versionShifts.endsAt,
+					timezone: locations.timezone,
 				})
 				.from(timeEntries)
 				.innerJoin(
@@ -369,6 +370,12 @@ export const timeEntryRoutes = new Elysia({
 					eq(versionShifts.id, timeEntries.versionShiftId),
 				)
 				.innerJoin(positions, eq(positions.id, versionShifts.positionId))
+				.innerJoin(
+					scheduleVersions,
+					eq(scheduleVersions.id, versionShifts.versionId),
+				)
+				.innerJoin(schedules, eq(schedules.id, scheduleVersions.scheduleId))
+				.innerJoin(locations, eq(locations.id, schedules.locationId))
 				.where(eq(timeEntries.employmentId, employment.id))
 				.orderBy(desc(timeEntries.clockedInAt))
 				.limit(50);
@@ -410,6 +417,7 @@ export const timeEntryRoutes = new Elysia({
 					clockedOutAt: row.clockedOutAt?.toISOString() ?? null,
 					workerNote: row.workerNote,
 					openBreakStartedAt: openBreakByEntry.get(row.id) ?? null,
+					timezone: row.timezone,
 				})),
 			};
 		},

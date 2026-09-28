@@ -7,6 +7,7 @@ import {
 	openShifts,
 	positions,
 	profiles,
+	schedules,
 	schedules as schedulesTable,
 	scheduleVersions,
 	shiftPickups,
@@ -516,12 +517,19 @@ export const coverageRoutes = new Elysia({
 					shift: versionShifts,
 					email: profiles.email,
 					fullName: profiles.fullName,
+					timezone: locations.timezone,
 				})
 				.from(shiftReleases)
 				.innerJoin(
 					versionShifts,
 					eq(versionShifts.id, shiftReleases.versionShiftId),
 				)
+				.innerJoin(
+					scheduleVersions,
+					eq(scheduleVersions.id, versionShifts.versionId),
+				)
+				.innerJoin(schedules, eq(schedules.id, scheduleVersions.scheduleId))
+				.innerJoin(locations, eq(locations.id, schedules.locationId))
 				.innerJoin(employments, eq(employments.id, shiftReleases.requestedBy))
 				.innerJoin(profiles, eq(profiles.id, employments.profileId))
 				.where(eq(employments.workplaceId, params.workplaceId))
@@ -534,9 +542,11 @@ export const coverageRoutes = new Elysia({
 					openShift: openShifts,
 					email: profiles.email,
 					fullName: profiles.fullName,
+					timezone: locations.timezone,
 				})
 				.from(shiftPickups)
 				.innerJoin(openShifts, eq(openShifts.id, shiftPickups.openShiftId))
+				.innerJoin(locations, eq(locations.id, openShifts.locationId))
 				.innerJoin(employments, eq(employments.id, shiftPickups.requestedBy))
 				.innerJoin(profiles, eq(profiles.id, employments.profileId))
 				.where(eq(employments.workplaceId, params.workplaceId))
@@ -566,6 +576,7 @@ export const coverageRoutes = new Elysia({
 					endsAt: row.shift.endsAt.toISOString(),
 					reason: row.release.reason,
 					status: row.release.status,
+					timezone: row.timezone,
 				})),
 				pickups: pickupRows.map((row) => {
 					const shift = draftShifts.find(
@@ -580,6 +591,7 @@ export const coverageRoutes = new Elysia({
 						startsAt: shift ? shift.startsAt.toISOString() : null,
 						endsAt: shift ? shift.endsAt.toISOString() : null,
 						status: row.pickup.status,
+						timezone: row.timezone,
 					};
 				}),
 			};

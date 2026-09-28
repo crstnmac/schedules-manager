@@ -5,6 +5,8 @@ export type SwapShift = {
 	positionName: string;
 	startsAt: string;
 	endsAt: string;
+	/** The shift's Location zone; the workplace default when absent. */
+	timezone?: string;
 };
 
 export function swapGiveTake(
@@ -18,15 +20,15 @@ export function swapGiveTake(
 
 export function formatSwapShift(
 	shift: SwapShift,
-	formatClockTime: (iso?: string) => string,
+	formatClockTime: (iso?: string, timeZone?: string | null) => string,
 ): string {
-	return `${formatDay(shift.startsAt)} · ${formatClockTime(shift.startsAt)}–${formatClockTime(shift.endsAt)} · ${shift.positionName}`;
+	return `${formatDay(shift.startsAt, shift.timezone)} · ${formatClockTime(shift.startsAt, shift.timezone)}–${formatClockTime(shift.endsAt, shift.timezone)} · ${shift.positionName}`;
 }
 
 export function formatSwapExchange(
 	direction: "incoming" | "outgoing",
 	swap: { requesterShift: SwapShift; counterpartShift: SwapShift },
-	formatClockTime: (iso?: string) => string,
+	formatClockTime: (iso?: string, timeZone?: string | null) => string,
 ): string {
 	const { give, take } = swapGiveTake(direction, swap);
 	return `Give ${formatSwapShift(give, formatClockTime)} · take ${formatSwapShift(take, formatClockTime)}`;

@@ -1556,7 +1556,7 @@ function SwapSheet({
 				}),
 				coworkerHelper.accessor(
 					(row) =>
-						`${formatClockTime(row.startsAt)}–${formatClockTime(row.endsAt)}`,
+						`${formatClockTime(row.startsAt, row.timezone)}–${formatClockTime(row.endsAt, row.timezone)}`,
 					{
 						id: "window",
 						header: "Shift",

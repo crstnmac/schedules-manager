@@ -1401,6 +1401,7 @@ export const publicationRoutes = new Elysia({
 							endMinute: endInfo.minuteOfDay,
 							overnight: endInfo.dateKey !== info.dateKey,
 							planned: nextShiftRaw.planned,
+							timezone: locationTz,
 							timeEntry: entry
 								? {
 										clockedInAt: entry.clockedInAt.toISOString(),

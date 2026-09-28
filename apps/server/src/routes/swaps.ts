@@ -1,6 +1,7 @@
 import {
 	db,
 	employments,
+	locations,
 	positions,
 	profiles,
 	schedules,
@@ -33,6 +34,12 @@ const requesterProfiles = alias(profiles, "requester_profiles");
 const counterpartProfiles = alias(profiles, "counterpart_profiles");
 const requesterPositions = alias(positions, "requester_positions");
 const counterpartPositions = alias(positions, "counterpart_positions");
+const requesterVersions = alias(scheduleVersions, "requester_versions");
+const counterpartVersions = alias(scheduleVersions, "counterpart_versions");
+const requesterSchedules = alias(schedules, "requester_schedules");
+const counterpartSchedules = alias(schedules, "counterpart_schedules");
+const requesterLocations = alias(locations, "requester_locations");
+const counterpartLocations = alias(locations, "counterpart_locations");
 
 type SwapStatusRow = typeof shiftSwaps.$inferSelect;
 
@@ -50,12 +57,15 @@ export interface SwapDetail {
 		positionName: string;
 		startsAt: string;
 		endsAt: string;
+		/** The shift's Location time zone, for showing its wall clock. */
+		timezone: string;
 	};
 	counterpartShift: {
 		id: string;
 		positionName: string;
 		startsAt: string;
 		endsAt: string;
+		timezone: string;
 	};
 }
 
@@ -75,6 +85,8 @@ const swapDetailColumns = {
 	counterpartEmail: counterpartProfiles.email,
 	requesterPositionName: requesterPositions.name,
 	counterpartPositionName: counterpartPositions.name,
+	requesterTimezone: requesterLocations.timezone,
+	counterpartTimezone: counterpartLocations.timezone,
 };
 
 function swapDetailQuery() {
@@ -112,6 +124,30 @@ function swapDetailQuery() {
 		.innerJoin(
 			counterpartPositions,
 			eq(counterpartPositions.id, counterpartShifts.positionId),
+		)
+		.innerJoin(
+			requesterVersions,
+			eq(requesterVersions.id, requesterShifts.versionId),
+		)
+		.innerJoin(
+			requesterSchedules,
+			eq(requesterSchedules.id, requesterVersions.scheduleId),
+		)
+		.innerJoin(
+			requesterLocations,
+			eq(requesterLocations.id, requesterSchedules.locationId),
+		)
+		.innerJoin(
+			counterpartVersions,
+			eq(counterpartVersions.id, counterpartShifts.versionId),
+		)
+		.innerJoin(
+			counterpartSchedules,
+			eq(counterpartSchedules.id, counterpartVersions.scheduleId),
+		)
+		.innerJoin(
+			counterpartLocations,
+			eq(counterpartLocations.id, counterpartSchedules.locationId),
 		);
 }
 
@@ -138,12 +174,14 @@ function toSwapDetail(row: SwapDetailRow): SwapDetail {
 			positionName: row.requesterPositionName,
 			startsAt: row.requesterShift.startsAt.toISOString(),
 			endsAt: row.requesterShift.endsAt.toISOString(),
+			timezone: row.requesterTimezone,
 		},
 		counterpartShift: {
 			id: row.counterpartShift.id,
 			positionName: row.counterpartPositionName,
 			startsAt: row.counterpartShift.startsAt.toISOString(),
 			endsAt: row.counterpartShift.endsAt.toISOString(),
+			timezone: row.counterpartTimezone,
 		},
 	};
 }

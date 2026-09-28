@@ -807,12 +807,14 @@ export interface SwapDetailDto {
 		positionName: string;
 		startsAt: string;
 		endsAt: string;
+		timezone: string;
 	};
 	counterpartShift: {
 		id: string;
 		positionName: string;
 		startsAt: string;
 		endsAt: string;
+		timezone: string;
 	};
 }
 
@@ -939,6 +941,8 @@ export interface MyScheduleResponse {
 		endMinute: number;
 		overnight: boolean;
 		planned: boolean;
+		/** The shift's Location zone. */
+		timezone: string;
 		timeEntry: {
 			clockedInAt: string;
 			clockedOutAt: string | null;
@@ -982,6 +986,7 @@ export interface DayRosterEntry {
 	startsAt: string;
 	endsAt: string;
 	mine: boolean;
+	timezone: string;
 }
 
 export function useDayRoster(
@@ -1084,6 +1089,7 @@ export interface TimecardEntry {
 	clockedOutAt: string | null;
 	workerNote: string | null;
 	openBreakStartedAt: string | null;
+	timezone: string;
 }
 
 export function useMyTimeEntries(workplaceId: string | undefined) {
@@ -2174,6 +2180,7 @@ export function useTimesheets(workplaceId: string | undefined) {
 					clockedOutAt: string | null;
 					autoClosedAt: string | null;
 					approvalStatus: "pending" | "approved" | "declined";
+					timezone: string;
 				}[];
 			}>(`/v1/workplaces/${workplaceId}/timesheets`),
 		enabled: Boolean(workplaceId),

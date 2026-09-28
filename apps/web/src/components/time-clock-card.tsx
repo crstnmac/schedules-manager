@@ -31,6 +31,8 @@ export type TimeClockShift = {
 	endMinute: number;
 	overnight: boolean;
 	planned?: boolean;
+	/** The shift's Location zone; punch times are shown on its clock. */
+	timezone?: string;
 	timeEntry: {
 		clockedInAt: string;
 		clockedOutAt: string | null;
@@ -49,7 +51,8 @@ export function TimeClockCard({
 	const clockIn = useClockIn();
 	const clockOut = useClockOut();
 	const { workplace } = useWorkplace();
-	const { formatClockTime, formatShiftRange } = useDisplayPrefs();
+	const { formatClockTime: formatClock, formatShiftRange } = useDisplayPrefs();
+	const formatClockTime = (iso?: string) => formatClock(iso, shift.timezone);
 	const notesEnabled = workplace?.policies.timesheetNotesEnabled ?? false;
 	const [confirmingIn, setConfirmingIn] = useState(false);
 	const [confirmingOut, setConfirmingOut] = useState(false);
@@ -87,7 +90,7 @@ export function TimeClockCard({
 								: "Next shift"}
 					</p>
 					<h1 className="font-semibold text-2xl tracking-tight">
-						{formatDay(shift.startsAt)}
+						{formatDay(shift.startsAt, shift.timezone)}
 					</h1>
 					<p className="mt-1 font-medium text-lg tabular-nums">
 						{shiftRange} · {shift.positionName}

@@ -12,6 +12,7 @@ import { registerJoinPolicyTests } from "./join-policy-cases";
 import { registerKioskRateLimitTests } from "./kiosk-rate-limit-cases";
 import { registerLeaveTests } from "./leave-cases";
 import { registerLocationBillingTests } from "./location-billing-cases";
+import { registerLocationTimezoneTests } from "./location-timezone-cases";
 import { registerMcpIntegrationTests } from "./mcp-integration-cases";
 import { registerMyScheduleTests } from "./my-schedule-cases";
 import { registerOpsTests } from "./ops-cases";
@@ -21,7 +22,6 @@ import { registerReadinessTests } from "./readiness-cases";
 import { registerReminderTests } from "./reminder-cases";
 import { registerReportTests } from "./report-cases";
 import { registerReportsTests } from "./reports-cases";
-
 import { registerStalePositionTests } from "./stale-position-cases";
 import { registerSubscriptionGatingTests } from "./subscription-gating-cases";
 import { registerTimeClockTests } from "./time-clock-cases";
@@ -136,6 +136,11 @@ integrationDescribe("Schedule publication", () => {
 	registerLeaveTests(() => ({ database, app, token: managerToken }));
 	registerLocationBillingTests(() => ({ database, app, token: managerToken }));
 	registerTrialPolicyTests(() => ({ database, app, token: managerToken }));
+	registerLocationTimezoneTests(() => ({
+		database,
+		app,
+		token: managerToken,
+	}));
 	registerSubscriptionGatingTests(() => ({
 		database,
 		app,

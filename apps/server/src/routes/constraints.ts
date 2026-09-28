@@ -1,5 +1,6 @@
 import {
 	db,
+	employmentLocations,
 	employments,
 	leaveRequestApprovals,
 	leaveRequestDocuments,
@@ -11,7 +12,7 @@ import {
 	unavailability,
 	workPreferences,
 } from "@SchedulesManager/db";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import {
 	requirePrivilege,
@@ -871,15 +872,13 @@ export const constraintsRoutes = new Elysia({
 			// location.
 			const scopeRows = await db
 				.select({
-					employmentId: employments.id,
+					employmentId: employmentLocations.employmentId,
 					timezone: locations.timezone,
 				})
-				.from(employments)
-				.innerJoin(
-					locations,
-					eq(locations.workplaceId, employments.workplaceId),
-				)
-				.where(eq(employments.workplaceId, params.workplaceId));
+				.from(employmentLocations)
+				.innerJoin(locations, eq(locations.id, employmentLocations.locationId))
+				.where(eq(locations.workplaceId, params.workplaceId))
+				.orderBy(asc(locations.createdAt));
 			const tzByEmployment = new Map<string, string>();
 			for (const row of scopeRows) {
 				if (!tzByEmployment.has(row.employmentId)) {

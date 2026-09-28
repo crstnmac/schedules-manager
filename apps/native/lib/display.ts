@@ -79,10 +79,14 @@ export function useDisplayPrefs() {
 		nameFormat,
 		timeZone,
 		formatMinute: (minute: number) => formatMinute(minute, timeFormat),
-		formatClockTime: (iso?: string) =>
-			formatClockTime(iso, timeFormat, timeZone),
-		formatDayShort: (iso: string) => formatDayShort(iso, timeZone),
-		formatDayLong: (iso: string) => formatDayLong(iso, timeZone),
+		// Rows that belong to a Location pass its zone (as scheduling tools
+		// show each Location on its own clock); otherwise the schedule's zone.
+		formatClockTime: (iso?: string, rowTimeZone?: string | null) =>
+			formatClockTime(iso, timeFormat, rowTimeZone ?? timeZone),
+		formatDayShort: (iso: string, rowTimeZone?: string | null) =>
+			formatDayShort(iso, rowTimeZone ?? timeZone),
+		formatDayLong: (iso: string, rowTimeZone?: string | null) =>
+			formatDayLong(iso, rowTimeZone ?? timeZone),
 		formatShiftRange: (
 			startMinute: number,
 			endMinute: number,

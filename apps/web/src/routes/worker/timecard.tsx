@@ -85,19 +85,22 @@ function TimecardPage() {
 	const columns = useMemo(
 		() =>
 			punchHelper.columns([
-				punchHelper.accessor((row) => formatDayLabel(row.clockedInAt), {
-					id: "day",
-					header: "Day",
-					cell: ({ getValue }) => (
-						<span className="font-medium">{getValue()}</span>
-					),
-				}),
+				punchHelper.accessor(
+					(row) => formatDayLabel(row.clockedInAt, row.timezone),
+					{
+						id: "day",
+						header: "Day",
+						cell: ({ getValue }) => (
+							<span className="font-medium">{getValue()}</span>
+						),
+					},
+				),
 				punchHelper.accessor("positionName", { header: "Position" }),
 				punchHelper.accessor(
 					(row) =>
-						`${formatClockTime(row.clockedInAt)} – ${
+						`${formatClockTime(row.clockedInAt, row.timezone)} – ${
 							row.clockedOutAt
-								? formatClockTime(row.clockedOutAt)
+								? formatClockTime(row.clockedOutAt, row.timezone)
 								: "on the clock"
 						}`,
 					{
@@ -144,7 +147,8 @@ function TimecardPage() {
 						if (entry.clockedOutAt !== null) return null;
 						return entry.openBreakStartedAt ? (
 							<Badge variant="secondary">
-								On break since {formatClockTime(entry.openBreakStartedAt)}
+								On break since{" "}
+								{formatClockTime(entry.openBreakStartedAt, entry.timezone)}
 							</Badge>
 						) : (
 							<Badge>On the clock</Badge>
@@ -297,12 +301,12 @@ function TimecardPage() {
 	);
 }
 
-function formatDayLabel(iso: string): string {
+function formatDayLabel(iso: string, timeZone?: string): string {
 	return new Date(iso).toLocaleDateString(undefined, {
 		weekday: "long",
 		month: "short",
 		day: "numeric",
-		timeZone: getWorkplaceTimeZone(),
+		timeZone: timeZone ?? getWorkplaceTimeZone(),
 	});
 }
 

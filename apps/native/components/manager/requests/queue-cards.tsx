@@ -335,17 +335,20 @@ function ShiftWindow({
 	startsAt,
 	endsAt,
 	positionName,
+	timeZone,
 }: {
 	startsAt: string | null;
 	endsAt: string | null;
 	positionName: string;
+	/** The shift's Location zone. */
+	timeZone?: string;
 }) {
 	const { formatClockTime, formatDayShort } = useDisplayPrefs();
 	return (
 		<DetailWell>
 			<AppText variant="callout" weight="600" tabular>
 				{startsAt
-					? `${formatDayShort(startsAt)} · ${formatClockTime(startsAt)}${endsAt ? `–${formatClockTime(endsAt)}` : ""}`
+					? `${formatDayShort(startsAt, timeZone)} · ${formatClockTime(startsAt, timeZone)}${endsAt ? `–${formatClockTime(endsAt, timeZone)}` : ""}`
 					: "Open Shift"}
 			</AppText>
 			<View
@@ -436,6 +439,7 @@ function ReleaseCard({
 				startsAt={release.startsAt}
 				endsAt={release.endsAt}
 				positionName={release.positionName}
+				timeZone={release.timezone}
 			/>
 			{release.reason ? <Note>{release.reason}</Note> : null}
 			<Consequence>
@@ -502,6 +506,7 @@ function PickupCard({
 				startsAt={pickup.startsAt}
 				endsAt={pickup.endsAt}
 				positionName={pickup.positionName}
+				timeZone={pickup.timezone}
 			/>
 			<Consequence>
 				Assigning may publish a new Schedule Version right away.
@@ -549,8 +554,9 @@ function SwapCard({
 			</AppText>
 			<View style={{ flex: 1 }}>
 				<AppText variant="footnote" weight="600" tabular>
-					{formatDayShort(shift.startsAt)} · {formatClockTime(shift.startsAt)}–
-					{formatClockTime(shift.endsAt)}
+					{formatDayShort(shift.startsAt, shift.timezone)} ·{" "}
+					{formatClockTime(shift.startsAt, shift.timezone)}–
+					{formatClockTime(shift.endsAt, shift.timezone)}
 				</AppText>
 				<AppText variant="caption" tone="secondary">
 					{shift.positionName}

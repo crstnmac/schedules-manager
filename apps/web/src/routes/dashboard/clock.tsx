@@ -118,19 +118,22 @@ function ManagerClockPage() {
 	const punchColumns = useMemo(
 		() =>
 			punchHelper.columns([
-				punchHelper.accessor((row) => formatDay(row.clockedInAt), {
-					id: "day",
-					header: "Day",
-					cell: ({ getValue }) => (
-						<span className="font-medium">{getValue()}</span>
-					),
-				}),
+				punchHelper.accessor(
+					(row) => formatDay(row.clockedInAt, row.timezone),
+					{
+						id: "day",
+						header: "Day",
+						cell: ({ getValue }) => (
+							<span className="font-medium">{getValue()}</span>
+						),
+					},
+				),
 				punchHelper.accessor("positionName", { header: "Position" }),
 				punchHelper.accessor(
 					(row) =>
-						`${formatClockTime(row.clockedInAt)} – ${
+						`${formatClockTime(row.clockedInAt, row.timezone)} – ${
 							row.clockedOutAt
-								? formatClockTime(row.clockedOutAt)
+								? formatClockTime(row.clockedOutAt, row.timezone)
 								: "on the clock"
 						}`,
 					{

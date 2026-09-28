@@ -115,11 +115,12 @@ export const rosterRoutes = new Elysia({
 					),
 				);
 
+			const timezoneFor = (versionId: string) =>
+				versions.find((v) => v.version.id === versionId)?.timezone ??
+				"America/Chicago";
 			const roster = shiftRows
 				.filter((row) => {
-					const timezone =
-						versions.find((v) => v.version.id === row.shift.versionId)
-							?.timezone ?? "America/Chicago";
+					const timezone = timezoneFor(row.shift.versionId);
 					if (zonedDateKey(row.shift.startsAt, timezone) !== query.date) {
 						return false;
 					}
@@ -139,6 +140,7 @@ export const rosterRoutes = new Elysia({
 					startsAt: row.shift.startsAt.toISOString(),
 					endsAt: row.shift.endsAt.toISOString(),
 					mine: employment.id === row.shift.employmentId,
+					timezone: timezoneFor(row.shift.versionId),
 				}))
 				.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 

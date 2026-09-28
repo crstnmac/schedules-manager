@@ -54,6 +54,7 @@ interface CoverageResponse {
 		endsAt: string;
 		reason: string | null;
 		status: "pending" | "approved" | "declined";
+		timezone: string;
 	}[];
 	pickups: {
 		id: string;
@@ -63,6 +64,7 @@ interface CoverageResponse {
 		startsAt: string | null;
 		endsAt: string | null;
 		status: "pending" | "approved" | "declined";
+		timezone: string;
 	}[];
 }
 
@@ -144,17 +146,23 @@ const searchSwap = (row: SwapDetailDto) => [
 ];
 const rowId = (row: { id: string }) => row.id;
 
-function formatShiftWindow(startsAt: string, endsAt?: string | null) {
+/** A shift window on its Location's wall clock. */
+function formatShiftWindow(
+	startsAt: string,
+	endsAt: string | null | undefined,
+	timeZone: string,
+) {
+	const day = (iso: string) => formatDay(iso, timeZone);
+	const time = (iso: string) => formatClockTime(iso, "12h", timeZone);
 	if (!endsAt || new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
-		return `${formatDay(startsAt)} · ${formatClockTime(startsAt)}`;
+		return `${day(startsAt)} · ${time(startsAt)}`;
 	}
-	const sameDay = isSameWorkplaceDay(startsAt, endsAt);
 	const duration = formatDurationMs(
 		new Date(endsAt).getTime() - new Date(startsAt).getTime(),
 	);
-	return sameDay
-		? `${formatDay(startsAt)} · ${formatClockTime(startsAt)} – ${formatClockTime(endsAt)} · ${duration}`
-		: `${formatDay(startsAt)} ${formatClockTime(startsAt)} → ${formatDay(endsAt)} ${formatClockTime(endsAt)} · ${duration}`;
+	return isSameWorkplaceDay(startsAt, endsAt, timeZone)
+		? `${day(startsAt)} · ${time(startsAt)} – ${time(endsAt)} · ${duration}`
+		: `${day(startsAt)} ${time(startsAt)} → ${day(endsAt)} ${time(endsAt)} · ${duration}`;
 }
 
 const releaseHelper = createDataColumnHelper<ReleaseRow>();
@@ -243,7 +251,7 @@ function CoveragePage() {
 					),
 				}),
 				releaseHelper.accessor(
-					(row) => formatShiftWindow(row.startsAt, row.endsAt),
+					(row) => formatShiftWindow(row.startsAt, row.endsAt, row.timezone),
 					{
 						id: "shift",
 						header: "Shift",
@@ -327,7 +335,9 @@ function CoveragePage() {
 				}),
 				pickupHelper.accessor(
 					(row) =>
-						row.startsAt ? formatShiftWindow(row.startsAt, row.endsAt) : "",
+						row.startsAt
+							? formatShiftWindow(row.startsAt, row.endsAt, row.timezone)
+							: "",
 					{
 						id: "startsAt",
 						header: "Shift",
@@ -408,7 +418,7 @@ function CoveragePage() {
 				),
 				swapHelper.accessor(
 					(row) =>
-						`${row.requester.name} gives ${formatShiftWindow(row.requesterShift.startsAt, row.requesterShift.endsAt)} (${row.requesterShift.positionName}) · takes ${formatShiftWindow(row.counterpartShift.startsAt, row.counterpartShift.endsAt)} (${row.counterpartShift.positionName})`,
+						`${row.requester.name} gives ${formatShiftWindow(row.requesterShift.startsAt, row.requesterShift.endsAt, row.requesterShift.timezone)} (${row.requesterShift.positionName}) · takes ${formatShiftWindow(row.counterpartShift.startsAt, row.counterpartShift.endsAt, row.counterpartShift.timezone)} (${row.counterpartShift.positionName})`,
 					{
 						id: "exchange",
 						header: "Exchange",

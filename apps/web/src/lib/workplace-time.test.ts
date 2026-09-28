@@ -29,6 +29,14 @@ describe("workplace time zone formatting", () => {
 		expect(formatDay("2026-09-28")).toContain("28");
 	});
 
+	test("a row's own Location zone overrides the default", () => {
+		setWorkplaceTimeZone("America/Chicago");
+		expect(formatClockTime(clockInOpens, "24h", "America/New_York")).toBe(
+			"17:15",
+		);
+		expect(formatDay(clockInOpens, "Asia/Kolkata")).toContain("23");
+	});
+
 	test("same-day checks use the workplace calendar", () => {
 		setWorkplaceTimeZone("America/Chicago");
 		// 9:30 PM and 11:30 PM Chicago are one workday, though they straddle

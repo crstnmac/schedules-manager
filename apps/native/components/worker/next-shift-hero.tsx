@@ -227,7 +227,8 @@ function TimeClock({
 	clockIn: ReturnType<typeof useClockIn>;
 	clockOut: ReturnType<typeof useClockOut>;
 }) {
-	const { formatClockTime } = useDisplayPrefs();
+	const { formatClockTime: formatClock } = useDisplayPrefs();
+	const formatClockTime = (iso?: string) => formatClock(iso, shift.timezone);
 	const router = useRouter();
 	const entry = shift.timeEntry;
 	const onClock = entry !== null && entry.clockedOutAt === null;

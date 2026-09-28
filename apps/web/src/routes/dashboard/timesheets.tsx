@@ -35,14 +35,20 @@ export const Route = createFileRoute("/dashboard/timesheets")({
 	component: TimesheetsPage,
 });
 
-function formatClockWindow(inIso: string, outIso: string | null) {
+/** A clock window on its Location's wall clock. */
+function formatClockWindow(
+	inIso: string,
+	outIso: string | null,
+	timeZone: string,
+) {
+	const day = (iso: string) => formatDay(iso, timeZone);
+	const time = (iso: string) => formatClockTime(iso, "12h", timeZone);
 	if (!outIso) {
-		return `On the clock since ${formatDay(inIso)} · ${formatClockTime(inIso)}`;
+		return `On the clock since ${day(inIso)} · ${time(inIso)}`;
 	}
-	const sameDay = isSameWorkplaceDay(inIso, outIso);
-	return sameDay
-		? `${formatDay(inIso)} · ${formatClockTime(inIso)} – ${formatClockTime(outIso)}`
-		: `${formatDay(inIso)} ${formatClockTime(inIso)} → ${formatDay(outIso)} ${formatClockTime(outIso)}`;
+	return isSameWorkplaceDay(inIso, outIso, timeZone)
+		? `${day(inIso)} · ${time(inIso)} – ${time(outIso)}`
+		: `${day(inIso)} ${time(inIso)} → ${day(outIso)} ${time(outIso)}`;
 }
 
 type TimesheetRow = {
@@ -52,6 +58,7 @@ type TimesheetRow = {
 	clockedOutAt: string | null;
 	autoClosedAt: string | null;
 	approvalStatus: string;
+	timezone: string;
 };
 
 const columnHelper = createDataColumnHelper<TimesheetRow>();
@@ -170,7 +177,8 @@ function TimesheetsPage() {
 					),
 				}),
 				columnHelper.accessor(
-					(row) => formatClockWindow(row.clockedInAt, row.clockedOutAt),
+					(row) =>
+						formatClockWindow(row.clockedInAt, row.clockedOutAt, row.timezone),
 					{
 						id: "window",
 						header: "Clock window",
@@ -235,7 +243,7 @@ function TimesheetsPage() {
 									trigger="Decline"
 									disabled={decide.isPending}
 									title="Decline this time entry?"
-									description={`Declining rejects the recorded hours for ${formatClockWindow(entry.clockedInAt, entry.clockedOutAt)}. The worker may need to record it again.`}
+									description={`Declining rejects the recorded hours for ${formatClockWindow(entry.clockedInAt, entry.clockedOutAt, entry.timezone)}. The worker may need to record it again.`}
 									confirmLabel="Decline entry"
 									destructive
 									onConfirm={() =>

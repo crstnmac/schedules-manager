@@ -79,6 +79,7 @@ export interface MyScheduleResponse {
 		endMinute: number;
 		overnight: boolean;
 		planned: boolean;
+		timezone?: string;
 		timeEntry: {
 			clockedInAt: string;
 			clockedOutAt: string | null;
@@ -212,6 +213,7 @@ export interface TimecardEntry {
 	clockedInAt: string;
 	clockedOutAt: string | null;
 	workerNote: string | null;
+	timezone?: string;
 }
 
 export function useMyTimeEntries(workplaceId: string | undefined) {
@@ -503,12 +505,14 @@ export interface SwapDetail {
 		positionName: string;
 		startsAt: string;
 		endsAt: string;
+		timezone?: string;
 	};
 	counterpartShift: {
 		id: string;
 		positionName: string;
 		startsAt: string;
 		endsAt: string;
+		timezone?: string;
 	};
 }
 
@@ -607,6 +611,7 @@ export interface DayRosterEntry {
 	startsAt: string;
 	endsAt: string;
 	mine: boolean;
+	timezone?: string;
 }
 
 export function useDayRoster(

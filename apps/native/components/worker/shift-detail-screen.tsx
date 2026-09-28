@@ -341,8 +341,8 @@ function RosterRow({ row }: { row: DayRosterEntry }) {
 					{row.mine ? "You" : row.workerName}
 				</AppText>
 				<AppText variant="footnote" tone="secondary" tabular>
-					{formatClockTime(row.startsAt)}–{formatClockTime(row.endsAt)} ·{" "}
-					{row.positionName}
+					{formatClockTime(row.startsAt, row.timezone)}–
+					{formatClockTime(row.endsAt, row.timezone)} · {row.positionName}
 				</AppText>
 			</View>
 			{row.mine ? <Badge label="You" tone="primary" /> : null}
@@ -394,7 +394,7 @@ function SwapProposer({
 									<PressableScale
 										accessibilityRole="radio"
 										accessibilityState={{ checked: isSelected }}
-										accessibilityLabel={`${row.workerName}, ${formatClockTime(row.startsAt)} to ${formatClockTime(row.endsAt)}, ${row.positionName}`}
+										accessibilityLabel={`${row.workerName}, ${formatClockTime(row.startsAt, row.timezone)} to ${formatClockTime(row.endsAt, row.timezone)}, ${row.positionName}`}
 										haptic
 										pressedScale={0.985}
 										onPress={() => setSelected(row)}
@@ -418,8 +418,9 @@ function SwapProposer({
 												{row.workerName}
 											</AppText>
 											<AppText variant="footnote" tone="secondary" tabular>
-												{formatClockTime(row.startsAt)}–
-												{formatClockTime(row.endsAt)} · {row.positionName}
+												{formatClockTime(row.startsAt, row.timezone)}–
+												{formatClockTime(row.endsAt, row.timezone)} ·{" "}
+												{row.positionName}
 											</AppText>
 										</View>
 										<View

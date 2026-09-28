@@ -1,4 +1,9 @@
-import { db, locations, profiles } from "@SchedulesManager/db";
+import {
+	db,
+	employmentLocations,
+	locations,
+	profiles,
+} from "@SchedulesManager/db";
 import { asc, eq, inArray } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
@@ -17,8 +22,9 @@ export const meRoutes = new Elysia({ prefix: "/v1", tags: ["Identity"] })
 		async ({ headers }) => {
 			const { profile } = await requireSession(headers);
 			const memberships = await listActiveEmployments(profile.id);
-			// Shift times are shown in the workplace's time zone, not the
-			// viewer's; the first Location's zone stands for the workplace.
+			// Rows carry their own Location's zone; this default covers views
+			// that aren't tied to one Location. A person's assigned Location
+			// comes first, then the workplace's first Location.
 			const workplaceIds = memberships.map(({ workplace }) => workplace.id);
 			const locationZones =
 				workplaceIds.length === 0
@@ -31,9 +37,28 @@ export const meRoutes = new Elysia({ prefix: "/v1", tags: ["Identity"] })
 							.from(locations)
 							.where(inArray(locations.workplaceId, workplaceIds))
 							.orderBy(asc(locations.createdAt));
-			const timezoneFor = (workplaceId: string) =>
+			const employmentIds = memberships.map(({ employment }) => employment.id);
+			const assignedZones =
+				employmentIds.length === 0
+					? []
+					: await db
+							.select({
+								employmentId: employmentLocations.employmentId,
+								timezone: locations.timezone,
+							})
+							.from(employmentLocations)
+							.innerJoin(
+								locations,
+								eq(locations.id, employmentLocations.locationId),
+							)
+							.where(inArray(employmentLocations.employmentId, employmentIds))
+							.orderBy(asc(locations.createdAt));
+			const timezoneFor = (employmentId: string, workplaceId: string) =>
+				assignedZones.find((row) => row.employmentId === employmentId)
+					?.timezone ??
 				locationZones.find((row) => row.workplaceId === workplaceId)
-					?.timezone ?? null;
+					?.timezone ??
+				null;
 
 			return {
 				profile: profilePreferencesPayload(profile),
@@ -55,7 +80,7 @@ export const meRoutes = new Elysia({ prefix: "/v1", tags: ["Identity"] })
 						workplace: {
 							id: workplace.id,
 							name: workplace.name,
-							timezone: timezoneFor(workplace.id),
+							timezone: timezoneFor(employment.id, workplace.id),
 							policies: workplaceWorkerPolicies(workplace),
 						},
 					}),

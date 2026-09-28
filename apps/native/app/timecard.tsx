@@ -135,11 +135,13 @@ export default function TimecardScreen() {
 														{entry.positionName}
 													</AppText>
 													<AppText variant="footnote" tone="secondary" tabular>
-														{formatClockTime(entry.clockedInAt)} –{" "}
+														{formatClockTime(entry.clockedInAt, entry.timezone)}{" "}
+														–{" "}
 														{open
 															? "now"
 															: formatClockTime(
 																	entry.clockedOutAt ?? undefined,
+																	entry.timezone,
 																)}
 													</AppText>
 												</View>
@@ -235,6 +237,8 @@ interface TimecardEntry {
 	shiftEndsAt: string;
 	clockedInAt: string;
 	clockedOutAt: string | null;
+	/** The shift's Location zone. */
+	timezone?: string;
 }
 
 function groupByDay(entries: TimecardEntry[]) {

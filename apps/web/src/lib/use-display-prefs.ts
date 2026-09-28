@@ -18,7 +18,9 @@ export function useDisplayPrefs() {
 		timeFormat,
 		nameFormat,
 		formatMinute: (minute: number) => formatMinute(minute, timeFormat),
-		formatClockTime: (iso?: string) => formatClockTime(iso, timeFormat),
+		/** Pass the row's Location zone when it has one. */
+		formatClockTime: (iso?: string, timeZone?: string | null) =>
+			formatClockTime(iso, timeFormat, timeZone),
 		formatShiftRange: (
 			startMinute: number,
 			endMinute: number,

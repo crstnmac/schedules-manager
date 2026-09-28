@@ -42,7 +42,8 @@ export function NextShiftBar({
 	const shift = schedule.data?.nextShift ?? null;
 	const clockIn = useClockIn();
 	const clockOut = useClockOut();
-	const { formatClockTime, formatShiftRange } = useDisplayPrefs();
+	const { formatClockTime: formatClock, formatShiftRange } = useDisplayPrefs();
+	const formatClockTime = (iso?: string) => formatClock(iso, shift?.timezone);
 	const notesEnabled = workplace?.policies.timesheetNotesEnabled ?? false;
 	const [confirmingIn, setConfirmingIn] = useState(false);
 	const [confirmingOut, setConfirmingOut] = useState(false);
@@ -89,9 +90,10 @@ export function NextShiftBar({
 					</p>
 					<p
 						className="truncate font-medium text-sm tabular-nums"
-						title={`${formatDay(shift.startsAt)} · ${shiftRange} · ${shift.positionName}`}
+						title={`${formatDay(shift.startsAt, shift.timezone)} · ${shiftRange} · ${shift.positionName}`}
 					>
-						{formatDay(shift.startsAt)} · {shiftRange} · {shift.positionName}
+						{formatDay(shift.startsAt, shift.timezone)} · {shiftRange} ·{" "}
+						{shift.positionName}
 					</p>
 				</div>
 

@@ -19,10 +19,11 @@ export function formatMinute(
 let workplaceTimeZone: string | undefined;
 
 /**
- * Shift, punch, and leave times are shown in the workplace's time zone, so a
- * manager or worker travelling (or a browser set to another zone) sees the
- * same wall clock as the schedule. The app shell sets this from /v1/me before
- * rendering pages; without it the browser's zone is used.
+ * Work times are shown in the zone of the Location they belong to, as
+ * multi-location scheduling tools do: rows that come with a Location pass its
+ * `timeZone`. This default (the person's assigned Location, else the
+ * workplace's first) covers everything else. The app shell sets it from
+ * /v1/me before rendering pages; without it the browser's zone is used.
  */
 export function setWorkplaceTimeZone(timeZone: string | null | undefined) {
 	workplaceTimeZone = timeZone ?? undefined;
@@ -33,31 +34,40 @@ export function getWorkplaceTimeZone(): string | undefined {
 }
 
 /** The workplace's calendar date (YYYY-MM-DD) for an instant, default now. */
-export function workplaceDateKey(instant: Date | string = new Date()): string {
+export function workplaceDateKey(
+	instant: Date | string = new Date(),
+	timeZone: string | null | undefined = workplaceTimeZone,
+): string {
 	return new Date(instant).toLocaleDateString("sv-SE", {
-		timeZone: workplaceTimeZone,
+		timeZone: timeZone ?? undefined,
 	});
 }
 
-/** Today's date (YYYY-MM-DD) where the workplace is. */
-export function workplaceTodayKey(): string {
-	return workplaceDateKey();
+/** Today's date (YYYY-MM-DD) at a Location, or the workplace default. */
+export function workplaceTodayKey(timeZone?: string | null): string {
+	return workplaceDateKey(new Date(), timeZone ?? workplaceTimeZone);
 }
 
-export function isSameWorkplaceDay(a: string, b: string): boolean {
-	return workplaceDateKey(a) === workplaceDateKey(b);
+export function isSameWorkplaceDay(
+	a: string,
+	b: string,
+	timeZone?: string | null,
+): boolean {
+	const zone = timeZone ?? workplaceTimeZone;
+	return workplaceDateKey(a, zone) === workplaceDateKey(b, zone);
 }
 
 export function formatClockTime(
 	iso?: string,
 	format: TimeFormat = "12h",
+	timeZone?: string | null,
 ): string {
 	if (!iso) return "";
 	return new Date(iso).toLocaleTimeString([], {
 		hour: "numeric",
 		minute: "2-digit",
 		hour12: format !== "24h",
-		timeZone: workplaceTimeZone,
+		timeZone: timeZone ?? workplaceTimeZone,
 	});
 }
 
@@ -110,7 +120,7 @@ export function formatShiftRange(
 	return `${formatMinute(startMinute, format)}–${end}${overnight ? " +1" : ""}`;
 }
 
-export function formatDay(isoOrDate: string): string {
+export function formatDay(isoOrDate: string, timeZone?: string | null): string {
 	// A date key is already a calendar date; an instant is shown on the
 	// workplace's calendar.
 	if (!isoOrDate.includes("T")) {
@@ -125,7 +135,7 @@ export function formatDay(isoOrDate: string): string {
 		weekday: "short",
 		month: "short",
 		day: "numeric",
-		timeZone: workplaceTimeZone,
+		timeZone: timeZone ?? workplaceTimeZone,
 	});
 }
 

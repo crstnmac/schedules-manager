@@ -107,7 +107,7 @@ function RosterPage() {
 				id: shift.versionShiftId,
 				worker: shift.workerName,
 				position: shift.positionName,
-				window: `${formatClockTime(shift.startsAt)}–${formatClockTime(shift.endsAt)}`,
+				window: `${formatClockTime(shift.startsAt, shift.timezone)}–${formatClockTime(shift.endsAt, shift.timezone)}`,
 				startsAt: shift.startsAt,
 				mine: shift.mine,
 			})),

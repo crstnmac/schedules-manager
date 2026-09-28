@@ -641,8 +641,8 @@ function shiftRangeMinutes(
 	return [start, end];
 }
 
-function defaultAddDate(weekStart: string): string {
-	const today = workplaceTodayKey();
+function defaultAddDate(weekStart: string, timeZone: string): string {
+	const today = workplaceTodayKey(timeZone);
 	const last = addDays(weekStart, 6);
 	if (today >= weekStart && today <= last) return today;
 	return weekStart;
@@ -1601,7 +1601,7 @@ function SchedulePage() {
 	const days = Array.from({ length: 7 }, (_, index) =>
 		addDays(weekStart, index),
 	);
-	const todayKey = workplaceTodayKey();
+	const todayKey = workplaceTodayKey(scheduleTimeZone);
 	const visibleDays =
 		viewMode === "day"
 			? days.includes(selectedDay)
@@ -2064,7 +2064,7 @@ function SchedulePage() {
 											variant="ghost"
 											size="sm"
 											onClick={() => {
-												const todayKey = workplaceTodayKey();
+												const todayKey = workplaceTodayKey(scheduleTimeZone);
 												setWeekStart(
 													weekStartOf(
 														new Date(`${todayKey}T12:00:00`),
@@ -2297,7 +2297,9 @@ function SchedulePage() {
 										disabled={
 											!canManage || !data || data.positions.length === 0
 										}
-										onClick={() => openCreate(defaultAddDate(weekStart))}
+										onClick={() =>
+											openCreate(defaultAddDate(weekStart, scheduleTimeZone))
+										}
 									>
 										<PlusIcon data-icon="inline-start" />
 										Add

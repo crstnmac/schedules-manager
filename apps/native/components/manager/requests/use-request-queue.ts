@@ -25,6 +25,7 @@ export interface CoverageRelease {
 	endsAt: string;
 	reason: string | null;
 	status: "pending" | "approved" | "declined";
+	timezone?: string;
 }
 
 export interface CoveragePickup {
@@ -35,6 +36,7 @@ export interface CoveragePickup {
 	startsAt: string | null;
 	endsAt: string | null;
 	status: "pending" | "approved" | "declined";
+	timezone?: string;
 }
 
 interface CoverageResponse {

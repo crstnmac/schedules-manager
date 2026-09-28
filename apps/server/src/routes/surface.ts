@@ -14,6 +14,7 @@ import {
 	profiles,
 	ptoBalances,
 	schedules,
+	scheduleVersions,
 	shifts,
 	shiftTagAssignments,
 	shiftTags,
@@ -2104,10 +2105,21 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 					entry: timeEntries,
 					name: profiles.fullName,
 					email: profiles.email,
+					timezone: locations.timezone,
 				})
 				.from(timeEntries)
 				.innerJoin(employments, eq(employments.id, timeEntries.employmentId))
 				.innerJoin(profiles, eq(profiles.id, employments.profileId))
+				.innerJoin(
+					versionShifts,
+					eq(versionShifts.id, timeEntries.versionShiftId),
+				)
+				.innerJoin(
+					scheduleVersions,
+					eq(scheduleVersions.id, versionShifts.versionId),
+				)
+				.innerJoin(schedules, eq(schedules.id, scheduleVersions.scheduleId))
+				.innerJoin(locations, eq(locations.id, schedules.locationId))
 				.where(eq(employments.workplaceId, params.workplaceId))
 				.orderBy(desc(timeEntries.clockedInAt))
 				.limit(100);
@@ -2119,6 +2131,7 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 					clockedOutAt: row.entry.clockedOutAt?.toISOString() ?? null,
 					autoClosedAt: row.entry.autoClosedAt?.toISOString() ?? null,
 					approvalStatus: row.entry.approvalStatus,
+					timezone: row.timezone,
 				})),
 			};
 		},

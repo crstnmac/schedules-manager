@@ -170,7 +170,12 @@ function SwapLeg({
 	highlight,
 }: {
 	label: string;
-	shift: { startsAt: string; endsAt: string; positionName: string };
+	shift: {
+		startsAt: string;
+		endsAt: string;
+		positionName: string;
+		timezone?: string;
+	};
 	highlight?: boolean;
 }) {
 	const { theme } = useAppTheme();
@@ -196,8 +201,9 @@ function SwapLeg({
 			</AppText>
 			<View style={{ flex: 1, gap: 1 }}>
 				<AppText variant="callout" weight="600" tabular>
-					{formatDayShort(shift.startsAt)} · {formatClockTime(shift.startsAt)}–
-					{formatClockTime(shift.endsAt)}
+					{formatDayShort(shift.startsAt, shift.timezone)} ·{" "}
+					{formatClockTime(shift.startsAt, shift.timezone)}–
+					{formatClockTime(shift.endsAt, shift.timezone)}
 				</AppText>
 				<AppText variant="footnote" tone="secondary">
 					{shift.positionName}
