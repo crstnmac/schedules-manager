@@ -298,9 +298,9 @@ function ScheduleShot() {
 	return (
 		<div className="dk-shot" id="product-demo">
 			<img
-				src="/schedule.webp"
+				src="/product-schedule.png"
 				width={2940}
-				height={1674}
+				height={1720}
 				alt="The jooling weekly schedule in the web product, showing shifts by person and role, published version, open shifts and a conflict"
 			/>
 		</div>
@@ -445,9 +445,9 @@ function PhoneMockup() {
 	return (
 		<div className="dk-phone">
 			<img
-				src="/worker-home-mobile.webp"
-				width={1170}
-				height={2000}
+				src="/product-worker-mobile.png"
+				width={780}
+				height={1688}
 				loading="lazy"
 				alt="The jooling worker app showing the next shift, a published-schedule notice, and a shift change to accept"
 			/>

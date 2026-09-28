@@ -19,7 +19,7 @@ export const solutions = {
 		eyebrow: "Restaurant scheduling software",
 		title: "Publish restaurant shifts with a plan for every change.",
 		lede: "Build a clear rota for front of house and kitchen teams, publish it when it is ready, and keep everyone informed as the week changes.",
-		image: "/schedule.webp",
+		image: "/product-schedule.png",
 		imageAlt: "jooling weekly schedule with shifts assigned across a team",
 		points: [
 			[
@@ -69,7 +69,7 @@ export const solutions = {
 		eyebrow: "Employee scheduling app",
 		title: "A worker app that keeps the next shift in view.",
 		lede: "Give your team a simple place to see their schedule, share availability, request time off, and stay up to date when shifts change.",
-		image: "/worker-home-mobile.webp",
+		image: "/product-worker-mobile.png",
 		imageAlt: "jooling worker app showing the next shift and weekly schedule",
 		points: [
 			[

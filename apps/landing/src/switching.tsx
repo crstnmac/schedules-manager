@@ -312,7 +312,7 @@ export function ComparisonPage({ slug }: { slug: string }) {
 						</div>
 						<img
 							className="real-schedule-screenshot comparison-shot"
-							src="/schedule.webp"
+							src="/product-schedule.png"
 							alt="A jooling manager workspace showing one published week of shifts across the team"
 							loading="lazy"
 						/>
