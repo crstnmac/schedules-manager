@@ -74,14 +74,13 @@ import {
 	LeaveWindowFields,
 	leaveChargeMinutes,
 } from "@/components/leave-window-fields";
-import { LeaveTypesCard } from "@/components/settings-surface-cards";
 import {
-	TableFilter,
-	TablePagination,
-	TableSearch,
-	TableToolbar,
-	useTablePagination,
-} from "@/components/table-toolbar";
+	type ListFilter,
+	type ListSort,
+	ListToolbar,
+	useListView,
+} from "@/components/list-view";
+import { LeaveTypesCard } from "@/components/settings-surface-cards";
 import { api } from "@/lib/api";
 import {
 	formatLeaveHours,
@@ -135,6 +134,79 @@ type LeaveTab =
 	| "types";
 
 const historyHelper = createDataColumnHelper<TimeOffRequestDto>();
+
+const requestId = (request: TimeOffRequestDto) => request.id;
+// Any pending request can be selected; the bulk-decision endpoint reports
+// the ones still waiting on another approver.
+const isPendingRequest = (request: TimeOffRequestDto) =>
+	request.status === "pending";
+
+function leaveTypeFilter(
+	requests: TimeOffRequestDto[],
+): ListFilter<TimeOffRequestDto>[] {
+	const names = Array.from(
+		new Set(requests.map((request) => request.leaveTypeName ?? "")),
+	).sort();
+	return names.length > 1
+		? [
+				{
+					id: "type",
+					label: "Leave type",
+					options: names.map((name) => ({
+						label: name || "No type",
+						value: name,
+					})),
+					value: (request) => request.leaveTypeName ?? "",
+				},
+			]
+		: [];
+}
+
+const ENCASHMENT_FILTERS: ListFilter<LeaveEncashmentDto>[] = [
+	{
+		id: "status",
+		label: "Status",
+		options: [
+			{ label: "Requested", value: "requested" },
+			{ label: "Approved", value: "approved" },
+			{ label: "Declined", value: "declined" },
+			{ label: "Paid", value: "paid" },
+			{ label: "Cancelled", value: "cancelled" },
+		],
+		value: (row) => row.status,
+	},
+];
+
+const ENCASHMENT_SORTS: ListSort<LeaveEncashmentDto>[] = [
+	{
+		id: "createdAt",
+		label: "Requested",
+		compare: (a, b) => a.createdAt.localeCompare(b.createdAt),
+	},
+	{
+		id: "amount",
+		label: "Amount",
+		compare: (a, b) => a.amountCents - b.amountCents,
+	},
+];
+
+const searchEncashment = (row: LeaveEncashmentDto) => [
+	row.employmentName,
+	row.employmentEmail,
+	row.leaveTypeName,
+];
+const encashmentId = (row: LeaveEncashmentDto) => row.id;
+
+const HISTORY_STATUS_FILTER: ListFilter<TimeOffRequestDto> = {
+	id: "status",
+	label: "Status",
+	options: [
+		{ label: "Approved", value: "approved" },
+		{ label: "Declined", value: "declined" },
+		{ label: "Cancelled", value: "cancelled" },
+	],
+	value: (request) => request.status,
+};
 
 type TeamMember = {
 	employmentId: string;
@@ -248,12 +320,6 @@ function TimeOffPage() {
 	const [expediteId, setExpediteId] = useState<string | null>(null);
 	const [expediteReason, setExpediteReason] = useState("");
 	const [delegationOpen, setDelegationOpen] = useState(false);
-	const [selectedRequestIds, setSelectedRequestIds] = useState<
-		ReadonlySet<string>
-	>(new Set());
-	const [decisionSearch, setDecisionSearch] = useState("");
-	const [historySearch, setHistorySearch] = useState("");
-	const [historyStatus, setHistoryStatus] = useState("all");
 
 	const canManageSettings = hasCapability(
 		kind ? { kind, privileges } : null,
@@ -283,7 +349,7 @@ function TimeOffPage() {
 			}),
 		onSuccess: (result, input) => {
 			invalidateLeave();
-			setSelectedRequestIds(new Set());
+			decisionList.selection?.clear();
 			setBulkDeclineOpen(false);
 			setBulkDeclineReason("");
 			const applied = result.approved + result.declined;
@@ -319,39 +385,44 @@ function TimeOffPage() {
 	const requests = timeOff.data?.requests ?? [];
 	const pendingUnavailability = timeOff.data?.pendingUnavailability ?? [];
 	const pending = requests.filter((request) => request.status === "pending");
-	const selectedPending = pending.filter((request) =>
-		selectedRequestIds.has(request.id),
-	);
 	const decided = requests.filter((request) => request.status !== "pending");
 	const myPendingApprovals = myApprovals.data ?? [];
-	const decisionRows = useMemo(() => {
-		const term = decisionSearch.trim().toLowerCase();
-		if (!term) return pending;
-		return pending.filter((request) =>
-			formatPerson(request.worker.fullName, request.worker.email)
-				.toLowerCase()
-				.includes(term),
-		);
-	}, [decisionSearch, formatPerson, pending]);
-	const decisionPagination = useTablePagination(decisionRows, {
-		resetKey: decisionSearch,
+	const personName = (request: TimeOffRequestDto) =>
+		formatPerson(request.worker.fullName, request.worker.email);
+	const requestSorts: ListSort<TimeOffRequestDto>[] = [
+		{
+			id: "when",
+			label: "Start date",
+			compare: (a, b) => a.startsAt.localeCompare(b.startsAt),
+		},
+		{
+			id: "person",
+			label: "Person",
+			compare: (a, b) => personName(a).localeCompare(personName(b)),
+		},
+		{
+			id: "createdAt",
+			label: "Submitted",
+			compare: (a, b) => a.createdAt.localeCompare(b.createdAt),
+		},
+	];
+	const decisionList = useListView<TimeOffRequestDto>({
+		rows: pending,
+		getRowId: requestId,
+		search: (request) => [personName(request)],
+		filters: leaveTypeFilter(pending),
+		sorts: requestSorts,
+		defaultSort: { id: "when", direction: "asc" },
+		selectable: isPendingRequest,
 	});
-	const historyRows = useMemo(() => {
-		const term = historySearch.trim().toLowerCase();
-		return decided.filter((request) => {
-			if (historyStatus !== "all" && request.status !== historyStatus) {
-				return false;
-			}
-			if (!term) return true;
-			return `${formatPerson(request.worker.fullName, request.worker.email)} ${
-				request.leaveTypeName ?? ""
-			}`
-				.toLowerCase()
-				.includes(term);
-		});
-	}, [decided, formatPerson, historySearch, historyStatus]);
-	const historyPagination = useTablePagination(historyRows, {
-		resetKey: `${historySearch}|${historyStatus}`,
+	const selectedPending = decisionList.selection?.selectedRows ?? [];
+	const historyList = useListView<TimeOffRequestDto>({
+		rows: decided,
+		getRowId: requestId,
+		search: (request) => [personName(request), request.leaveTypeName],
+		filters: [HISTORY_STATUS_FILTER, ...leaveTypeFilter(decided)],
+		sorts: requestSorts,
+		defaultSort: { id: "when", direction: "desc" },
 	});
 	const types = leaveTypes.data?.leaveTypes ?? [];
 	const team: TeamMember[] =
@@ -733,44 +804,27 @@ function TimeOffPage() {
 							</Empty>
 						) : (
 							<>
-								<TableToolbar
-									left={
-										<TableSearch
-											value={decisionSearch}
-											onValueChange={setDecisionSearch}
-											placeholder="Search person"
-										/>
-									}
-									right={<TablePagination {...decisionPagination} />}
-								/>
-								{selectedPending.length > 0 ? (
-									<div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/40 px-4 py-2">
-										<p className="text-muted-foreground text-xs">
-											{selectedPending.length} selected
-										</p>
-										<div className="flex flex-wrap items-center gap-2">
+								<ListToolbar
+									list={decisionList}
+									searchPlaceholder="Search person"
+									noun={{ one: "request", many: "requests" }}
+									bulkActions={(selected) => (
+										<>
 											<ConfirmAction
-												trigger={`Approve selected (${selectedPending.length})`}
+												trigger="Approve"
 												triggerVariant="default"
-												title={`Approve ${selectedPending.length} time-off requests?`}
-												description={`Approves ${selectedPending
+												title={`Approve ${selected.length} time-off ${selected.length === 1 ? "request" : "requests"}?`}
+												description={`Approves ${selected
 													.slice(0, 3)
-													.map((request) =>
-														formatPerson(
-															request.worker.fullName,
-															request.worker.email,
-														),
-													)
+													.map(personName)
 													.join(
 														", ",
-													)}${selectedPending.length > 3 ? ` and ${selectedPending.length - 3} more` : ""}. Each blocks the schedule.`}
-												confirmLabel="Approve all"
+													)}${selected.length > 3 ? ` and ${selected.length - 3} more` : ""}. Each blocks the schedule.`}
+												confirmLabel="Approve"
 												disabled={bulkDecision.isPending}
 												onConfirm={() =>
 													bulkDecision.mutate({
-														requestIds: selectedPending.map(
-															(request) => request.id,
-														),
+														requestIds: selected.map((request) => request.id),
 														decision: "approved",
 													})
 												}
@@ -784,37 +838,24 @@ function TimeOffPage() {
 													setBulkDeclineOpen(true);
 												}}
 											>
-												Decline selected ({selectedPending.length})
+												Decline
 											</Button>
-											<Button
-												variant="ghost"
-												size="sm"
-												onClick={() => setSelectedRequestIds(new Set())}
-											>
-												Clear
-											</Button>
-										</div>
-									</div>
-								) : null}
+										</>
+									)}
+								/>
 								<ul className="min-h-0 flex-1 divide-y overflow-y-auto">
-									{decisionPagination.pageRows.map((request) => (
+									{decisionList.pagination.pageRows.map((request) => (
 										<PendingRequestRow
 											key={request.id}
 											workplaceId={workplaceId}
 											request={request}
 											busy={busy}
-											selected={selectedRequestIds.has(request.id)}
-											onToggleSelect={(checked) => {
-												setSelectedRequestIds((current) => {
-													const next = new Set(current);
-													if (checked) {
-														next.add(request.id);
-													} else {
-														next.delete(request.id);
-													}
-													return next;
-												});
-											}}
+											selected={
+												decisionList.selection?.isSelected(request) ?? false
+											}
+											onToggleSelect={(checked) =>
+												decisionList.selection?.setSelected([request], checked)
+											}
 											onEdit={() => setEditing(request)}
 											onDelete={() => removeLeave.mutate(request.id)}
 											onChanged={invalidateLeave}
@@ -901,36 +942,18 @@ function TimeOffPage() {
 					</TabsContent>
 
 					<TabsContent value="history" className="flex min-h-0 flex-1 flex-col">
-						<TableToolbar
-							left={
-								<>
-									<TableSearch
-										value={historySearch}
-										onValueChange={setHistorySearch}
-										placeholder="Search person or type"
-									/>
-									<TableFilter
-										value={historyStatus}
-										onValueChange={setHistoryStatus}
-										items={[
-											{ label: "All statuses", value: "all" },
-											{ label: "Approved", value: "approved" },
-											{ label: "Declined", value: "declined" },
-											{ label: "Cancelled", value: "cancelled" },
-										]}
-										ariaLabel="Filter history by status"
-									/>
-								</>
-							}
-							right={<TablePagination {...historyPagination} />}
+						<ListToolbar
+							list={historyList}
+							searchPlaceholder="Search person or type"
 						/>
 						<div className="min-h-0 flex-1 overflow-auto">
 							<DataTable
 								fill={false}
 								stacked
 								columns={historyColumns}
-								data={historyPagination.pageRows}
-								getRowId={(row) => row.id}
+								list={historyList}
+								data={historyList.pagination.pageRows}
+								getRowId={requestId}
 								empty={
 									<div className="p-4">
 										<Empty className="border border-dashed">
@@ -2701,7 +2724,6 @@ function EncashmentsPanel({
 	onChanged: () => void;
 }) {
 	const posthog = usePostHog();
-	const [status, setStatus] = useState("all");
 	const [declineTarget, setDeclineTarget] = useState<LeaveEncashmentDto | null>(
 		null,
 	);
@@ -2775,10 +2797,15 @@ function EncashmentsPanel({
 		onError: (error) => toast.error((error as Error).message),
 	});
 
-	const rows = useMemo(() => {
-		if (status === "all") return encashments;
-		return encashments.filter((row) => row.status === status);
-	}, [encashments, status]);
+	const list = useListView<LeaveEncashmentDto>({
+		rows: encashments,
+		getRowId: encashmentId,
+		search: searchEncashment,
+		filters: ENCASHMENT_FILTERS,
+		sorts: ENCASHMENT_SORTS,
+		defaultSort: { id: "createdAt", direction: "desc" },
+	});
+	const rows = list.rows;
 
 	const busy = decide.isPending || markPaid.isPending;
 
@@ -2799,23 +2826,11 @@ function EncashmentsPanel({
 				</Button>
 			</div>
 
-			<TableToolbar
+			<ListToolbar
 				embedded
-				left={
-					<TableFilter
-						value={status}
-						onValueChange={setStatus}
-						items={[
-							{ label: "All statuses", value: "all" },
-							{ label: "Requested", value: "requested" },
-							{ label: "Approved", value: "approved" },
-							{ label: "Declined", value: "declined" },
-							{ label: "Paid", value: "paid" },
-							{ label: "Cancelled", value: "cancelled" },
-						]}
-						ariaLabel="Filter encashments by status"
-					/>
-				}
+				list={list}
+				searchPlaceholder="Search person or type"
+				pagination={false}
 			/>
 
 			{loading ? (

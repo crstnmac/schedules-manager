@@ -21,14 +21,9 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
-import {
-	TableFilter,
-	TablePagination,
-	TableSearch,
-	TableToolbar,
-	useTablePagination,
-} from "@/components/table-toolbar";
+import { ListToolbar, useListView } from "@/components/list-view";
 import { api } from "@/lib/api";
+import { PUNCH_SORTS, PUNCH_STATUS_FILTER, punchId } from "@/lib/punch-list";
 import {
 	type TimecardEntry,
 	useMySchedule,
@@ -44,6 +39,9 @@ export const Route = createFileRoute("/worker/timecard")({
 
 const punchHelper = createDataColumnHelper<TimecardEntry>();
 
+const TIMECARD_FILTERS = [PUNCH_STATUS_FILTER];
+const searchPosition = (entry: TimecardEntry) => [entry.positionName];
+
 function TimecardPage() {
 	const { workplace } = useWorkplace();
 	const { formatClockTime } = useDisplayPrefs();
@@ -52,8 +50,6 @@ function TimecardPage() {
 	const schedule = useMySchedule(workplace?.id);
 	const weekStartDay = schedule.data?.weekStartDay ?? 1;
 	const [nowMs, setNowMs] = useState(() => Date.now());
-	const [search, setSearch] = useState("");
-	const [statusFilter, setStatusFilter] = useState("all");
 	const queryClient = useQueryClient();
 	const updateBreak = useMutation({
 		mutationFn: (input: { timeEntryId: string; action: "start" | "end" }) =>
@@ -78,19 +74,13 @@ function TimecardPage() {
 	}, [hasOpen]);
 
 	const week = currentWeekTotals(entries, nowMs, weekStartDay);
-	const filteredEntries = useMemo(() => {
-		const term = search.trim().toLowerCase();
-		return entries.filter((entry) => {
-			if (statusFilter === "open" && entry.clockedOutAt !== null) return false;
-			if (statusFilter === "closed" && entry.clockedOutAt === null) {
-				return false;
-			}
-			if (!term) return true;
-			return entry.positionName.toLowerCase().includes(term);
-		});
-	}, [entries, search, statusFilter]);
-	const pagination = useTablePagination(filteredEntries, {
-		resetKey: `${search}|${statusFilter}`,
+	const list = useListView<TimecardEntry>({
+		rows: entries,
+		getRowId: punchId,
+		search: searchPosition,
+		filters: TIMECARD_FILTERS,
+		sorts: PUNCH_SORTS,
+		defaultSort: { id: "day", direction: "desc" },
 	});
 	const columns = useMemo(
 		() =>
@@ -283,35 +273,15 @@ function TimecardPage() {
 						</div>
 					) : (
 						<div className="flex min-h-0 flex-1 flex-col">
-							<TableToolbar
-								left={
-									<>
-										<TableSearch
-											value={search}
-											onValueChange={setSearch}
-											placeholder="Search position"
-										/>
-										<TableFilter
-											value={statusFilter}
-											onValueChange={setStatusFilter}
-											items={[
-												{ label: "All entries", value: "all" },
-												{ label: "On the clock", value: "open" },
-												{ label: "Completed", value: "closed" },
-											]}
-											ariaLabel="Filter by entry status"
-										/>
-									</>
-								}
-								right={<TablePagination {...pagination} />}
-							/>
+							<ListToolbar list={list} searchPlaceholder="Search position" />
 							<div className="min-h-0 flex-1 overflow-auto">
 								<DataTable
 									stacked
 									fill={false}
 									columns={columns}
-									data={pagination.pageRows}
-									getRowId={(row) => row.id}
+									list={list}
+									data={list.pagination.pageRows}
+									getRowId={punchId}
 									empty={
 										<p className="p-4 text-muted-foreground text-sm">
 											No entries match your search.

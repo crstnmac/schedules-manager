@@ -23,18 +23,18 @@ import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TimerIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { AppDocument, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import {
-	TableFilter,
-	TablePagination,
-	TableSearch,
-	TableToolbar,
-	useTablePagination,
-} from "@/components/table-toolbar";
+	type ListFilter,
+	type ListSort,
+	ListToolbar,
+	useListView,
+} from "@/components/list-view";
 import { TimeClockCard } from "@/components/time-clock-card";
+import { PUNCH_SORTS, punchId } from "@/lib/punch-list";
 import {
 	type TimecardEntry,
 	useMySchedule,
@@ -55,6 +55,26 @@ type AssignedShift = NonNullable<
 const shiftHelper = createDataColumnHelper<AssignedShift>();
 const punchHelper = createDataColumnHelper<TimecardEntry>();
 
+const SHIFT_SORTS: ListSort<AssignedShift>[] = [
+	{
+		id: "date",
+		label: "Date",
+		compare: (a, b) => a.startsAt.localeCompare(b.startsAt),
+	},
+	{
+		id: "positionName",
+		label: "Position",
+		compare: (a, b) => a.positionName.localeCompare(b.positionName),
+	},
+];
+
+const searchShift = (shift: AssignedShift) => [shift.positionName, shift.note];
+const shiftId = (shift: AssignedShift) => shift.id;
+const searchPunch = (entry: TimecardEntry) => [
+	entry.positionName,
+	formatDay(entry.clockedInAt),
+];
+
 function ManagerClockPage() {
 	const { workplace } = useWorkplace();
 	const { formatClockTime, formatShiftRange } = useDisplayPrefs();
@@ -64,9 +84,6 @@ function ManagerClockPage() {
 	const currentWeek = schedule.data?.currentWeek ?? null;
 	const assignedShifts = currentWeek?.shifts ?? [];
 	const entries = timecard.data?.timeEntries ?? [];
-	const [shiftSearch, setShiftSearch] = useState("");
-	const [shiftDay, setShiftDay] = useState("all");
-	const [punchSearch, setPunchSearch] = useState("");
 	const onClock =
 		nextShift?.timeEntry != null && nextShift.timeEntry.clockedOutAt === null;
 
@@ -146,39 +163,39 @@ function ManagerClockPage() {
 		[formatClockTime],
 	);
 
-	const shiftDayItems = useMemo(() => {
+	const shiftFilters = useMemo<ListFilter<AssignedShift>[]>(() => {
 		const dates = Array.from(
 			new Set(assignedShifts.map((shift) => shift.date)),
 		).sort();
-		return [
-			{ label: "All days", value: "all" },
-			...dates.map((date) => ({ label: formatDay(date), value: date })),
-		];
+		return dates.length > 1
+			? [
+					{
+						id: "date",
+						label: "Day",
+						options: dates.map((date) => ({
+							label: formatDay(date),
+							value: date,
+						})),
+						value: (shift) => shift.date,
+					},
+				]
+			: [];
 	}, [assignedShifts]);
-	const filteredShifts = useMemo(() => {
-		const term = shiftSearch.trim().toLowerCase();
-		return assignedShifts.filter((shift) => {
-			if (shiftDay !== "all" && shift.date !== shiftDay) return false;
-			if (!term) return true;
-			return `${shift.positionName} ${shift.note ?? ""}`
-				.toLowerCase()
-				.includes(term);
-		});
-	}, [assignedShifts, shiftDay, shiftSearch]);
-	const shiftPagination = useTablePagination(filteredShifts, {
-		resetKey: `${currentWeek?.weekStart ?? ""}|${shiftDay}|${shiftSearch}`,
+	const shiftList = useListView<AssignedShift>({
+		rows: assignedShifts,
+		getRowId: shiftId,
+		search: searchShift,
+		filters: shiftFilters,
+		sorts: SHIFT_SORTS,
+		defaultSort: { id: "date", direction: "asc" },
+		resetKey: currentWeek?.weekStart,
 	});
-	const filteredEntries = useMemo(() => {
-		const term = punchSearch.trim().toLowerCase();
-		if (!term) return entries;
-		return entries.filter((entry) =>
-			`${entry.positionName} ${formatDay(entry.clockedInAt)}`
-				.toLowerCase()
-				.includes(term),
-		);
-	}, [entries, punchSearch]);
-	const punchPagination = useTablePagination(filteredEntries, {
-		resetKey: punchSearch,
+	const punchList = useListView<TimecardEntry>({
+		rows: entries,
+		getRowId: punchId,
+		search: searchPunch,
+		sorts: PUNCH_SORTS,
+		defaultSort: { id: "day", direction: "desc" },
 	});
 
 	return (
@@ -261,32 +278,17 @@ function ManagerClockPage() {
 								</p>
 							) : (
 								<>
-									<TableToolbar
+									<ListToolbar
 										embedded
-										left={
-											<>
-												<TableSearch
-													value={shiftSearch}
-													onValueChange={setShiftSearch}
-													placeholder="Search shifts"
-												/>
-												{shiftDayItems.length > 1 ? (
-													<TableFilter
-														value={shiftDay}
-														onValueChange={setShiftDay}
-														items={shiftDayItems}
-														ariaLabel="Filter by day"
-													/>
-												) : null}
-											</>
-										}
-										right={<TablePagination {...shiftPagination} />}
+										list={shiftList}
+										searchPlaceholder="Search shifts"
 									/>
 									<DataTable
 										fill={false}
 										columns={shiftColumns}
-										data={shiftPagination.pageRows}
-										getRowId={(row) => row.id}
+										list={shiftList}
+										data={shiftList.pagination.pageRows}
+										getRowId={shiftId}
 										empty={
 											<p className="py-6 text-center text-muted-foreground text-sm">
 												No shifts match your search or day filter.
@@ -338,22 +340,17 @@ function ManagerClockPage() {
 							) : null}
 							{entries.length > 0 ? (
 								<>
-									<TableToolbar
+									<ListToolbar
 										embedded
-										left={
-											<TableSearch
-												value={punchSearch}
-												onValueChange={setPunchSearch}
-												placeholder="Search punches"
-											/>
-										}
-										right={<TablePagination {...punchPagination} />}
+										list={punchList}
+										searchPlaceholder="Search punches"
 									/>
 									<DataTable
 										fill={false}
 										columns={punchColumns}
-										data={punchPagination.pageRows}
-										getRowId={(row) => row.id}
+										list={punchList}
+										data={punchList.pagination.pageRows}
+										getRowId={punchId}
 										empty={
 											<p className="py-6 text-center text-muted-foreground text-sm">
 												No punches match your search.

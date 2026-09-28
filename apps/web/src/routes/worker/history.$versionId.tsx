@@ -10,15 +10,14 @@ import {
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeftIcon, CalendarDaysIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import {
-	TablePagination,
-	TableSearch,
-	TableToolbar,
-	useTablePagination,
-} from "@/components/table-toolbar";
+	type ListSort,
+	ListToolbar,
+	useListView,
+} from "@/components/list-view";
 import { usePublishedVersion } from "@/lib/queries";
 import { formatDay } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
@@ -33,23 +32,39 @@ type HistoryShift = NonNullable<
 
 const historyShiftHelper = createDataColumnHelper<HistoryShift>();
 
+const SORTS: ListSort<HistoryShift>[] = [
+	{
+		id: "date",
+		label: "Date",
+		compare: (a, b) =>
+			a.date.localeCompare(b.date) || a.startMinute - b.startMinute,
+	},
+	{
+		id: "positionName",
+		label: "Position",
+		compare: (a, b) => a.positionName.localeCompare(b.positionName),
+	},
+];
+
+const searchShift = (shift: HistoryShift) => [
+	formatDay(shift.date),
+	shift.positionName,
+	shift.note,
+];
+const shiftId = (shift: HistoryShift) => shift.id;
+
 function WorkerHistory() {
 	const { versionId } = Route.useParams();
 	const { formatShiftRange } = useDisplayPrefs();
 	const version = usePublishedVersion(versionId);
 	const data = version.data;
-	const [search, setSearch] = useState("");
-	const filteredShifts = useMemo(() => {
-		const shifts = data?.shifts ?? [];
-		const term = search.trim().toLowerCase();
-		if (!term) return shifts;
-		return shifts.filter((shift) =>
-			`${formatDay(shift.date)} ${shift.positionName} ${shift.note ?? ""}`
-				.toLowerCase()
-				.includes(term),
-		);
-	}, [data, search]);
-	const pagination = useTablePagination(filteredShifts, { resetKey: search });
+	const list = useListView<HistoryShift>({
+		rows: data?.shifts ?? [],
+		getRowId: shiftId,
+		search: searchShift,
+		sorts: SORTS,
+		defaultSort: { id: "date", direction: "asc" },
+	});
 	const historyShiftColumns = useMemo(
 		() =>
 			historyShiftHelper.columns([
@@ -136,23 +151,15 @@ function WorkerHistory() {
 
 				{data ? (
 					<>
-						<TableToolbar
-							left={
-								<TableSearch
-									value={search}
-									onValueChange={setSearch}
-									placeholder="Search shifts"
-								/>
-							}
-							right={<TablePagination {...pagination} />}
-						/>
+						<ListToolbar list={list} searchPlaceholder="Search shifts" />
 						<div className="min-h-0 flex-1 overflow-auto">
 							<DataTable
 								stacked
 								fill={false}
 								columns={historyShiftColumns}
-								data={pagination.pageRows}
-								getRowId={(row) => row.id}
+								list={list}
+								data={list.pagination.pageRows}
+								getRowId={shiftId}
 								empty={
 									<div className="p-4 md:p-6">
 										<Empty className="border border-dashed">

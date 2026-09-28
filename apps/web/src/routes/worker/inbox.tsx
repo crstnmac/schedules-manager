@@ -8,20 +8,22 @@ import {
 } from "@SchedulesManager/ui/components/empty";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { BellIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { toast } from "sonner";
 
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
+import { ListToolbar, useListView } from "@/components/list-view";
 import {
-	TableFilter,
-	TablePagination,
-	TableSearch,
-	TableToolbar,
-	useTablePagination,
-} from "@/components/table-toolbar";
+	INBOX_FILTERS,
+	INBOX_SORTS,
+	isUnread,
+	notificationId,
+	searchNotification,
+} from "@/lib/inbox-list";
 import {
 	type InboxNotification,
 	useMarkAllNotificationsRead,
@@ -37,12 +39,6 @@ export const Route = createFileRoute("/worker/inbox")({
 
 const columnHelper = createDataColumnHelper<InboxNotification>();
 
-const READ_FILTERS = [
-	{ label: "All notifications", value: "all" },
-	{ label: "Unread", value: "unread" },
-	{ label: "Read", value: "read" },
-];
-
 function WorkerInbox() {
 	const { workplace } = useWorkplace();
 	const inbox = useNotifications(workplace?.id);
@@ -50,8 +46,6 @@ function WorkerInbox() {
 	const markAll = useMarkAllNotificationsRead(workplace?.id);
 	const items = inbox.data?.notifications ?? [];
 	const unreadCount = inbox.data?.unreadCount ?? 0;
-	const [search, setSearch] = useState("");
-	const [readFilter, setReadFilter] = useState("all");
 
 	const columns = useMemo(
 		() =>
@@ -133,17 +127,27 @@ function WorkerInbox() {
 		[markRead],
 	);
 
-	const filteredRows = useMemo(() => {
-		const term = search.trim().toLowerCase();
-		return items.filter((item) => {
-			if (readFilter === "unread" && item.readAt) return false;
-			if (readFilter === "read" && !item.readAt) return false;
-			if (!term) return true;
-			return `${item.title} ${item.body}`.toLowerCase().includes(term);
-		});
-	}, [items, readFilter, search]);
-	const pagination = useTablePagination(filteredRows, {
-		resetKey: `${search}|${readFilter}`,
+	const list = useListView<InboxNotification>({
+		rows: items,
+		getRowId: notificationId,
+		search: searchNotification,
+		filters: INBOX_FILTERS,
+		sorts: INBOX_SORTS,
+		defaultSort: { id: "createdAt", direction: "desc" },
+		selectable: isUnread,
+	});
+	const markSelectedRead = useMutation({
+		mutationFn: async (ids: string[]) => {
+			for (const id of ids) await markRead.mutateAsync(id);
+			return ids.length;
+		},
+		onSuccess: (count) => {
+			list.selection?.clear();
+			toast.success(
+				`Marked ${count} ${count === 1 ? "notification" : "notifications"} read.`,
+			);
+		},
+		onError: (error) => toast.error((error as Error).message),
 	});
 
 	return (
@@ -170,23 +174,24 @@ function WorkerInbox() {
 				}
 			/>
 			<AppPageBody scroll={false}>
-				<TableToolbar
-					left={
-						<>
-							<TableSearch
-								value={search}
-								onValueChange={setSearch}
-								placeholder="Search notifications"
-							/>
-							<TableFilter
-								value={readFilter}
-								onValueChange={setReadFilter}
-								items={READ_FILTERS}
-								ariaLabel="Filter by read state"
-							/>
-						</>
-					}
-					right={<TablePagination {...pagination} />}
+				<ListToolbar
+					list={list}
+					searchPlaceholder="Search notifications"
+					noun={{ one: "notification", many: "notifications" }}
+					bulkActions={(selected) => (
+						<Button
+							size="sm"
+							disabled={markSelectedRead.isPending}
+							onClick={() =>
+								markSelectedRead.mutate(selected.map((item) => item.id))
+							}
+						>
+							{markSelectedRead.isPending ? (
+								<Spinner data-icon="inline-start" />
+							) : null}
+							Mark read
+						</Button>
+					)}
 				/>
 				<div className="min-h-0 flex-1 overflow-auto">
 					{inbox.isLoading ? (
@@ -201,8 +206,9 @@ function WorkerInbox() {
 							stacked
 							query={inbox}
 							columns={columns}
-							data={pagination.pageRows}
-							getRowId={(row) => row.id}
+							list={list}
+							data={list.pagination.pageRows}
+							getRowId={notificationId}
 							empty={
 								<div className="p-4">
 									<Empty className="border border-dashed">

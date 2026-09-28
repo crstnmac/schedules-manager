@@ -75,16 +75,16 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
+import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { FormSheet } from "@/components/form-sheet";
-import { RequiredTextField } from "@/components/required-text-field";
 import {
-	TableFilter,
-	TablePagination,
-	TableSearch,
-	TableToolbar,
-	useTablePagination,
-} from "@/components/table-toolbar";
+	type ListFilter,
+	type ListSort,
+	ListToolbar,
+	useListView,
+} from "@/components/list-view";
+import { RequiredTextField } from "@/components/required-text-field";
 import { WorkerDirectoryImportSheet } from "@/components/worker-directory-import-sheet";
 import { WorkerImportSheet } from "@/components/worker-import-sheet";
 import { api } from "@/lib/api";
@@ -105,12 +105,45 @@ export const Route = createFileRoute("/dashboard/workers/")({
 const workerHelper = createDataColumnHelper<WorkerDto>();
 const invitationHelper = createDataColumnHelper<InvitationDto>();
 
-const ROLE_FILTERS = [
-	{ label: "All roles", value: "all" },
-	{ label: "Managers", value: "manager" },
-	{ label: "Viewers", value: "viewer" },
-	{ label: "Workers", value: "worker" },
+const ROLE_FILTERS: ListFilter<WorkerDto>[] = [
+	{
+		id: "kind",
+		label: "Role",
+		options: [
+			{ label: "Managers", value: "manager" },
+			{ label: "Viewers", value: "viewer" },
+			{ label: "Workers", value: "worker" },
+		],
+		value: (worker) => worker.kind,
+	},
 ];
+
+const workerName = (worker: WorkerDto) =>
+	worker.profile.fullName ?? worker.profile.email;
+
+const WORKER_SORTS: ListSort<WorkerDto>[] = [
+	{
+		id: "worker",
+		label: "Name",
+		compare: (a, b) => workerName(a).localeCompare(workerName(b)),
+	},
+	{
+		id: "kind",
+		label: "Role",
+		compare: (a, b) => a.kind.localeCompare(b.kind),
+	},
+	{
+		id: "wage",
+		label: "Wage",
+		compare: (a, b) => (a.hourlyWageCents ?? -1) - (b.hourlyWageCents ?? -1),
+	},
+];
+
+const searchWorker = (worker: WorkerDto) => [
+	worker.profile.fullName,
+	worker.profile.email,
+];
+const workerId = (worker: WorkerDto) => worker.employmentId;
 
 const PRIVILEGE_OPTIONS = [
 	{ value: "schedule.view", label: "View schedule" },
@@ -124,12 +157,36 @@ const PRIVILEGE_OPTIONS = [
 	{ value: "integrations.manage", label: "Manage integrations" },
 ] as const;
 
-const INVITATION_FILTERS = [
-	{ label: "All invitations", value: "all" },
-	{ label: "Pending", value: "pending" },
-	{ label: "Accepted", value: "accepted" },
-	{ label: "Revoked", value: "revoked" },
+const INVITATION_FILTERS: ListFilter<InvitationDto>[] = [
+	{
+		id: "status",
+		label: "Status",
+		options: [
+			{ label: "Pending", value: "pending" },
+			{ label: "Accepted", value: "accepted" },
+			{ label: "Revoked", value: "revoked" },
+		],
+		value: (invitation) => invitation.status,
+	},
 ];
+
+const INVITATION_SORTS: ListSort<InvitationDto>[] = [
+	{
+		id: "email",
+		label: "Email",
+		compare: (a, b) => a.email.localeCompare(b.email),
+	},
+	{
+		id: "expiresAt",
+		label: "Expires",
+		compare: (a, b) => a.expiresAt.localeCompare(b.expiresAt),
+	},
+];
+
+const searchInvitation = (invitation: InvitationDto) => [invitation.email];
+const invitationId = (invitation: InvitationDto) => invitation.id;
+const isPendingInvitation = (invitation: InvitationDto) =>
+	invitation.status === "pending";
 
 function WorkersPage() {
 	const { workplace, employmentId: myEmploymentId } = useWorkplace();
@@ -141,10 +198,6 @@ function WorkersPage() {
 	const positions = usePositions(workplace?.id);
 
 	const [tab, setTab] = useState<"team" | "invitations">("team");
-	const [teamSearch, setTeamSearch] = useState("");
-	const [roleFilter, setRoleFilter] = useState("all");
-	const [inviteSearch, setInviteSearch] = useState("");
-	const [statusFilter, setStatusFilter] = useState("all");
 
 	const [inviteOpen, setInviteOpen] = useState(false);
 	const [importOpen, setImportOpen] = useState(false);
@@ -297,27 +350,59 @@ function WorkersPage() {
 		workers.data?.workers.filter((worker) => worker.status === "active") ?? [];
 	const invitations = workers.data?.invitations ?? [];
 
-	const teamRows = useMemo(() => {
-		const term = teamSearch.trim().toLowerCase();
-		return activeWorkers.filter((worker) => {
-			if (roleFilter !== "all" && worker.kind !== roleFilter) return false;
-			if (!term) return true;
-			return `${worker.profile.fullName ?? ""} ${worker.profile.email}`
-				.toLowerCase()
-				.includes(term);
-		});
-	}, [activeWorkers, roleFilter, teamSearch]);
-
-	const invitationRows = useMemo(() => {
-		const term = inviteSearch.trim().toLowerCase();
-		return invitations.filter((invitation) => {
-			if (statusFilter !== "all" && invitation.status !== statusFilter) {
-				return false;
+	const teamList = useListView<WorkerDto>({
+		rows: activeWorkers,
+		getRowId: workerId,
+		search: searchWorker,
+		filters: ROLE_FILTERS,
+		sorts: WORKER_SORTS,
+		defaultSort: { id: "worker", direction: "asc" },
+	});
+	const invitationList = useListView<InvitationDto>({
+		rows: invitations,
+		getRowId: invitationId,
+		search: searchInvitation,
+		filters: INVITATION_FILTERS,
+		sorts: INVITATION_SORTS,
+		selectable: isPendingInvitation,
+	});
+	const bulkInvitations = useMutation({
+		mutationFn: async (input: {
+			ids: string[];
+			action: "resend" | "revoke";
+		}) => {
+			let failed = 0;
+			for (const id of input.ids) {
+				try {
+					await api(
+						input.action === "resend"
+							? `/v1/workplaces/${workplace?.id}/invitations/${id}/resend`
+							: `/v1/workplaces/${workplace?.id}/invitations/${id}`,
+						{ method: input.action === "resend" ? "POST" : "DELETE" },
+					);
+				} catch {
+					failed += 1;
+				}
 			}
-			if (!term) return true;
-			return invitation.email.toLowerCase().includes(term);
-		});
-	}, [invitations, inviteSearch, statusFilter]);
+			return { failed, total: input.ids.length, action: input.action };
+		},
+		onSuccess: ({ failed, total, action }) => {
+			invalidate();
+			invitationList.selection?.clear();
+			const noun = `${total} ${total === 1 ? "invitation" : "invitations"}`;
+			if (failed > 0) {
+				toast.error(
+					`${failed} of ${noun} couldn't be ${action === "resend" ? "resent" : "revoked"}.`,
+				);
+			} else {
+				toast.success(
+					action === "resend"
+						? `Resent ${noun}. Emails queued for delivery.`
+						: `Revoked ${noun}.`,
+				);
+			}
+		},
+	});
 
 	const locationNames = useMemo(() => {
 		const map = new Map<string, string>();
@@ -326,13 +411,6 @@ function WorkersPage() {
 		}
 		return map;
 	}, [locations.data]);
-
-	const teamPagination = useTablePagination(teamRows, {
-		resetKey: `${teamSearch}|${roleFilter}`,
-	});
-	const invitationPagination = useTablePagination(invitationRows, {
-		resetKey: `${inviteSearch}|${statusFilter}`,
-	});
 
 	const deliveryQuery = useQuery({
 		queryKey: ["workplaces", workplace?.id, "email-deliveries"],
@@ -653,23 +731,9 @@ function WorkersPage() {
 					</div>
 
 					<TabsContent value="team" className="flex min-h-0 flex-1 flex-col">
-						<TableToolbar
-							left={
-								<>
-									<TableSearch
-										value={teamSearch}
-										onValueChange={setTeamSearch}
-										placeholder="Search name or email"
-									/>
-									<TableFilter
-										value={roleFilter}
-										onValueChange={setRoleFilter}
-										items={ROLE_FILTERS}
-										ariaLabel="Filter by role"
-									/>
-								</>
-							}
-							right={<TablePagination {...teamPagination} />}
+						<ListToolbar
+							list={teamList}
+							searchPlaceholder="Search name or email"
 						/>
 						<div className="min-h-0 flex-1 overflow-auto">
 							{workers.isLoading ? (
@@ -684,8 +748,9 @@ function WorkersPage() {
 									fill={false}
 									stacked
 									columns={workerColumns}
-									data={teamPagination.pageRows}
-									getRowId={(row) => row.employmentId}
+									list={teamList}
+									data={teamList.pagination.pageRows}
+									getRowId={workerId}
 									empty={
 										<div className="p-4">
 											<Empty className="border border-dashed">
@@ -746,31 +811,48 @@ function WorkersPage() {
 								</AlertDescription>
 							</Alert>
 						) : null}
-						<TableToolbar
-							left={
-								<>
-									<TableSearch
-										value={inviteSearch}
-										onValueChange={setInviteSearch}
-										placeholder="Search email"
-									/>
-									<TableFilter
-										value={statusFilter}
-										onValueChange={setStatusFilter}
-										items={INVITATION_FILTERS}
-										ariaLabel="Filter by status"
-									/>
-								</>
-							}
-							right={<TablePagination {...invitationPagination} />}
+						<ListToolbar
+							list={invitationList}
+							searchPlaceholder="Search email"
+							noun={{ one: "invitation", many: "invitations" }}
+							bulkActions={(selected) => {
+								const ids = selected.map((invitation) => invitation.id);
+								const noun = `${ids.length} ${ids.length === 1 ? "invitation" : "invitations"}`;
+								return (
+									<>
+										<Button
+											size="sm"
+											variant="outline"
+											disabled={bulkInvitations.isPending}
+											onClick={() =>
+												bulkInvitations.mutate({ ids, action: "resend" })
+											}
+										>
+											Resend
+										</Button>
+										<ConfirmAction
+											trigger="Revoke"
+											title={`Revoke ${noun}?`}
+											description="Revoked invitations can no longer be accepted. You can invite the same email again later."
+											confirmLabel="Revoke"
+											destructive
+											disabled={bulkInvitations.isPending}
+											onConfirm={() =>
+												bulkInvitations.mutate({ ids, action: "revoke" })
+											}
+										/>
+									</>
+								);
+							}}
 						/>
 						<div className="min-h-0 flex-1 overflow-auto">
 							<DataTable
 								fill={false}
 								stacked
 								columns={invitationColumns}
-								data={invitationPagination.pageRows}
-								getRowId={(row) => row.id}
+								list={invitationList}
+								data={invitationList.pagination.pageRows}
+								getRowId={invitationId}
 								empty={
 									<div className="p-4">
 										<Empty className="border border-dashed">

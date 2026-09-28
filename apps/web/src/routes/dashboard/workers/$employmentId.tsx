@@ -48,13 +48,12 @@ import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { DatePicker } from "@/components/date-picker";
 import { LeaveForecastTable } from "@/components/leave-forecast-table";
 import { LeaveLedgerList } from "@/components/leave-ledger-list";
-import { RequiredTextField } from "@/components/required-text-field";
 import {
-	TablePagination,
-	TableSearch,
-	TableToolbar,
-	useTablePagination,
-} from "@/components/table-toolbar";
+	type ListSort,
+	ListToolbar,
+	useListView,
+} from "@/components/list-view";
+import { RequiredTextField } from "@/components/required-text-field";
 import { api } from "@/lib/api";
 import { todayIsoDate } from "@/lib/leave";
 import { hasCapability } from "@/lib/privileges";
@@ -84,6 +83,24 @@ type DocumentRow = {
 
 const ptoHelper = createDataColumnHelper<LeaveTypeRow>();
 const documentHelper = createDataColumnHelper<DocumentRow>();
+
+const PTO_SORTS: ListSort<LeaveTypeRow>[] = [
+	{
+		id: "name",
+		label: "Leave type",
+		compare: (a, b) => a.name.localeCompare(b.name),
+	},
+];
+const DOCUMENT_SORTS: ListSort<DocumentRow>[] = [
+	{
+		id: "title",
+		label: "Title",
+		compare: (a, b) => a.title.localeCompare(b.title),
+	},
+];
+const searchLeaveType = (row: LeaveTypeRow) => [row.name];
+const searchDocument = (row: DocumentRow) => [row.title, row.url, row.note];
+const rowId = (row: { id: string }) => row.id;
 
 function signedHoursToMinutes(value: string) {
 	const hours = Number(value);
@@ -554,8 +571,6 @@ function EmploymentPage() {
 	const [documentTitle, setDocumentTitle] = useState("");
 	const [documentUrl, setDocumentUrl] = useState("");
 	const [documentNote, setDocumentNote] = useState("");
-	const [ptoSearch, setPtoSearch] = useState("");
-	const [documentSearch, setDocumentSearch] = useState("");
 
 	useEffect(() => {
 		if (!worker) return;
@@ -748,25 +763,18 @@ function EmploymentPage() {
 		[],
 	);
 
-	const filteredPto = useMemo(() => {
-		const term = ptoSearch.trim().toLowerCase();
-		if (!term) return leaveTypeRows;
-		return leaveTypeRows.filter((row) => row.name.toLowerCase().includes(term));
-	}, [leaveTypeRows, ptoSearch]);
-	const ptoPagination = useTablePagination(filteredPto, {
-		resetKey: ptoSearch,
+	const ptoList = useListView<LeaveTypeRow>({
+		rows: leaveTypeRows,
+		getRowId: rowId,
+		search: searchLeaveType,
+		sorts: PTO_SORTS,
+		defaultSort: { id: "name", direction: "asc" },
 	});
-	const filteredDocuments = useMemo(() => {
-		const term = documentSearch.trim().toLowerCase();
-		if (!term) return documentRows;
-		return documentRows.filter((row) =>
-			`${row.title} ${row.url ?? ""} ${row.note ?? ""}`
-				.toLowerCase()
-				.includes(term),
-		);
-	}, [documentRows, documentSearch]);
-	const documentPagination = useTablePagination(filteredDocuments, {
-		resetKey: documentSearch,
+	const documentList = useListView<DocumentRow>({
+		rows: documentRows,
+		getRowId: rowId,
+		search: searchDocument,
+		sorts: DOCUMENT_SORTS,
 	});
 
 	return (
@@ -906,24 +914,19 @@ function EmploymentPage() {
 						</CardHeader>
 						<CardContent className="flex flex-col">
 							{leaveTypeRows.length > 0 ? (
-								<TableToolbar
+								<ListToolbar
 									embedded
-									left={
-										<TableSearch
-											value={ptoSearch}
-											onValueChange={setPtoSearch}
-											placeholder="Search leave types"
-										/>
-									}
-									right={<TablePagination {...ptoPagination} />}
+									list={ptoList}
+									searchPlaceholder="Search leave types"
 								/>
 							) : null}
 							<DataTable
 								bounded
 								fill={false}
 								columns={ptoColumns}
-								data={ptoPagination.pageRows}
-								getRowId={(row) => row.id}
+								list={ptoList}
+								data={ptoList.pagination.pageRows}
+								getRowId={rowId}
 								empty={
 									<p className="text-muted-foreground text-sm">
 										{leaveTypeRows.length === 0
@@ -953,24 +956,19 @@ function EmploymentPage() {
 						<CardContent className="flex flex-col gap-4">
 							<div className="flex flex-col">
 								{documentRows.length > 0 ? (
-									<TableToolbar
+									<ListToolbar
 										embedded
-										left={
-											<TableSearch
-												value={documentSearch}
-												onValueChange={setDocumentSearch}
-												placeholder="Search documents"
-											/>
-										}
-										right={<TablePagination {...documentPagination} />}
+										list={documentList}
+										searchPlaceholder="Search documents"
 									/>
 								) : null}
 								<DataTable
 									bounded
 									fill={false}
 									columns={documentColumns}
-									data={documentPagination.pageRows}
-									getRowId={(row) => row.id}
+									list={documentList}
+									data={documentList.pagination.pageRows}
+									getRowId={rowId}
 									empty={
 										<p className="text-muted-foreground text-sm">
 											{documentRows.length === 0

@@ -20,12 +20,11 @@ import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { DatePicker } from "@/components/date-picker";
 import {
-	TableFilter,
-	TablePagination,
-	TableSearch,
-	TableToolbar,
-	useTablePagination,
-} from "@/components/table-toolbar";
+	type ListFilter,
+	type ListSort,
+	ListToolbar,
+	useListView,
+} from "@/components/list-view";
 import { useDayRoster } from "@/lib/queries";
 import { formatDay, shiftDays } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
@@ -44,8 +43,30 @@ type RosterRow = {
 	worker: string;
 	position: string;
 	window: string;
+	startsAt: string;
 	mine: boolean;
 };
+
+const SORTS: ListSort<RosterRow>[] = [
+	{
+		id: "worker",
+		label: "Worker",
+		compare: (a, b) => a.worker.localeCompare(b.worker),
+	},
+	{
+		id: "position",
+		label: "Position",
+		compare: (a, b) => a.position.localeCompare(b.position),
+	},
+	{
+		id: "window",
+		label: "Start time",
+		compare: (a, b) => a.startsAt.localeCompare(b.startsAt),
+	},
+];
+
+const searchRoster = (row: RosterRow) => [row.worker, row.position];
+const rowId = (row: RosterRow) => row.id;
 
 const columnHelper = createDataColumnHelper<RosterRow>();
 
@@ -78,8 +99,6 @@ function RosterPage() {
 	const { formatClockTime } = useDisplayPrefs();
 	const today = todayKey();
 	const [date, setDate] = useState(today);
-	const [search, setSearch] = useState("");
-	const [positionFilter, setPositionFilter] = useState("all");
 	const schedule = useDayRoster(workplace?.id, date);
 
 	const rows = useMemo(
@@ -89,32 +108,37 @@ function RosterPage() {
 				worker: shift.workerName,
 				position: shift.positionName,
 				window: `${formatClockTime(shift.startsAt)}–${formatClockTime(shift.endsAt)}`,
+				startsAt: shift.startsAt,
 				mine: shift.mine,
 			})),
 		[formatClockTime, schedule.data],
 	);
 
-	const positionItems = useMemo(() => {
+	const filters = useMemo<ListFilter<RosterRow>[]>(() => {
 		const names = Array.from(new Set(rows.map((row) => row.position))).sort();
-		return [
-			{ label: "All positions", value: "all" },
-			...names.map((name) => ({ label: name || "Unassigned", value: name })),
-		];
+		return names.length > 1
+			? [
+					{
+						id: "position",
+						label: "Position",
+						options: names.map((name) => ({
+							label: name || "Unassigned",
+							value: name,
+						})),
+						value: (row) => row.position,
+					},
+				]
+			: [];
 	}, [rows]);
 
-	const filteredRows = useMemo(() => {
-		const term = search.trim().toLowerCase();
-		return rows.filter((row) => {
-			if (positionFilter !== "all" && row.position !== positionFilter) {
-				return false;
-			}
-			if (!term) return true;
-			return `${row.worker} ${row.position}`.toLowerCase().includes(term);
-		});
-	}, [positionFilter, rows, search]);
-
-	const pagination = useTablePagination(filteredRows, {
-		resetKey: `${search}|${positionFilter}|${date}`,
+	const list = useListView<RosterRow>({
+		rows,
+		getRowId: rowId,
+		search: searchRoster,
+		filters,
+		sorts: SORTS,
+		defaultSort: { id: "window", direction: "asc" },
+		resetKey: date,
 	});
 
 	return (
@@ -142,59 +166,45 @@ function RosterPage() {
 				}
 			/>
 			<AppPageBody scroll={false}>
-				<TableToolbar
-					left={
-						<>
-							<div className="flex items-center gap-1">
-								<Button
-									type="button"
-									variant="outline"
-									size="icon-sm"
-									onClick={() => setDate((current) => shiftDays(current, -1))}
-									aria-label="Previous day"
-								>
-									<ChevronLeftIcon />
-								</Button>
-								<DatePicker
-									value={date}
-									onValueChange={setDate}
-									buttonClassName="h-7 w-[150px] text-xs"
-								/>
-								<Button
-									type="button"
-									variant="outline"
-									size="icon-sm"
-									onClick={() => setDate((current) => shiftDays(current, 1))}
-									aria-label="Next day"
-								>
-									<ChevronRightIcon />
-								</Button>
-								<Button
-									type="button"
-									variant="ghost"
-									size="sm"
-									disabled={date === today}
-									onClick={() => setDate(today)}
-								>
-									Today
-								</Button>
-							</div>
-							<TableSearch
-								value={search}
-								onValueChange={setSearch}
-								placeholder="Search worker or position"
+				<ListToolbar
+					list={list}
+					searchPlaceholder="Search worker or position"
+					leading={
+						<div className="flex items-center gap-1">
+							<Button
+								type="button"
+								variant="outline"
+								size="icon-sm"
+								onClick={() => setDate((current) => shiftDays(current, -1))}
+								aria-label="Previous day"
+							>
+								<ChevronLeftIcon />
+							</Button>
+							<DatePicker
+								value={date}
+								onValueChange={setDate}
+								buttonClassName="h-7 w-[150px] text-xs"
 							/>
-							{positionItems.length > 1 ? (
-								<TableFilter
-									value={positionFilter}
-									onValueChange={setPositionFilter}
-									items={positionItems}
-									ariaLabel="Filter by position"
-								/>
-							) : null}
-						</>
+							<Button
+								type="button"
+								variant="outline"
+								size="icon-sm"
+								onClick={() => setDate((current) => shiftDays(current, 1))}
+								aria-label="Next day"
+							>
+								<ChevronRightIcon />
+							</Button>
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								disabled={date === today}
+								onClick={() => setDate(today)}
+							>
+								Today
+							</Button>
+						</div>
 					}
-					right={<TablePagination {...pagination} />}
 				/>
 				<div className="min-h-0 flex-1 overflow-auto">
 					<DataTable
@@ -202,8 +212,9 @@ function RosterPage() {
 						stacked
 						query={schedule}
 						columns={columns}
-						data={pagination.pageRows}
-						getRowId={(row) => row.id}
+						list={list}
+						data={list.pagination.pageRows}
+						getRowId={rowId}
 						empty={
 							<div className="p-4">
 								<Empty className="border border-dashed">

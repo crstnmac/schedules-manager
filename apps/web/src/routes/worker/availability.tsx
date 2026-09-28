@@ -68,12 +68,11 @@ import {
 	leaveChargeMinutes,
 } from "@/components/leave-window-fields";
 import {
-	TableFilter,
-	TablePagination,
-	TableSearch,
-	TableToolbar,
-	useTablePagination,
-} from "@/components/table-toolbar";
+	type ListFilter,
+	type ListSort,
+	ListToolbar,
+	useListView,
+} from "@/components/list-view";
 import { TimePicker } from "@/components/time-picker";
 import { UnsavedChangesGuard } from "@/components/unsaved-changes";
 import { api } from "@/lib/api";
@@ -153,6 +152,78 @@ type LeaveWindowRow = {
 const unavailabilityHelper = createDataColumnHelper<UnavailabilityRow>();
 const timeOffHelper =
 	createDataColumnHelper<WorkerConstraints["timeOff"][number]>();
+
+type TimeOffRow = WorkerConstraints["timeOff"][number];
+
+const TIME_OFF_FILTERS: ListFilter<TimeOffRow>[] = [
+	{
+		id: "status",
+		label: "Status",
+		options: [
+			{ label: "Pending", value: "pending" },
+			{ label: "Approved", value: "approved" },
+			{ label: "Declined", value: "declined" },
+			{ label: "Cancelled", value: "cancelled" },
+		],
+		value: (row) => row.status,
+	},
+];
+
+const TIME_OFF_SORTS: ListSort<TimeOffRow>[] = [
+	{
+		id: "when",
+		label: "Date",
+		compare: (a, b) => a.startsAt.localeCompare(b.startsAt),
+	},
+	{
+		id: "status",
+		label: "Status",
+		compare: (a, b) => a.status.localeCompare(b.status),
+	},
+];
+
+const UNAVAILABILITY_FILTERS: ListFilter<UnavailabilityRow>[] = [
+	{
+		id: "kind",
+		label: "Type",
+		options: [
+			{ label: "Weekly", value: "weekly" },
+			{ label: "Date", value: "date" },
+		],
+		value: (row) => row.kind,
+	},
+	{
+		id: "status",
+		label: "Status",
+		options: [
+			{ label: "Pending", value: "pending" },
+			{ label: "Approved", value: "approved" },
+		],
+		value: (row) => row.status,
+	},
+];
+
+const UNAVAILABILITY_SORTS: ListSort<UnavailabilityRow>[] = [
+	{
+		id: "kind",
+		label: "Type",
+		compare: (a, b) => a.kind.localeCompare(b.kind),
+	},
+	{
+		id: "status",
+		label: "Status",
+		compare: (a, b) => a.status.localeCompare(b.status),
+	},
+];
+
+const searchUnavailability = (row: UnavailabilityRow) => [
+	row.kind,
+	row.window,
+	row.status,
+	row.note,
+];
+const timeOffId = (row: TimeOffRow) => row.id;
+const unavailabilityId = (row: UnavailabilityRow) => `${row.kind}-${row.id}`;
 
 function windowId() {
 	return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -290,9 +361,6 @@ function AvailabilityPage() {
 	const [recurringStart, setRecurringStart] = useState(8 * 60);
 	const [recurringEnd, setRecurringEnd] = useState(14 * 60);
 	const [recurringNote, setRecurringNote] = useState("");
-	const [timeOffSearch, setTimeOffSearch] = useState("");
-	const [timeOffStatus, setTimeOffStatus] = useState("all");
-	const [unavailabilitySearch, setUnavailabilitySearch] = useState("");
 	const [date, setDate] = useState("");
 	const [dateStart, setDateStart] = useState(8 * 60);
 	const [dateEnd, setDateEnd] = useState(14 * 60);
@@ -957,42 +1025,28 @@ function AvailabilityPage() {
 	});
 
 	const timeOffRows = constraints.data?.timeOff ?? [];
-	const filteredTimeOff = useMemo(() => {
-		const term = timeOffSearch.trim().toLowerCase();
-		return timeOffRows.filter((row) => {
-			if (timeOffStatus !== "all" && row.status !== timeOffStatus) return false;
-			if (!term) return true;
-			const type = leaveTypes.data?.leaveTypes.find(
-				(entry) => entry.id === row.leaveTypeId,
-			)?.name;
-			return `${formatLeaveRange(row)} ${type ?? ""} ${row.reason ?? ""} ${
-				row.decisionReason ?? ""
-			}`
-				.toLowerCase()
-				.includes(term);
-		});
-	}, [
-		timeOffRows,
-		timeOffSearch,
-		timeOffStatus,
-		formatLeaveRange,
-		leaveTypes.data,
-	]);
-	const timeOffPagination = useTablePagination(filteredTimeOff, {
-		resetKey: `${timeOffSearch}|${timeOffStatus}`,
+	const leaveTypeName = (row: TimeOffRow) =>
+		leaveTypes.data?.leaveTypes.find((entry) => entry.id === row.leaveTypeId)
+			?.name;
+	const timeOffList = useListView<TimeOffRow>({
+		rows: timeOffRows,
+		getRowId: timeOffId,
+		search: (row) => [
+			formatLeaveRange(row),
+			leaveTypeName(row),
+			row.reason,
+			row.decisionReason,
+		],
+		filters: TIME_OFF_FILTERS,
+		sorts: TIME_OFF_SORTS,
+		defaultSort: { id: "when", direction: "desc" },
 	});
-
-	const filteredUnavailability = useMemo(() => {
-		const term = unavailabilitySearch.trim().toLowerCase();
-		if (!term) return unavailabilityRows;
-		return unavailabilityRows.filter((row) =>
-			`${row.kind} ${row.window} ${row.status} ${row.note ?? ""}`
-				.toLowerCase()
-				.includes(term),
-		);
-	}, [unavailabilityRows, unavailabilitySearch]);
-	const unavailabilityPagination = useTablePagination(filteredUnavailability, {
-		resetKey: unavailabilitySearch,
+	const unavailabilityList = useListView<UnavailabilityRow>({
+		rows: unavailabilityRows,
+		getRowId: unavailabilityId,
+		search: searchUnavailability,
+		filters: UNAVAILABILITY_FILTERS,
+		sorts: UNAVAILABILITY_SORTS,
 	});
 
 	return (
@@ -1093,37 +1147,19 @@ function AvailabilityPage() {
 												) : null}
 											</div>
 										) : null}
-										<TableToolbar
+										<ListToolbar
 											embedded
-											left={
-												<>
-													<TableSearch
-														value={timeOffSearch}
-														onValueChange={setTimeOffSearch}
-														placeholder="Search requests"
-													/>
-													<TableFilter
-														value={timeOffStatus}
-														onValueChange={setTimeOffStatus}
-														ariaLabel="Filter by status"
-														items={[
-															{ label: "All statuses", value: "all" },
-															{ label: "Pending", value: "pending" },
-															{ label: "Approved", value: "approved" },
-															{ label: "Declined", value: "declined" },
-														]}
-													/>
-												</>
-											}
-											right={<TablePagination {...timeOffPagination} />}
+											list={timeOffList}
+											searchPlaceholder="Search requests"
 										/>
 										<DataTable
 											stacked
 											bounded
 											fill={false}
 											columns={timeOffColumns}
-											data={timeOffPagination.pageRows}
-											getRowId={(row) => row.id}
+											list={timeOffList}
+											data={timeOffList.pagination.pageRows}
+											getRowId={timeOffId}
 											empty={
 												<p className="text-muted-foreground text-sm">
 													{timeOffRows.length === 0
@@ -1342,24 +1378,19 @@ function AvailabilityPage() {
 										</CardDescription>
 									</CardHeader>
 									<CardContent className="flex flex-col gap-4">
-										<TableToolbar
+										<ListToolbar
 											embedded
-											left={
-												<TableSearch
-													value={unavailabilitySearch}
-													onValueChange={setUnavailabilitySearch}
-													placeholder="Search windows"
-												/>
-											}
-											right={<TablePagination {...unavailabilityPagination} />}
+											list={unavailabilityList}
+											searchPlaceholder="Search windows"
 										/>
 										<DataTable
 											stacked
 											bounded
 											fill={false}
 											columns={unavailabilityColumns}
-											data={unavailabilityPagination.pageRows}
-											getRowId={(row) => `${row.kind}-${row.id}`}
+											list={unavailabilityList}
+											data={unavailabilityList.pagination.pageRows}
+											getRowId={unavailabilityId}
 											empty={
 												<p className="text-muted-foreground text-sm">
 													{unavailabilityRows.length === 0

@@ -17,6 +17,7 @@ import {
 	TabsList,
 	TabsTrigger,
 } from "@SchedulesManager/ui/components/tabs";
+import { useMutation } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { BellIcon, DownloadIcon, ScrollTextIcon } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -25,13 +26,19 @@ import { toast } from "sonner";
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { DatePicker } from "@/components/date-picker";
+import { ListToolbar, useListView } from "@/components/list-view";
 import {
 	TableFilter,
 	TablePagination,
-	TableSearch,
 	TableToolbar,
-	useTablePagination,
 } from "@/components/table-toolbar";
+import {
+	INBOX_FILTERS,
+	INBOX_SORTS,
+	isUnread,
+	notificationId,
+	searchNotification,
+} from "@/lib/inbox-list";
 import {
 	type AuditEventDto,
 	type InboxNotification,
@@ -48,12 +55,6 @@ export const Route = createFileRoute("/dashboard/activity")({
 
 const inboxHelper = createDataColumnHelper<InboxNotification>();
 const auditHelper = createDataColumnHelper<AuditEventDto>();
-
-const READ_FILTERS = [
-	{ label: "All notifications", value: "all" },
-	{ label: "Unread", value: "unread" },
-	{ label: "Read", value: "read" },
-];
 
 const AUDIT_ACTIONS = [
 	{ label: "All actions", value: "all" },
@@ -99,8 +100,6 @@ function ActivityPage() {
 	const unreadCount = inbox.data?.unreadCount ?? 0;
 
 	const [tab, setTab] = useState<"inbox" | "audit">("inbox");
-	const [inboxSearch, setInboxSearch] = useState("");
-	const [readFilter, setReadFilter] = useState("all");
 	const [auditFrom, setAuditFrom] = useState("");
 	const [auditTo, setAuditTo] = useState("");
 	const [auditAction, setAuditAction] = useState("all");
@@ -214,21 +213,31 @@ function ActivityPage() {
 		[markRead],
 	);
 
-	const inboxRows = useMemo(() => {
-		const term = inboxSearch.trim().toLowerCase();
-		return items.filter((item) => {
-			if (readFilter === "unread" && item.readAt) return false;
-			if (readFilter === "read" && !item.readAt) return false;
-			if (!term) return true;
-			return `${item.title} ${item.body}`.toLowerCase().includes(term);
-		});
-	}, [items, inboxSearch, readFilter]);
+	const inboxList = useListView<InboxNotification>({
+		rows: items,
+		getRowId: notificationId,
+		search: searchNotification,
+		filters: INBOX_FILTERS,
+		sorts: INBOX_SORTS,
+		defaultSort: { id: "createdAt", direction: "desc" },
+		selectable: isUnread,
+	});
+	const markSelectedRead = useMutation({
+		mutationFn: async (ids: string[]) => {
+			for (const id of ids) await markRead.mutateAsync(id);
+			return ids.length;
+		},
+		onSuccess: (count) => {
+			inboxList.selection?.clear();
+			toast.success(
+				`Marked ${count} ${count === 1 ? "notification" : "notifications"} read.`,
+			);
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
 
 	const auditRows = events;
 
-	const inboxPagination = useTablePagination(inboxRows, {
-		resetKey: `${inboxSearch}|${readFilter}`,
-	});
 	const auditPagination = {
 		page: Math.min(auditPage, auditPageCount),
 		pageCount: auditPageCount,
@@ -296,23 +305,24 @@ function ActivityPage() {
 					</div>
 
 					<TabsContent value="inbox" className="flex min-h-0 flex-1 flex-col">
-						<TableToolbar
-							left={
-								<>
-									<TableSearch
-										value={inboxSearch}
-										onValueChange={setInboxSearch}
-										placeholder="Search notifications"
-									/>
-									<TableFilter
-										value={readFilter}
-										onValueChange={setReadFilter}
-										items={READ_FILTERS}
-										ariaLabel="Filter by read state"
-									/>
-								</>
-							}
-							right={<TablePagination {...inboxPagination} />}
+						<ListToolbar
+							list={inboxList}
+							searchPlaceholder="Search notifications"
+							noun={{ one: "notification", many: "notifications" }}
+							bulkActions={(selected) => (
+								<Button
+									size="sm"
+									disabled={markSelectedRead.isPending}
+									onClick={() =>
+										markSelectedRead.mutate(selected.map((item) => item.id))
+									}
+								>
+									{markSelectedRead.isPending ? (
+										<Spinner data-icon="inline-start" />
+									) : null}
+									Mark read
+								</Button>
+							)}
 						/>
 						<div className="min-h-0 flex-1 overflow-auto">
 							{inbox.isLoading ? (
@@ -326,8 +336,9 @@ function ActivityPage() {
 									stacked
 									query={inbox}
 									columns={inboxColumns}
-									data={inboxPagination.pageRows}
-									getRowId={(row) => row.id}
+									list={inboxList}
+									data={inboxList.pagination.pageRows}
+									getRowId={notificationId}
 									empty={
 										<div className="p-4">
 											<Empty className="border border-dashed">

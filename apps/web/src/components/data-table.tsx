@@ -1,4 +1,5 @@
 import { Button } from "@SchedulesManager/ui/components/button";
+import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
 import {
 	Table,
 	TableBody,
@@ -20,7 +21,9 @@ import {
 	useTable,
 } from "@tanstack/react-table";
 import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
+
+import type { ListView } from "@/components/list-view";
 
 import {
 	QueryFeedback,
@@ -54,6 +57,7 @@ export function DataTable<TData extends RowData>({
 	query,
 	stacked = false,
 	stickyHeader = false,
+	list,
 }: {
 	columns: Array<ColumnDef<typeof features, TData, unknown>>;
 	data: TData[];
@@ -73,10 +77,55 @@ export function DataTable<TData extends RowData>({
 	 * the surrounding card header and toolbar stay visible while rows scroll.
 	 */
 	stickyHeader?: boolean;
+	/**
+	 * Connects the table to a list view: adds the selection checkbox column
+	 * when the list is selectable, and sorts by the list's sort orders (across
+	 * every page) when a column id matches one.
+	 */
+	list?: ListView<TData>;
 }) {
+	const selection = list?.selection ?? null;
+	const tableColumns = useMemo(() => {
+		if (!selection) return columns;
+		const helper = createColumnHelper<typeof features, TData>();
+		const selectable = data.filter((row) => selection.canSelect(row));
+		const selectedOnPage = selectable.filter((row) =>
+			selection.isSelected(row),
+		);
+		const select = helper.display({
+			id: "select",
+			enableSorting: false,
+			header: () =>
+				selectable.length > 0 ? (
+					<Checkbox
+						aria-label="Select all on this page"
+						checked={selectedOnPage.length === selectable.length}
+						indeterminate={
+							selectedOnPage.length > 0 &&
+							selectedOnPage.length < selectable.length
+						}
+						onCheckedChange={(checked) =>
+							selection.setSelected(selectable, checked === true)
+						}
+					/>
+				) : null,
+			cell: ({ row }) =>
+				selection.canSelect(row.original) ? (
+					<Checkbox
+						aria-label="Select row"
+						checked={selection.isSelected(row.original)}
+						onCheckedChange={(checked) =>
+							selection.setSelected([row.original], checked === true)
+						}
+					/>
+				) : null,
+		});
+		return [select, ...columns] as typeof columns;
+	}, [columns, data, selection]);
+	const listSorts = list && list.sorts.length > 0 ? list : null;
 	const dataTable = useTable({
 		features,
-		columns,
+		columns: tableColumns,
 		data,
 		getRowId,
 	});
@@ -97,15 +146,33 @@ export function DataTable<TData extends RowData>({
 			{dataTable.getRowModel().rows.map((row) => {
 				const detailCells = row
 					.getAllCells()
-					.filter((cell) => cell.column.id !== "actions");
+					.filter(
+						(cell) =>
+							cell.column.id !== "actions" && cell.column.id !== "select",
+					);
+				const selectCell = row
+					.getAllCells()
+					.find((cell) => cell.column.id === "select");
 				const actionCells = row
 					.getAllCells()
 					.filter((cell) => cell.column.id === "actions");
 				return (
 					<li
 						key={row.id}
-						className="flex flex-col gap-3 rounded-xl border bg-card p-3"
+						className={cn(
+							"flex flex-col gap-3 rounded-xl border bg-card p-3",
+							selection?.isSelected(row.original) &&
+								"border-primary/50 bg-muted",
+						)}
 					>
+						{selectCell && selection?.canSelect(row.original) ? (
+							<div className="flex">
+								{flexRender(
+									selectCell.column.columnDef.cell,
+									selectCell.getContext(),
+								)}
+							</div>
+						) : null}
 						<div className="grid gap-1.5">
 							{detailCells.map((cell) => {
 								const header = cell.column.columnDef.header;
@@ -163,8 +230,16 @@ export function DataTable<TData extends RowData>({
 							className="[@media(hover:hover)]:hover:bg-transparent"
 						>
 							{headerGroup.headers.map((header) => {
-								const canSort = header.column.getCanSort();
-								const sorted = header.column.getIsSorted();
+								const listSort = listSorts?.sorts.some(
+									(sort) => sort.id === header.column.id,
+								);
+								const canSort = listSorts
+									? Boolean(listSort)
+									: header.column.getCanSort();
+								const sorted = listSorts
+									? listSorts.sort?.id === header.column.id &&
+										listSorts.sort.direction
+									: header.column.getIsSorted();
 								return (
 									<TableHead
 										key={header.id}
@@ -184,7 +259,11 @@ export function DataTable<TData extends RowData>({
 												variant="ghost"
 												size="sm"
 												className="-ml-2 h-auto px-2 font-medium text-muted-foreground [@media(hover:hover)]:hover:text-foreground"
-												onClick={header.column.getToggleSortingHandler()}
+												onClick={
+													listSorts
+														? () => listSorts.toggleSort(header.column.id)
+														: header.column.getToggleSortingHandler()
+												}
 											>
 												{flexRender(
 													header.column.columnDef.header,
@@ -215,7 +294,12 @@ export function DataTable<TData extends RowData>({
 				</TableHeader>
 				<TableBody>
 					{dataTable.getRowModel().rows.map((row) => (
-						<TableRow key={row.id}>
+						<TableRow
+							key={row.id}
+							data-state={
+								selection?.isSelected(row.original) ? "selected" : undefined
+							}
+						>
 							{row.getAllCells().map((cell) => (
 								<TableCell key={cell.id}>
 									{flexRender(cell.column.columnDef.cell, cell.getContext())}

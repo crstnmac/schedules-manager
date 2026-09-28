@@ -14,18 +14,17 @@ import { Textarea } from "@SchedulesManager/ui/components/textarea";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { MegaphoneIcon, PlusIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { FormSheet } from "@/components/form-sheet";
 import {
-	TablePagination,
-	TableSearch,
-	TableToolbar,
-	useTablePagination,
-} from "@/components/table-toolbar";
+	type ListSort,
+	ListToolbar,
+	useListView,
+} from "@/components/list-view";
 import { api } from "@/lib/api";
 import { useAnnouncements } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
@@ -43,6 +42,31 @@ type AnnouncementRow = {
 };
 
 const columnHelper = createDataColumnHelper<AnnouncementRow>();
+
+const SORTS: ListSort<AnnouncementRow>[] = [
+	{
+		id: "createdAt",
+		label: "Posted",
+		compare: (a, b) => a.createdAt.localeCompare(b.createdAt),
+	},
+	{
+		id: "title",
+		label: "Title",
+		compare: (a, b) => a.title.localeCompare(b.title),
+	},
+	{
+		id: "author",
+		label: "Author",
+		compare: (a, b) => a.author.localeCompare(b.author),
+	},
+];
+
+const searchAnnouncement = (row: AnnouncementRow) => [
+	row.title,
+	row.body,
+	row.author,
+];
+const rowId = (row: AnnouncementRow) => row.id;
 
 const columns = columnHelper.columns([
 	columnHelper.accessor("title", {
@@ -69,9 +93,8 @@ const columns = columnHelper.columns([
 
 function AnnouncementsPage() {
 	const { workplace } = useWorkplace();
-	const list = useAnnouncements(workplace?.id);
+	const announcements = useAnnouncements(workplace?.id);
 	const [open, setOpen] = useState(false);
-	const [search, setSearch] = useState("");
 	const [title, setTitle] = useState("");
 	const [body, setBody] = useState("");
 	const queryClient = useQueryClient();
@@ -91,15 +114,14 @@ function AnnouncementsPage() {
 		onError: (error) => toast.error((error as Error).message),
 	});
 
-	const rows = list.data?.announcements ?? [];
-	const filteredRows = useMemo(() => {
-		const term = search.trim().toLowerCase();
-		if (!term) return rows;
-		return rows.filter((row) =>
-			`${row.title} ${row.body} ${row.author}`.toLowerCase().includes(term),
-		);
-	}, [rows, search]);
-	const pagination = useTablePagination(filteredRows, { resetKey: search });
+	const rows = announcements.data?.announcements ?? [];
+	const list = useListView<AnnouncementRow>({
+		rows,
+		getRowId: rowId,
+		search: searchAnnouncement,
+		sorts: SORTS,
+		defaultSort: { id: "createdAt", direction: "desc" },
+	});
 
 	return (
 		<AppPage>
@@ -115,24 +137,16 @@ function AnnouncementsPage() {
 				}
 			/>
 			<AppPageBody scroll={false}>
-				<TableToolbar
-					left={
-						<TableSearch
-							value={search}
-							onValueChange={setSearch}
-							placeholder="Search announcements"
-						/>
-					}
-					right={<TablePagination {...pagination} />}
-				/>
+				<ListToolbar list={list} searchPlaceholder="Search announcements" />
 				<div className="min-h-0 flex-1 overflow-auto">
 					<DataTable
 						fill={false}
 						stacked
-						query={list}
+						query={announcements}
 						columns={columns}
-						data={pagination.pageRows}
-						getRowId={(row) => row.id}
+						list={list}
+						data={list.pagination.pageRows}
+						getRowId={rowId}
 						empty={
 							<div className="p-4">
 								<Empty className="border border-dashed">

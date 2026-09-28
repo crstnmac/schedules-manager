@@ -59,14 +59,13 @@ import { toast } from "sonner";
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
-import { NextShiftBar } from "@/components/next-shift-bar";
 import {
-	TableFilter,
-	TablePagination,
-	TableSearch,
-	TableToolbar,
-	useTablePagination,
-} from "@/components/table-toolbar";
+	type ListFilter,
+	type ListSort,
+	ListToolbar,
+	useListView,
+} from "@/components/list-view";
+import { NextShiftBar } from "@/components/next-shift-bar";
 import { WorkerScheduleCalendar } from "@/components/worker-schedule-calendar";
 import { api } from "@/lib/api";
 import {
@@ -119,31 +118,43 @@ function isPlanned(shift: WorkerShift | PlannedAwareShift): boolean {
 }
 
 /** Day-filter options (All days + each date present in the week). */
-function dayFilterItems(shifts: { date: string }[]) {
+function dayFilter(shifts: WorkerShift[]): ListFilter<WorkerShift>[] {
 	const dates = Array.from(new Set(shifts.map((shift) => shift.date))).sort();
-	return [
-		{ label: "All days", value: "all" },
-		...dates.map((date) => ({ label: formatDay(date), value: date })),
-	];
+	return dates.length > 1
+		? [
+				{
+					id: "date",
+					label: "Day",
+					options: dates.map((date) => ({
+						label: formatDay(date),
+						value: date,
+					})),
+					value: (shift) => shift.date,
+				},
+			]
+		: [];
 }
 
-function filterShiftsByDayAndTerm<
-	T extends {
-		date: string;
-		workerName?: string | null;
-		positionName: string;
-		note?: string | null;
+const WEEK_SORTS: ListSort<WorkerShift>[] = [
+	{
+		id: "date",
+		label: "Date",
+		compare: (a, b) =>
+			a.date.localeCompare(b.date) || a.startMinute - b.startMinute,
 	},
->(shifts: T[], day: string, search: string) {
-	const term = search.trim().toLowerCase();
-	return shifts.filter((shift) => {
-		if (day !== "all" && shift.date !== day) return false;
-		if (!term) return true;
-		return `${shift.workerName ?? ""} ${shift.positionName} ${shift.note ?? ""}`
-			.toLowerCase()
-			.includes(term);
-	});
-}
+	{
+		id: "position",
+		label: "Position",
+		compare: (a, b) => a.positionName.localeCompare(b.positionName),
+	},
+];
+
+const searchWeekShift = (shift: WorkerShift) => [
+	shift.workerName,
+	shift.positionName,
+	shift.note,
+];
+const shiftRowId = (shift: WorkerShift) => shift.id;
 type AcceptanceRow = NonNullable<
 	NonNullable<ReturnType<typeof useMySchedule>["data"]>["pendingAcceptances"]
 >[number];
@@ -157,6 +168,37 @@ const acceptanceHelper = createDataColumnHelper<AcceptanceRow>();
 const shiftHelper = createDataColumnHelper<WorkerShift>();
 const historyHelper = createDataColumnHelper<HistoryRow>();
 const swapHelper = createDataColumnHelper<SwapRow>();
+
+const searchHistory = (row: HistoryRow) => [
+	formatDay(row.weekStart),
+	`v${row.versionNumber}`,
+];
+const HISTORY_SORTS: ListSort<HistoryRow>[] = [
+	{
+		id: "week",
+		label: "Week",
+		compare: (a, b) => a.weekStart.localeCompare(b.weekStart),
+	},
+	{
+		id: "publishedAt",
+		label: "Published",
+		compare: (a, b) => a.publishedAt.localeCompare(b.publishedAt),
+	},
+];
+const historyRowId = (row: HistoryRow) => row.versionId;
+const acceptanceRowId = (row: AcceptanceRow) => row.id;
+const swapRowId = (row: SwapRow) => row.swap.id;
+const SWAP_FILTERS: ListFilter<SwapRow>[] = [
+	{
+		id: "status",
+		label: "Status",
+		options: [
+			{ label: "Waiting on coworker", value: "pending_counterpart" },
+			{ label: "Waiting on manager", value: "pending_manager" },
+		],
+		value: (row) => row.swap.status,
+	},
+];
 const taskHelper = createDataColumnHelper<ShiftTask>();
 const coworkerHelper = createDataColumnHelper<DayRosterEntry>();
 
@@ -293,11 +335,6 @@ function WorkerHome() {
 	const release = useRequestRelease();
 	const [swapShift, setSwapShift] = useState<WorkerShift | null>(null);
 	const [view, setView] = useState<"week" | "calendar">("week");
-	const [weekSearch, setWeekSearch] = useState("");
-	const [weekDay, setWeekDay] = useState("all");
-	const [nextWeekSearch, setNextWeekSearch] = useState("");
-	const [nextWeekDay, setNextWeekDay] = useState("all");
-	const [historySearch, setHistorySearch] = useState("");
 	const [section, setSection] = useState<ScheduleSectionId>("this-week");
 	const nowMs = Date.now();
 
@@ -343,48 +380,36 @@ function WorkerHome() {
 			return sum + end - shift.startMinute;
 		}, 0) / 60;
 
-	const currentWeekFiltered = useMemo(
-		() =>
-			filterShiftsByDayAndTerm(currentWeek?.shifts ?? [], weekDay, weekSearch),
-		[currentWeek, weekDay, weekSearch],
-	);
-	const currentWeekDayItems = useMemo(
-		() => dayFilterItems(currentWeek?.shifts ?? []),
-		[currentWeek],
-	);
-	const currentWeekPagination = useTablePagination(currentWeekFiltered, {
-		resetKey: `${currentWeek?.weekStart ?? ""}|${weekDay}|${weekSearch}`,
+	const currentWeekShifts = currentWeek?.shifts ?? [];
+	const currentWeekList = useListView<WorkerShift>({
+		rows: currentWeekShifts,
+		getRowId: shiftRowId,
+		search: searchWeekShift,
+		filters: dayFilter(currentWeekShifts),
+		sorts: WEEK_SORTS,
+		defaultSort: { id: "date", direction: "asc" },
+		resetKey: currentWeek?.weekStart,
 	});
-	const nextWeekFiltered = useMemo(
-		() =>
-			filterShiftsByDayAndTerm(
-				nextWeek?.shifts ?? [],
-				nextWeekDay,
-				nextWeekSearch,
-			),
-		[nextWeek, nextWeekDay, nextWeekSearch],
-	);
-	const nextWeekDayItems = useMemo(
-		() => dayFilterItems(nextWeek?.shifts ?? []),
-		[nextWeek],
-	);
-	const nextWeekPagination = useTablePagination(nextWeekFiltered, {
-		resetKey: `${nextWeek?.weekStart ?? ""}|${nextWeekDay}|${nextWeekSearch}`,
+	const nextWeekShifts = nextWeek?.shifts ?? [];
+	const nextWeekList = useListView<WorkerShift>({
+		rows: nextWeekShifts,
+		getRowId: shiftRowId,
+		search: searchWeekShift,
+		filters: dayFilter(nextWeekShifts),
+		sorts: WEEK_SORTS,
+		defaultSort: { id: "date", direction: "asc" },
+		resetKey: nextWeek?.weekStart,
 	});
-	const historyFiltered = useMemo(() => {
-		const term = historySearch.trim().toLowerCase();
-		if (!term) return history;
-		return history.filter((row) =>
-			`${formatDay(row.weekStart)} v${row.versionNumber} ${row.publishedAt}`
-				.toLowerCase()
-				.includes(term),
-		);
-	}, [history, historySearch]);
-	const historyPagination = useTablePagination(historyFiltered, {
-		resetKey: historySearch,
+	const historyList = useListView<HistoryRow>({
+		rows: history,
+		getRowId: historyRowId,
+		search: searchHistory,
+		sorts: HISTORY_SORTS,
+		defaultSort: { id: "week", direction: "desc" },
 	});
-	const acceptancePagination = useTablePagination(pendingAcceptances, {
-		resetKey: pendingAcceptances.length,
+	const acceptanceList = useListView<AcceptanceRow>({
+		rows: pendingAcceptances,
+		getRowId: acceptanceRowId,
 	});
 
 	const activeSwaps = (mySwaps.data?.swaps ?? []).filter(
@@ -913,34 +938,18 @@ function WorkerHome() {
 												</div>
 											</CardHeader>
 											<CardContent className="flex min-h-0 flex-1 flex-col">
-												<TableToolbar
+												<ListToolbar
 													embedded
-													className="shrink-0"
-													left={
-														<>
-															<TableSearch
-																value={weekSearch}
-																onValueChange={setWeekSearch}
-																placeholder="Search shifts"
-															/>
-															{currentWeekDayItems.length > 1 ? (
-																<TableFilter
-																	value={weekDay}
-																	onValueChange={setWeekDay}
-																	items={currentWeekDayItems}
-																	ariaLabel="Filter by day"
-																/>
-															) : null}
-														</>
-													}
-													right={<TablePagination {...currentWeekPagination} />}
+													list={currentWeekList}
+													searchPlaceholder="Search shifts"
 												/>
 												<DataTable
 													stacked
 													stickyHeader
 													columns={weekShiftColumns}
-													data={currentWeekPagination.pageRows}
-													getRowId={(row) => row.id}
+													list={currentWeekList}
+													data={currentWeekList.pagination.pageRows}
+													getRowId={shiftRowId}
 													className="[&_tbody_tr:last-child]:border-b-0"
 													empty={
 														<p className="py-6 text-center text-muted-foreground text-sm">
@@ -994,34 +1003,18 @@ function WorkerHome() {
 											</CardDescription>
 										</CardHeader>
 										<CardContent className="flex min-h-0 flex-1 flex-col">
-											<TableToolbar
+											<ListToolbar
 												embedded
-												className="shrink-0"
-												left={
-													<>
-														<TableSearch
-															value={nextWeekSearch}
-															onValueChange={setNextWeekSearch}
-															placeholder="Search shifts"
-														/>
-														{nextWeekDayItems.length > 1 ? (
-															<TableFilter
-																value={nextWeekDay}
-																onValueChange={setNextWeekDay}
-																items={nextWeekDayItems}
-																ariaLabel="Filter by day"
-															/>
-														) : null}
-													</>
-												}
-												right={<TablePagination {...nextWeekPagination} />}
+												list={nextWeekList}
+												searchPlaceholder="Search shifts"
 											/>
 											<DataTable
 												stacked
 												stickyHeader
 												columns={nextWeekColumns}
-												data={nextWeekPagination.pageRows}
-												getRowId={(row) => row.id}
+												list={nextWeekList}
+												data={nextWeekList.pagination.pageRows}
+												getRowId={shiftRowId}
 												empty={
 													<p className="py-6 text-center text-muted-foreground text-sm">
 														No shifts match your search or day filter.
@@ -1054,24 +1047,18 @@ function WorkerHome() {
 											</CardDescription>
 										</CardHeader>
 										<CardContent className="flex min-h-0 flex-1 flex-col">
-											<TableToolbar
+											<ListToolbar
 												embedded
-												className="shrink-0"
-												left={
-													<TableSearch
-														value={historySearch}
-														onValueChange={setHistorySearch}
-														placeholder="Search weeks"
-													/>
-												}
-												right={<TablePagination {...historyPagination} />}
+												list={historyList}
+												searchPlaceholder="Search weeks"
 											/>
 											<DataTable
 												stacked
 												stickyHeader
 												columns={historyColumns}
-												data={historyPagination.pageRows}
-												getRowId={(row) => row.versionId}
+												list={historyList}
+												data={historyList.pagination.pageRows}
+												getRowId={historyRowId}
 												empty={
 													<p className="py-6 text-center text-muted-foreground text-sm">
 														No published weeks match your search.
@@ -1114,18 +1101,14 @@ function WorkerHome() {
 													</CardDescription>
 												</CardHeader>
 												<CardContent className="flex flex-col">
-													<TableToolbar
-														embedded
-														right={
-															<TablePagination {...acceptancePagination} />
-														}
-													/>
+													<ListToolbar embedded list={acceptanceList} />
 													<DataTable
 														stacked
 														fill={false}
 														columns={acceptanceColumns}
-														data={acceptancePagination.pageRows}
-														getRowId={(row) => row.id}
+														list={acceptanceList}
+														data={acceptanceList.pagination.pageRows}
+														getRowId={acceptanceRowId}
 													/>
 												</CardContent>
 											</Card>
@@ -1385,7 +1368,6 @@ function WorkerSwapsCard({ workplaceId }: { workplaceId: string | undefined }) {
 	const swaps = useMySwaps(workplaceId);
 	const respond = useRespondToSwap();
 	const cancel = useCancelSwap();
-	const [search, setSearch] = useState("");
 	const items = useMemo(
 		() =>
 			(swaps.data?.swaps ?? []).filter(
@@ -1395,18 +1377,17 @@ function WorkerSwapsCard({ workplaceId }: { workplaceId: string | undefined }) {
 			),
 		[swaps.data],
 	);
-	const filtered = useMemo(() => {
-		const term = search.trim().toLowerCase();
-		if (!term) return items;
-		return items.filter((row) =>
-			`${row.swap.requester.name} ${row.swap.counterpart.name} ${
-				SWAP_STATUS_LABELS[row.swap.status]
-			} ${formatSwapExchange(row.direction, row.swap, formatClockTime)}`
-				.toLowerCase()
-				.includes(term),
-		);
-	}, [items, search, formatClockTime]);
-	const pagination = useTablePagination(filtered, { resetKey: search });
+	const list = useListView<SwapRow>({
+		rows: items,
+		getRowId: swapRowId,
+		search: (row) => [
+			row.swap.requester.name,
+			row.swap.counterpart.name,
+			SWAP_STATUS_LABELS[row.swap.status],
+			formatSwapExchange(row.direction, row.swap, formatClockTime),
+		],
+		filters: SWAP_FILTERS,
+	});
 
 	if (swaps.isLoading || items.length === 0) return null;
 
@@ -1521,23 +1502,14 @@ function WorkerSwapsCard({ workplaceId }: { workplaceId: string | undefined }) {
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="flex flex-col">
-				<TableToolbar
-					embedded
-					left={
-						<TableSearch
-							value={search}
-							onValueChange={setSearch}
-							placeholder="Search swaps"
-						/>
-					}
-					right={<TablePagination {...pagination} />}
-				/>
+				<ListToolbar embedded list={list} searchPlaceholder="Search swaps" />
 				<DataTable
 					stacked
 					fill={false}
 					columns={columns}
-					data={pagination.pageRows}
-					getRowId={(row) => row.swap.id}
+					list={list}
+					data={list.pagination.pageRows}
+					getRowId={swapRowId}
 					empty={
 						<p className="py-6 text-center text-muted-foreground text-sm">
 							No swaps match your search.

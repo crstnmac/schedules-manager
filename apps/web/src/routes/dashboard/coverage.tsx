@@ -22,14 +22,13 @@ import { toast } from "sonner";
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
-import { QueryFeedback } from "@/components/query-feedback";
 import {
-	TableFilter,
-	TablePagination,
-	TableSearch,
-	TableToolbar,
-	useTablePagination,
-} from "@/components/table-toolbar";
+	type ListFilter,
+	type ListSort,
+	ListToolbar,
+	useListView,
+} from "@/components/list-view";
+import { QueryFeedback } from "@/components/query-feedback";
 import { api } from "@/lib/api";
 import { hasCoverageItems } from "@/lib/coverage-logic";
 import {
@@ -69,12 +68,76 @@ export const Route = createFileRoute("/dashboard/coverage")({
 type ReleaseRow = CoverageResponse["releases"][number];
 type PickupRow = CoverageResponse["pickups"][number];
 
-const STATUS_FILTERS = [
-	{ label: "All statuses", value: "all" },
+const STATUS_OPTIONS = [
 	{ label: "Pending", value: "pending" },
 	{ label: "Approved", value: "approved" },
 	{ label: "Declined", value: "declined" },
 ];
+
+const RELEASE_FILTERS: ListFilter<ReleaseRow>[] = [
+	{
+		id: "status",
+		label: "Status",
+		options: STATUS_OPTIONS,
+		value: (row) => row.status,
+	},
+];
+const PICKUP_FILTERS: ListFilter<PickupRow>[] = [
+	{
+		id: "status",
+		label: "Status",
+		options: STATUS_OPTIONS,
+		value: (row) => row.status,
+	},
+];
+
+const RELEASE_SORTS: ListSort<ReleaseRow>[] = [
+	{
+		id: "shift",
+		label: "Shift",
+		compare: (a, b) => a.startsAt.localeCompare(b.startsAt),
+	},
+	{
+		id: "workerName",
+		label: "Worker",
+		compare: (a, b) => a.workerName.localeCompare(b.workerName),
+	},
+];
+const PICKUP_SORTS: ListSort<PickupRow>[] = [
+	{
+		id: "startsAt",
+		label: "Shift",
+		compare: (a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? ""),
+	},
+	{
+		id: "workerName",
+		label: "Worker",
+		compare: (a, b) => a.workerName.localeCompare(b.workerName),
+	},
+];
+const SWAP_SORTS: ListSort<SwapDetailDto>[] = [
+	{
+		id: "workers",
+		label: "Requester",
+		compare: (a, b) => a.requester.name.localeCompare(b.requester.name),
+	},
+	{
+		id: "exchange",
+		label: "Shift",
+		compare: (a, b) =>
+			a.requesterShift.startsAt.localeCompare(b.requesterShift.startsAt),
+	},
+];
+
+const searchCoverageRow = (row: ReleaseRow | PickupRow) => [
+	row.workerName,
+	row.positionName,
+];
+const searchSwap = (row: SwapDetailDto) => [
+	row.requester.name,
+	row.counterpart.name,
+];
+const rowId = (row: { id: string }) => row.id;
 
 function formatShiftWindow(startsAt: string, endsAt?: string | null) {
 	if (!endsAt || new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
@@ -156,11 +219,6 @@ function CoveragePage() {
 	const hasItems = hasCoverageItems(data, swaps);
 
 	const [tab, setTab] = useState<"releases" | "swaps" | "pickups">("releases");
-	const [releaseSearch, setReleaseSearch] = useState("");
-	const [releaseStatus, setReleaseStatus] = useState("all");
-	const [pickupSearch, setPickupSearch] = useState("");
-	const [pickupStatus, setPickupStatus] = useState("all");
-	const [swapSearch, setSwapSearch] = useState("");
 
 	const releases = data?.releases ?? [];
 	const pickups = data?.pickups ?? [];
@@ -411,45 +469,28 @@ function CoveragePage() {
 		[decideSwap],
 	);
 
-	const releaseRows = useMemo(() => {
-		const term = releaseSearch.trim().toLowerCase();
-		return releases.filter((row) => {
-			if (releaseStatus !== "all" && row.status !== releaseStatus) return false;
-			if (!term) return true;
-			return `${row.workerName} ${row.positionName}`
-				.toLowerCase()
-				.includes(term);
-		});
-	}, [releases, releaseSearch, releaseStatus]);
-
-	const pickupRows = useMemo(() => {
-		const term = pickupSearch.trim().toLowerCase();
-		return pickups.filter((row) => {
-			if (pickupStatus !== "all" && row.status !== pickupStatus) return false;
-			if (!term) return true;
-			return `${row.workerName} ${row.positionName}`
-				.toLowerCase()
-				.includes(term);
-		});
-	}, [pickups, pickupSearch, pickupStatus]);
-
-	const swapRows = useMemo(() => {
-		const term = swapSearch.trim().toLowerCase();
-		if (!term) return swapItems;
-		return swapItems.filter((row) =>
-			`${row.requester.name} ${row.counterpart.name}`
-				.toLowerCase()
-				.includes(term),
-		);
-	}, [swapItems, swapSearch]);
-
-	const releasePagination = useTablePagination(releaseRows, {
-		resetKey: `${releaseSearch}|${releaseStatus}`,
+	const releaseList = useListView<ReleaseRow>({
+		rows: releases,
+		getRowId: rowId,
+		search: searchCoverageRow,
+		filters: RELEASE_FILTERS,
+		sorts: RELEASE_SORTS,
+		defaultSort: { id: "shift", direction: "asc" },
 	});
-	const pickupPagination = useTablePagination(pickupRows, {
-		resetKey: `${pickupSearch}|${pickupStatus}`,
+	const pickupList = useListView<PickupRow>({
+		rows: pickups,
+		getRowId: rowId,
+		search: searchCoverageRow,
+		filters: PICKUP_FILTERS,
+		sorts: PICKUP_SORTS,
+		defaultSort: { id: "startsAt", direction: "asc" },
 	});
-	const swapPagination = useTablePagination(swapRows, { resetKey: swapSearch });
+	const swapList = useListView<SwapDetailDto>({
+		rows: swapItems,
+		getRowId: rowId,
+		search: searchSwap,
+		sorts: SWAP_SORTS,
+	});
 
 	const pendingCount =
 		releases.filter((row) => row.status === "pending").length +
@@ -525,31 +566,18 @@ function CoveragePage() {
 							value="releases"
 							className="flex min-h-0 flex-1 flex-col"
 						>
-							<TableToolbar
-								left={
-									<>
-										<TableSearch
-											value={releaseSearch}
-											onValueChange={setReleaseSearch}
-											placeholder="Search worker or position"
-										/>
-										<TableFilter
-											value={releaseStatus}
-											onValueChange={setReleaseStatus}
-											items={STATUS_FILTERS}
-											ariaLabel="Filter releases by status"
-										/>
-									</>
-								}
-								right={<TablePagination {...releasePagination} />}
+							<ListToolbar
+								list={releaseList}
+								searchPlaceholder="Search worker or position"
 							/>
 							<div className="min-h-0 flex-1 overflow-auto">
 								<DataTable
 									fill={false}
 									stacked
 									columns={releaseColumns}
-									data={releasePagination.pageRows}
-									getRowId={(row) => row.id}
+									list={releaseList}
+									data={releaseList.pagination.pageRows}
+									getRowId={rowId}
 									empty={
 										<div className="p-4">
 											<Empty className="border border-dashed">
@@ -573,23 +601,15 @@ function CoveragePage() {
 						</TabsContent>
 
 						<TabsContent value="swaps" className="flex min-h-0 flex-1 flex-col">
-							<TableToolbar
-								left={
-									<TableSearch
-										value={swapSearch}
-										onValueChange={setSwapSearch}
-										placeholder="Search workers"
-									/>
-								}
-								right={<TablePagination {...swapPagination} />}
-							/>
+							<ListToolbar list={swapList} searchPlaceholder="Search workers" />
 							<div className="min-h-0 flex-1 overflow-auto">
 								<DataTable
 									fill={false}
 									stacked
 									columns={swapColumns}
-									data={swapPagination.pageRows}
-									getRowId={(row) => row.id}
+									list={swapList}
+									data={swapList.pagination.pageRows}
+									getRowId={rowId}
 									empty={
 										<div className="p-4">
 											<Empty className="border border-dashed">
@@ -610,31 +630,18 @@ function CoveragePage() {
 							value="pickups"
 							className="flex min-h-0 flex-1 flex-col"
 						>
-							<TableToolbar
-								left={
-									<>
-										<TableSearch
-											value={pickupSearch}
-											onValueChange={setPickupSearch}
-											placeholder="Search worker or position"
-										/>
-										<TableFilter
-											value={pickupStatus}
-											onValueChange={setPickupStatus}
-											items={STATUS_FILTERS}
-											ariaLabel="Filter pickups by status"
-										/>
-									</>
-								}
-								right={<TablePagination {...pickupPagination} />}
+							<ListToolbar
+								list={pickupList}
+								searchPlaceholder="Search worker or position"
 							/>
 							<div className="min-h-0 flex-1 overflow-auto">
 								<DataTable
 									fill={false}
 									stacked
 									columns={pickupColumns}
-									data={pickupPagination.pageRows}
-									getRowId={(row) => row.id}
+									list={pickupList}
+									data={pickupList.pagination.pageRows}
+									getRowId={rowId}
 									empty={
 										<div className="p-4">
 											<Empty className="border border-dashed">

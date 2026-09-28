@@ -8,16 +8,14 @@ import {
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { createFileRoute } from "@tanstack/react-router";
 import { MegaphoneIcon } from "lucide-react";
-import { useMemo, useState } from "react";
 
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import {
-	TablePagination,
-	TableSearch,
-	TableToolbar,
-	useTablePagination,
-} from "@/components/table-toolbar";
+	type ListSort,
+	ListToolbar,
+	useListView,
+} from "@/components/list-view";
 import { useAnnouncements } from "@/lib/queries";
 import { useWorkplace } from "@/lib/use-workplace";
 
@@ -34,6 +32,26 @@ type AnnouncementRow = {
 };
 
 const columnHelper = createDataColumnHelper<AnnouncementRow>();
+
+const SORTS: ListSort<AnnouncementRow>[] = [
+	{
+		id: "createdAt",
+		label: "Posted",
+		compare: (a, b) => a.createdAt.localeCompare(b.createdAt),
+	},
+	{
+		id: "title",
+		label: "Title",
+		compare: (a, b) => a.title.localeCompare(b.title),
+	},
+];
+
+const searchAnnouncement = (row: AnnouncementRow) => [
+	row.title,
+	row.body,
+	row.author,
+];
+const rowId = (row: AnnouncementRow) => row.id;
 
 const columns = columnHelper.columns([
 	columnHelper.accessor("title", {
@@ -61,17 +79,15 @@ const columns = columnHelper.columns([
 function WorkerAnnouncementsPage() {
 	const { workplace } = useWorkplace();
 	const announcements = useAnnouncements(workplace?.id);
-	const [search, setSearch] = useState("");
 	const rows = announcements.data?.announcements ?? [];
 
-	const filteredRows = useMemo(() => {
-		const term = search.trim().toLowerCase();
-		if (!term) return rows;
-		return rows.filter((row) =>
-			`${row.title} ${row.body} ${row.author}`.toLowerCase().includes(term),
-		);
-	}, [rows, search]);
-	const pagination = useTablePagination(filteredRows, { resetKey: search });
+	const list = useListView<AnnouncementRow>({
+		rows,
+		getRowId: rowId,
+		search: searchAnnouncement,
+		sorts: SORTS,
+		defaultSort: { id: "createdAt", direction: "desc" },
+	});
 
 	return (
 		<AppPage>
@@ -80,16 +96,7 @@ function WorkerAnnouncementsPage() {
 				description="Updates shared with everyone at this workplace."
 			/>
 			<AppPageBody scroll={false}>
-				<TableToolbar
-					left={
-						<TableSearch
-							value={search}
-							onValueChange={setSearch}
-							placeholder="Search announcements"
-						/>
-					}
-					right={<TablePagination {...pagination} />}
-				/>
+				<ListToolbar list={list} searchPlaceholder="Search announcements" />
 				<div className="min-h-0 flex-1 overflow-auto">
 					{announcements.isLoading ? (
 						<div className="flex flex-col gap-3 p-4" role="status">
@@ -103,8 +110,9 @@ function WorkerAnnouncementsPage() {
 							stacked
 							query={announcements}
 							columns={columns}
-							data={pagination.pageRows}
-							getRowId={(row) => row.id}
+							list={list}
+							data={list.pagination.pageRows}
+							getRowId={rowId}
 							empty={
 								<div className="p-4">
 									<Empty className="border border-dashed">

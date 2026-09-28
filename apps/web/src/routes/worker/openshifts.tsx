@@ -11,18 +11,17 @@ import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { createFileRoute } from "@tanstack/react-router";
 import { CalendarPlusIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { toast } from "sonner";
 
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import {
-	TableFilter,
-	TablePagination,
-	TableSearch,
-	TableToolbar,
-	useTablePagination,
-} from "@/components/table-toolbar";
+	type ListFilter,
+	type ListSort,
+	ListToolbar,
+	useListView,
+} from "@/components/list-view";
 import {
 	type OpenShiftDto,
 	useOpenShifts,
@@ -38,14 +37,50 @@ export const Route = createFileRoute("/worker/openshifts")({
 
 const columnHelper = createDataColumnHelper<OpenShiftDto>();
 
+const SORTS: ListSort<OpenShiftDto>[] = [
+	{
+		id: "when",
+		label: "Start time",
+		compare: (a, b) => a.startsAt.localeCompare(b.startsAt),
+	},
+	{
+		id: "positionName",
+		label: "Position",
+		compare: (a, b) => a.positionName.localeCompare(b.positionName),
+	},
+];
+
+function facet(
+	shifts: OpenShiftDto[],
+	id: string,
+	label: string,
+	value: (shift: OpenShiftDto) => string,
+): ListFilter<OpenShiftDto>[] {
+	const names = Array.from(new Set(shifts.map(value))).sort();
+	return names.length > 1
+		? [
+				{
+					id,
+					label,
+					options: names.map((name) => ({ label: name, value: name })),
+					value,
+				},
+			]
+		: [];
+}
+
+const searchShift = (shift: OpenShiftDto) => [
+	shift.positionName,
+	shift.locationName,
+];
+const shiftId = (shift: OpenShiftDto) => shift.id;
+
 function OpenShiftsPage() {
 	const { workplace } = useWorkplace();
 	const { formatShiftRange } = useDisplayPrefs();
 	const openShifts = useOpenShifts(workplace?.id);
 	const requestPickup = useRequestPickup();
 	const shifts = openShifts.data?.openShifts ?? [];
-	const [search, setSearch] = useState("");
-	const [positionFilter, setPositionFilter] = useState("all");
 
 	const columns = useMemo(
 		() =>
@@ -127,30 +162,20 @@ function OpenShiftsPage() {
 		[formatShiftRange, requestPickup],
 	);
 
-	const positionItems = useMemo(() => {
-		const names = Array.from(
-			new Set(shifts.map((shift) => shift.positionName)),
-		).sort();
-		return [
-			{ label: "All positions", value: "all" },
-			...names.map((name) => ({ label: name, value: name })),
-		];
-	}, [shifts]);
-
-	const filteredRows = useMemo(() => {
-		const term = search.trim().toLowerCase();
-		return shifts.filter((shift) => {
-			if (positionFilter !== "all" && shift.positionName !== positionFilter) {
-				return false;
-			}
-			if (!term) return true;
-			return `${shift.positionName} ${shift.locationName}`
-				.toLowerCase()
-				.includes(term);
-		});
-	}, [positionFilter, search, shifts]);
-	const pagination = useTablePagination(filteredRows, {
-		resetKey: `${search}|${positionFilter}`,
+	const filters = useMemo(
+		() => [
+			...facet(shifts, "position", "Position", (shift) => shift.positionName),
+			...facet(shifts, "location", "Location", (shift) => shift.locationName),
+		],
+		[shifts],
+	);
+	const list = useListView<OpenShiftDto>({
+		rows: shifts,
+		getRowId: shiftId,
+		search: searchShift,
+		filters,
+		sorts: SORTS,
+		defaultSort: { id: "when", direction: "asc" },
 	});
 
 	return (
@@ -160,25 +185,9 @@ function OpenShiftsPage() {
 				description="Request pickup on an open shift. A manager makes the assignment."
 			/>
 			<AppPageBody scroll={false}>
-				<TableToolbar
-					left={
-						<>
-							<TableSearch
-								value={search}
-								onValueChange={setSearch}
-								placeholder="Search position or location"
-							/>
-							{positionItems.length > 1 ? (
-								<TableFilter
-									value={positionFilter}
-									onValueChange={setPositionFilter}
-									items={positionItems}
-									ariaLabel="Filter by position"
-								/>
-							) : null}
-						</>
-					}
-					right={<TablePagination {...pagination} />}
+				<ListToolbar
+					list={list}
+					searchPlaceholder="Search position or location"
 				/>
 				<div className="min-h-0 flex-1 overflow-auto">
 					{openShifts.isLoading ? (
@@ -193,8 +202,9 @@ function OpenShiftsPage() {
 							stacked
 							query={openShifts}
 							columns={columns}
-							data={pagination.pageRows}
-							getRowId={(row) => row.id}
+							list={list}
+							data={list.pagination.pageRows}
+							getRowId={shiftId}
 							empty={
 								<div className="p-4">
 									<Empty className="border border-dashed">
