@@ -7,6 +7,7 @@ import type React from "react";
 import { useEffect, useState } from "react";
 import { Link, usePathname } from "./router";
 import { entityLine, isSet, LEGAL_ENTITY, withPeriod } from "./site-config";
+import { ThemeToggle } from "./theme";
 import "./home.css";
 import "./pages.css";
 
@@ -150,6 +151,7 @@ function SiteHeader() {
 					</Link>
 				</nav>
 				<div className="dk-header-actions">
+					<ThemeToggle className="dk-theme-toggle" />
 					<Link className="dk-text-link dk-login" href={appUrl}>
 						Log in
 					</Link>

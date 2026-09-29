@@ -12,6 +12,11 @@ body {
 	background: #0b0c0e;
 	font-synthesis: none;
 }
+html[data-theme="light"],
+html[data-theme="light"] body {
+	color-scheme: light;
+	background: #f7f7f8;
+}
 button,
 a {
 	-webkit-tap-highlight-color: transparent;
@@ -89,6 +94,30 @@ a {
 .cookie-consent :is(a, button):focus-visible {
 	outline: none;
 	box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.7);
+}
+html[data-theme="light"] .cookie-consent {
+	background: rgba(255, 255, 255, 0.94);
+	box-shadow:
+		0 0 0 0.5px rgba(11, 12, 14, 0.12),
+		0 16px 36px rgba(11, 12, 14, 0.1);
+}
+html[data-theme="light"] .cookie-consent p {
+	color: #5f6067;
+}
+html[data-theme="light"] .cookie-consent a {
+	color: #1d4ed8;
+}
+html[data-theme="light"] .cookie-consent .cookie-accept {
+	background: #16171a;
+	color: #f7f7f8;
+}
+html[data-theme="light"] .cookie-consent .cookie-accept:hover {
+	background: #2e2f33;
+}
+html[data-theme="light"] .cookie-consent .cookie-decline {
+	background: rgba(11, 12, 14, 0.04);
+	color: #0b0c0e;
+	box-shadow: inset 0 0 0 0.5px rgba(11, 12, 14, 0.12);
 }
 @media (max-width: 720px) {
 	.cookie-consent {

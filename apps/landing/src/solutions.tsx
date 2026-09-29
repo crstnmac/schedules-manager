@@ -3,6 +3,7 @@ import { cn } from "@SchedulesManager/ui/lib/utils";
 import { Check } from "lucide-react";
 import { Link } from "./router";
 import { DarkPage, FinalCTA, PrimaryCTA, Reveal } from "./site-shell";
+import { ThemedImage } from "./theme";
 
 const appUrl = env.VITE_APP_URL;
 const signUp = new URL(appUrl);
@@ -15,7 +16,7 @@ export const solutions = {
 		eyebrow: "Restaurant scheduling software",
 		title: "Publish restaurant shifts with a plan for every change.",
 		lede: "Build a clear rota for front of house and kitchen teams, publish it when it is ready, and keep everyone informed as the week changes.",
-		image: "/product-schedule.png",
+		image: "product-schedule",
 		imageAlt:
 			"jooling weekly schedule with shifts assigned across a restaurant team",
 		points: [
@@ -41,7 +42,7 @@ export const solutions = {
 		eyebrow: "Retail scheduling software",
 		title: "Keep store shifts clear, even when the week moves.",
 		lede: "Plan coverage by role and location, publish one schedule your team can check, and make changes without losing track of the latest plan.",
-		image: "/product-schedule.png",
+		image: "product-schedule",
 		imageAlt:
 			"jooling weekly schedule with shifts by person and role across a location",
 		points: [
@@ -67,7 +68,7 @@ export const solutions = {
 		eyebrow: "Employee scheduling app",
 		title: "A worker app that keeps the next shift in view.",
 		lede: "Give your team a simple place to see their schedule, share availability, request time off, and stay up to date when shifts change.",
-		image: "/product-worker-mobile.png",
+		image: "product-worker-mobile",
 		imageAlt: "jooling worker app showing the next shift and weekly schedule",
 		points: [
 			[
@@ -131,8 +132,8 @@ export function SolutionPage({ slug }: { slug: SolutionSlug }) {
 				{isPhone ? (
 					<div className="dk-page-phone">
 						<div className="dk-phone">
-							<img
-								src={page.image}
+							<ThemedImage
+								name={page.image}
 								alt={page.imageAlt}
 								width={780}
 								height={1688}
@@ -144,8 +145,8 @@ export function SolutionPage({ slug }: { slug: SolutionSlug }) {
 			{isPhone ? null : (
 				<section className="dk-container" aria-label="Product preview">
 					<div className="dk-shot">
-						<img
-							src={page.image}
+						<ThemedImage
+							name={page.image}
 							alt={page.imageAlt}
 							width={2940}
 							height={1720}

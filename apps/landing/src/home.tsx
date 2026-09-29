@@ -34,6 +34,7 @@ import {
 	signUpUrl,
 } from "./site-shell";
 import { competitors } from "./switching";
+import { ThemedImage } from "./theme";
 
 const restaurantSignUpUrl = new URL(signUpUrl);
 restaurantSignUpUrl.searchParams.set("opening_restaurant", "1");
@@ -151,8 +152,8 @@ function Announcement() {
 function ScheduleShot() {
 	return (
 		<div className="dk-shot" id="product-demo">
-			<img
-				src="/product-schedule.png"
+			<ThemedImage
+				name="product-schedule"
 				width={2940}
 				height={1720}
 				alt="The jooling weekly schedule in the web product, showing shifts by person and role, published version, open shifts and a conflict"
@@ -298,8 +299,8 @@ function Capabilities() {
 function PhoneMockup() {
 	return (
 		<div className="dk-phone">
-			<img
-				src="/product-worker-mobile.png"
+			<ThemedImage
+				name="product-worker-mobile"
 				width={780}
 				height={1688}
 				loading="lazy"

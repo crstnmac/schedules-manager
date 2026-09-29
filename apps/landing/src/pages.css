@@ -27,6 +27,72 @@
 		"Times New Roman", serif;
 }
 
+/* ─── Light theme ─────────────────────────────────────────────────
+ * Same token names as the dark theme: "void" is the page, "graphite" the
+ * card surface, "snow" the primary text, "bone"/"ink" the primary button. */
+:root[data-theme="light"] .dk {
+	--color-void: #f7f7f8;
+	--color-graphite: #ffffff;
+	--color-charcoal: #ececee;
+	--color-smoke: #d4d4d8;
+	--color-steel: #85868c;
+	--color-fog: #5f6067;
+	--color-ash: #4e4f55;
+	--color-chalk: #2b2c30;
+	--color-snow: #0b0c0e;
+	--color-bone: #16171a;
+	--color-ink: #f7f7f8;
+	--color-signal-blue: #2563eb;
+	--color-arc-blue: #1d4ed8;
+	--color-ring-blue: #3b82f6;
+	--color-mint: #15803d;
+	--color-fern: #16a34a;
+	--color-coral: #dc2626;
+	--color-ember: #c2410c;
+	--color-warn: #c2410c;
+
+	--hairline: rgba(11, 12, 14, 0.08);
+	--hairline-strong: rgba(11, 12, 14, 0.12);
+	--soft-fill: rgba(11, 12, 14, 0.04);
+	--soft-fill-hover: rgba(11, 12, 14, 0.07);
+	--text-strong: rgba(11, 12, 14, 0.88);
+	--underline: rgba(11, 12, 14, 0.3);
+	--header-bg: rgba(247, 247, 248, 0.92);
+	--menu-bg: rgba(247, 247, 248, 0.97);
+	--hover-faint: rgba(11, 12, 14, 0.02);
+	--tile-fill: rgba(37, 99, 235, 0.06);
+	--inset-highlight: rgba(255, 255, 255, 0.9);
+	--frame-ring: rgba(11, 12, 14, 0.1);
+	--drop-shadow: rgba(11, 12, 14, 0.06);
+	--btn-primary-hover: #2e2f33;
+	--footer-bg: #efeff1;
+
+	--shadow-button:
+		0 1px 2px rgba(11, 12, 14, 0.12), 0 0 0 0.5px rgba(11, 12, 14, 0.2);
+	--shadow-card:
+		0 0 0 0.5px var(--hairline-strong), 0 1px 2px rgba(11, 12, 14, 0.04),
+		0 12px 32px var(--drop-shadow);
+	--shadow-panel:
+		0 0 0 0.5px var(--hairline-strong), 0 12px 28px rgba(11, 12, 14, 0.06);
+	--shadow-mockup:
+		0 40px 80px rgba(11, 12, 14, 0.1), 0 12px 24px rgba(11, 12, 14, 0.06);
+}
+.dk .dk-theme-toggle {
+	display: grid;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--radius-pill);
+	color: var(--color-fog);
+	transition:
+		color 0.15s ease,
+		background-color 0.15s ease;
+}
+.dk .dk-theme-toggle:hover {
+	color: var(--color-snow);
+	background: var(--soft-fill);
+}
+
 /* ─── Serif display type ──────────────────────────────────────── */
 
 .dk h1,

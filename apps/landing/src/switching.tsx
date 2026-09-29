@@ -10,6 +10,7 @@ import {
 	Reveal,
 	SectionHeading,
 } from "./site-shell";
+import { ThemedImage } from "./theme";
 
 export const competitors = [
 	{
@@ -254,8 +255,8 @@ export function ComparisonPage({ slug }: { slug: string }) {
 			</section>
 			<section className="dk-container" aria-label="Product preview">
 				<div className="dk-shot">
-					<img
-						src="/product-schedule.png"
+					<ThemedImage
+						name="product-schedule"
 						width={2940}
 						height={1720}
 						alt="A jooling manager workspace showing one published week of shifts across the team"

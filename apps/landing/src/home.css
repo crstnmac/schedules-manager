@@ -24,6 +24,18 @@
 	--hairline-strong: rgba(255, 255, 255, 0.1);
 	--soft-fill: rgba(255, 255, 255, 0.05);
 	--soft-fill-hover: rgba(255, 255, 255, 0.08);
+	--text-strong: rgba(255, 255, 255, 0.92);
+	--underline: rgba(255, 255, 255, 0.35);
+	--header-bg: rgba(11, 12, 14, 0.86);
+	--menu-bg: rgba(11, 12, 14, 0.96);
+	--hover-faint: rgba(255, 255, 255, 0.02);
+	--tile-fill: rgba(255, 255, 255, 0.03);
+	--inset-highlight: rgba(255, 255, 255, 0.08);
+	--frame-ring: rgba(255, 255, 255, 0.12);
+	--drop-shadow: rgba(0, 0, 0, 0.14);
+	--btn-primary-hover: #ffffff;
+	--footer-bg: #111214;
+	--color-warn: #fb923c;
 
 	--radius-xs: 5.26px;
 	--radius-sm: 8.77px;
@@ -33,8 +45,8 @@
 
 	--shadow-button: 0 1px 4px rgba(0, 0, 0, 0.1), 0 0 1px rgba(0, 0, 0, 0.1);
 	--shadow-card:
-		inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 0.5px var(--hairline),
-		0 20px 44px rgba(0, 0, 0, 0.14), 0 4px 10px rgba(0, 0, 0, 0.08);
+		inset 0 1px 0 var(--inset-highlight), 0 0 0 0.5px var(--hairline),
+		0 20px 44px var(--drop-shadow), 0 4px 10px rgba(0, 0, 0, 0.08);
 	--shadow-panel:
 		inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 0 0 0.5px var(--hairline),
 		0 16px 36px rgba(0, 0, 0, 0.12);
@@ -169,7 +181,7 @@
 	box-shadow: var(--shadow-button);
 }
 .dk .dk-btn-primary:hover {
-	background: #ffffff;
+	background: var(--btn-primary-hover);
 }
 .dk .dk-btn-ghost {
 	background: var(--soft-fill);
@@ -180,7 +192,7 @@
 	background: var(--soft-fill-hover);
 }
 .dk .dk-text-link {
-	color: rgba(255, 255, 255, 0.92);
+	color: var(--text-strong);
 	transition: color 0.15s ease;
 }
 .dk .dk-text-link:hover {
@@ -243,7 +255,7 @@
 	background: var(--soft-fill);
 }
 .dk .dk-badge.is-warn {
-	color: #fb923c;
+	color: var(--color-warn);
 	background: rgba(234, 88, 12, 0.1);
 }
 
@@ -273,7 +285,7 @@
 .dk .dk-announcement a {
 	color: var(--color-snow);
 	text-decoration: underline;
-	text-decoration-color: rgba(255, 255, 255, 0.35);
+	text-decoration-color: var(--underline);
 	text-underline-offset: 3px;
 }
 .dk .dk-announcement a:hover {
@@ -297,7 +309,7 @@
 	width: 28px;
 	height: 28px;
 	border-radius: 8px;
-	color: rgba(255, 255, 255, 0.92);
+	color: var(--text-strong);
 }
 .dk .dk-announcement button:hover {
 	background: var(--soft-fill);
@@ -317,7 +329,7 @@
 }
 .dk .dk-header.is-scrolled,
 .dk .dk-header.is-open {
-	background: rgba(11, 12, 14, 0.86);
+	background: var(--header-bg);
 	backdrop-filter: blur(12px) saturate(140%);
 	-webkit-backdrop-filter: blur(12px) saturate(140%);
 	border-bottom-color: var(--hairline);
@@ -399,7 +411,7 @@
 		align-items: stretch;
 		gap: 0;
 		padding: 8px 16px 16px;
-		background: rgba(11, 12, 14, 0.96);
+		background: var(--menu-bg);
 		backdrop-filter: blur(12px);
 		-webkit-backdrop-filter: blur(12px);
 		border-bottom: 0.5px solid var(--hairline);
@@ -642,7 +654,7 @@
 	transition: background-color 0.2s ease;
 }
 .dk .dk-cap:hover {
-	background: rgba(255, 255, 255, 0.02);
+	background: var(--hover-faint);
 }
 .dk .dk-cap h3 {
 	margin-top: 20px;
@@ -662,10 +674,10 @@
 	width: 36px;
 	height: 36px;
 	border-radius: var(--radius-sm);
-	background: rgba(255, 255, 255, 0.03);
+	background: var(--tile-fill);
 	box-shadow:
-		inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
-		inset 0 1px 0 rgba(255, 255, 255, 0.06);
+		inset 0 0 0 0.5px var(--inset-highlight),
+		inset 0 1px 0 var(--inset-highlight);
 	color: var(--color-signal-blue);
 }
 @media (max-width: 860px) {
@@ -736,9 +748,9 @@
 	border-radius: 34px;
 	background: var(--color-void);
 	box-shadow:
-		inset 0 0 0 0.5px rgba(255, 255, 255, 0.12),
+		inset 0 0 0 0.5px var(--frame-ring),
 		0 0 0 6px var(--color-charcoal),
-		0 0 0 6.5px rgba(255, 255, 255, 0.08),
+		0 0 0 6.5px var(--inset-highlight),
 		var(--shadow-mockup);
 	font-size: 11px;
 }
@@ -999,9 +1011,9 @@
 }
 .dk .dk-plan.is-recommended {
 	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.08),
+		inset 0 1px 0 var(--inset-highlight),
 		0 0 0 1.5px rgba(59, 130, 246, 0.25),
-		0 20px 44px rgba(0, 0, 0, 0.14);
+		0 20px 44px var(--drop-shadow);
 }
 .dk .dk-plan-head {
 	display: flex;
@@ -1207,7 +1219,7 @@
 
 .dk .dk-footer {
 	padding: 48px 0 32px;
-	background: #111214;
+	background: var(--footer-bg);
 	border-top: 0.5px solid var(--hairline);
 }
 .dk .dk-footer-grid {
@@ -1296,7 +1308,7 @@
 	border-radius: var(--radius-card);
 	background: var(--color-charcoal);
 	box-shadow:
-		0 0 0 0.5px rgba(255, 255, 255, 0.12),
+		0 0 0 0.5px var(--frame-ring),
 		var(--shadow-mockup);
 	padding: 8px;
 	overflow: hidden;
@@ -1316,7 +1328,7 @@
 	max-height: 520px;
 	box-shadow:
 		0 0 0 6px var(--color-charcoal),
-		0 0 0 6.5px rgba(255, 255, 255, 0.08),
+		0 0 0 6.5px var(--inset-highlight),
 		var(--shadow-mockup);
 }
 .dk .dk-phone img {
