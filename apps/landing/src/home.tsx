@@ -1,4 +1,3 @@
-import { env } from "@SchedulesManager/env/landing";
 import { AnimatedNumber, motion } from "@SchedulesManager/ui/components/motion";
 import { fadeUp, staggerContainer } from "@SchedulesManager/ui/lib/motion";
 import { cn } from "@SchedulesManager/ui/lib/utils";
@@ -14,7 +13,6 @@ import {
 	HeartPulse,
 	Layers,
 	MapPin,
-	Menu,
 	Plus,
 	Repeat,
 	Send,
@@ -24,16 +22,19 @@ import {
 	X,
 } from "lucide-react";
 import type React from "react";
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { Link } from "./router";
-import { entityLine, isSet, LEGAL_ENTITY, withPeriod } from "./site-config";
+import {
+	DarkPage,
+	docsUrl,
+	FinalCTA,
+	PrimaryCTA,
+	Reveal,
+	SectionHeading,
+	signUpUrl,
+} from "./site-shell";
 import { competitors } from "./switching";
-import "./home.css";
 
-const appUrl = env.VITE_APP_URL;
-const docsUrl = env.VITE_DOCS_URL;
-const signUpUrl = new URL(appUrl);
-signUpUrl.searchParams.set("mode", "sign-up");
 const restaurantSignUpUrl = new URL(signUpUrl);
 restaurantSignUpUrl.searchParams.set("opening_restaurant", "1");
 
@@ -126,79 +127,6 @@ const capabilities = [
 	},
 ];
 
-function Brand() {
-	return (
-		<Link className="dk-brand" href="/" aria-label="jooling home">
-			<img src="/logo-mark.svg" alt="" />
-			jooling
-		</Link>
-	);
-}
-
-function PrimaryCTA({
-	children = "Get started",
-	href = signUpUrl.toString(),
-	className,
-}: {
-	children?: React.ReactNode;
-	href?: string;
-	className?: string;
-}) {
-	return (
-		<Link className={cn("dk-btn dk-btn-primary", className)} href={href}>
-			{children}
-			<ArrowUpRight aria-hidden="true" size={15} />
-		</Link>
-	);
-}
-
-function Reveal({
-	children,
-	className,
-	as = "div",
-	id,
-}: {
-	children: React.ReactNode;
-	className?: string;
-	as?: "div" | "header" | "li";
-	id?: string;
-}) {
-	const Component =
-		as === "header" ? motion.header : as === "li" ? motion.li : motion.div;
-	return (
-		<Component
-			id={id}
-			className={className}
-			initial="hidden"
-			whileInView="visible"
-			viewport={{ once: true, amount: 0.3 }}
-			variants={fadeUp}
-		>
-			{children}
-		</Component>
-	);
-}
-
-function SectionHeading({
-	eyebrow,
-	title,
-	lede,
-	className,
-}: {
-	eyebrow: string;
-	title: React.ReactNode;
-	lede?: React.ReactNode;
-	className?: string;
-}) {
-	return (
-		<Reveal as="header" className={cn("dk-section-heading", className)}>
-			<p className="dk-eyebrow">{eyebrow}</p>
-			<h2>{title}</h2>
-			{lede ? <p className="dk-lede">{lede}</p> : null}
-		</Reveal>
-	);
-}
-
 function Announcement() {
 	const [open, setOpen] = useState(true);
 	if (!open) return null;
@@ -217,80 +145,6 @@ function Announcement() {
 				<X size={14} />
 			</button>
 		</div>
-	);
-}
-
-function Header() {
-	const [menuOpen, setMenuOpen] = useState(false);
-	const [scrolled, setScrolled] = useState(false);
-
-	useEffect(() => {
-		const update = () => setScrolled(window.scrollY > 8);
-		update();
-		window.addEventListener("scroll", update, { passive: true });
-		return () => window.removeEventListener("scroll", update);
-	}, []);
-
-	const close = () => setMenuOpen(false);
-
-	return (
-		<header
-			className={cn(
-				"dk-header",
-				scrolled && "is-scrolled",
-				menuOpen && "is-open",
-			)}
-		>
-			<div className="dk-header-inner">
-				<Brand />
-				<nav
-					id="main-navigation"
-					aria-label="Main navigation"
-					className="dk-nav"
-				>
-					<Link href="#how-it-works" onClick={close}>
-						How it works
-					</Link>
-					<Link href="#for-your-team" onClick={close}>
-						For your team
-					</Link>
-					<Link href="/restaurant" onClick={close}>
-						Restaurants
-					</Link>
-					<Link href="/retail" onClick={close}>
-						Retail
-					</Link>
-					<Link href="#pricing" onClick={close}>
-						Pricing
-					</Link>
-					<Link href="#faq" onClick={close}>
-						FAQs
-					</Link>
-					<Link href={docsUrl} onClick={close}>
-						Docs
-					</Link>
-					<Link className="dk-nav-mobile-only" href={appUrl} onClick={close}>
-						Log in
-					</Link>
-				</nav>
-				<div className="dk-header-actions">
-					<Link className="dk-text-link dk-login" href={appUrl}>
-						Log in
-					</Link>
-					<PrimaryCTA className="dk-header-cta">Get started</PrimaryCTA>
-					<button
-						type="button"
-						className="dk-menu-toggle"
-						aria-label={menuOpen ? "Close navigation" : "Open navigation"}
-						aria-expanded={menuOpen}
-						aria-controls="main-navigation"
-						onClick={() => setMenuOpen(!menuOpen)}
-					>
-						{menuOpen ? <X size={18} /> : <Menu size={18} />}
-					</button>
-				</div>
-			</div>
-		</header>
 	);
 }
 
@@ -698,109 +552,18 @@ function Faq() {
 	);
 }
 
-function Footer() {
-	const entity = entityLine([LEGAL_ENTITY.legalName, LEGAL_ENTITY.address]);
-	return (
-		<>
-			<section className="dk-final dk-container">
-				<Reveal className="dk-final-card">
-					<span className="dk-badge is-live">
-						<i />
-						Your week, sorted
-					</span>
-					<h2>Good weeks start with a clear plan.</h2>
-					<p className="dk-lede">
-						Build the schedule, bring your team along, and get back to the work
-						that matters.
-					</p>
-					<div className="dk-hero-actions">
-						<PrimaryCTA>Start 30 days free</PrimaryCTA>
-						<Link className="dk-btn dk-btn-ghost" href={appUrl}>
-							Log in
-						</Link>
-					</div>
-				</Reveal>
-			</section>
-			<footer className="dk-footer">
-				<div className="dk-container dk-footer-grid">
-					<div className="dk-footer-intro">
-						<Brand />
-						<p>A calmer way to schedule hourly teams.</p>
-					</div>
-					<div className="dk-footer-col">
-						<strong>Product</strong>
-						<Link href="#how-it-works">How it works</Link>
-						<Link href="#pricing">Pricing</Link>
-						<Link href="#faq">FAQs</Link>
-						<Link href={docsUrl}>Docs</Link>
-					</div>
-					<div className="dk-footer-col">
-						<strong>For teams</strong>
-						<Link href="#for-your-team">Team experience</Link>
-						<Link href="/worker-app">Worker app</Link>
-						<Link href="/restaurant">Restaurants</Link>
-						<Link href="/retail">Retail</Link>
-					</div>
-					<div className="dk-footer-col">
-						<strong>Account</strong>
-						<Link href={appUrl}>Log in</Link>
-						<Link href={signUpUrl.toString()}>Get started</Link>
-					</div>
-				</div>
-				<div className="dk-container dk-footer-bottom">
-					<span>
-						© {new Date().getFullYear()}
-						{isSet(LEGAL_ENTITY.legalName)
-							? ` ${withPeriod(LEGAL_ENTITY.legalName)}`
-							: " jooling"}
-					</span>
-					<nav aria-label="Legal">
-						<Link href="/privacy">Privacy Policy</Link>
-						<Link href="/terms">Terms &amp; Conditions</Link>
-						<Link href="/dpa">DPA</Link>
-					</nav>
-				</div>
-				{entity ? (
-					<div className="dk-container dk-footer-entity">{entity}</div>
-				) : null}
-			</footer>
-		</>
-	);
-}
-
 export function HomePage() {
-	useEffect(() => {
-		const root = document.documentElement;
-		const meta = document.head.querySelector<HTMLMetaElement>(
-			'meta[name="theme-color"]',
-		);
-		const previous = meta?.content;
-		root.classList.add("dk-theme");
-		if (meta) meta.content = "#0b0c0e";
-		return () => {
-			root.classList.remove("dk-theme");
-			if (meta && previous) meta.content = previous;
-		};
-	}, []);
-
 	return (
-		<div className="dk">
-			<Link className="dk-skip-link" href="#main-content">
-				Skip to content
-			</Link>
-			<Announcement />
-			<Header />
-			<main id="main-content">
-				<Hero />
-				<Industries />
-				<Workflow />
-				<Capabilities />
-				<Team />
-				<Switching />
-				<Pricing />
-				<Faq />
-			</main>
-			<Footer />
-		</div>
+		<DarkPage before={<Announcement />}>
+			<Hero />
+			<Industries />
+			<Workflow />
+			<Capabilities />
+			<Team />
+			<Switching />
+			<Pricing />
+			<Faq />
+			<FinalCTA />
+		</DarkPage>
 	);
 }

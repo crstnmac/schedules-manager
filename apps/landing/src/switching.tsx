@@ -1,10 +1,15 @@
-import { env } from "@SchedulesManager/env/landing";
-import { ArrowDown, ArrowRight, Check } from "lucide-react";
+import { ArrowDown, Check } from "lucide-react";
 import type { ReactNode } from "react";
 import { captureComparisonSignup } from "./analytics";
-import { LandingLink } from "./landing-link";
-import { isSet, LEGAL_ENTITY, withPeriod } from "./site-config";
-import "./comparison-redesign.css";
+import { Link } from "./router";
+import {
+	appUrl,
+	DarkPage,
+	FinalCTA,
+	PrimaryCTA,
+	Reveal,
+	SectionHeading,
+} from "./site-shell";
 
 export const competitors = [
 	{
@@ -197,223 +202,109 @@ const switchingDetails: Record<
 	},
 };
 
-export function SwitchingSection() {
-	return (
-		<section className="switching-section" id="switching">
-			<div className="section-container switching-content">
-				<div className="switching-intro">
-					<p className="eyebrow">Making a move?</p>
-					<h2>Bring your next week with you.</h2>
-					<p className="switching-lede">
-						Move your schedule into a draft, review it, then publish when it's
-						ready.
-					</p>
-				</div>
-				<nav className="switching-grid" aria-label="Switching guides">
-					{competitors.map((competitor) => (
-						<LandingLink
-							className="switching-guide"
-							href={`/vs/${competitor.slug}`}
-							key={competitor.slug}
-						>
-							<span>From {competitor.name}</span>
-							<ArrowRight aria-hidden="true" size={18} />
-						</LandingLink>
-					))}
-				</nav>
-			</div>
-		</section>
-	);
-}
-
-export function OpeningRestaurantSection() {
-	const appUrl = env.VITE_APP_URL;
-	const signUp = new URL(appUrl);
-	signUp.searchParams.set("mode", "sign-up");
-	signUp.searchParams.set("opening_restaurant", "1");
-	return (
-		<section className="opening-section" id="opening-restaurant">
-			<div className="section-container opening-content">
-				<div>
-					<p className="eyebrow">Opening a restaurant?</p>
-					<h2>Make the first schedule before opening day.</h2>
-					<p>
-						Set up roles and your team, start from a reusable weekly schedule,
-						and publish only when the plan is ready. New restaurant workplaces
-						can try jooling for 90 days at their first checkout.
-					</p>
-				</div>
-				<LandingLink className="button button-primary" href={signUp.toString()}>
-					Start 90 days free <ArrowRight aria-hidden="true" size={18} />
-				</LandingLink>
-			</div>
-		</section>
-	);
-}
-
 export function ComparisonPage({ slug }: { slug: string }) {
 	const competitor = competitors.find((item) => item.slug === slug);
 	if (!competitor) return null;
 	const details = switchingDetails[competitor.slug];
-	const appUrl = env.VITE_APP_URL;
 	const signUp = new URL(appUrl);
 	signUp.searchParams.set("mode", "sign-up");
 	signUp.searchParams.set("switching_from", competitor.slug);
-	const startFree = (
-		<>
-			Start 30 days free <ArrowRight aria-hidden="true" size={18} />
-		</>
-	);
+	const onSignUp = () => captureComparisonSignup(competitor.slug);
+	const steps = [
+		{ title: details.exportStep.title, body: details.exportStep.body },
+		{
+			title: "Import and match",
+			body: "Download jooling's CSV template in the schedule actions menu, or upload your export straight away. The preview shows exactly what will be created and flags names or times that need a fix.",
+		},
+		{
+			title: "Publish when ready",
+			body: "Imported shifts land in a draft. Adjust, review conflicts, and publish one clear version — workers are notified, and nothing changes silently.",
+		},
+	];
 	return (
-		<div className="comparison-page">
-			<LandingLink className="skip-link" href="#main-content">
-				Skip to content
-			</LandingLink>
-			<header className="comparison-header section-container">
-				<LandingLink className="brand" href="/" aria-label="jooling home">
-					<img src="/logo-mark.svg" alt="" />
-					jooling<span className="brand-dot">.</span>
-				</LandingLink>
-				<nav className="comparison-header-nav" aria-label="Page navigation">
-					<a href="#what-changes">Why jooling</a>
-					<a href="#switch-steps">Moving your schedule</a>
-				</nav>
-				<LandingLink
-					className="comparison-header-cta"
-					href={signUp.toString()}
-					onClick={() => captureComparisonSignup(competitor.slug)}
-				>
-					Start free <ArrowRight aria-hidden="true" size={16} />
-				</LandingLink>
-			</header>
-			<main id="main-content" className="comparison-main">
-				<section className="comparison-hero section-container">
-					<p className="eyebrow">Switching from {competitor.name}</p>
+		<DarkPage>
+			<section className="dk-container dk-page-hero">
+				<div className="dk-page-hero-copy">
+					<nav className="dk-subnav" aria-label="Switching guides">
+						{competitors.map((item) => (
+							<Link
+								key={item.slug}
+								href={`/vs/${item.slug}`}
+								aria-current={item.slug === slug ? "page" : undefined}
+							>
+								From {item.name}
+							</Link>
+						))}
+					</nav>
+					<p className="dk-eyebrow">Switching from {competitor.name}</p>
 					<h1>
-						A calmer way to run <span>next week.</span>
+						A calmer way to run <em>next week.</em>
 					</h1>
-					<p className="comparison-lede">{competitor.detail}</p>
-					<div className="comparison-actions">
-						<LandingLink
-							className="button button-primary"
-							href={signUp.toString()}
-							onClick={() => captureComparisonSignup(competitor.slug)}
-						>
-							{startFree}
-						</LandingLink>
-						<a className="comparison-quiet" href="#switch-steps">
-							See how importing works <ArrowDown aria-hidden="true" size={18} />
+					<p className="dk-page-lede">{competitor.detail}</p>
+					<div className="dk-hero-actions">
+						<PrimaryCTA href={signUp.toString()} onClick={onSignUp}>
+							Start 30 days free
+						</PrimaryCTA>
+						<a className="dk-btn dk-btn-ghost" href="#switch-steps">
+							See how importing works
+							<ArrowDown aria-hidden="true" size={15} />
 						</a>
 					</div>
-					<figure className="comparison-product">
-						<div className="comparison-product-meta">
-							<span>Inside jooling</span>
-							<span>One schedule. One clear version.</span>
-						</div>
-						<img
-							className="real-schedule-screenshot comparison-shot"
-							src="/product-schedule.png"
-							alt="A jooling manager workspace showing one published week of shifts across the team"
-							loading="lazy"
-						/>
-					</figure>
-				</section>
-				<section
-					id="what-changes"
-					className="comparison-changes section-container"
-				>
-					<div className="comparison-section-heading">
-						<p className="eyebrow">The difference</p>
-						<h2>Less chasing. More clarity.</h2>
-						<p>
-							Keep the parts of scheduling that matter close to hand, from the
-							first draft to the version your team sees.
-						</p>
-					</div>
-					<div className="comparison-changes-grid">
-						{details.changes.map((change) => (
-							<article key={change.title}>
-								<div className="comparison-change-head">
-									<Check aria-hidden="true" size={19} />
-									<h3>{change.title}</h3>
-								</div>
-								<p>{change.body}</p>
-							</article>
-						))}
-					</div>
-				</section>
-				<section
-					id="switch-steps"
-					className="comparison-steps section-container"
-				>
-					<div className="comparison-section-heading">
-						<p className="eyebrow">The move</p>
-						<h2>Bring your next week over.</h2>
-						<p>
-							Take a deliberate path from your existing schedule to a draft you
-							can review before anyone is notified.
-						</p>
-					</div>
-					<ol className="comparison-step-grid">
-						<li>
-							<span className="comparison-step-num" aria-hidden="true">
-								1
+				</div>
+			</section>
+			<section className="dk-container" aria-label="Product preview">
+				<div className="dk-shot">
+					<img
+						src="/product-schedule.png"
+						width={2940}
+						height={1720}
+						alt="A jooling manager workspace showing one published week of shifts across the team"
+					/>
+				</div>
+			</section>
+			<section id="what-changes" className="dk-container dk-section">
+				<SectionHeading
+					eyebrow="The difference"
+					title="Less chasing. More clarity."
+					lede="Keep the parts of scheduling that matter close to hand, from the first draft to the version your team sees."
+				/>
+				<ul className="dk-point-grid is-two">
+					{details.changes.map((change) => (
+						<Reveal as="li" className="dk-point" key={change.title}>
+							<span className="dk-icon-tile">
+								<Check aria-hidden="true" size={16} />
 							</span>
-							<h3>{details.exportStep.title}</h3>
-							<p>{details.exportStep.body}</p>
-						</li>
-						<li>
-							<span className="comparison-step-num" aria-hidden="true">
-								2
+							<h3>{change.title}</h3>
+							<p>{change.body}</p>
+						</Reveal>
+					))}
+				</ul>
+			</section>
+			<section id="switch-steps" className="dk-container dk-section">
+				<SectionHeading
+					eyebrow="The move"
+					title="Bring your next week over."
+					lede="Take a deliberate path from your existing schedule to a draft you can review before anyone is notified."
+				/>
+				<ol className="dk-point-grid">
+					{steps.map((step, index) => (
+						<Reveal as="li" className="dk-point" key={step.title}>
+							<span className="dk-step-num" aria-hidden="true">
+								{String(index + 1).padStart(2, "0")}
 							</span>
-							<h3>Import and match</h3>
-							<p>
-								Download jooling's CSV template in the schedule actions menu, or
-								upload your export straight away. The preview shows exactly what
-								will be created and flags names or times that need a fix.
-							</p>
-						</li>
-						<li>
-							<span className="comparison-step-num" aria-hidden="true">
-								3
-							</span>
-							<h3>Publish when ready</h3>
-							<p>
-								Imported shifts land in a draft. Adjust, review conflicts, and
-								publish one clear version — workers are notified, and nothing
-								changes silently.
-							</p>
-						</li>
-					</ol>
-				</section>
-				<section className="comparison-cta section-container">
-					<div>
-						<p className="eyebrow">Ready when you are</p>
-						<h2>Your clearest week yet.</h2>
-						<p>
-							Per-location pricing. Your whole team included. Cancel any time.
-						</p>
-					</div>
-					<LandingLink
-						className="button button-primary"
-						href={signUp.toString()}
-						onClick={() => captureComparisonSignup(competitor.slug)}
-					>
-						{startFree}
-					</LandingLink>
-				</section>
-			</main>
-			<footer className="comparison-footer section-container">
-				<span>
-					© {new Date().getFullYear()}
-					{isSet(LEGAL_ENTITY.legalName)
-						? ` ${withPeriod(LEGAL_ENTITY.legalName)}`
-						: ""}
-				</span>
-				<LandingLink href="/privacy">Privacy</LandingLink>
-				<LandingLink href="/terms">Terms</LandingLink>
-				<LandingLink href="/dpa">DPA</LandingLink>
-			</footer>
-		</div>
+							<h3>{step.title}</h3>
+							<p>{step.body}</p>
+						</Reveal>
+					))}
+				</ol>
+			</section>
+			<FinalCTA
+				badge="Ready when you are"
+				title="Your clearest week yet."
+				body="Per-location pricing. Your whole team included. Cancel any time."
+				href={signUp.toString()}
+				onClick={onSignUp}
+			/>
+		</DarkPage>
 	);
 }

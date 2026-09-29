@@ -1,9 +1,5 @@
-import { env } from "@SchedulesManager/env/landing";
-import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import type React from "react";
-import { LandingLink } from "./landing-link";
 import { Link } from "./router";
-import "./legal-redesign.css";
 import {
 	ENTITY_DEFINITION,
 	entityLine,
@@ -16,80 +12,19 @@ import {
 	SUBPROCESSORS,
 	withPeriod,
 } from "./site-config";
-
-const appUrl = env.VITE_APP_URL;
-const signUpUrl = new URL(appUrl);
-signUpUrl.searchParams.set("mode", "sign-up");
-
-function LegalBrand() {
-	return (
-		<Link className="brand" to="/" aria-label="jooling home">
-			<img src="/logo-mark.svg" alt="" />
-			jooling<span className="brand-dot">.</span>
-		</Link>
-	);
-}
-
-function LegalHeader() {
-	return (
-		<header className="header is-scrolled">
-			<div className="nav-container">
-				<LegalBrand />
-				<div className="nav-actions legal-nav-actions">
-					<LandingLink className="legal-back" href="/">
-						<ArrowLeft size={14} />
-						Back to home
-					</LandingLink>
-					<LandingLink
-						className="button button-primary legal-login"
-						href={appUrl}
-						variant="default"
-						size="lg"
-					>
-						Log in <ArrowUpRight data-icon="inline-end" />
-					</LandingLink>
-				</div>
-			</div>
-		</header>
-	);
-}
-
-export function LegalFooter() {
-	const entity = entityLine([
-		LEGAL_ENTITY.legalName,
-		LEGAL_ENTITY.address,
-		isSet(LEGAL_ENTITY.registrationNumber) &&
-			`Reg. ${LEGAL_ENTITY.registrationNumber}`,
-	]);
-	return (
-		<footer className="legal-footer">
-			<div className="section-container legal-footer-inner">
-				<div className="legal-footer-entity">
-					<span>
-						© {new Date().getFullYear()}
-						{isSet(LEGAL_ENTITY.legalName)
-							? ` ${withPeriod(LEGAL_ENTITY.legalName)}`
-							: "."}{" "}
-						All rights reserved.
-					</span>
-					{entity ? <span>{entity}</span> : null}
-				</div>
-				<nav aria-label="Legal">
-					<Link to="/privacy">Privacy Policy</Link>
-					<Link to="/terms">Terms &amp; Conditions</Link>
-					<Link to="/dpa">DPA</Link>
-					<LandingLink href={signUpUrl.toString()}>Get started</LandingLink>
-				</nav>
-			</div>
-		</footer>
-	);
-}
+import { DarkPage } from "./site-shell";
 
 type LegalSection = {
 	id: string;
 	heading: string;
 	body: React.ReactNode;
 };
+
+const legalDocs = [
+	["/privacy", "Privacy", "Privacy Policy"],
+	["/terms", "Terms", "Terms & Conditions"],
+	["/dpa", "Data processing", "Data Processing Addendum"],
+] as const;
 
 export function LegalLayout({
 	eyebrow,
@@ -103,69 +38,47 @@ export function LegalLayout({
 	sections: LegalSection[];
 }) {
 	return (
-		<div className="site legal-site">
-			<a className="skip-link" href="#legal-content">
-				Skip to content
-			</a>
-			<LegalHeader />
-			<main id="legal-content" className="legal-main">
-				<div className="section-container legal-container">
-					<nav className="legal-document-nav" aria-label="Legal documents">
-						<Link
-							to="/privacy"
-							aria-current={eyebrow === "Privacy Policy" ? "page" : undefined}
-						>
-							Privacy
-						</Link>
-						<Link
-							to="/terms"
-							aria-current={
-								eyebrow === "Terms & Conditions" ? "page" : undefined
-							}
-						>
-							Terms
-						</Link>
-						<Link
-							to="/dpa"
-							aria-current={
-								eyebrow === "Data Processing Addendum" ? "page" : undefined
-							}
-						>
-							Data processing
-						</Link>
+		<DarkPage>
+			<div className="dk-container dk-legal">
+				<header className="dk-legal-header">
+					<nav className="dk-subnav" aria-label="Legal documents">
+						{legalDocs.map(([href, label, name]) => (
+							<Link
+								key={href}
+								href={href}
+								aria-current={eyebrow === name ? "page" : undefined}
+							>
+								{label}
+							</Link>
+						))}
 					</nav>
-					<header className="legal-header">
-						<div className="legal-header-meta">
-							<p className="eyebrow">Legal / {eyebrow}</p>
-							<p className="legal-updated">Last updated {LAST_UPDATED}</p>
-						</div>
-						<h1>{title}</h1>
-						<div className="legal-intro">{intro}</div>
-					</header>
-					<div className="legal-document-grid">
-						<aside className="legal-contents" aria-label="On this page">
-							<p>On this page</p>
-							<nav>
-								{sections.map((section) => (
-									<a key={section.id} href={`#${section.id}`}>
-										{section.heading}
-									</a>
-								))}
-							</nav>
-						</aside>
-						<article className="legal-body">
+					<p className="dk-eyebrow">Legal / {eyebrow}</p>
+					<h1>{title}</h1>
+					<div className="dk-legal-intro">{intro}</div>
+					<p className="dk-legal-updated">Last updated {LAST_UPDATED}</p>
+				</header>
+				<div className="dk-legal-grid">
+					<aside className="dk-legal-toc" aria-label="On this page">
+						<p>On this page</p>
+						<nav>
 							{sections.map((section) => (
-								<section key={section.id} id={section.id}>
-									<h2>{section.heading}</h2>
-									{section.body}
-								</section>
+								<a key={section.id} href={`#${section.id}`}>
+									{section.heading}
+								</a>
 							))}
-						</article>
-					</div>
+						</nav>
+					</aside>
+					<article className="dk-prose">
+						{sections.map((section) => (
+							<section key={section.id} id={section.id}>
+								<h2>{section.heading}</h2>
+								{section.body}
+							</section>
+						))}
+					</article>
 				</div>
-			</main>
-			<LegalFooter />
-		</div>
+			</div>
+		</DarkPage>
 	);
 }
 

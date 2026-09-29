@@ -12,6 +12,15 @@ export function navigate(to: string) {
 	window.history.pushState(null, "", to);
 	window.dispatchEvent(new Event(ROUTE_CHANGE));
 	window.scrollTo({ top: 0, left: 0 });
+	const hash = new URL(to, window.location.origin).hash.slice(1);
+	if (hash) {
+		// Wait for the new route to render before looking up the anchor.
+		requestAnimationFrame(() =>
+			requestAnimationFrame(() =>
+				document.getElementById(hash)?.scrollIntoView(),
+			),
+		);
+	}
 }
 
 export function usePathname() {

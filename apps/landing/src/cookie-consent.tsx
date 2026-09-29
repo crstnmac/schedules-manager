@@ -57,7 +57,7 @@ export function CookieConsent() {
 			<div className="cookie-consent-actions">
 				<button
 					type="button"
-					className="button button-secondary"
+					className="cookie-decline"
 					onClick={() => {
 						storeCookieConsent("denied");
 						setShowBanner(false);
@@ -67,7 +67,7 @@ export function CookieConsent() {
 				</button>
 				<button
 					type="button"
-					className="button button-primary"
+					className="cookie-accept"
 					onClick={() => {
 						storeCookieConsent("granted");
 						setShowBanner(false);

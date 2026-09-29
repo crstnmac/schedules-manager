@@ -1,0 +1,383 @@
+/* Newsreader (SIL OFL 1.1), latin subset with the optical-size axis. */
+@font-face {
+	font-family: "Newsreader Variable";
+	font-style: normal;
+	font-display: swap;
+	font-weight: 200 800;
+	src: url("./fonts/newsreader-latin-opsz-normal.woff2")
+		format("woff2-variations");
+}
+@font-face {
+	font-family: "Newsreader Variable";
+	font-style: italic;
+	font-display: swap;
+	font-weight: 200 800;
+	src: url("./fonts/newsreader-latin-opsz-italic.woff2")
+		format("woff2-variations");
+}
+
+/*
+ * Shared dark-page layouts (solutions, comparisons, legal) and the serif
+ * display face. Loaded after home.css so it can refine the base tokens.
+ */
+
+.dk {
+	--font-serif:
+		"Newsreader Variable", "Newsreader", "Iowan Old Style", Georgia,
+		"Times New Roman", serif;
+}
+
+/* ─── Serif display type ──────────────────────────────────────── */
+
+.dk h1,
+.dk h2,
+.dk .dk-card-title,
+.dk .dk-display {
+	font-family: var(--font-serif);
+	font-optical-sizing: auto;
+	font-weight: 400;
+	font-feature-settings: normal;
+	letter-spacing: -0.012em;
+}
+.dk h1 em,
+.dk h2 em {
+	font-style: italic;
+	color: var(--color-chalk);
+}
+.dk .dk-hero h1 {
+	font-size: 72px;
+	line-height: 0.98;
+	letter-spacing: -0.022em;
+}
+.dk h2 {
+	font-size: 46px;
+	line-height: 1.08;
+}
+.dk .dk-final-card h2 {
+	font-size: 58px;
+	letter-spacing: -0.02em;
+}
+@media (max-width: 900px) {
+	.dk .dk-hero h1 {
+		font-size: 52px;
+	}
+}
+@media (max-width: 720px) {
+	.dk h2 {
+		font-size: 34px;
+	}
+	.dk .dk-hero h1 {
+		font-size: 44px;
+		line-height: 1.02;
+	}
+	.dk .dk-final-card h2 {
+		font-size: 38px;
+	}
+}
+
+/* ─── Page hero (solutions, comparisons) ──────────────────────── */
+
+.dk .dk-page-hero {
+	padding-top: 72px;
+	padding-bottom: 56px;
+}
+.dk .dk-page-hero-copy {
+	max-width: 760px;
+}
+.dk .dk-page-hero h1 {
+	font-size: 64px;
+	line-height: 1;
+	letter-spacing: -0.02em;
+	text-wrap: balance;
+}
+.dk .dk-page-lede {
+	max-width: 580px;
+	margin: 20px 0 28px;
+	color: var(--color-fog);
+	font-size: 17px;
+	font-weight: 420;
+	line-height: 1.5;
+	letter-spacing: -0.02em;
+}
+.dk .dk-page-hero.has-phone {
+	display: grid;
+	grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+	align-items: center;
+	gap: 48px;
+}
+.dk .dk-page-phone {
+	display: flex;
+	justify-content: center;
+	padding: 40px 16px;
+	border-radius: var(--radius-lg);
+	background: var(--color-graphite);
+	box-shadow: var(--shadow-card);
+}
+@media (max-width: 900px) {
+	.dk .dk-page-hero.has-phone {
+		grid-template-columns: 1fr;
+	}
+}
+@media (max-width: 720px) {
+	.dk .dk-page-hero {
+		padding-top: 40px;
+		padding-bottom: 40px;
+	}
+	.dk .dk-page-hero h1 {
+		font-size: 42px;
+		line-height: 1.04;
+	}
+	.dk .dk-page-lede {
+		font-size: 16px;
+	}
+}
+
+/* Segmented sub-navigation between sibling pages. */
+.dk .dk-subnav {
+	display: flex;
+	width: fit-content;
+	max-width: 100%;
+	flex-wrap: wrap;
+	gap: 2px;
+	margin-bottom: 32px;
+	padding: 3px;
+	border-radius: var(--radius-pill);
+	background: var(--color-graphite);
+	box-shadow: inset 0 0 0 0.5px var(--hairline-strong);
+}
+.dk .dk-subnav a {
+	height: 28px;
+	display: inline-flex;
+	align-items: center;
+	padding: 0 12px;
+	border-radius: 7px;
+	color: var(--color-fog);
+	font-size: 13px;
+	transition:
+		color 0.15s ease,
+		background-color 0.15s ease;
+}
+.dk .dk-subnav a:hover {
+	color: var(--color-snow);
+}
+.dk .dk-subnav a[aria-current="page"] {
+	background: var(--color-charcoal);
+	color: var(--color-snow);
+	box-shadow: inset 0 0 0 0.5px var(--hairline-strong);
+}
+
+/* ─── Point / step cards ──────────────────────────────────────── */
+
+.dk .dk-point-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 12px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+.dk .dk-point-grid.is-two {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.dk .dk-point {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 28px;
+	border-radius: var(--radius-card);
+	background: var(--color-graphite);
+	box-shadow: var(--shadow-card);
+}
+.dk .dk-point .dk-icon-tile {
+	margin-bottom: 8px;
+}
+.dk .dk-point h3 {
+	font-family: var(--font-serif);
+	font-size: 24px;
+	line-height: 1.2;
+	letter-spacing: -0.01em;
+}
+.dk .dk-point p {
+	color: var(--color-fog);
+	font-size: 14px;
+	line-height: 1.55;
+}
+.dk .dk-point p a {
+	color: var(--color-arc-blue);
+}
+.dk .dk-point p a:hover {
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+.dk .dk-step-num {
+	margin-bottom: 14px;
+	color: var(--color-signal-blue);
+	font-family: var(--font-serif);
+	font-size: 15px;
+	font-style: italic;
+}
+@media (max-width: 900px) {
+	.dk .dk-point-grid,
+	.dk .dk-point-grid.is-two {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* ─── Legal documents ─────────────────────────────────────────── */
+
+.dk .dk-legal {
+	padding-top: 72px;
+	padding-bottom: 96px;
+}
+.dk .dk-legal-header {
+	max-width: 760px;
+	padding-bottom: 48px;
+	margin-bottom: 48px;
+	border-bottom: 0.5px solid var(--hairline-strong);
+}
+.dk .dk-legal-header h1 {
+	font-size: 56px;
+	line-height: 1.02;
+	letter-spacing: -0.02em;
+	text-wrap: balance;
+}
+.dk .dk-legal-intro {
+	margin-top: 20px;
+	color: var(--color-ash);
+	font-size: 17px;
+	line-height: 1.55;
+}
+.dk .dk-legal-intro p + p {
+	margin-top: 12px;
+}
+.dk .dk-legal-intro a {
+	color: var(--color-arc-blue);
+}
+.dk .dk-legal-updated {
+	margin-top: 20px;
+	color: var(--color-steel);
+	font-size: 12px;
+}
+.dk .dk-legal-grid {
+	display: grid;
+	grid-template-columns: 220px minmax(0, 1fr);
+	gap: 64px;
+	align-items: start;
+}
+.dk .dk-legal-toc {
+	position: sticky;
+	top: 96px;
+	max-height: calc(100vh - 120px);
+	overflow-y: auto;
+}
+.dk .dk-legal-toc p {
+	margin-bottom: 12px;
+	color: var(--color-steel);
+	font-size: 11px;
+	font-weight: 500;
+}
+.dk .dk-legal-toc nav {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	border-left: 0.5px solid var(--hairline-strong);
+}
+.dk .dk-legal-toc a {
+	padding: 5px 0 5px 14px;
+	color: var(--color-fog);
+	font-size: 13px;
+	line-height: 1.35;
+	transition: color 0.15s ease;
+}
+.dk .dk-legal-toc a:hover {
+	color: var(--color-snow);
+}
+@media (max-width: 900px) {
+	.dk .dk-legal-grid {
+		grid-template-columns: 1fr;
+		gap: 32px;
+	}
+	.dk .dk-legal-toc {
+		position: static;
+		max-height: none;
+	}
+}
+@media (max-width: 720px) {
+	.dk .dk-legal {
+		padding-top: 40px;
+	}
+	.dk .dk-legal-header h1 {
+		font-size: 38px;
+	}
+}
+
+/* Long-form document body. */
+.dk .dk-prose {
+	max-width: 720px;
+	color: var(--color-chalk);
+	font-size: 15px;
+	line-height: 1.7;
+	letter-spacing: -0.01em;
+}
+.dk .dk-prose section {
+	scroll-margin-top: 96px;
+}
+.dk .dk-prose section + section {
+	margin-top: 48px;
+	padding-top: 48px;
+	border-top: 0.5px solid var(--hairline);
+}
+.dk .dk-prose h2 {
+	margin-bottom: 16px;
+	font-size: 30px;
+	line-height: 1.2;
+}
+.dk .dk-prose h3 {
+	margin: 28px 0 10px;
+	font-size: 16px;
+	font-weight: 500;
+}
+.dk .dk-prose p + p,
+.dk .dk-prose p + ul,
+.dk .dk-prose p + ol,
+.dk .dk-prose ul + p,
+.dk .dk-prose ol + p {
+	margin-top: 14px;
+}
+.dk .dk-prose ul,
+.dk .dk-prose ol {
+	margin: 0;
+	padding-left: 20px;
+}
+.dk .dk-prose ul {
+	list-style: disc;
+}
+.dk .dk-prose ol {
+	list-style: decimal;
+}
+.dk .dk-prose li + li {
+	margin-top: 8px;
+}
+.dk .dk-prose li::marker {
+	color: var(--color-steel);
+}
+.dk .dk-prose strong {
+	color: var(--color-snow);
+	font-weight: 500;
+}
+.dk .dk-prose a {
+	color: var(--color-arc-blue);
+	text-decoration: underline;
+	text-decoration-color: rgba(96, 165, 250, 0.35);
+	text-underline-offset: 3px;
+}
+.dk .dk-prose a:hover {
+	text-decoration-color: currentColor;
+}
+.dk .dk-prose code {
+	padding: 1px 5px;
+	border-radius: var(--radius-xs);
+	background: var(--soft-fill);
+	font-size: 0.9em;
+}
