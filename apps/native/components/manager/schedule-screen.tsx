@@ -2,13 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
-import Animated, {
-	useAnimatedStyle,
-	useReducedMotion,
-	useSharedValue,
-	withRepeat,
-	withTiming,
-} from "react-native-reanimated";
 
 import { Metric } from "@/components/manager/metric";
 import {
@@ -800,16 +793,9 @@ function LiveBadge({ live }: { live: Live }) {
 	}
 }
 
-/** Success pill with a breathing dot: someone is working right now. */
+/** Success pill with a dot: someone is working right now. */
 function OnClockBadge() {
 	const { theme } = useAppTheme();
-	const reduceMotion = useReducedMotion();
-	const pulse = useSharedValue(1);
-	useEffect(() => {
-		if (reduceMotion) return;
-		pulse.value = withRepeat(withTiming(0.3, { duration: 900 }), -1, true);
-	}, [pulse, reduceMotion]);
-	const dot = useAnimatedStyle(() => ({ opacity: pulse.value }));
 	return (
 		<View
 			style={{
@@ -822,16 +808,13 @@ function OnClockBadge() {
 				paddingVertical: 3,
 			}}
 		>
-			<Animated.View
-				style={[
-					{
-						width: 6,
-						height: 6,
-						borderRadius: 3,
-						backgroundColor: theme.success,
-					},
-					dot,
-				]}
+			<View
+				style={{
+					width: 6,
+					height: 6,
+					borderRadius: 3,
+					backgroundColor: theme.success,
+				}}
 			/>
 			<AppText variant="caption" weight="600" color={theme.success}>
 				On clock
