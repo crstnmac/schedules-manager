@@ -1,10 +1,5 @@
 import type * as React from "react";
 import { View } from "react-native";
-import Animated, {
-	FadeIn,
-	FadeOut,
-	LinearTransition,
-} from "react-native-reanimated";
 
 import {
 	AppText,
@@ -19,24 +14,13 @@ import {
 } from "@/components/ui";
 import { positionColor } from "@/lib/position-color";
 import type { LeaveApprovalDto } from "@/lib/queries";
-import { motion, radius, spacing, useAppTheme } from "@/theme";
+import { radius, spacing, useAppTheme } from "@/theme";
 
 /**
- * Enter/exit wrapper for queue rows: a decided card fades out and the list
- * closes the gap with a spring instead of jumping.
+ * Wrapper for queue rows.
  */
 export function QueueRow({ children }: { children: React.ReactNode }) {
-	return (
-		<Animated.View
-			entering={FadeIn.duration(motion.base)}
-			exiting={FadeOut.duration(motion.fast)}
-			layout={LinearTransition.springify()
-				.damping(motion.spring.damping)
-				.stiffness(motion.spring.stiffness)}
-		>
-			{children}
-		</Animated.View>
-	);
+	return <View>{children}</View>;
 }
 
 /**

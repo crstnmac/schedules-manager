@@ -1,13 +1,13 @@
 import { useHeaderHeight } from "expo-router/react-navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
 	ActivityIndicator,
 	FlatList,
+	Keyboard,
 	KeyboardAvoidingView,
 	TextInput,
 	View,
 } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
@@ -27,7 +27,6 @@ import {
 	type WorkplaceMessage,
 } from "@/lib/queries";
 import {
-	motion,
 	radius,
 	spacing,
 	type as typeRamp,
@@ -104,6 +103,27 @@ function buildRows(
 	return rows.reverse();
 }
 
+/** Whether the software keyboard is up, so the composer can drop the home-bar inset. */
+function useKeyboardVisible() {
+	const [visible, setVisible] = useState(false);
+	useEffect(() => {
+		const ios = process.env.EXPO_OS === "ios";
+		const show = Keyboard.addListener(
+			ios ? "keyboardWillShow" : "keyboardDidShow",
+			() => setVisible(true),
+		);
+		const hide = Keyboard.addListener(
+			ios ? "keyboardWillHide" : "keyboardDidHide",
+			() => setVisible(false),
+		);
+		return () => {
+			show.remove();
+			hide.remove();
+		};
+	}, []);
+	return visible;
+}
+
 export function ConversationThread({
 	conversationId,
 }: {
@@ -116,6 +136,7 @@ export function ConversationThread({
 	const messages = useConversationMessages(conversationId);
 	const send = useSendConversationMessage(conversationId);
 	const [body, setBody] = useState("");
+	const keyboardVisible = useKeyboardVisible();
 
 	const rows = useMemo(
 		() => buildRows(messages.messages, employment?.id),
@@ -132,8 +153,10 @@ export function ConversationThread({
 	return (
 		<KeyboardAvoidingView
 			style={{ flex: 1, backgroundColor: theme.background }}
-			behavior={process.env.EXPO_OS === "ios" ? "padding" : undefined}
-			keyboardVerticalOffset={headerHeight}
+			// Android is edge-to-edge, so nothing resizes for the keyboard unless
+			// we pad for it here too.
+			behavior="padding"
+			keyboardVerticalOffset={process.env.EXPO_OS === "ios" ? headerHeight : 0}
 		>
 			{messages.isError ? (
 				<View style={{ padding: spacing.lg }}>
@@ -205,7 +228,9 @@ export function ConversationThread({
 					gap: spacing.sm,
 					paddingHorizontal: spacing.md,
 					paddingTop: spacing.sm,
-					paddingBottom: Math.max(insets.bottom, spacing.sm),
+					paddingBottom: keyboardVisible
+							? spacing.sm
+							: Math.max(insets.bottom, spacing.sm),
 					backgroundColor: theme.surface,
 					borderTopWidth: 1,
 					borderTopColor: theme.separator,
@@ -307,8 +332,7 @@ function MessageBubble({ row }: { row: Extract<Row, { kind: "message" }> }) {
 			};
 
 	return (
-		<Animated.View
-			entering={FadeInDown.duration(motion.base)}
+		<View
 			style={{
 				flexDirection: "row",
 				justifyContent: mine ? "flex-end" : "flex-start",
@@ -376,6 +400,6 @@ function MessageBubble({ row }: { row: Extract<Row, { kind: "message" }> }) {
 					</AppText>
 				) : null}
 			</View>
-		</Animated.View>
+		</View>
 	);
 }

@@ -1,13 +1,6 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, View } from "react-native";
-import Animated, {
-	useAnimatedStyle,
-	useReducedMotion,
-	useSharedValue,
-	withRepeat,
-	withTiming,
-} from "react-native-reanimated";
 
 import { AppText, Button, Icon, PressableScale } from "@/components/ui";
 import { useDisplayPrefs } from "@/lib/display";
@@ -197,21 +190,16 @@ function HeroMeta({
 	);
 }
 
-/** Breathing dot that signals a running timer. */
+/** Dot that signals a running timer. */
 function LiveDot() {
-	const reduceMotion = useReducedMotion();
-	const pulse = useSharedValue(1);
-	useEffect(() => {
-		if (reduceMotion) return;
-		pulse.value = withRepeat(withTiming(0.35, { duration: 900 }), -1, true);
-	}, [pulse, reduceMotion]);
-	const style = useAnimatedStyle(() => ({ opacity: pulse.value }));
 	return (
-		<Animated.View
-			style={[
-				{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#4ADE80" },
-				style,
-			]}
+		<View
+			style={{
+				width: 7,
+				height: 7,
+				borderRadius: 4,
+				backgroundColor: "#4ADE80",
+			}}
 		/>
 	);
 }

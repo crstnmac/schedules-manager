@@ -25,6 +25,7 @@ export function useStackScreenOptions({
 		headerTitleStyle: { color: theme.text },
 		headerShadowVisible: false,
 		headerBackButtonDisplayMode: "minimal",
+		animation: "none",
 	};
 	if (!isIOS)
 		return { ...shared, headerStyle: { backgroundColor: theme.background } };

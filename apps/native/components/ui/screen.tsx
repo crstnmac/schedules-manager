@@ -8,14 +8,9 @@ import {
 	View,
 	type ViewStyle,
 } from "react-native";
-import Animated, {
-	FadeIn,
-	FadeInDown,
-	LinearTransition,
-} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { gutter, motion, spacing, useAppTheme } from "@/theme";
+import { gutter, spacing, useAppTheme } from "@/theme";
 
 /** Readable column width on tablets; phones use the full width. */
 const MAX_CONTENT_WIDTH = 720;
@@ -100,12 +95,12 @@ export function Screen({
 }
 
 /**
- * Enter animation for blocks that arrive with data. Stagger siblings with
- * `index`; Reanimated honours the system Reduce Motion setting.
+ * Wrapper for blocks that arrive with data. Static (no animation); `index`
+ * is accepted for call-site compatibility.
  */
 export function Appear({
 	children,
-	index = 0,
+	index: _index = 0,
 	style,
 }: {
 	children: React.ReactNode;
@@ -113,23 +108,11 @@ export function Appear({
 	style?: StyleProp<ViewStyle>;
 }) {
 	return (
-		<Animated.View
-			entering={FadeInDown.duration(motion.base)
-				.delay(Math.min(index, 6) * 45)
-				.springify()
-				.damping(motion.spring.damping)
-				.stiffness(motion.spring.stiffness)}
-			layout={LinearTransition.springify()
-				.damping(motion.spring.damping)
-				.stiffness(motion.spring.stiffness)}
-			style={style}
-		>
-			{children}
-		</Animated.View>
+		<View style={style}>{children}</View>
 	);
 }
 
-/** Crossfade for content swapped in place (e.g. a segmented view). */
+/** Wrapper for content swapped in place (e.g. a segmented view). */
 export function FadeSwap({
 	children,
 	style,
@@ -138,8 +121,6 @@ export function FadeSwap({
 	style?: StyleProp<ViewStyle>;
 }) {
 	return (
-		<Animated.View entering={FadeIn.duration(motion.base)} style={style}>
-			{children}
-		</Animated.View>
+		<View style={style}>{children}</View>
 	);
 }
