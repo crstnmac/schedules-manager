@@ -98,10 +98,11 @@ describe("WorkerLayout auth-loading guard (T12-T17)", () => {
 		state.workplace.capabilities = { scheduling: true, operations: true };
 		state.me.isLoading = false;
 		state.me.data = workerMeData;
-		const { queryByTestId, getByTestId, queryByText } = render(<Worker />);
+		const { queryByTestId, getByTestId, getAllByText } = render(<Worker />);
 		expect(queryByTestId("navigate")).toBeNull();
 		expect(getByTestId("outlet")).toBeTruthy();
-		expect(queryByText("My schedule")).toBeTruthy();
+		// Shown in both the sidebar and the section tabs.
+		expect(getAllByText("My schedule").length).toBeGreaterThan(0);
 	});
 
 	test("T17: deep link survives the auth-loading gap (pathname stays /worker/timecard)", async () => {

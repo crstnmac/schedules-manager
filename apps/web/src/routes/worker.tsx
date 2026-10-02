@@ -1,53 +1,15 @@
-import { Avatar, AvatarFallback } from "@SchedulesManager/ui/components/avatar";
-import {
-	Breadcrumb,
-	BreadcrumbItem,
-	BreadcrumbList,
-	BreadcrumbPage,
-} from "@SchedulesManager/ui/components/breadcrumb";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuGroup,
-	DropdownMenuItem,
-	DropdownMenuLabel,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "@SchedulesManager/ui/components/dropdown-menu";
-import { PageFade } from "@SchedulesManager/ui/components/motion";
-import { Separator } from "@SchedulesManager/ui/components/separator";
-import {
-	Sidebar,
-	SidebarContent,
-	SidebarFooter,
-	SidebarGroup,
-	SidebarGroupContent,
-	SidebarGroupLabel,
-	SidebarHeader,
-	SidebarInset,
-	SidebarMenu,
-	SidebarMenuBadge,
-	SidebarMenuButton,
-	SidebarMenuItem,
-	SidebarProvider,
-	SidebarTrigger,
-} from "@SchedulesManager/ui/components/sidebar";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { usePostHog } from "@posthog/react";
 import {
 	createFileRoute,
-	Link,
 	Navigate,
-	Outlet,
 	useRouterState,
 } from "@tanstack/react-router";
 import {
 	BellIcon,
 	CalendarDaysIcon,
-	ChevronsUpDownIcon,
 	Clock3Icon,
 	InboxIcon,
-	LogOutIcon,
 	type LucideIcon,
 	MegaphoneIcon,
 	MessageSquareIcon,
@@ -56,11 +18,8 @@ import {
 import { useEffect } from "react";
 import { toast } from "sonner";
 
+import { AppShell, type ShellNavGroup } from "@/components/app-shell";
 import { profileInitials } from "@/components/current-profile";
-import { DocsLink } from "@/components/docs-link";
-import { LogoMark } from "@/components/logo-mark";
-
-import { PilotFeedback } from "@/components/pilot-feedback";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
 import { useMe, useNotifications } from "@/lib/queries";
@@ -81,6 +40,7 @@ type WorkerNavItem = {
 		| "/worker/announcements"
 		| "/worker/inbox";
 	label: string;
+	description: string;
 	icon: LucideIcon;
 	exact?: boolean;
 	operations?: boolean;
@@ -93,16 +53,23 @@ const navigationGroups: { label: string; items: WorkerNavItem[] }[] = [
 			{
 				to: "/worker",
 				label: "My schedule",
+				description: "Your upcoming shifts",
 				icon: CalendarDaysIcon,
 				exact: true,
 			},
 			{
 				to: "/worker/timecard",
 				label: "Timecard",
+				description: "Hours you have worked",
 				icon: TimerIcon,
 				operations: true,
 			},
-			{ to: "/worker/openshifts", label: "Open shifts", icon: InboxIcon },
+			{
+				to: "/worker/openshifts",
+				label: "Open shifts",
+				description: "Pick up extra work",
+				icon: InboxIcon,
+			},
 		],
 	},
 	{
@@ -111,6 +78,7 @@ const navigationGroups: { label: string; items: WorkerNavItem[] }[] = [
 			{
 				to: "/worker/availability",
 				label: "Time off & availability",
+				description: "Requests and unavailability",
 				icon: Clock3Icon,
 			},
 		],
@@ -118,13 +86,24 @@ const navigationGroups: { label: string; items: WorkerNavItem[] }[] = [
 	{
 		label: "Team",
 		items: [
-			{ to: "/worker/messages", label: "Messages", icon: MessageSquareIcon },
+			{
+				to: "/worker/messages",
+				label: "Messages",
+				description: "Conversations with your team",
+				icon: MessageSquareIcon,
+			},
 			{
 				to: "/worker/announcements",
 				label: "Announcements",
+				description: "Notices from your managers",
 				icon: MegaphoneIcon,
 			},
-			{ to: "/worker/inbox", label: "Inbox", icon: BellIcon },
+			{
+				to: "/worker/inbox",
+				label: "Inbox",
+				description: "Notifications and alerts",
+				icon: BellIcon,
+			},
 		],
 	},
 ];
@@ -206,193 +185,72 @@ function WorkerLayout() {
 		return <Navigate to="/worker" replace />;
 	}
 
+	const sidebarGroups: ShellNavGroup[] = navigationGroups
+		.map((group) => ({
+			label: group.label,
+			items: group.items
+				.filter(
+					(item) =>
+						item.to !== "/worker/inbox" && (!item.operations || showTimecard),
+				)
+				.map((item) => ({
+					to: item.to,
+					label: item.label,
+					description: item.description,
+					icon: item.icon,
+					match: item.to,
+					exact: item.exact,
+				})),
+		}))
+		.filter((group) => group.items.length > 0);
+	const quickLinks = [
+		{ to: "/worker/openshifts", label: "Open shifts", icon: InboxIcon },
+		{
+			to: "/worker/availability",
+			label: "Time off & availability",
+			icon: Clock3Icon,
+		},
+		{ to: "/worker/messages", label: "Messages", icon: MessageSquareIcon },
+	] as const;
+
 	return (
-		<SidebarProvider>
-			<Sidebar variant="inset" collapsible="icon">
-				<SidebarHeader>
-					<SidebarMenu>
-						<SidebarMenuItem>
-							<SidebarMenuButton size="lg" tooltip={workplace.name}>
-								<LogoMark size={32} className="rounded-lg" />
-								<div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:sr-only">
-									<span
-										className="truncate font-semibold"
-										title={workplace.name}
-									>
-										{workplace.name}
-									</span>
-									<span className="truncate text-muted-foreground text-xs">
-										Worker
-									</span>
-								</div>
-							</SidebarMenuButton>
-						</SidebarMenuItem>
-					</SidebarMenu>
-				</SidebarHeader>
-				<SidebarContent>
-					{navigationGroups.map((group) => {
-						const items = group.items.filter(
-							(item) => !item.operations || showTimecard,
-						);
-						if (items.length === 0) return null;
-						return (
-							<SidebarGroup key={group.label}>
-								<SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-								<SidebarGroupContent>
-									<nav aria-label={group.label}>
-										<SidebarMenu>
-											{items.map((item) => {
-												const active = item.exact
-													? pathname === item.to
-													: pathname.startsWith(item.to);
-												return (
-													<SidebarMenuItem key={item.to}>
-														<SidebarMenuButton
-															isActive={active}
-															aria-current={active ? "page" : undefined}
-															tooltip={item.label}
-															render={
-																<Link
-																	to={item.to}
-																	activeOptions={{ exact: Boolean(item.exact) }}
-																/>
-															}
-														>
-															<item.icon />
-															<span>{item.label}</span>
-														</SidebarMenuButton>
-														{item.to === "/worker/inbox" && unreadCount > 0 ? (
-															<SidebarMenuBadge>{unreadCount}</SidebarMenuBadge>
-														) : null}
-													</SidebarMenuItem>
-												);
-											})}
-										</SidebarMenu>
-									</nav>
-								</SidebarGroupContent>
-							</SidebarGroup>
-						);
-					})}
-				</SidebarContent>
-				<SidebarFooter>
-					<div className="px-1 group-data-[collapsible=icon]:hidden">
-						<PilotFeedback
-							workplaceId={workplace.id}
-							buttonClassName="w-full border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground [@media(hover:hover)]:hover:bg-sidebar-accent [@media(hover:hover)]:hover:text-sidebar-accent-foreground focus-visible:border-sidebar-ring focus-visible:ring-sidebar-ring/30 dark:bg-sidebar-accent/40 dark:[@media(hover:hover)]:hover:bg-sidebar-accent"
-						/>
-					</div>
-					<SidebarMenu>
-						{profile ? (
-							<SidebarMenuItem>
-								<DropdownMenu>
-									<DropdownMenuTrigger
-										render={
-											<SidebarMenuButton size="lg" tooltip={displayName} />
-										}
-									>
-										<Avatar className="shrink-0">
-											<AvatarFallback>
-												{profileInitials(profile)}
-											</AvatarFallback>
-										</Avatar>
-										<div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-											<span
-												className="truncate font-medium"
-												title={displayName}
-											>
-												{displayName}
-											</span>
-											{profile.fullName ? (
-												<span
-													className="truncate text-xs"
-													title={profile.email}
-												>
-													{profile.email}
-												</span>
-											) : (
-												<span className="truncate text-xs capitalize">
-													{kind}
-												</span>
-											)}
-										</div>
-										<ChevronsUpDownIcon className="ml-auto group-data-[collapsible=icon]:hidden" />
-									</DropdownMenuTrigger>
-									<DropdownMenuContent
-										side="right"
-										align="end"
-										className="min-w-56"
-									>
-										<DropdownMenuGroup>
-											<DropdownMenuLabel>
-												<p className="truncate" title={displayName}>
-													{displayName}
-												</p>
-												<p className="truncate font-normal text-muted-foreground text-xs">
-													Worker
-												</p>
-											</DropdownMenuLabel>
-										</DropdownMenuGroup>
-										<DropdownMenuSeparator />
-										<DropdownMenuGroup>
-											<DropdownMenuLabel className="text-muted-foreground text-xs">
-												Theme
-											</DropdownMenuLabel>
-											<DropdownMenuItem onClick={() => setTheme("light")}>
-												Light
-											</DropdownMenuItem>
-											<DropdownMenuItem onClick={() => setTheme("dark")}>
-												Dark
-											</DropdownMenuItem>
-											<DropdownMenuItem onClick={() => setTheme("system")}>
-												System
-											</DropdownMenuItem>
-										</DropdownMenuGroup>
-										<DropdownMenuSeparator />
-										<DropdownMenuItem
-											disabled={isSigningOut}
-											onClick={() => void handleSignOut()}
-										>
-											{isSigningOut ? <Spinner /> : <LogOutIcon />}
-											{isSigningOut ? "Signing out…" : "Sign out"}
-										</DropdownMenuItem>
-									</DropdownMenuContent>
-								</DropdownMenu>
-							</SidebarMenuItem>
-						) : null}
-					</SidebarMenu>
-				</SidebarFooter>
-			</Sidebar>
-			<SidebarInset className="flex h-svh min-h-0! min-w-0 flex-col overflow-hidden md:h-[calc(100svh-1rem)]">
-				<header className="sticky top-0 z-40 flex h-14 min-h-14 shrink-0 items-center gap-2 border-b bg-background px-3 md:px-4">
-					<SidebarTrigger className="-ml-1 shrink-0" />
-					<Separator
-						orientation="vertical"
-						className="mx-1 data-[orientation=vertical]:h-4"
-					/>
-					<Breadcrumb className="min-w-0">
-						<BreadcrumbList>
-							<BreadcrumbItem>
-								<BreadcrumbPage>{activePage}</BreadcrumbPage>
-							</BreadcrumbItem>
-						</BreadcrumbList>
-					</Breadcrumb>
-					<div className="ml-auto flex min-w-0 items-center gap-2">
-						<DocsLink />
-					</div>
-				</header>
-				<main
-					id="main-content"
-					tabIndex={-1}
-					className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-0!"
-				>
-					<PageFade
-						key={routeId}
-						className="flex min-h-0 min-w-0 flex-1 flex-col"
-					>
-						<Outlet />
-					</PageFade>
-				</main>
-			</SidebarInset>
-		</SidebarProvider>
+		<AppShell
+			workplaceId={workplace.id}
+			workplaceName={workplace.name}
+			roleLabel="Worker"
+			navLabel="Worker navigation"
+			pathname={pathname}
+			routeId={routeId}
+			groups={sidebarGroups}
+			home={{
+				to: "/worker",
+				label: "My schedule",
+				icon: CalendarDaysIcon,
+				match: "/worker",
+			}}
+			inbox={{
+				to: "/worker/inbox",
+				label: "Inbox",
+				icon: BellIcon,
+				match: "/worker/inbox",
+				unreadCount,
+			}}
+			profile={
+				profile
+					? {
+							displayName,
+							email: profile.fullName ? profile.email : null,
+							initials: profileInitials(profile),
+							kind: "Worker",
+						}
+					: undefined
+			}
+			isSigningOut={isSigningOut}
+			onSignOut={() => void handleSignOut()}
+			onTheme={setTheme}
+			title={activePage}
+			quickLinks={[...quickLinks]}
+			notifications={inbox.data?.notifications}
+		/>
 	);
 }

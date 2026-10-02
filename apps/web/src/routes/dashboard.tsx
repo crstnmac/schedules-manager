@@ -1,47 +1,8 @@
-import { Avatar, AvatarFallback } from "@SchedulesManager/ui/components/avatar";
-import {
-	Breadcrumb,
-	BreadcrumbItem,
-	BreadcrumbLink,
-	BreadcrumbList,
-	BreadcrumbPage,
-	BreadcrumbSeparator,
-} from "@SchedulesManager/ui/components/breadcrumb";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuGroup,
-	DropdownMenuItem,
-	DropdownMenuLabel,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "@SchedulesManager/ui/components/dropdown-menu";
-import { PageFade } from "@SchedulesManager/ui/components/motion";
-import { Separator } from "@SchedulesManager/ui/components/separator";
-import {
-	Sidebar,
-	SidebarContent,
-	SidebarFooter,
-	SidebarGroup,
-	SidebarGroupContent,
-	SidebarGroupLabel,
-	SidebarHeader,
-	SidebarInset,
-	SidebarMenu,
-	SidebarMenuBadge,
-	SidebarMenuButton,
-	SidebarMenuItem,
-	SidebarProvider,
-	SidebarTrigger,
-} from "@SchedulesManager/ui/components/sidebar";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
-import { cn } from "@SchedulesManager/ui/lib/utils";
 import { usePostHog } from "@posthog/react";
 import {
 	createFileRoute,
-	Link,
 	Navigate,
-	Outlet,
 	useRouterState,
 } from "@tanstack/react-router";
 import {
@@ -49,12 +10,9 @@ import {
 	BarChart3Icon,
 	BellIcon,
 	CalendarDaysIcon,
-	ChevronsUpDownIcon,
 	ClipboardListIcon,
 	Clock3Icon,
 	LayoutDashboardIcon,
-	LockIcon,
-	LogOutIcon,
 	MegaphoneIcon,
 	MessageSquareIcon,
 	Settings2Icon,
@@ -66,10 +24,12 @@ import {
 import { useEffect } from "react";
 import { toast } from "sonner";
 
+import {
+	AppShell,
+	type ShellNavGroup,
+	type ShellNavItem,
+} from "@/components/app-shell";
 import { profileInitials } from "@/components/current-profile";
-import { DocsLink } from "@/components/docs-link";
-import { LogoMark } from "@/components/logo-mark";
-import { PilotFeedback } from "@/components/pilot-feedback";
 import { settingsSectionLabel } from "@/components/settings/nav";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
@@ -86,6 +46,7 @@ const navigation = [
 	{
 		to: "/dashboard",
 		label: "Overview",
+		description: "Today at a glance",
 		icon: LayoutDashboardIcon,
 		exact: true,
 		group: "Plan",
@@ -93,6 +54,7 @@ const navigation = [
 	{
 		to: "/dashboard/clock",
 		label: "Clock",
+		description: "Who is on the clock now",
 		icon: AlarmClockIcon,
 		operations: true,
 		group: "Time",
@@ -100,6 +62,7 @@ const navigation = [
 	{
 		to: "/dashboard/schedule",
 		label: "Schedule",
+		description: "Build and publish the week",
 		icon: CalendarDaysIcon,
 		group: "Plan",
 		capability: "schedule.view",
@@ -107,12 +70,14 @@ const navigation = [
 	{
 		to: "/dashboard/roster",
 		label: "Roster",
+		description: "Who works each day",
 		icon: ClipboardListIcon,
 		group: "Plan",
 	},
 	{
 		to: "/dashboard/workers",
 		label: "Workers",
+		description: "People, pay, and access",
 		icon: UsersIcon,
 		group: "Team",
 		capability: "workers.manage",
@@ -120,6 +85,7 @@ const navigation = [
 	{
 		to: "/dashboard/timeoff",
 		label: "Time off",
+		description: "Review requests",
 		icon: Clock3Icon,
 		group: "Team",
 		capability: "approvals.review",
@@ -127,6 +93,7 @@ const navigation = [
 	{
 		to: "/dashboard/timesheets",
 		label: "Timesheets",
+		description: "Approve hours worked",
 		icon: TimerIcon,
 		operations: true,
 		group: "Time",
@@ -135,6 +102,7 @@ const navigation = [
 	{
 		to: "/dashboard/coverage",
 		label: "Coverage",
+		description: "Swaps, releases, open shifts",
 		icon: WorkflowIcon,
 		group: "Plan",
 		capability: "approvals.review",
@@ -142,12 +110,14 @@ const navigation = [
 	{
 		to: "/dashboard/messages",
 		label: "Messages",
+		description: "Conversations with your team",
 		icon: MessageSquareIcon,
 		group: "Team",
 	},
 	{
 		to: "/dashboard/announcements",
 		label: "Announcements",
+		description: "Notices to every worker",
 		icon: MegaphoneIcon,
 		group: "Team",
 		capability: "settings.manage",
@@ -155,6 +125,7 @@ const navigation = [
 	{
 		to: "/dashboard/reports",
 		label: "Reports",
+		description: "Attendance and labor",
 		icon: BarChart3Icon,
 		operations: true,
 		group: "Time",
@@ -163,6 +134,7 @@ const navigation = [
 	{
 		to: "/dashboard/activity",
 		label: "Activity",
+		description: "Notifications and alerts",
 		icon: BellIcon,
 		group: "Workspace",
 		capability: "reports.view",
@@ -170,6 +142,7 @@ const navigation = [
 	{
 		to: "/dashboard/settings/workplace",
 		label: "Settings",
+		description: "Workplace settings",
 		icon: Settings2Icon,
 		group: "Workspace",
 		match: "/dashboard/settings",
@@ -183,7 +156,25 @@ const navigation = [
 	},
 ] as const;
 
-const navigationGroups = ["Plan", "Team", "Time", "Workspace"] as const;
+const navigationGroups = [
+	{ label: "Plan" },
+	{ label: "Team" },
+	{ label: "Time" },
+] as const;
+
+/** Reachable from the left rail instead of the sidebar. */
+const railOnly: string[] = [
+	"/dashboard/activity",
+	"/dashboard/settings/workplace",
+];
+
+/** Shortcuts shown in the right sidebar. */
+const quickLinkTargets: string[] = [
+	"/dashboard/schedule",
+	"/dashboard/timeoff",
+	"/dashboard/workers",
+	"/dashboard/announcements",
+];
 
 function navigationVisibleFor(
 	item: (typeof navigation)[number],
@@ -305,242 +296,85 @@ function DashboardLayout() {
 		return <Navigate to="/dashboard/settings/subscription" replace />;
 	}
 
+	const operationsLocked = !billing.data?.capabilities.operations;
+	const sidebarGroups: ShellNavGroup[] = navigationGroups
+		.map((group) => ({
+			label: group.label,
+			items: visibleNavigation
+				.filter(
+					(item) => item.group === group.label && !railOnly.includes(item.to),
+				)
+				.map((item): ShellNavItem => {
+					const locked =
+						"operations" in item && item.operations && operationsLocked;
+					return {
+						to: locked ? "/dashboard/settings/subscription" : item.to,
+						label: item.label,
+						description: item.description,
+						icon: item.icon,
+						match: "match" in item && item.match ? item.match : item.to,
+						exact: "exact" in item && item.exact ? true : undefined,
+						locked: locked || undefined,
+					};
+				}),
+		}))
+		.filter((group) => group.items.length > 0);
+	const canSeeSettings = visibleNavigation.some(
+		(item) => item.to === "/dashboard/settings/workplace",
+	);
+	const quickLinks = visibleNavigation
+		.filter((item) => quickLinkTargets.includes(item.to))
+		.map((item) => ({ to: item.to, label: item.label, icon: item.icon }));
+
 	return (
-		<SidebarProvider>
-			<Sidebar variant="inset" collapsible="icon">
-				<SidebarHeader>
-					<SidebarMenu>
-						<SidebarMenuItem>
-							<SidebarMenuButton size="lg" tooltip={workplace.name}>
-								<LogoMark size={32} className="rounded-lg" />
-								<div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:sr-only">
-									<span
-										className="truncate font-semibold"
-										title={workplace.name}
-									>
-										{workplace.name}
-									</span>
-									<span className="truncate text-muted-foreground text-xs">
-										Manager workspace
-									</span>
-								</div>
-							</SidebarMenuButton>
-						</SidebarMenuItem>
-					</SidebarMenu>
-				</SidebarHeader>
-				<SidebarContent>
-					<nav aria-label="Manager navigation" className="contents">
-						{navigationGroups.map((group) => {
-							const items = visibleNavigation.filter(
-								(item) => item.group === group,
-							);
-							if (items.length === 0) return null;
-							return (
-								<SidebarGroup
-									key={group}
-									className={group === "Workspace" ? "mt-auto" : undefined}
-								>
-									{group === "Workspace" ? null : (
-										<SidebarGroupLabel>{group}</SidebarGroupLabel>
-									)}
-									<SidebarGroupContent>
-										<SidebarMenu>
-											{items.map((item) => {
-												const locked =
-													"operations" in item &&
-													item.operations &&
-													!billing.data?.capabilities.operations;
-												const exact = "exact" in item && item.exact;
-												const matchPath =
-													"match" in item && item.match ? item.match : item.to;
-												const active = exact
-													? pathname === matchPath
-													: pathname.startsWith(matchPath);
-												return (
-													<SidebarMenuItem key={item.to}>
-														<SidebarMenuButton
-															isActive={active}
-															aria-current={active ? "page" : undefined}
-															tooltip={item.label}
-															render={
-																<Link
-																	to={
-																		locked
-																			? "/dashboard/settings/subscription"
-																			: item.to
-																	}
-																	activeOptions={{ exact: Boolean(exact) }}
-																/>
-															}
-														>
-															<item.icon />
-															<span>{item.label}</span>
-															{locked ? (
-																<LockIcon
-																	className="ml-auto size-3.5 text-muted-foreground"
-																	aria-label="Needs the Operations plan"
-																/>
-															) : null}
-														</SidebarMenuButton>
-														{item.to === "/dashboard/activity" &&
-														unreadCount > 0 ? (
-															<SidebarMenuBadge>{unreadCount}</SidebarMenuBadge>
-														) : null}
-													</SidebarMenuItem>
-												);
-											})}
-										</SidebarMenu>
-									</SidebarGroupContent>
-								</SidebarGroup>
-							);
-						})}
-					</nav>
-				</SidebarContent>
-				<SidebarFooter>
-					<div className="px-1 group-data-[collapsible=icon]:hidden">
-						<PilotFeedback
-							workplaceId={workplace.id}
-							buttonClassName="w-full border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground [@media(hover:hover)]:hover:bg-sidebar-accent [@media(hover:hover)]:hover:text-sidebar-accent-foreground focus-visible:border-sidebar-ring focus-visible:ring-sidebar-ring/30 dark:bg-sidebar-accent/40 dark:[@media(hover:hover)]:hover:bg-sidebar-accent"
-						/>
-					</div>
-					<SidebarMenu>
-						{profile ? (
-							<SidebarMenuItem>
-								<DropdownMenu>
-									<DropdownMenuTrigger
-										render={
-											<SidebarMenuButton size="lg" tooltip={displayName} />
-										}
-									>
-										<Avatar className="shrink-0">
-											<AvatarFallback>
-												{profileInitials(profile)}
-											</AvatarFallback>
-										</Avatar>
-										<div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-											<span
-												className="truncate font-medium"
-												title={displayName}
-											>
-												{displayName}
-											</span>
-											{profile.fullName ? (
-												<span
-													className="truncate text-xs"
-													title={profile.email}
-												>
-													{profile.email}
-												</span>
-											) : (
-												<span className="truncate text-xs capitalize">
-													{kind}
-												</span>
-											)}
-										</div>
-										<ChevronsUpDownIcon className="ml-auto group-data-[collapsible=icon]:hidden" />
-									</DropdownMenuTrigger>
-									<DropdownMenuContent
-										side="right"
-										align="end"
-										className="min-w-56"
-									>
-										<DropdownMenuGroup>
-											<DropdownMenuLabel>
-												<p className="truncate" title={displayName}>
-													{displayName}
-												</p>
-												<p className="truncate font-normal text-muted-foreground text-xs capitalize">
-													{kind}
-												</p>
-											</DropdownMenuLabel>
-										</DropdownMenuGroup>
-										<DropdownMenuSeparator />
-										<DropdownMenuGroup>
-											<DropdownMenuLabel className="text-muted-foreground text-xs">
-												Theme
-											</DropdownMenuLabel>
-											<DropdownMenuItem onClick={() => setTheme("light")}>
-												Light
-											</DropdownMenuItem>
-											<DropdownMenuItem onClick={() => setTheme("dark")}>
-												Dark
-											</DropdownMenuItem>
-											<DropdownMenuItem onClick={() => setTheme("system")}>
-												System
-											</DropdownMenuItem>
-										</DropdownMenuGroup>
-										<DropdownMenuSeparator />
-										<DropdownMenuItem
-											disabled={isSigningOut}
-											onClick={() => void handleSignOut()}
-										>
-											{isSigningOut ? <Spinner /> : <LogOutIcon />}
-											{isSigningOut ? "Signing out…" : "Sign out"}
-										</DropdownMenuItem>
-									</DropdownMenuContent>
-								</DropdownMenu>
-							</SidebarMenuItem>
-						) : null}
-					</SidebarMenu>
-				</SidebarFooter>
-			</Sidebar>
-			<SidebarInset
-				className={cn(
-					"flex h-svh min-h-0! min-w-0 flex-col overflow-hidden md:h-[calc(100svh-1rem)]",
-				)}
-			>
-				<header className="sticky top-0 z-40 flex min-h-14 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-b bg-background px-3 py-2 md:h-14 md:px-4 md:py-0">
-					<SidebarTrigger className="-ml-1 shrink-0" />
-					<Separator
-						orientation="vertical"
-						className="mx-1 data-[orientation=vertical]:h-4"
-					/>
-					{isSchedule ? null : (
-						<Breadcrumb className="min-w-0">
-							<BreadcrumbList>
-								{isSettings && settingsLabel ? (
-									<>
-										<BreadcrumbItem className="hidden sm:inline-flex">
-											<BreadcrumbLink
-												render={<Link to="/dashboard/settings/workplace" />}
-											>
-												Settings
-											</BreadcrumbLink>
-										</BreadcrumbItem>
-										<BreadcrumbSeparator className="hidden sm:inline-flex" />
-										<BreadcrumbItem>
-											<BreadcrumbPage>{settingsLabel}</BreadcrumbPage>
-										</BreadcrumbItem>
-									</>
-								) : (
-									<BreadcrumbItem>
-										<BreadcrumbPage>{activePage}</BreadcrumbPage>
-									</BreadcrumbItem>
-								)}
-							</BreadcrumbList>
-						</Breadcrumb>
-					)}
-					{isSchedule ? (
-						<div
-							id="schedule-header-controls"
-							className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto overscroll-x-contain"
-						/>
-					) : null}
-					<DocsLink className={isSchedule ? undefined : "ml-auto"} />
-				</header>
-				<main
-					id="main-content"
-					tabIndex={-1}
-					className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden p-0!"
-				>
-					<PageFade
-						key={routeId}
-						className="flex min-h-0 min-w-0 flex-1 flex-col"
-					>
-						<Outlet />
-					</PageFade>
-				</main>
-			</SidebarInset>
-		</SidebarProvider>
+		<AppShell
+			workplaceId={workplace.id}
+			workplaceName={workplace.name}
+			roleLabel="Manager workspace"
+			navLabel="Manager navigation"
+			pathname={pathname}
+			routeId={routeId}
+			groups={sidebarGroups}
+			home={{
+				to: "/dashboard",
+				label: "Overview",
+				icon: LayoutDashboardIcon,
+				match: "/dashboard",
+			}}
+			inbox={{
+				to: "/dashboard/activity",
+				label: "Activity",
+				icon: BellIcon,
+				match: "/dashboard/activity",
+				unreadCount,
+			}}
+			settings={
+				canSeeSettings
+					? {
+							to: "/dashboard/settings/workplace",
+							label: "Settings",
+							icon: Settings2Icon,
+							match: "/dashboard/settings",
+						}
+					: undefined
+			}
+			profile={
+				profile
+					? {
+							displayName,
+							email: profile.fullName ? profile.email : null,
+							initials: profileInitials(profile),
+							kind: kind ?? "manager",
+						}
+					: undefined
+			}
+			isSigningOut={isSigningOut}
+			onSignOut={() => void handleSignOut()}
+			onTheme={setTheme}
+			title={headerLabel}
+			scheduleControls={isSchedule}
+			quickLinks={quickLinks}
+			notifications={inbox.data?.notifications}
+		/>
 	);
 }

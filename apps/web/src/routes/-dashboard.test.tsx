@@ -87,10 +87,11 @@ describe("DashboardLayout auth-loading guard (T5-T11)", () => {
 		state.workplace.kind = "manager";
 		state.me.isLoading = false;
 		state.me.data = defaults.meData;
-		const { queryByTestId, getByTestId, queryByText } = render(<Dashboard />);
+		const { queryByTestId, getByTestId, getAllByText } = render(<Dashboard />);
 		expect(queryByTestId("navigate")).toBeNull();
 		expect(getByTestId("outlet")).toBeTruthy();
-		expect(queryByText("Overview")).toBeTruthy();
+		// Shown in both the sidebar and the section tabs.
+		expect(getAllByText("Overview").length).toBeGreaterThan(0);
 	});
 
 	test("T11: deep link survives the auth-loading gap (pathname stays /dashboard/schedule)", async () => {
