@@ -61,7 +61,7 @@ import {
 	UsersIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppDocument } from "@/components/app-page";
 import { PageHeader } from "@/components/page-header";
@@ -104,7 +104,7 @@ function formatCurrency(cents: number): string {
 	});
 }
 
-function StatCard({
+const StatCard = memo(function StatCard({
 	label,
 	value,
 	hint,
@@ -147,9 +147,9 @@ function StatCard({
 			</CardContent>
 		</Card>
 	);
-}
+});
 
-function StatLink({
+const StatLink = memo(function StatLink({
 	icon: Icon,
 	value,
 	label,
@@ -180,9 +180,9 @@ function StatLink({
 			</ItemActions>
 		</Item>
 	);
-}
+});
 
-function AttentionItem({
+const AttentionItem = memo(function AttentionItem({
 	icon: Icon,
 	label,
 	description,
@@ -219,7 +219,7 @@ function AttentionItem({
 			</ItemActions>
 		</Item>
 	);
-}
+});
 
 function Overview() {
 	const { workplace } = useWorkplace();
@@ -269,16 +269,23 @@ function Overview() {
 	const isLoading =
 		locations.isLoading || positions.isLoading || workers.isLoading;
 
-	const activeWorkers =
-		workers.data?.workers.filter(
-			(worker) => worker.status === "active" && worker.kind === "worker",
-		) ?? [];
-	const pendingInvitations =
-		workers.data?.invitations.filter(
-			(invitation) =>
-				invitation.status === "pending" &&
-				new Date(invitation.expiresAt).getTime() > Date.now(),
-		) ?? [];
+	const workersData = workers.data;
+	const activeWorkers = useMemo(
+		() =>
+			workersData?.workers.filter(
+				(worker) => worker.status === "active" && worker.kind === "worker",
+			) ?? [],
+		[workersData],
+	);
+	const pendingInvitations = useMemo(
+		() =>
+			workersData?.invitations.filter(
+				(invitation) =>
+					invitation.status === "pending" &&
+					new Date(invitation.expiresAt).getTime() > Date.now(),
+			) ?? [],
+		[workersData],
+	);
 
 	const pilotCounts = pilot.data?.counts;
 	const checklist = [
@@ -338,14 +345,24 @@ function Overview() {
 				? { label: `Draft changes on v${latestVersion}`, published: false }
 				: { label: `Published v${latestVersion}`, published: true };
 
-	const constrainedStaff = (scheduleData?.staff ?? []).filter(
-		(member) =>
-			(member.unavailability?.length ?? 0) > 0 ||
-			member.preference ||
-			(member.timeOff?.length ?? 0) > 0,
+	const staff = scheduleData?.staff;
+	const constrainedStaff = useMemo(
+		() =>
+			(staff ?? []).filter(
+				(member) =>
+					(member.unavailability?.length ?? 0) > 0 ||
+					member.preference ||
+					(member.timeOff?.length ?? 0) > 0,
+			),
+		[staff],
 	);
-	const outstandingAcceptances = (acceptances.data?.acceptances ?? []).filter(
-		(acceptance) => acceptance.status !== "accepted",
+	const acceptanceRows = acceptances.data?.acceptances;
+	const outstandingAcceptances = useMemo(
+		() =>
+			(acceptanceRows ?? []).filter(
+				(acceptance) => acceptance.status !== "accepted",
+			),
+		[acceptanceRows],
 	);
 	const attentionLoading =
 		settings.isLoading ||

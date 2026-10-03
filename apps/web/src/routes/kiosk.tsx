@@ -30,7 +30,7 @@ import {
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { createFileRoute } from "@tanstack/react-router";
 import { LogInIcon, LogOutIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { LogoMark } from "@/components/logo-mark";
 import { useAuth } from "@/lib/auth";
@@ -51,8 +51,38 @@ function useNow(intervalMs: number): Date {
 	return now;
 }
 
-function KioskPage() {
+const KioskClock = memo(function KioskClock({
+	timeZone,
+}: {
+	timeZone: string | undefined;
+}) {
+	// Ticking here keeps the PIN form from re-rendering every tick.
 	const now = useNow(10_000);
+	return (
+		<div className="flex flex-col items-center gap-1 text-center">
+			<time
+				dateTime={now.toISOString()}
+				className="font-heading font-semibold text-5xl tabular-nums tracking-tight md:text-6xl"
+			>
+				{now.toLocaleTimeString(undefined, {
+					hour: "numeric",
+					minute: "2-digit",
+					timeZone,
+				})}
+			</time>
+			<p className="text-muted-foreground">
+				{now.toLocaleDateString(undefined, {
+					weekday: "long",
+					month: "long",
+					day: "numeric",
+					timeZone,
+				})}
+			</p>
+		</div>
+	);
+});
+
+function KioskPage() {
 	const { user } = useAuth();
 	const me = useMe(Boolean(user));
 	const workplaceId = me.data?.employments.find((row) => row.kind === "manager")
@@ -162,26 +192,7 @@ function KioskPage() {
 				<span className="text-muted-foreground text-sm">Shared kiosk</span>
 			</header>
 			<div className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-10">
-				<div className="flex flex-col items-center gap-1 text-center">
-					<time
-						dateTime={now.toISOString()}
-						className="font-heading font-semibold text-5xl tabular-nums tracking-tight md:text-6xl"
-					>
-						{now.toLocaleTimeString(undefined, {
-							hour: "numeric",
-							minute: "2-digit",
-							timeZone: locationTimeZone,
-						})}
-					</time>
-					<p className="text-muted-foreground">
-						{now.toLocaleDateString(undefined, {
-							weekday: "long",
-							month: "long",
-							day: "numeric",
-							timeZone: locationTimeZone,
-						})}
-					</p>
-				</div>
+				<KioskClock timeZone={locationTimeZone} />
 				<Card className="w-full max-w-md">
 					<CardHeader>
 						<CardTitle>Clock in or out</CardTitle>

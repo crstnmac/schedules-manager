@@ -17,7 +17,7 @@ import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronLeftIcon, TimerIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
@@ -30,8 +30,8 @@ import {
 	useMyTimeEntries,
 } from "@/lib/queries";
 import { formatDurationMs, getWorkplaceTimeZone } from "@/lib/time";
-import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
+import { useStablePrefs } from "./-shared/use-stable-prefs";
 
 export const Route = createFileRoute("/worker/timecard")({
 	component: TimecardPage,
@@ -40,16 +40,17 @@ export const Route = createFileRoute("/worker/timecard")({
 const punchHelper = createDataColumnHelper<TimecardEntry>();
 
 const TIMECARD_FILTERS = [PUNCH_STATUS_FILTER];
+const TIMECARD_DEFAULT_SORT = { id: "day", direction: "desc" } as const;
+const NO_ENTRIES: TimecardEntry[] = [];
 const searchPosition = (entry: TimecardEntry) => [entry.positionName];
 
 function TimecardPage() {
 	const { workplace } = useWorkplace();
-	const { formatClockTime } = useDisplayPrefs();
+	const { formatClockTime } = useStablePrefs();
 	const notesEnabled = workplace?.policies.timesheetNotesEnabled ?? false;
 	const timecard = useMyTimeEntries(workplace?.id);
 	const schedule = useMySchedule(workplace?.id);
 	const weekStartDay = schedule.data?.weekStartDay ?? 1;
-	const [nowMs, setNowMs] = useState(() => Date.now());
 	const queryClient = useQueryClient();
 	const updateBreak = useMutation({
 		mutationFn: (input: { timeEntryId: string; action: "start" | "end" }) =>
@@ -64,23 +65,25 @@ function TimecardPage() {
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
-	const entries = timecard.data?.timeEntries ?? [];
-	const hasOpen = entries.some((entry) => entry.clockedOutAt === null);
-
-	useEffect(() => {
-		if (!hasOpen) return;
-		const timer = setInterval(() => setNowMs(Date.now()), 1000);
-		return () => clearInterval(timer);
-	}, [hasOpen]);
-
-	const week = currentWeekTotals(entries, nowMs, weekStartDay);
+	const entries = timecard.data?.timeEntries ?? NO_ENTRIES;
+	const hasOpen = useMemo(
+		() => entries.some((entry) => entry.clockedOutAt === null),
+		[entries],
+	);
+	// Sorting uses a snapshot of "now"; only the live cells below tick each second.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: entries is the refresh trigger.
+	const sortNowMs = useMemo(() => Date.now(), [entries]);
+	const weekStartsAt = mondayStart(new Date(), weekStartDay).toISOString();
+	const updateBreakMutate = updateBreak.mutate;
+	const updateBreakPending = updateBreak.isPending;
+	const updateBreakVariables = updateBreak.variables;
 	const list = useListView<TimecardEntry>({
 		rows: entries,
 		getRowId: punchId,
 		search: searchPosition,
 		filters: TIMECARD_FILTERS,
 		sorts: PUNCH_SORTS,
-		defaultSort: { id: "day", direction: "desc" },
+		defaultSort: TIMECARD_DEFAULT_SORT,
 	});
 	const columns = useMemo(
 		() =>
@@ -116,17 +119,20 @@ function TimecardPage() {
 				punchHelper.accessor(
 					(row) =>
 						row.clockedOutAt == null
-							? nowMs - new Date(row.clockedInAt).getTime()
+							? sortNowMs - new Date(row.clockedInAt).getTime()
 							: new Date(row.clockedOutAt).getTime() -
 								new Date(row.clockedInAt).getTime(),
 					{
 						id: "duration",
 						header: "Duration",
-						cell: ({ getValue }) => (
-							<span className="tabular-nums">
-								{formatDurationMs(getValue())}
-							</span>
-						),
+						cell: ({ row, getValue }) =>
+							row.original.clockedOutAt == null ? (
+								<LiveDuration clockedInAt={row.original.clockedInAt} />
+							) : (
+								<span className="tabular-nums">
+									{formatDurationMs(getValue())}
+								</span>
+							),
 					},
 				),
 				...(notesEnabled
@@ -164,8 +170,8 @@ function TimecardPage() {
 						if (entry.clockedOutAt !== null) return null;
 						const breakOpen = entry.openBreakStartedAt !== null;
 						const pendingThis =
-							updateBreak.isPending &&
-							updateBreak.variables?.timeEntryId === entry.id;
+							updateBreakPending &&
+							updateBreakVariables?.timeEntryId === entry.id;
 						return (
 							<div className="flex flex-wrap items-center justify-end gap-2">
 								<Button
@@ -173,13 +179,13 @@ function TimecardPage() {
 									variant="outline"
 									disabled={breakOpen || pendingThis}
 									onClick={() =>
-										updateBreak.mutate({
+										updateBreakMutate({
 											timeEntryId: entry.id,
 											action: "start",
 										})
 									}
 								>
-									{pendingThis && updateBreak.variables?.action === "start" ? (
+									{pendingThis && updateBreakVariables?.action === "start" ? (
 										<Spinner data-icon="inline-start" />
 									) : null}
 									Start Break
@@ -189,13 +195,13 @@ function TimecardPage() {
 									variant="outline"
 									disabled={!breakOpen || pendingThis}
 									onClick={() =>
-										updateBreak.mutate({
+										updateBreakMutate({
 											timeEntryId: entry.id,
 											action: "end",
 										})
 									}
 								>
-									{pendingThis && updateBreak.variables?.action === "end" ? (
+									{pendingThis && updateBreakVariables?.action === "end" ? (
 										<Spinner data-icon="inline-start" />
 									) : null}
 									End Break
@@ -205,7 +211,14 @@ function TimecardPage() {
 					},
 				}),
 			]),
-		[formatClockTime, notesEnabled, nowMs, updateBreak],
+		[
+			formatClockTime,
+			notesEnabled,
+			sortNowMs,
+			updateBreakMutate,
+			updateBreakPending,
+			updateBreakVariables,
+		],
 	);
 
 	return (
@@ -213,11 +226,13 @@ function TimecardPage() {
 			<AppPageHeader
 				title="Timecard"
 				badge={
-					<Badge variant="secondary">
-						{formatDurationMs(week.totalMs)} this week
-					</Badge>
+					<WeekTotalBadge
+						entries={entries}
+						weekStartDay={weekStartDay}
+						live={hasOpen}
+					/>
 				}
-				description={`Week of ${formatDayLabel(week.startsAt)} · every Time Entry you started and finished.`}
+				description={`Week of ${formatDayLabel(weekStartsAt)} · every Time Entry you started and finished.`}
 				actions={
 					<Button
 						size="sm"
@@ -300,6 +315,49 @@ function TimecardPage() {
 		</AppPage>
 	);
 }
+
+function useNow(live: boolean) {
+	const [nowMs, setNowMs] = useState(() => Date.now());
+	useEffect(() => {
+		if (!live) return;
+		setNowMs(Date.now());
+		const timer = setInterval(() => setNowMs(Date.now()), 1000);
+		return () => clearInterval(timer);
+	}, [live]);
+	return nowMs;
+}
+
+/** Ticks on its own so the table and page chrome don't re-render every second. */
+const LiveDuration = memo(function LiveDuration({
+	clockedInAt,
+}: {
+	clockedInAt: string;
+}) {
+	const nowMs = useNow(true);
+	return (
+		<span className="tabular-nums">
+			{formatDurationMs(nowMs - new Date(clockedInAt).getTime())}
+		</span>
+	);
+});
+
+const WeekTotalBadge = memo(function WeekTotalBadge({
+	entries,
+	weekStartDay,
+	live,
+}: {
+	entries: TimecardEntry[];
+	weekStartDay: number;
+	live: boolean;
+}) {
+	const nowMs = useNow(live);
+	const week = currentWeekTotals(entries, nowMs, weekStartDay);
+	return (
+		<Badge variant="secondary">
+			{formatDurationMs(week.totalMs)} this week
+		</Badge>
+	);
+});
 
 function formatDayLabel(iso: string, timeZone?: string): string {
 	return new Date(iso).toLocaleDateString(undefined, {

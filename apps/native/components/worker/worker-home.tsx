@@ -79,7 +79,6 @@ export function WorkerHome() {
 	usePrefetchLikelyScreens(workplaceId);
 	const clockIn = useClockIn();
 	const clockOut = useClockOut();
-	const [scope, setScope] = useState<Scope>("mine");
 
 	// Planned (unpublished) shifts are visible to the worker but must not raise
 	// shift-start notifications, which belong to the Published Schedule.
@@ -114,7 +113,6 @@ export function WorkerHome() {
 	const currentWeek = data?.currentWeek ?? null;
 	const nextWeek = data?.nextWeek ?? null;
 	const nextShift = data?.nextShift ?? null;
-	const todayKey = localDateKey();
 	const firstName = me.data?.profile
 		? formatPerson(me.data.profile.fullName, me.data.profile.email).split(
 				" ",
@@ -131,29 +129,6 @@ export function WorkerHome() {
 		return null;
 	}, [nextShift, currentWeek, nextWeek]);
 
-	const hasCoworkerShifts = Boolean(
-		currentWeek?.shifts.some((shift) => !shift.isMine),
-	);
-	const weekShifts = (currentWeek?.shifts ?? []).filter(
-		(shift) => scope === "everyone" || shift.isMine,
-	);
-	const shiftsByDay = groupByDay(weekShifts);
-	const myWeek = (currentWeek?.shifts ?? []).filter((shift) => shift.isMine);
-	const myHours = myWeek.reduce(
-		(sum, shift) =>
-			sum + shiftHours(shift.startMinute, shift.endMinute, shift.overnight),
-		0,
-	);
-	const workedHours = myWeek.reduce((sum, shift) => {
-		const entry = shift.timeEntry;
-		if (!entry?.clockedOutAt) return sum;
-		return (
-			sum +
-			(new Date(entry.clockedOutAt).getTime() -
-				new Date(entry.clockedInAt).getTime()) /
-				3_600_000
-		);
-	}, 0);
 	const nextWeekMine = (nextWeek?.shifts ?? []).filter((shift) => shift.isMine);
 
 	const needsAcknowledgement =
@@ -226,71 +201,7 @@ export function WorkerHome() {
 
 			{currentWeek && currentWeek.shifts.length > 0 ? (
 				<Appear index={2}>
-					<Section
-						title="This week"
-						caption={`Week of ${formatDateKey(currentWeek.weekStart)} · ${currentWeek.locationName}`}
-					>
-						<WeekStats
-							shifts={myWeek.length}
-							scheduledHours={myHours}
-							workedHours={workedHours}
-						/>
-						{hasCoworkerShifts ? (
-							<SegmentedControl<Scope>
-								value={scope}
-								onChange={setScope}
-								options={[
-									{ value: "mine", label: "My shifts", count: myWeek.length },
-									{
-										value: "everyone",
-										label: "Everyone",
-										count: currentWeek.shifts.length,
-									},
-								]}
-							/>
-						) : null}
-						<FadeSwap key={scope} style={{ gap: spacing.md }}>
-							{shiftsByDay.length === 0 ? (
-								<Card>
-									<AppText variant="subhead" tone="secondary" align="center">
-										You have no shifts this week.
-									</AppText>
-								</Card>
-							) : null}
-							{shiftsByDay.map(([date, shifts]) => (
-								<View key={date} style={{ gap: spacing.sm }}>
-									<DayHeading
-										dateKey={date}
-										isToday={date === todayKey}
-										trailing={
-											shifts.length > 1 ? `${shifts.length} shifts` : undefined
-										}
-									/>
-									{shifts.map((shift) => (
-										<ShiftCard
-											key={shift.id}
-											shift={shift}
-											locationName={currentWeek.locationName}
-											onPress={
-												shift.planned
-													? undefined
-													: () => openShift(shift, currentWeek.locationName)
-											}
-										/>
-									))}
-								</View>
-							))}
-						</FadeSwap>
-						{currentWeek.shifts.some((shift) => shift.planned) ? (
-							<AppText
-								variant="footnote"
-								tone="secondary"
-								style={{ paddingHorizontal: spacing.xs }}
-							>
-								Planned shifts aren’t published yet and may still change.
-							</AppText>
-						) : null}
-					</Section>
+					<WeekSection currentWeek={currentWeek} />
 				</Appear>
 			) : null}
 
@@ -331,6 +242,104 @@ export function WorkerHome() {
 				/>
 			) : null}
 		</Screen>
+	);
+}
+
+function WeekSection({
+	currentWeek,
+}: {
+	currentWeek: NonNullable<MyScheduleResponse["currentWeek"]>;
+}) {
+	const openShift = useOpenShift();
+	const [scope, setScope] = useState<Scope>("mine");
+	const todayKey = localDateKey();
+	const hasCoworkerShifts = currentWeek.shifts.some((shift) => !shift.isMine);
+	const shiftsByDay = groupByDay(
+		currentWeek.shifts.filter((shift) => scope === "everyone" || shift.isMine),
+	);
+	const myWeek = currentWeek.shifts.filter((shift) => shift.isMine);
+	const myHours = myWeek.reduce(
+		(sum, shift) =>
+			sum + shiftHours(shift.startMinute, shift.endMinute, shift.overnight),
+		0,
+	);
+	const workedHours = myWeek.reduce((sum, shift) => {
+		const entry = shift.timeEntry;
+		if (!entry?.clockedOutAt) return sum;
+		return (
+			sum +
+			(new Date(entry.clockedOutAt).getTime() -
+				new Date(entry.clockedInAt).getTime()) /
+				3_600_000
+		);
+	}, 0);
+
+	return (
+		<Section
+			title="This week"
+			caption={`Week of ${formatDateKey(currentWeek.weekStart)} · ${currentWeek.locationName}`}
+		>
+			<WeekStats
+				shifts={myWeek.length}
+				scheduledHours={myHours}
+				workedHours={workedHours}
+			/>
+			{hasCoworkerShifts ? (
+				<SegmentedControl<Scope>
+					value={scope}
+					onChange={setScope}
+					options={[
+						{ value: "mine", label: "My shifts", count: myWeek.length },
+						{
+							value: "everyone",
+							label: "Everyone",
+							count: currentWeek.shifts.length,
+						},
+					]}
+				/>
+			) : null}
+			<FadeSwap key={scope} style={{ gap: spacing.md }}>
+				{shiftsByDay.length === 0 ? (
+					<Card>
+						<AppText variant="subhead" tone="secondary" align="center">
+							You have no shifts this week.
+						</AppText>
+					</Card>
+				) : null}
+				{shiftsByDay.map(([date, shifts]) => (
+					<View key={date} style={{ gap: spacing.sm }}>
+						<DayHeading
+							dateKey={date}
+							isToday={date === todayKey}
+							trailing={
+								shifts.length > 1 ? `${shifts.length} shifts` : undefined
+							}
+						/>
+						{shifts.map((shift) => (
+							<ShiftCard
+								key={shift.id}
+								shift={shift}
+								locationName={currentWeek.locationName}
+								onPress={
+									shift.planned
+										? undefined
+										: () => openShift(shift, currentWeek.locationName)
+								}
+							/>
+						))}
+					</View>
+				))}
+			</FadeSwap>
+			{currentWeek.shifts.some((shift) => shift.planned) ? (
+				<AppText
+					variant="footnote"
+					tone="secondary"
+					style={{ paddingHorizontal: spacing.xs }}
+				>
+					Planned shifts aren’t published yet and may still change.
+				</AppText>
+			) : null}
+		</Section>
 	);
 }
 

@@ -16,7 +16,7 @@ import {
 	StarIcon,
 	UserRoundIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 
 import { ShiftTile } from "@/components/schedule-shift-tile";
 import type { ScheduleResponse, ScheduleShiftDto } from "@/lib/queries";
@@ -281,7 +281,7 @@ function ScheduleDayEmptyState({ canManage }: { canManage: boolean }) {
  * tapping instead of panning a desktop grid. Editing reuses the same shift
  * sheet as desktop via onOpenShift / onCreateShift.
  */
-export function ScheduleMobileBoard({
+export const ScheduleMobileBoard = memo(function ScheduleMobileBoard({
 	days,
 	todayKey,
 	staff,
@@ -501,7 +501,7 @@ export function ScheduleMobileBoard({
 			})}
 		</div>
 	);
-}
+});
 
 export function ScheduleMobileBoardSkeleton() {
 	const railKeys = ["mo", "tu", "we", "th", "fr", "sa", "su"];

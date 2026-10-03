@@ -44,21 +44,8 @@ export function NextShiftHero({
 }) {
 	const { theme } = useAppTheme();
 	const { formatShiftRange } = useDisplayPrefs();
-	const [nowMs, setNowMs] = useState(() => Date.now());
 	const entry = shift.timeEntry;
 	const onClock = entry !== null && entry.clockedOutAt === null;
-
-	// Tick every second on the clock (live timer), otherwise every 30s so the
-	// "starts in" copy and the clock-in window stay current.
-	useEffect(() => {
-		const timer = setInterval(
-			() => setNowMs(Date.now()),
-			onClock ? 1000 : 30_000,
-		);
-		return () => clearInterval(timer);
-	}, [onClock]);
-
-	const countdown = startsIn(shift.startsAt, nowMs);
 	const dayLabel = relativeDayLabel(shift.date);
 
 	return (
@@ -94,11 +81,7 @@ export function NextShiftHero({
 							{onClock ? "ON THE CLOCK" : dayLabel.toUpperCase()}
 						</AppText>
 					</HeroPill>
-					{!onClock && countdown ? (
-						<AppText variant="footnote" weight="500" color={ON_BLUE_MUTED}>
-							Starts {countdown}
-						</AppText>
-					) : null}
+					{!onClock ? <StartsIn startsAt={shift.startsAt} /> : null}
 					<View style={{ flex: 1 }} />
 					{onOpen ? (
 						<Icon name="chevronRight" size={14} color={ON_BLUE_MUTED} />
@@ -138,13 +121,34 @@ export function NextShiftHero({
 				style={{ height: 1, backgroundColor: "rgba(255, 255, 255, 0.18)" }}
 			/>
 
-			<TimeClock
-				shift={shift}
-				nowMs={nowMs}
-				clockIn={clockIn}
-				clockOut={clockOut}
-			/>
+			<TimeClock shift={shift} clockIn={clockIn} clockOut={clockOut} />
 		</View>
+	);
+}
+
+/**
+ * Wall clock that re-renders only its caller: every second while on the
+ * clock (live timer), otherwise every 30s for "starts in" and the clock-in
+ * window.
+ */
+function useNow(fast: boolean) {
+	const [nowMs, setNowMs] = useState(() => Date.now());
+	useEffect(() => {
+		setNowMs(Date.now());
+		const timer = setInterval(() => setNowMs(Date.now()), fast ? 1000 : 30_000);
+		return () => clearInterval(timer);
+	}, [fast]);
+	return nowMs;
+}
+
+function StartsIn({ startsAt }: { startsAt: string }) {
+	const nowMs = useNow(false);
+	const countdown = startsIn(startsAt, nowMs);
+	if (!countdown) return null;
+	return (
+		<AppText variant="footnote" weight="500" color={ON_BLUE_MUTED}>
+			Starts {countdown}
+		</AppText>
 	);
 }
 
@@ -206,12 +210,10 @@ function LiveDot() {
 
 function TimeClock({
 	shift,
-	nowMs,
 	clockIn,
 	clockOut,
 }: {
 	shift: NextShift;
-	nowMs: number;
 	clockIn: ReturnType<typeof useClockIn>;
 	clockOut: ReturnType<typeof useClockOut>;
 }) {
@@ -220,6 +222,7 @@ function TimeClock({
 	const router = useRouter();
 	const entry = shift.timeEntry;
 	const onClock = entry !== null && entry.clockedOutAt === null;
+	const nowMs = useNow(onClock);
 	const worked = entry !== null && entry.clockedOutAt !== null;
 	const startsAt = new Date(shift.startsAt).getTime();
 	const endsAt = new Date(shift.endsAt).getTime();

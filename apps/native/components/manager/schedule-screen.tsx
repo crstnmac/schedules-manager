@@ -143,9 +143,6 @@ const ATTENDANCE_LABEL = {
  * isn't, and what's uncovered. Building the week stays on the web grid.
  */
 export function ScheduleScreen() {
-	// Location-local minutes, never the phone's timezone: the schedule is
-	// planned in the Location's time.
-	const { formatMinute } = useDisplayPrefs();
 	const { workplaceId, canReview } = useCurrentEmployment();
 	const locations = useWorkplaceLocations(workplaceId);
 	const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
@@ -181,13 +178,6 @@ export function ScheduleScreen() {
 	});
 	const markAttendance = useMarkAttendance(workplaceId);
 
-	// Re-evaluate "not in yet" / "on clock" each minute without refetching.
-	const [now, setNow] = useState(Date.now());
-	useEffect(() => {
-		const timer = setInterval(() => setNow(Date.now()), 60_000);
-		return () => clearInterval(timer);
-	}, []);
-
 	const punches = useMemo(
 		() =>
 			new Map(
@@ -206,64 +196,6 @@ export function ScheduleScreen() {
 		}
 		return map;
 	}, [shifts]);
-
-	const dayShifts = shifts
-		.filter((shift) => shift.date === day)
-		.sort((a, b) =>
-			a.startMinute === b.startMinute
-				? (a.workerName ?? "").localeCompare(b.workerName ?? "")
-				: a.startMinute - b.startMinute,
-		)
-		.map((shift) => ({
-			shift,
-			punch: punches.get(shift.id),
-			live: liveStatus(shift, punches.get(shift.id), now),
-		}));
-	const isIssue = (row: (typeof dayShifts)[number]) =>
-		row.live.kind === "late" ||
-		row.live.kind === "notIn" ||
-		row.live.kind === "noPunch" ||
-		Boolean(row.punch?.attendance) ||
-		(row.shift.conflicts?.length ?? 0) > 0;
-	const open = dayShifts.filter((row) => row.live.kind === "open");
-	const issues = dayShifts.filter(isIssue);
-	const onClock = dayShifts.filter(
-		(row) => row.live.kind === "onClock" || row.live.kind === "late",
-	);
-	const visible =
-		filter === "open" ? open : filter === "issues" ? issues : dayShifts;
-
-	// Group by start time so a busy day reads as a handful of waves.
-	const groups = new Map<number, typeof visible>();
-	for (const row of visible) {
-		const list = groups.get(row.shift.startMinute) ?? [];
-		list.push(row);
-		groups.set(row.shift.startMinute, list);
-	}
-
-	function openRow(row: (typeof dayShifts)[number]) {
-		const punch = row.punch;
-		if (!canReview || !punch?.versionShiftId || !row.shift.workerName) return;
-		const name = row.shift.workerName;
-		const mark = (kind: "late" | "no_show" | "sick") =>
-			markAttendance.mutate(
-				{ versionShiftId: punch.versionShiftId, kind },
-				{
-					onSuccess: tapSuccess,
-					onError: (error) =>
-						Alert.alert("Could not save", (error as Error).message),
-				},
-			);
-		showActionSheet({
-			title: `Mark ${name}`,
-			message: "Attendance marks don’t change the published schedule.",
-			actions: [
-				{ label: "Late", onPress: () => mark("late") },
-				{ label: "No-show", destructive: true, onPress: () => mark("no_show") },
-				{ label: "Sick", onPress: () => mark("sick") },
-			],
-		});
-	}
 
 	const latest = schedule.data?.publication?.versions?.find(
 		(v) => v.versionNumber === schedule.data?.publication?.latestVersionNumber,
@@ -363,108 +295,216 @@ export function ScheduleScreen() {
 				) : null}
 
 				{schedule.data ? (
-					<FadeSwap key={`${startKey}-${day}`} style={{ gap: spacing.xl }}>
-						<View style={{ flexDirection: "row", gap: spacing.md }}>
-							{day === today ? (
-								<Metric
-									icon="clockFill"
-									value={onClock.length}
-									label="On the clock"
-									tone="success"
-								/>
-							) : null}
-							<Metric
-								icon="calendar"
-								value={dayShifts.length}
-								label="Scheduled"
-							/>
-							<Metric
-								icon="handRaised"
-								value={open.length}
-								label="Open shifts"
-								tone={open.length > 0 ? "warning" : "primary"}
-							/>
-							{day !== today ? (
-								<Metric
-									icon="warning"
-									value={issues.length}
-									label="Issues"
-									tone={issues.length > 0 ? "danger" : "primary"}
-								/>
-							) : null}
-						</View>
-
-						{dayShifts.length > 0 ? (
-							<ChoiceChips<Filter>
-								accessibilityLabel="Filter shifts"
-								value={filter}
-								onChange={setFilter}
-								options={[
-									{ value: "all", label: `All ${dayShifts.length}` },
-									{ value: "open", label: `Open ${open.length}` },
-									{
-										value: "issues",
-										label: `Needs attention ${issues.length}`,
-									},
-								]}
-							/>
-						) : null}
-
-						{dayShifts.length === 0 ? (
-							<EmptyState
-								icon="calendar"
-								title="Nothing scheduled"
-								body="No shifts on this day. Build and publish the week on the web Schedule grid."
-							/>
-						) : visible.length === 0 ? (
-							<EmptyState
-								icon="checkCircle"
-								tone="success"
-								title={
-									filter === "open"
-										? "Every shift is covered"
-										: "Nothing needs attention"
-								}
-								body={
-									filter === "open"
-										? "All shifts on this day have someone assigned."
-										: "Everyone scheduled is where they should be."
-								}
-							/>
-						) : (
-							[...groups.entries()].map(([minute, rows], index) => (
-								<Appear key={minute} index={index}>
-									<Section
-										title={formatMinute(minute)}
-										caption={`${rows.length} shift${rows.length === 1 ? "" : "s"}`}
-									>
-										<Card padded={false} style={{ gap: 0 }}>
-											{rows.map((row, rowIndex) => (
-												<View key={row.shift.id}>
-													{rowIndex > 0 ? <Divider inset={68} /> : null}
-													<ShiftRow
-														shift={row.shift}
-														live={row.live}
-														attendance={row.punch?.attendance ?? null}
-														onPress={
-															canReview &&
-															row.punch?.versionShiftId &&
-															row.shift.workerName
-																? () => openRow(row)
-																: undefined
-														}
-													/>
-												</View>
-											))}
-										</Card>
-									</Section>
-								</Appear>
-							))
-						)}
-					</FadeSwap>
+					<DayView
+						key={`${startKey}-${day}`}
+						shifts={shifts}
+						punches={punches}
+						day={day}
+						today={today}
+						filter={filter}
+						onFilter={setFilter}
+						canReview={canReview}
+						markAttendance={markAttendance}
+					/>
 				) : null}
 			</Screen>
 		</>
+	);
+}
+
+type DayRow = {
+	shift: ScheduleShift;
+	punch: TimeclockRow | undefined;
+	live: Live;
+};
+
+/**
+ * One day's metrics, filter and shift waves. Owns the once-a-minute clock so
+ * the tick re-renders only this subtree, not the header, week strip or chrome.
+ */
+function DayView({
+	shifts,
+	punches,
+	day,
+	today,
+	filter,
+	onFilter,
+	canReview,
+	markAttendance,
+}: {
+	shifts: ScheduleShift[];
+	punches: Map<string, TimeclockRow>;
+	day: string;
+	today: string;
+	filter: Filter;
+	onFilter: (filter: Filter) => void;
+	canReview: boolean;
+	markAttendance: ReturnType<typeof useMarkAttendance>;
+}) {
+	// Location-local minutes, never the phone's timezone: the schedule is
+	// planned in the Location's time.
+	const { formatMinute } = useDisplayPrefs();
+	// Re-evaluate "not in yet" / "on clock" each minute without refetching.
+	const [now, setNow] = useState(Date.now());
+	useEffect(() => {
+		const timer = setInterval(() => setNow(Date.now()), 60_000);
+		return () => clearInterval(timer);
+	}, []);
+
+	const dayShifts = shifts
+		.filter((shift) => shift.date === day)
+		.sort((a, b) =>
+			a.startMinute === b.startMinute
+				? (a.workerName ?? "").localeCompare(b.workerName ?? "")
+				: a.startMinute - b.startMinute,
+		)
+		.map((shift) => ({
+			shift,
+			punch: punches.get(shift.id),
+			live: liveStatus(shift, punches.get(shift.id), now),
+		}));
+	const isIssue = (row: DayRow) =>
+		row.live.kind === "late" ||
+		row.live.kind === "notIn" ||
+		row.live.kind === "noPunch" ||
+		Boolean(row.punch?.attendance) ||
+		(row.shift.conflicts?.length ?? 0) > 0;
+	const open = dayShifts.filter((row) => row.live.kind === "open");
+	const issues = dayShifts.filter(isIssue);
+	const onClock = dayShifts.filter(
+		(row) => row.live.kind === "onClock" || row.live.kind === "late",
+	);
+	const visible =
+		filter === "open" ? open : filter === "issues" ? issues : dayShifts;
+
+	// Group by start time so a busy day reads as a handful of waves.
+	const groups = new Map<number, typeof visible>();
+	for (const row of visible) {
+		const list = groups.get(row.shift.startMinute) ?? [];
+		list.push(row);
+		groups.set(row.shift.startMinute, list);
+	}
+
+	function openRow(row: DayRow) {
+		const punch = row.punch;
+		if (!canReview || !punch?.versionShiftId || !row.shift.workerName) return;
+		const name = row.shift.workerName;
+		const mark = (kind: "late" | "no_show" | "sick") =>
+			markAttendance.mutate(
+				{ versionShiftId: punch.versionShiftId, kind },
+				{
+					onSuccess: tapSuccess,
+					onError: (error) =>
+						Alert.alert("Could not save", (error as Error).message),
+				},
+			);
+		showActionSheet({
+			title: `Mark ${name}`,
+			message: "Attendance marks don’t change the published schedule.",
+			actions: [
+				{ label: "Late", onPress: () => mark("late") },
+				{ label: "No-show", destructive: true, onPress: () => mark("no_show") },
+				{ label: "Sick", onPress: () => mark("sick") },
+			],
+		});
+	}
+
+	return (
+		<FadeSwap style={{ gap: spacing.xl }}>
+			<View style={{ flexDirection: "row", gap: spacing.md }}>
+				{day === today ? (
+					<Metric
+						icon="clockFill"
+						value={onClock.length}
+						label="On the clock"
+						tone="success"
+					/>
+				) : null}
+				<Metric icon="calendar" value={dayShifts.length} label="Scheduled" />
+				<Metric
+					icon="handRaised"
+					value={open.length}
+					label="Open shifts"
+					tone={open.length > 0 ? "warning" : "primary"}
+				/>
+				{day !== today ? (
+					<Metric
+						icon="warning"
+						value={issues.length}
+						label="Issues"
+						tone={issues.length > 0 ? "danger" : "primary"}
+					/>
+				) : null}
+			</View>
+
+			{dayShifts.length > 0 ? (
+				<ChoiceChips<Filter>
+					accessibilityLabel="Filter shifts"
+					value={filter}
+					onChange={onFilter}
+					options={[
+						{ value: "all", label: `All ${dayShifts.length}` },
+						{ value: "open", label: `Open ${open.length}` },
+						{
+							value: "issues",
+							label: `Needs attention ${issues.length}`,
+						},
+					]}
+				/>
+			) : null}
+
+			{dayShifts.length === 0 ? (
+				<EmptyState
+					icon="calendar"
+					title="Nothing scheduled"
+					body="No shifts on this day. Build and publish the week on the web Schedule grid."
+				/>
+			) : visible.length === 0 ? (
+				<EmptyState
+					icon="checkCircle"
+					tone="success"
+					title={
+						filter === "open"
+							? "Every shift is covered"
+							: "Nothing needs attention"
+					}
+					body={
+						filter === "open"
+							? "All shifts on this day have someone assigned."
+							: "Everyone scheduled is where they should be."
+					}
+				/>
+			) : (
+				[...groups.entries()].map(([minute, rows], index) => (
+					<Appear key={minute} index={index}>
+						<Section
+							title={formatMinute(minute)}
+							caption={`${rows.length} shift${rows.length === 1 ? "" : "s"}`}
+						>
+							<Card padded={false} style={{ gap: 0 }}>
+								{rows.map((row, rowIndex) => (
+									<View key={row.shift.id}>
+										{rowIndex > 0 ? <Divider inset={68} /> : null}
+										<ShiftRow
+											shift={row.shift}
+											live={row.live}
+											attendance={row.punch?.attendance ?? null}
+											onPress={
+												canReview &&
+												row.punch?.versionShiftId &&
+												row.shift.workerName
+													? () => openRow(row)
+													: undefined
+											}
+										/>
+									</View>
+								))}
+							</Card>
+						</Section>
+					</Appear>
+				))
+			)}
+		</FadeSwap>
 	);
 }
 

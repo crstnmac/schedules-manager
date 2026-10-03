@@ -71,7 +71,7 @@ import {
 	UserPlusIcon,
 	UsersIcon,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
@@ -85,8 +85,6 @@ import {
 	useListView,
 } from "@/components/list-view";
 import { RequiredTextField } from "@/components/required-text-field";
-import { WorkerDirectoryImportSheet } from "@/components/worker-directory-import-sheet";
-import { WorkerImportSheet } from "@/components/worker-import-sheet";
 import { api } from "@/lib/api";
 import {
 	type InvitationDto,
@@ -96,7 +94,19 @@ import {
 	type WorkerDto,
 } from "@/lib/queries";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
+import { useMountedOnce } from "@/lib/use-mounted-once";
 import { useWorkplace } from "@/lib/use-workplace";
+
+const WorkerImportSheet = lazy(() =>
+	import("@/components/worker-import-sheet").then((m) => ({
+		default: m.WorkerImportSheet,
+	})),
+);
+const WorkerDirectoryImportSheet = lazy(() =>
+	import("@/components/worker-directory-import-sheet").then((m) => ({
+		default: m.WorkerDirectoryImportSheet,
+	})),
+);
 
 export const Route = createFileRoute("/dashboard/workers/")({
 	component: WorkersPage,
@@ -202,6 +212,8 @@ function WorkersPage() {
 	const [inviteOpen, setInviteOpen] = useState(false);
 	const [importOpen, setImportOpen] = useState(false);
 	const [directoryOpen, setDirectoryOpen] = useState(false);
+	const importMounted = useMountedOnce(importOpen);
+	const directoryMounted = useMountedOnce(directoryOpen);
 	const [deactivateTarget, setDeactivateTarget] = useState<WorkerDto | null>(
 		null,
 	);
@@ -1104,25 +1116,29 @@ function WorkersPage() {
 				</FieldGroup>
 			</FormSheet>
 
-			{workplace ? (
-				<WorkerImportSheet
-					open={importOpen}
-					onOpenChange={setImportOpen}
-					workplaceId={workplace.id}
-					onImported={() => {
-						setTab("invitations");
-						invalidate();
-					}}
-				/>
+			{workplace && importMounted ? (
+				<Suspense fallback={null}>
+					<WorkerImportSheet
+						open={importOpen}
+						onOpenChange={setImportOpen}
+						workplaceId={workplace.id}
+						onImported={() => {
+							setTab("invitations");
+							invalidate();
+						}}
+					/>
+				</Suspense>
 			) : null}
 
-			{workplace ? (
-				<WorkerDirectoryImportSheet
-					open={directoryOpen}
-					onOpenChange={setDirectoryOpen}
-					workplaceId={workplace.id}
-					onImported={invalidate}
-				/>
+			{workplace && directoryMounted ? (
+				<Suspense fallback={null}>
+					<WorkerDirectoryImportSheet
+						open={directoryOpen}
+						onOpenChange={setDirectoryOpen}
+						workplaceId={workplace.id}
+						onImported={invalidate}
+					/>
+				</Suspense>
 			) : null}
 
 			<AlertDialog

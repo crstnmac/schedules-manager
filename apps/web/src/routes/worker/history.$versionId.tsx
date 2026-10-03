@@ -20,7 +20,7 @@ import {
 } from "@/components/list-view";
 import { usePublishedVersion } from "@/lib/queries";
 import { formatDay } from "@/lib/time";
-import { useDisplayPrefs } from "@/lib/use-display-prefs";
+import { useStablePrefs } from "./-shared/use-stable-prefs";
 
 export const Route = createFileRoute("/worker/history/$versionId")({
 	component: WorkerHistory,
@@ -55,7 +55,7 @@ const shiftId = (shift: HistoryShift) => shift.id;
 
 function WorkerHistory() {
 	const { versionId } = Route.useParams();
-	const { formatShiftRange } = useDisplayPrefs();
+	const { formatShiftRange } = useStablePrefs();
 	const version = usePublishedVersion(versionId);
 	const data = version.data;
 	const list = useListView<HistoryShift>({

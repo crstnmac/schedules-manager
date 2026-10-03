@@ -143,16 +143,90 @@ export function useMySchedule(workplaceId: string | undefined, enabled = true) {
 	});
 }
 
+type MyScheduleSnapshot = [
+	readonly unknown[],
+	MyScheduleResponse | undefined,
+][];
+
+/**
+ * Optimistically patch every cached my-schedule query; returns the snapshot
+ * so a failed mutation can roll back.
+ */
+function patchMySchedule(
+	queryClient: ReturnType<typeof useQueryClient>,
+	patch: (data: MyScheduleResponse) => MyScheduleResponse,
+): MyScheduleSnapshot {
+	const snapshot = queryClient.getQueriesData<MyScheduleResponse>({
+		queryKey: ["my-schedule"],
+	});
+	for (const [key, data] of snapshot) {
+		if (data) queryClient.setQueryData<MyScheduleResponse>(key, patch(data));
+	}
+	return snapshot;
+}
+
+function restoreMySchedule(
+	queryClient: ReturnType<typeof useQueryClient>,
+	snapshot: MyScheduleSnapshot | undefined,
+) {
+	for (const [key, data] of snapshot ?? []) queryClient.setQueryData(key, data);
+}
+
 export function useAcknowledge() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
 		mutationFn: (versionId: string) =>
 			api(`/v1/my/deliveries/${versionId}/acknowledge`, { method: "POST" }),
-		onSuccess: () => {
+		onMutate: async (versionId) => {
+			await queryClient.cancelQueries({ queryKey: ["my-schedule"] });
+			return {
+				snapshot: patchMySchedule(queryClient, (data) => {
+					const week = data.currentWeek;
+					if (!week || week.version?.id !== versionId) return data;
+					return {
+						...data,
+						currentWeek: { ...week, deliveryStatus: "acknowledged" },
+					};
+				}),
+			};
+		},
+		onError: (_error, _versionId, context) =>
+			restoreMySchedule(queryClient, context?.snapshot),
+		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 		},
 	});
+}
+
+/** Set a shift's time entry in every cached my-schedule query. */
+function patchShiftTimeEntry(
+	queryClient: ReturnType<typeof useQueryClient>,
+	versionShiftId: string,
+	timeEntry: (
+		current: { clockedInAt: string; clockedOutAt: string | null } | null,
+	) => { clockedInAt: string; clockedOutAt: string | null } | null,
+): MyScheduleSnapshot {
+	const patchWeek = (week: MyScheduleResponse["currentWeek"]) =>
+		week
+			? {
+					...week,
+					shifts: week.shifts.map((shift) =>
+						shift.id === versionShiftId
+							? { ...shift, timeEntry: timeEntry(shift.timeEntry) }
+							: shift,
+					),
+				}
+			: week;
+	return patchMySchedule(queryClient, (data) => ({
+		...data,
+		currentWeek: patchWeek(data.currentWeek),
+		nextWeek: patchWeek(data.nextWeek),
+		nextShift:
+			data.nextShift?.id === versionShiftId
+				? { ...data.nextShift, timeEntry: timeEntry(data.nextShift.timeEntry) }
+				: data.nextShift,
+	}));
 }
 
 export function useClockIn() {
@@ -166,7 +240,19 @@ export function useClockIn() {
 				{ method: "POST", body: coordinates },
 			);
 		},
-		onSuccess: () => {
+		onMutate: async (versionShiftId) => {
+			await queryClient.cancelQueries({ queryKey: ["my-schedule"] });
+			const clockedInAt = new Date().toISOString();
+			return {
+				snapshot: patchShiftTimeEntry(queryClient, versionShiftId, () => ({
+					clockedInAt,
+					clockedOutAt: null,
+				})),
+			};
+		},
+		onError: (_error, _id, context) =>
+			restoreMySchedule(queryClient, context?.snapshot),
+		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 			queryClient.invalidateQueries({ queryKey: ["timecard"] });
 			queryClient.invalidateQueries({ queryKey: ["pay-period"] });
@@ -196,7 +282,19 @@ export function useClockOut() {
 				body: workerNote ? { workerNote } : undefined,
 			});
 		},
-		onSuccess: () => {
+		onMutate: async (input) => {
+			await queryClient.cancelQueries({ queryKey: ["my-schedule"] });
+			const id = typeof input === "string" ? input : input.versionShiftId;
+			const clockedOutAt = new Date().toISOString();
+			return {
+				snapshot: patchShiftTimeEntry(queryClient, id, (current) =>
+					current ? { ...current, clockedOutAt } : current,
+				),
+			};
+		},
+		onError: (_error, _input, context) =>
+			restoreMySchedule(queryClient, context?.snapshot),
+		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 			queryClient.invalidateQueries({ queryKey: ["timecard"] });
 			queryClient.invalidateQueries({ queryKey: ["pay-period"] });
@@ -216,13 +314,17 @@ export interface TimecardEntry {
 	timezone?: string;
 }
 
+const timecardOptions = (workplaceId: string | undefined) => ({
+	queryKey: ["timecard", workplaceId] as const,
+	queryFn: () =>
+		api<{ timeEntries: TimecardEntry[] }>(
+			`/v1/workplaces/${workplaceId}/my/time-entries`,
+		),
+});
+
 export function useMyTimeEntries(workplaceId: string | undefined) {
 	return useQuery({
-		queryKey: ["timecard", workplaceId],
-		queryFn: () =>
-			api<{ timeEntries: TimecardEntry[] }>(
-				`/v1/workplaces/${workplaceId}/my/time-entries`,
-			),
+		...timecardOptions(workplaceId),
 		enabled: Boolean(workplaceId),
 	});
 }
@@ -348,6 +450,8 @@ export function usePrefetchLikelyScreens(workplaceId: string | undefined) {
 			void queryClient.prefetchQuery(openShiftsOptions(workplaceId));
 			void queryClient.prefetchQuery(notificationsOptions(workplaceId));
 			void queryClient.prefetchQuery(conversationsOptions(workplaceId));
+			void queryClient.prefetchQuery(timecardOptions(workplaceId));
+			void queryClient.prefetchQuery(mySwapsOptions(workplaceId));
 		}, 800);
 		return () => clearTimeout(handle);
 	}, [queryClient, workplaceId]);
@@ -538,15 +642,61 @@ export interface SwapDetail {
 	};
 }
 
+const mySwapsOptions = (workplaceId: string | undefined) => ({
+	queryKey: ["swaps", workplaceId] as const,
+	queryFn: () => api<MySwapsData>(`/v1/workplaces/${workplaceId}/my/swaps`),
+});
+
+/** Only the pending swaps, so settled ones never rerender the home card. */
+const selectPendingSwaps = (data: MySwapsData) =>
+	data.swaps.filter(
+		(item) =>
+			item.swap.status === "pending_counterpart" ||
+			item.swap.status === "pending_manager",
+	);
+
 export function useMySwaps(workplaceId: string | undefined) {
 	return useQuery({
-		queryKey: ["swaps", workplaceId],
-		queryFn: () =>
-			api<{
-				swaps: { direction: "outgoing" | "incoming"; swap: SwapDetail }[];
-			}>(`/v1/workplaces/${workplaceId}/my/swaps`),
+		...mySwapsOptions(workplaceId),
 		enabled: Boolean(workplaceId),
 	});
+}
+
+export function useMyPendingSwaps(workplaceId: string | undefined) {
+	return useQuery({
+		...mySwapsOptions(workplaceId),
+		select: selectPendingSwaps,
+		enabled: Boolean(workplaceId),
+	});
+}
+
+type MySwapsData = {
+	swaps: { direction: "outgoing" | "incoming"; swap: SwapDetail }[];
+};
+
+/** Optimistically drop a swap from the cached lists; returns a rollback. */
+function removeSwapOptimistically(
+	queryClient: ReturnType<typeof useQueryClient>,
+	swapId: string,
+) {
+	const snapshot = queryClient.getQueriesData<MySwapsData>({
+		queryKey: ["swaps"],
+	});
+	for (const [key, data] of snapshot) {
+		if (!data) continue;
+		queryClient.setQueryData<MySwapsData>(key, {
+			...data,
+			swaps: data.swaps.filter((item) => item.swap.id !== swapId),
+		});
+	}
+	return snapshot;
+}
+
+function restoreSwaps(
+	queryClient: ReturnType<typeof useQueryClient>,
+	snapshot: [readonly unknown[], MySwapsData | undefined][] | undefined,
+) {
+	for (const [key, data] of snapshot ?? []) queryClient.setQueryData(key, data);
 }
 
 export function useRespondToSwap() {
@@ -557,7 +707,13 @@ export function useRespondToSwap() {
 				method: "POST",
 				body: { decision: input.decision },
 			}),
-		onSuccess: () => {
+		onMutate: async (input) => {
+			await queryClient.cancelQueries({ queryKey: ["swaps"] });
+			return { snapshot: removeSwapOptimistically(queryClient, input.swapId) };
+		},
+		onError: (_error, _input, context) =>
+			restoreSwaps(queryClient, context?.snapshot),
+		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: ["swaps"] });
 			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 			queryClient.invalidateQueries({ queryKey: ["coverage-swaps"] });
@@ -570,7 +726,13 @@ export function useCancelSwap() {
 	return useMutation({
 		mutationFn: (swapId: string) =>
 			api(`/v1/my/swaps/${swapId}/cancel`, { method: "POST" }),
-		onSuccess: () => {
+		onMutate: async (swapId) => {
+			await queryClient.cancelQueries({ queryKey: ["swaps"] });
+			return { snapshot: removeSwapOptimistically(queryClient, swapId) };
+		},
+		onError: (_error, _id, context) =>
+			restoreSwaps(queryClient, context?.snapshot),
+		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: ["swaps"] });
 			queryClient.invalidateQueries({ queryKey: ["coverage-swaps"] });
 		},
@@ -681,7 +843,20 @@ export function useRespondToAcceptance() {
 			api(`/v1/my/shift-acceptances/${input.acceptanceId}/${input.decision}`, {
 				method: "POST",
 			}),
-		onSuccess: () => {
+		onMutate: async (input) => {
+			await queryClient.cancelQueries({ queryKey: ["my-schedule"] });
+			return {
+				snapshot: patchMySchedule(queryClient, (data) => ({
+					...data,
+					pendingAcceptances: data.pendingAcceptances.filter(
+						(a) => a.id !== input.acceptanceId,
+					),
+				})),
+			};
+		},
+		onError: (_error, _input, context) =>
+			restoreMySchedule(queryClient, context?.snapshot),
+		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
 		},
 	});
@@ -761,6 +936,8 @@ export function usePublishedVersion(versionId: string | null) {
 	return useQuery({
 		queryKey: ["published-version", versionId],
 		queryFn: () => api<PublishedWeek>(`/v1/my/versions/${versionId}`),
+		// A published version is immutable, so reopening one never refetches.
+		staleTime: Number.POSITIVE_INFINITY,
 		enabled: Boolean(versionId),
 	});
 }

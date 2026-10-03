@@ -15,7 +15,6 @@ import {
 	AlertDialogTitle,
 	AlertDialogTrigger,
 } from "@SchedulesManager/ui/components/alert-dialog";
-import { Avatar, AvatarFallback } from "@SchedulesManager/ui/components/avatar";
 import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import { Card, CardHeader } from "@SchedulesManager/ui/components/card";
@@ -92,18 +91,12 @@ import {
 	TooltipTrigger,
 } from "@SchedulesManager/ui/components/tooltip";
 import { cn } from "@SchedulesManager/ui/lib/utils";
-import {
-	DragDropProvider,
-	type DragEndEvent,
-	useDroppable,
-} from "@dnd-kit/react";
+import { DragDropProvider, type DragEndEvent } from "@dnd-kit/react";
 import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
 	AlertTriangleIcon,
-	BanIcon,
-	CalendarOffIcon,
 	ChevronDownIcon,
 	ChevronLeftIcon,
 	ChevronRightIcon,
@@ -115,18 +108,15 @@ import {
 	PlusIcon,
 	SearchIcon,
 	SendIcon,
-	StarIcon,
 	TagsIcon,
 	Trash2Icon,
 	UserPlusIcon,
-	UserRoundXIcon,
 	UsersIcon,
 	XIcon,
 } from "lucide-react";
 import {
 	type CSSProperties,
 	lazy,
-	memo,
 	Suspense,
 	useCallback,
 	useDeferredValue,
@@ -142,12 +132,26 @@ import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { DatePicker } from "@/components/date-picker";
 import { ImportSheet } from "@/components/import-sheet";
+import { formatDayLabel, weekdayShort } from "@/components/schedule/format";
 import {
 	ScheduleMobileBoard,
 	ScheduleMobileBoardSkeleton,
 } from "@/components/schedule/mobile-board";
+import {
+	ScheduleDayHeader,
+	type ScheduleDayInfo,
+	ScheduleOffRosterRow,
+	ScheduleOpenRow,
+	ScheduleStaffCorner,
+	type ScheduleSurfaceFilter,
+	ScheduleWorkerRow,
+	shiftMatchesSurface,
+} from "@/components/schedule/schedule-grid";
+import {
+	createShiftSelectionStore,
+	useShiftSelectionSync,
+} from "@/components/schedule/selection-store";
 import { ScheduleMonthGrid } from "@/components/schedule-month-grid";
-import { ShiftTile } from "@/components/schedule-shift-tile";
 import { TimePicker } from "@/components/time-picker";
 import { api } from "@/lib/api";
 import { hasCapability } from "@/lib/privileges";
@@ -189,7 +193,7 @@ import {
 	positionColor,
 	weekStartOf,
 } from "@/lib/schedule-calendar";
-import { shiftOverlapsTimeOff, timeOffCoversDay } from "@/lib/schedule-timeoff";
+import { shiftOverlapsTimeOff } from "@/lib/schedule-timeoff";
 import {
 	datetimeLocalToIso,
 	formatDay,
@@ -448,39 +452,12 @@ const changeColumns = changeHelper.columns([
 	changeHelper.accessor("summary", { header: "Change" }),
 ]);
 
-function formatDayLabel(dateKey: string): string {
-	return new Date(`${dateKey}T12:00:00`).toLocaleDateString(undefined, {
-		weekday: "short",
-		month: "short",
-		day: "numeric",
-	});
-}
-
 function formatWeekLabel(weekStart: string): string {
 	const start = new Date(`${weekStart}T12:00:00`);
 	const end = new Date(`${addDays(weekStart, 6)}T12:00:00`);
 	const fmt = (d: Date) =>
 		d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 	return `${fmt(start)} – ${fmt(end)}`;
-}
-
-function weekdayShort(dateKey: string): string {
-	return new Date(`${dateKey}T12:00:00`).toLocaleDateString(undefined, {
-		weekday: "short",
-	});
-}
-
-function isWeekendDate(dateKey: string): boolean {
-	const day = new Date(`${dateKey}T12:00:00`).getDay();
-	return day === 0 || day === 6;
-}
-
-function formatCents(cents: number) {
-	return new Intl.NumberFormat("en-US", {
-		style: "currency",
-		currency: "USD",
-		maximumFractionDigits: 0,
-	}).format(cents / 100);
 }
 
 function PublicationBadge({
@@ -727,91 +704,6 @@ function positionApprovalCopy(approval: PositionApproval) {
 	};
 }
 
-function positionsLabel(count: number): string {
-	if (count === 0) return "All positions";
-	return `${count} position${count === 1 ? "" : "s"}`;
-}
-
-interface CellConstraint {
-	key: string;
-	kind: "unavailability" | "timeOff";
-	label: string;
-}
-
-function cellConstraints(
-	member: ScheduleResponse["staff"][number],
-	day: string,
-	formatMinute: (minute: number) => string,
-	timeZone: string,
-): CellConstraint[] {
-	const weekday = new Date(`${day}T12:00:00`).getDay();
-	const constraints: CellConstraint[] = [];
-	for (const window of member.unavailability ?? []) {
-		const matches =
-			window.kind === "recurring"
-				? window.weekday === weekday
-				: window.date === day;
-		if (!matches) continue;
-		constraints.push({
-			key: `unavailability-${window.kind}-${window.weekday ?? window.date}-${window.startMinute}`,
-			kind: "unavailability",
-			label: `Can't work ${formatMinute(window.startMinute)}–${formatMinute(window.endMinute)}`,
-		});
-	}
-	for (const request of member.timeOff ?? []) {
-		if (request.status === "declined") continue;
-		if (!timeOffCoversDay(request, day, timeZone)) continue;
-		constraints.push({
-			key: `timeOff-${request.startsAt}`,
-			kind: "timeOff",
-			label: request.status === "approved" ? "Time off" : "Time off (pending)",
-		});
-	}
-	return constraints;
-}
-
-const ScheduleDropCell = memo(function ScheduleDropCell({
-	employmentId,
-	date,
-	className,
-	children,
-}: {
-	employmentId: string | null;
-	date: string;
-	className?: string;
-	children: React.ReactNode;
-}) {
-	const { ref, isDropTarget } = useDroppable({
-		id: `cell:${employmentId ?? "open"}:${date}`,
-		type: "schedule-cell",
-		accept: "schedule-shift",
-		data: { employmentId, date },
-	});
-
-	return (
-		<div
-			ref={ref}
-			className={cn(
-				className,
-				"transition-colors duration-150 motion-reduce:transition-none",
-				isDropTarget &&
-					"bg-primary/10 ring-2 ring-primary/45 ring-inset motion-reduce:transition-none",
-			)}
-		>
-			{children}
-		</div>
-	);
-});
-
-function initials(name: string): string {
-	return name
-		.split(/\s+/)
-		.filter(Boolean)
-		.slice(0, 2)
-		.map((part) => part[0]?.toUpperCase() ?? "")
-		.join("");
-}
-
 const SKELETON_DAYS = [
 	"mon",
 	"tue",
@@ -914,7 +806,8 @@ function SchedulePage() {
 	const subject = kind ? { kind, privileges: privileges ?? null } : null;
 	const canManage = hasCapability(subject, "schedule.manage");
 	const canPublish = hasCapability(subject, "schedule.publish");
-	const { formatMinute } = useDisplayPrefs();
+	const { formatMinute, timeFormat } = useDisplayPrefs();
+	const stableFormatMinute = useStableCallback(formatMinute);
 	const posthog = usePostHog();
 	const scheduleStaffColumns = useMemo(
 		() => createScheduleStaffColumns(formatMinute),
@@ -945,6 +838,8 @@ function SchedulePage() {
 	const [tagFilter, setTagFilter] = useState("all");
 	const [timeBlockFilter, setTimeBlockFilter] = useState("all");
 	const [selectedShiftIds, setSelectedShiftIds] = useState<string[]>([]);
+	const [selectionStore] = useState(createShiftSelectionStore);
+	useShiftSelectionSync(selectionStore, selectedShiftIds);
 	const [patternOpen, setPatternOpen] = useState(false);
 	const [scheduleImportOpen, setScheduleImportOpen] = useState(false);
 	const [publishSelectionOpen, setPublishSelectionOpen] = useState(false);
@@ -957,7 +852,6 @@ function SchedulePage() {
 			note: string | null;
 		}[]
 	>([]);
-	const [salesDollars, setSalesDollars] = useState("");
 	const [repeatWeeks, setRepeatWeeks] = useState("1");
 	const [templateName, setTemplateName] = useState("");
 	const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
@@ -1402,8 +1296,10 @@ function SchedulePage() {
 	});
 
 	const data = schedule.data;
+	const canAddShift = Boolean(data && data.positions.length > 0);
 	const scheduleTimeZone = data?.schedule.timezone ?? "America/Chicago";
 	const publicationState = data?.publication;
+	const previousShiftGroups = useRef(new Map<string, ScheduleShiftDto[]>());
 	const scheduleIndex = useMemo(() => {
 		const shiftsByWorkerDay = new Map<string, ScheduleShiftDto[]>();
 		const hoursByEmploymentId = new Map<string, number>();
@@ -1423,6 +1319,19 @@ function SchedulePage() {
 		for (const entry of data?.hours ?? []) {
 			hoursByEmploymentId.set(entry.employmentId, entry.minutes);
 		}
+		// Reuse the previous array for any cell whose shifts are unchanged so
+		// memoized cells keep a stable `shifts` prop across refetches.
+		for (const [key, shifts] of shiftsByWorkerDay) {
+			const previous = previousShiftGroups.current.get(key);
+			if (
+				previous &&
+				previous.length === shifts.length &&
+				previous.every((shift, index) => shift === shifts[index])
+			) {
+				shiftsByWorkerDay.set(key, previous);
+			}
+		}
+		previousShiftGroups.current = shiftsByWorkerDay;
 		return {
 			shiftsByWorkerDay,
 			hoursByEmploymentId,
@@ -1527,20 +1436,18 @@ function SchedulePage() {
 		return map;
 	}, [laborQuery.data?.byDate]);
 
-	function prepareDaySales(day: string) {
+	const prepareDaySales = useStableCallback((day: string) => {
 		setSelectedDay(day);
-		const cents = salesByDate.get(day) ?? 0;
-		setSalesDollars(cents > 0 ? String(cents / 100) : "");
-	}
+	});
 
-	function submitDaySales(day: string) {
-		const dollars = Number(salesDollars);
+	const submitDaySales = useStableCallback((day: string, input: string) => {
+		const dollars = Number(input);
 		if (!Number.isFinite(dollars) || dollars < 0) {
 			toast.error("Enter daily sales as a dollar amount");
 			return;
 		}
 		saveSales.mutate({ day, amountCents: Math.round(dollars * 100) });
-	}
+	});
 	const deferredWorkerQuery = useDeferredValue(workerQuery);
 	const filteredStaff = useMemo(() => {
 		const query = deferredWorkerQuery.trim().toLocaleLowerCase();
@@ -1576,7 +1483,10 @@ function SchedulePage() {
 		staffStateFilter,
 		deferredWorkerQuery,
 	]);
-	const visibleStaff = filteredStaff.slice(0, visibleStaffCount);
+	const visibleStaff = useMemo(
+		() => filteredStaff.slice(0, visibleStaffCount),
+		[filteredStaff, visibleStaffCount],
+	);
 	const hasStaffFilters =
 		workerQuery.trim().length > 0 ||
 		positionFilter !== "all" ||
@@ -1600,21 +1510,23 @@ function SchedulePage() {
 		setVisibleStaffCount(40);
 	};
 
-	function shiftMatchesSurfaceFilters(shift: ScheduleShiftDto) {
-		if (tagFilter !== "all" && !shift.tagIds.includes(tagFilter)) return false;
-		if (timeBlockFilter !== "all") {
-			const part = (timeBlocks.data?.timeBlocks ?? []).find(
-				(row) => row.id === timeBlockFilter,
-			);
-			if (
-				part &&
-				(shift.startMinute < part.startMinute ||
-					shift.startMinute >= part.endMinute)
-			)
-				return false;
-		}
-		return true;
-	}
+	const timeBlockRows = timeBlocks.data?.timeBlocks;
+	const surfaceFilter = useMemo<ScheduleSurfaceFilter>(() => {
+		const part =
+			timeBlockFilter === "all"
+				? undefined
+				: (timeBlockRows ?? []).find((row) => row.id === timeBlockFilter);
+		return {
+			tagFilter,
+			timePart: part
+				? { startMinute: part.startMinute, endMinute: part.endMinute }
+				: null,
+		};
+	}, [tagFilter, timeBlockFilter, timeBlockRows]);
+	const shiftMatchesSurfaceFilters = useCallback(
+		(shift: ScheduleShiftDto) => shiftMatchesSurface(shift, surfaceFilter),
+		[surfaceFilter],
+	);
 
 	function shiftMatchesCalendarFilters(shift: ScheduleShiftDto) {
 		if (!shiftMatchesSurfaceFilters(shift)) return false;
@@ -1636,18 +1548,52 @@ function SchedulePage() {
 		return true;
 	}
 
-	const days = Array.from({ length: 7 }, (_, index) =>
-		addDays(weekStart, index),
+	const days = useMemo(
+		() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)),
+		[weekStart],
 	);
 	const todayKey = workplaceTodayKey(scheduleTimeZone);
-	const visibleDays =
-		viewMode === "day"
-			? days.includes(selectedDay)
-				? [selectedDay]
-				: [weekStart]
-			: todayFocus && days.includes(todayKey)
-				? days.filter((day) => day === todayKey)
-				: days;
+	const visibleDays = useMemo(
+		() =>
+			viewMode === "day"
+				? days.includes(selectedDay)
+					? [selectedDay]
+					: [weekStart]
+				: todayFocus && days.includes(todayKey)
+					? days.filter((day) => day === todayKey)
+					: days,
+		[viewMode, days, selectedDay, weekStart, todayFocus, todayKey],
+	);
+	const visibleDayInfos = useMemo<ScheduleDayInfo[]>(
+		() =>
+			visibleDays.map((day) => {
+				const date = new Date(`${day}T12:00:00`);
+				return {
+					key: day,
+					isToday: day === todayKey,
+					isWeekend: days.indexOf(day) >= 5,
+					dayName: date.toLocaleDateString(undefined, { weekday: "long" }),
+					dateNumber: date.getDate(),
+				};
+			}),
+		[visibleDays, days, todayKey],
+	);
+	const gridColumnsStyle = useMemo(
+		() =>
+			({
+				"--schedule-grid-columns":
+					gridDensity === "compact"
+						? `200px repeat(${visibleDays.length}, minmax(118px, 1fr))`
+						: `220px repeat(${visibleDays.length}, minmax(132px, 1fr))`,
+				"--schedule-grid-min-width":
+					visibleDays.length === 1
+						? "auto"
+						: gridDensity === "compact"
+							? "1032px"
+							: "1144px",
+			}) as CSSProperties,
+		[gridDensity, visibleDays.length],
+	);
 
 	function openEdit(shift: ScheduleShiftDto) {
 		setAddDates([]);
@@ -1679,6 +1625,18 @@ function SchedulePage() {
 	const stableToggleSelect = useStableCallback((shift: ScheduleShiftDto) =>
 		toggleShiftSelect(shift.id),
 	);
+	const stableAddShift = useStableCallback(
+		(member: ScheduleResponse["staff"][number], day: string) => {
+			const draft = emptyForm(day);
+			draft.employmentId = member.employmentId;
+			const positions = positionsForWorker(data?.positions ?? [], member);
+			if (positions.length === 1) draft.positionId = positions[0]?.id ?? "";
+			setAddDates([day]);
+			setAddEmploymentIds([member.employmentId]);
+			syncPunchFields(undefined);
+			setForm(draft);
+		},
+	);
 
 	function openCreate(date: string) {
 		if (!data) return;
@@ -1695,6 +1653,8 @@ function SchedulePage() {
 		syncPunchFields(undefined);
 		setForm(draft);
 	}
+
+	const stableOpenCreate = useStableCallback(openCreate);
 
 	function createShiftCount(state: ShiftFormState) {
 		if (state.shiftId) return 1;
@@ -3836,362 +3796,53 @@ function SchedulePage() {
 								<div className="schedule-grid-scroll min-h-0 min-w-0 flex-1 overflow-auto overscroll-none">
 									<div
 										className="grid min-w-(--schedule-grid-min-width) grid-cols-(--schedule-grid-columns)"
-										style={
-											{
-												"--schedule-grid-columns":
-													gridDensity === "compact"
-														? `200px repeat(${visibleDays.length}, minmax(118px, 1fr))`
-														: `220px repeat(${visibleDays.length}, minmax(132px, 1fr))`,
-												"--schedule-grid-min-width":
-													visibleDays.length === 1
-														? "auto"
-														: gridDensity === "compact"
-															? "1032px"
-															: "1144px",
-											} as CSSProperties
-										}
+										style={gridColumnsStyle}
 									>
-										<div className="sticky top-0 left-0 z-30 flex items-end border-border border-r border-b bg-muted px-3 py-2">
-											<span className="font-medium text-muted-foreground text-xs">
-												Staff
-											</span>
-										</div>
-										{visibleDays.map((day) => {
-											const isToday = day === todayKey;
-											const summary = daySummaries.get(day);
-											const daySalesCents = salesByDate.get(day) ?? 0;
-											const holiday = holidayByDate.get(day);
-											const hoursLabel =
-												summary && summary.minutes > 0
-													? `${(summary.minutes / 60).toFixed(1)}h`
-													: null;
-											return (
-												<div
-													key={day}
-													className={cn(
-														"group/day sticky top-0 z-20 flex flex-col items-center gap-0.5 border-border border-r border-b bg-muted px-1.5 py-2 last:border-r-0",
-														isToday && "bg-primary/10",
-													)}
-												>
-													<span
-														className={cn(
-															"font-medium text-xs leading-none",
-															isToday
-																? "text-primary"
-																: "text-muted-foreground",
-														)}
-													>
-														{weekdayShort(day)}
-													</span>
-													<span
-														className={cn(
-															"flex size-7 items-center justify-center font-semibold text-sm tabular-nums leading-none",
-															isToday &&
-																"rounded-full bg-primary text-primary-foreground",
-														)}
-													>
-														{new Date(`${day}T12:00:00`).getDate()}
-													</span>
-													{hoursLabel ? (
-														<span className="text-muted-foreground/80 text-xs tabular-nums leading-none">
-															{hoursLabel}
-														</span>
-													) : null}
-													{holiday ? (
-														<Tooltip>
-															<TooltipTrigger
-																render={
-																	<span className="flex max-w-full items-center gap-0.5 rounded bg-warning/40 px-1 py-0.5 font-medium text-warning-foreground text-xs leading-none">
-																		<StarIcon className="size-2.5 shrink-0" />
-																		<span className="truncate">
-																			{holiday.name}
-																		</span>
-																	</span>
-																}
-															/>
-															<TooltipContent>
-																Holiday · {holiday.name}
-															</TooltipContent>
-														</Tooltip>
-													) : null}
-													<Popover
-														onOpenChange={(open) => {
-															if (open) prepareDaySales(day);
-														}}
-													>
-														<PopoverTrigger
-															render={
-																<Button
-																	variant="ghost"
-																	size="xs"
-																	aria-label={`Sales for ${formatDayLabel(day)}`}
-																	className={cn(
-																		"h-4 px-1 font-normal text-muted-foreground text-xs tabular-nums",
-																		daySalesCents > 0
-																			? undefined
-																			: "opacity-0 transition-opacity focus-visible:opacity-100 [@media(hover:hover)]:group-hover/day:opacity-100 [@media(hover:none)]:opacity-60",
-																	)}
-																/>
-															}
-														>
-															{daySalesCents > 0
-																? formatCents(daySalesCents)
-																: "Sales"}
-														</PopoverTrigger>
-														<PopoverContent
-															align="center"
-															className="w-64"
-															sideOffset={6}
-														>
-															<PopoverHeader>
-																<PopoverTitle>
-																	Sales · {formatDayLabel(day)}
-																</PopoverTitle>
-																<PopoverDescription>
-																	Used for labor percent on this day.
-																</PopoverDescription>
-															</PopoverHeader>
-															<FieldGroup className="gap-3">
-																<Field>
-																	<FieldLabel htmlFor={`day-sales-${day}`}>
-																		Amount
-																	</FieldLabel>
-																	<InputGroup>
-																		<InputGroupAddon align="inline-start">
-																			$
-																		</InputGroupAddon>
-																		<InputGroupInput
-																			id={`day-sales-${day}`}
-																			inputMode="decimal"
-																			placeholder="0"
-																			value={
-																				selectedDay === day ? salesDollars : ""
-																			}
-																			onChange={(event) =>
-																				setSalesDollars(event.target.value)
-																			}
-																		/>
-																	</InputGroup>
-																</Field>
-																<Button
-																	size="sm"
-																	disabled={
-																		saveSales.isPending || !activeLocationId
-																	}
-																	onClick={() => submitDaySales(day)}
-																>
-																	{saveSales.isPending ? (
-																		<Spinner data-icon="inline-start" />
-																	) : null}
-																	Save sales
-																</Button>
-															</FieldGroup>
-														</PopoverContent>
-													</Popover>
-												</div>
-											);
-										})}
+										<ScheduleStaffCorner />
+										{visibleDayInfos.map((day) => (
+											<ScheduleDayHeader
+												key={day.key}
+												day={day}
+												minutes={daySummaries.get(day.key)?.minutes ?? 0}
+												salesCents={salesByDate.get(day.key) ?? 0}
+												holiday={holidayByDate.get(day.key)}
+												savingSales={saveSales.isPending}
+												canSaveSales={Boolean(activeLocationId)}
+												onPrepareSales={prepareDaySales}
+												onSubmitSales={submitDaySales}
+											/>
+										))}
 
-										{visibleStaff.map((member) => {
-											const hasConstraints =
-												(member.unavailability?.length ?? 0) > 0 ||
-												(member.timeOff?.length ?? 0) > 0;
-											const minutes =
-												scheduleIndex.hoursByEmploymentId.get(
-													member.employmentId,
-												) ?? 0;
-											const memberShiftCount =
-												scheduleIndex.shiftCountByEmploymentId.get(
-													member.employmentId,
-												) ?? 0;
-											return (
-												<div key={member.employmentId} className="contents">
-													<div
-														className={cn(
-															"sticky left-0 z-10 flex items-center gap-2.5 border-border border-r border-b bg-background px-3 py-2.5",
-															gridDensity === "compact"
-																? "min-h-[4.5rem]"
-																: "min-h-24",
-														)}
-													>
-														<Avatar size="sm" className="shrink-0">
-															<AvatarFallback
-																className={cn(
-																	member.kind === "manager" &&
-																		"bg-primary/10 font-semibold text-primary",
-																)}
-															>
-																{initials(member.name)}
-															</AvatarFallback>
-														</Avatar>
-														<div className="flex min-w-0 flex-1 flex-col gap-0.5">
-															<p
-																className="truncate font-medium text-sm leading-tight"
-																title={member.name}
-															>
-																{member.name}
-															</p>
-															<p className="truncate text-muted-foreground text-xs leading-tight">
-																{member.kind === "manager"
-																	? "Manager"
-																	: positionsLabel(member.positionIds.length)}
-																{" · "}
-																{memberShiftCount} shift
-																{memberShiftCount === 1 ? "" : "s"}
-															</p>
-														</div>
-														<div className="flex shrink-0 flex-col items-end gap-1">
-															<span
-																className="font-medium text-xs tabular-nums"
-																title={`${(minutes / 60).toFixed(1)} scheduled hours`}
-															>
-																{(minutes / 60).toFixed(1)}h
-															</span>
-															{hasConstraints ? (
-																<Tooltip>
-																	<TooltipTrigger
-																		render={
-																			<span className="inline-flex size-5 items-center justify-center text-muted-foreground">
-																				<BanIcon className="size-3.5" />
-																				<span className="sr-only">
-																					Has scheduling constraints
-																				</span>
-																			</span>
-																		}
-																	/>
-																	<TooltipContent>
-																		Has unavailability or time off
-																	</TooltipContent>
-																</Tooltip>
-															) : null}
-														</div>
-													</div>
-													{visibleDays.map((day) => {
-														const workerShifts = (
-															scheduleIndex.shiftsByWorkerDay.get(
-																`${member.employmentId}:${day}`,
-															) ?? []
-														).filter(shiftMatchesSurfaceFilters);
-														const constraints = cellConstraints(
-															member,
-															day,
-															formatMinute,
-															scheduleTimeZone,
-														);
-														const isEmptyCell =
-															workerShifts.length === 0 &&
-															constraints.length === 0;
-														const isToday = day === todayKey;
-														const dayIndex = days.indexOf(day);
-														const dayName = new Date(
-															`${day}T12:00:00`,
-														).toLocaleDateString(undefined, {
-															weekday: "long",
-														});
-														const isWeekend = dayIndex >= 5;
-														return (
-															<ScheduleDropCell
-																key={day}
-																employmentId={member.employmentId}
-																date={day}
-																className={cn(
-																	"group relative border-border/70 border-r border-b p-1.5 transition-colors last:border-r-0 [@media(hover:hover)]:hover:bg-accent/25",
-																	gridDensity === "compact"
-																		? "min-h-[4.5rem]"
-																		: "min-h-24",
-																	isWeekend && "bg-muted/30",
-																	isToday && "bg-primary/[0.035]",
-																)}
-															>
-																{constraints.length > 0 ? (
-																	<div className="mb-1 flex flex-col gap-1">
-																		{constraints.map((constraint) => (
-																			<Badge
-																				key={constraint.key}
-																				variant="outline"
-																				className="max-w-full gap-1 border-dashed px-1.5 font-normal text-muted-foreground text-xs"
-																			>
-																				{constraint.kind ===
-																				"unavailability" ? (
-																					<BanIcon data-icon="inline-start" />
-																				) : (
-																					<CalendarOffIcon data-icon="inline-start" />
-																				)}
-																				<span className="truncate">
-																					{constraint.label}
-																				</span>
-																			</Badge>
-																		))}
-																	</div>
-																) : null}
-																<div className="flex flex-col gap-1">
-																	{workerShifts.map((shift) => (
-																		<ShiftTile
-																			key={shift.id}
-																			shift={shift}
-																			onOpen={stableOpenEdit}
-																			onToggleSelect={stableToggleSelect}
-																			selected={selectedShiftIds.includes(
-																				shift.id,
-																			)}
-																			compact={gridDensity === "compact"}
-																			disabled={moveShift.isPending}
-																			timeclock={timeclockByShiftId.get(
-																				shift.id,
-																			)}
-																		/>
-																	))}
-																</div>
-																<Button
-																	type="button"
-																	aria-label={`Add shift for ${member.name} on ${dayName}`}
-																	variant={
-																		isEmptyCell ? "outline" : "secondary"
-																	}
-																	size={isEmptyCell ? "sm" : "icon-xs"}
-																	className={cn(
-																		"schedule-cell-add absolute text-muted-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-focus-within:opacity-100 [@media(hover:hover)]:group-hover:opacity-100",
-																		isEmptyCell &&
-																			"schedule-cell-add-empty inset-0 m-auto h-7 w-fit border-dashed bg-transparent shadow-none",
-																		!isEmptyCell && "right-1 bottom-1",
-																	)}
-																	disabled={
-																		!data || data.positions.length === 0
-																	}
-																	onClick={() => {
-																		const draft = emptyForm(day);
-																		draft.employmentId = member.employmentId;
-																		const positions = positionsForWorker(
-																			data?.positions ?? [],
-																			member,
-																		);
-																		if (positions.length === 1)
-																			draft.positionId = positions[0]?.id ?? "";
-																		setAddDates([day]);
-																		setAddEmploymentIds([member.employmentId]);
-																		syncPunchFields(undefined);
-																		setForm(draft);
-																	}}
-																>
-																	<PlusIcon
-																		data-icon={
-																			isEmptyCell ? "inline-start" : undefined
-																		}
-																	/>
-																	{isEmptyCell ? (
-																		<span>Add</span>
-																	) : (
-																		<span className="sr-only">
-																			Add shift for {member.name} on {dayName}
-																		</span>
-																	)}
-																</Button>
-															</ScheduleDropCell>
-														);
-													})}
-												</div>
-											);
-										})}
+										{visibleStaff.map((member) => (
+											<ScheduleWorkerRow
+												key={member.employmentId}
+												member={member}
+												days={visibleDayInfos}
+												shiftsByWorkerDay={scheduleIndex.shiftsByWorkerDay}
+												minutes={
+													scheduleIndex.hoursByEmploymentId.get(
+														member.employmentId,
+													) ?? 0
+												}
+												shiftCount={
+													scheduleIndex.shiftCountByEmploymentId.get(
+														member.employmentId,
+													) ?? 0
+												}
+												surface={surfaceFilter}
+												density={gridDensity}
+												timeFormat={timeFormat}
+												timeZone={scheduleTimeZone}
+												canAdd={canAddShift}
+												disabled={moveShift.isPending}
+												timeclockByShiftId={timeclockByShiftId}
+												store={selectionStore}
+												formatMinute={stableFormatMinute}
+												onOpenShift={stableOpenEdit}
+												onToggleSelect={stableToggleSelect}
+												onAddShift={stableAddShift}
+											/>
+										))}
 										{filteredStaff.length === 0 ? (
 											<div className="col-span-8 flex flex-col items-center gap-2 border-b bg-background p-8 text-center">
 												<p className="font-medium text-sm">
@@ -4226,111 +3877,32 @@ function SchedulePage() {
 										) : null}
 
 										{data.positions.length > 0 ? (
-											<>
-												<div className="sticky left-0 z-10 flex min-h-20 items-center gap-2.5 border-border border-r border-b bg-warning px-3 py-3 text-warning-foreground">
-													<span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-background/70">
-														<UserRoundXIcon
-															className="size-3.5"
-															aria-hidden="true"
-														/>
-													</span>
-													<div className="flex flex-col gap-0.5">
-														<p className="font-medium text-sm leading-tight">
-															Open shifts
-															{openShiftCount > 0 ? ` · ${openShiftCount}` : ""}
-														</p>
-														<p className="text-warning-foreground/80 text-xs leading-tight">
-															{openShiftCount > 0
-																? "Needs a worker"
-																: "Drop here to unassign"}
-														</p>
-													</div>
-												</div>
-												{visibleDays.map((day) => {
-													return (
-														<ScheduleDropCell
-															key={day}
-															employmentId={null}
-															date={day}
-															className="min-h-20 border-border/70 border-r border-b bg-warning/25 p-1.5 last:border-r-0"
-														>
-															<div className="flex flex-col gap-1">
-																{(
-																	scheduleIndex.shiftsByWorkerDay.get(
-																		`open:${day}`,
-																	) ?? []
-																)
-																	.filter(shiftMatchesSurfaceFilters)
-																	.map((shift) => (
-																		<ShiftTile
-																			key={shift.id}
-																			shift={shift}
-																			onOpen={stableOpenEdit}
-																			onToggleSelect={stableToggleSelect}
-																			selected={selectedShiftIds.includes(
-																				shift.id,
-																			)}
-																			compact={gridDensity === "compact"}
-																			disabled={moveShift.isPending}
-																			timeclock={timeclockByShiftId.get(
-																				shift.id,
-																			)}
-																		/>
-																	))}
-															</div>
-														</ScheduleDropCell>
-													);
-												})}
-											</>
+											<ScheduleOpenRow
+												days={visibleDayInfos}
+												openShiftCount={openShiftCount}
+												shiftsByWorkerDay={scheduleIndex.shiftsByWorkerDay}
+												surface={surfaceFilter}
+												density={gridDensity}
+												disabled={moveShift.isPending}
+												timeclockByShiftId={timeclockByShiftId}
+												store={selectionStore}
+												onOpenShift={stableOpenEdit}
+												onToggleSelect={stableToggleSelect}
+											/>
 										) : null}
 
 										{offRosterShifts.length > 0 ? (
-											<>
-												<div className="sticky left-0 z-10 flex min-h-20 items-center border-border border-r border-b bg-muted px-3 py-3">
-													<div className="flex flex-col gap-0.5">
-														<p className="font-medium text-sm leading-tight">
-															Off-roster
-														</p>
-														<p className="text-muted-foreground text-xs leading-tight">
-															Reassign or remove
-														</p>
-													</div>
-												</div>
-												{visibleDays.map((day) => {
-													const isWeekend = days.indexOf(day) >= 5;
-													return (
-														<div
-															key={day}
-															className={cn(
-																"min-h-20 border-border/70 border-r border-b bg-muted/20 p-1.5 last:border-r-0",
-																isWeekend && "bg-muted/30",
-															)}
-														>
-															<div className="flex flex-col gap-1">
-																{(offRosterShiftsByDay.get(day) ?? [])
-																	.filter(shiftMatchesSurfaceFilters)
-																	.map((shift) => (
-																		<ShiftTile
-																			key={shift.id}
-																			shift={shift}
-																			onOpen={stableOpenEdit}
-																			onToggleSelect={stableToggleSelect}
-																			selected={selectedShiftIds.includes(
-																				shift.id,
-																			)}
-																			compact={gridDensity === "compact"}
-																			disabled={moveShift.isPending}
-																			showWorker
-																			timeclock={timeclockByShiftId.get(
-																				shift.id,
-																			)}
-																		/>
-																	))}
-															</div>
-														</div>
-													);
-												})}
-											</>
+											<ScheduleOffRosterRow
+												days={visibleDayInfos}
+												shiftsByDay={offRosterShiftsByDay}
+												surface={surfaceFilter}
+												density={gridDensity}
+												disabled={moveShift.isPending}
+												timeclockByShiftId={timeclockByShiftId}
+												store={selectionStore}
+												onOpenShift={stableOpenEdit}
+												onToggleSelect={stableToggleSelect}
+											/>
 										) : null}
 									</div>
 								</div>
@@ -4352,8 +3924,8 @@ function SchedulePage() {
 							timeclockByShiftId={timeclockByShiftId}
 							canManage={canManage}
 							shiftsPending={moveShift.isPending}
-							onOpenShift={openEdit}
-							onCreateShift={openCreate}
+							onOpenShift={stableOpenEdit}
+							onCreateShift={stableOpenCreate}
 						/>
 					) : null}
 

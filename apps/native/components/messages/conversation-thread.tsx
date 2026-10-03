@@ -17,6 +17,7 @@ import {
 	ErrorState,
 	Icon,
 	PressableScale,
+	Skeleton,
 } from "@/components/ui";
 import { tapLight } from "@/lib/haptics";
 import { positionColor } from "@/lib/position-color";
@@ -26,12 +27,7 @@ import {
 	useSendConversationMessage,
 	type WorkplaceMessage,
 } from "@/lib/queries";
-import {
-	radius,
-	spacing,
-	type as typeRamp,
-	useAppTheme,
-} from "@/theme";
+import { radius, spacing, type as typeRamp, useAppTheme } from "@/theme";
 
 /** Messages from one author within this window read as a single group. */
 const GROUP_WINDOW_MS = 5 * 60_000;
@@ -131,24 +127,13 @@ export function ConversationThread({
 }) {
 	const { theme } = useAppTheme();
 	const headerHeight = useHeaderHeight();
-	const insets = useSafeAreaInsets();
 	const { employment } = useCurrentEmployment();
 	const messages = useConversationMessages(conversationId);
-	const send = useSendConversationMessage(conversationId);
-	const [body, setBody] = useState("");
-	const keyboardVisible = useKeyboardVisible();
 
 	const rows = useMemo(
 		() => buildRows(messages.messages, employment?.id),
 		[messages.messages, employment?.id],
 	);
-	const canSend = body.trim().length > 0 && !send.isPending;
-
-	function submit() {
-		if (!canSend) return;
-		tapLight();
-		send.mutate(body.trim(), { onSuccess: () => setBody("") });
-	}
 
 	return (
 		<KeyboardAvoidingView
@@ -194,10 +179,7 @@ export function ConversationThread({
 				}
 				ListEmptyComponent={
 					messages.isLoading ? (
-						<ActivityIndicator
-							color={theme.textSecondary}
-							style={{ padding: spacing.xxl }}
-						/>
+						<MessagesSkeleton />
 					) : (
 						// Inverted lists flip the empty component too; flip it back.
 						<View
@@ -215,15 +197,60 @@ export function ConversationThread({
 						</View>
 					)
 				}
-				renderItem={({ item }) =>
-					item.kind === "day" ? (
-						<DaySeparator label={item.label} />
-					) : (
-						<MessageBubble row={item} />
-					)
-				}
+				renderItem={renderRow}
+				removeClippedSubviews
 			/>
 
+			<Composer conversationId={conversationId} />
+		</KeyboardAvoidingView>
+	);
+}
+
+function renderRow({ item }: { item: Row }) {
+	return item.kind === "day" ? (
+		<DaySeparator label={item.label} />
+	) : (
+		<MessageBubble row={item} />
+	);
+}
+
+/** Placeholder bubbles while the first page loads (list is inverted, so flip back). */
+function MessagesSkeleton() {
+	return (
+		<View
+			accessibilityLabel="Loading messages"
+			style={{
+				transform: [{ scaleY: -1 }],
+				gap: spacing.md,
+				padding: spacing.sm,
+			}}
+		>
+			<Skeleton width="60%" height={40} rounded={radius.lg} />
+			<View style={{ alignItems: "flex-end" }}>
+				<Skeleton width="45%" height={40} rounded={radius.lg} />
+			</View>
+			<Skeleton width="72%" height={56} rounded={radius.lg} />
+		</View>
+	);
+}
+
+/** Owns the draft and keyboard state so typing never re-renders the message list. */
+function Composer({ conversationId }: { conversationId: string }) {
+	const { theme } = useAppTheme();
+	const insets = useSafeAreaInsets();
+	const send = useSendConversationMessage(conversationId);
+	const [body, setBody] = useState("");
+	const keyboardVisible = useKeyboardVisible();
+	const canSend = body.trim().length > 0 && !send.isPending;
+
+	function submit() {
+		if (!canSend) return;
+		tapLight();
+		send.mutate(body.trim(), { onSuccess: () => setBody("") });
+	}
+
+	return (
+		<>
 			<View
 				style={{
 					flexDirection: "row",
@@ -232,8 +259,8 @@ export function ConversationThread({
 					paddingHorizontal: spacing.md,
 					paddingTop: spacing.sm,
 					paddingBottom: keyboardVisible
-							? spacing.sm
-							: Math.max(insets.bottom, spacing.sm),
+						? spacing.sm
+						: Math.max(insets.bottom, spacing.sm),
 					backgroundColor: theme.surface,
 					borderTopWidth: 1,
 					borderTopColor: theme.separator,
@@ -300,7 +327,7 @@ export function ConversationThread({
 					Couldn’t send. {(send.error as Error).message}
 				</AppText>
 			) : null}
-		</KeyboardAvoidingView>
+		</>
 	);
 }
 

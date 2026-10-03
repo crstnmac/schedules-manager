@@ -10,6 +10,7 @@ import {
 	useAppTheme,
 } from "@/components/ui";
 import { ApiError } from "@/lib/api";
+import { tapSuccess, tapWarning } from "@/lib/haptics";
 import {
 	requestForegroundCoordinates,
 	useCurrentEmployment,
@@ -56,11 +57,13 @@ export default function KioskScreen() {
 				);
 			}
 			setWorkerPin("");
+			tapSuccess();
 			Alert.alert(
 				action === "in" ? "Clocked in" : "Clocked out",
 				"The Time Entry was updated.",
 			);
 		} catch (cause) {
+			tapWarning();
 			setError(
 				cause instanceof Error
 					? cause.message

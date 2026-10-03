@@ -185,7 +185,10 @@ export function AppDocument({
 	widthClassName?: string;
 }) {
 	return (
-		<section className="min-h-0 flex-1 overflow-y-auto">
+		<section
+			data-slot="app-document"
+			className="min-h-0 flex-1 overflow-y-auto"
+		>
 			<div
 				className={cn(
 					"mx-auto flex w-full flex-col gap-6 px-4 py-5 md:px-6 md:py-6",

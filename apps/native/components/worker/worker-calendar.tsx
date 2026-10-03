@@ -1,6 +1,6 @@
 import { useQueries } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import {
@@ -11,6 +11,7 @@ import {
 	CardListSkeleton,
 	FadeSwap,
 	IconButton,
+	PressableScale,
 	Section,
 } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -28,6 +29,7 @@ import { ShiftCard, useOpenShift, type WeekShift } from "./shift-card";
 type CalendarShift = { shift: WeekShift; locationName: string };
 
 const VISIBLE_DOTS = 3;
+const NO_ENTRIES: CalendarShift[] = [];
 
 function dateKey(date: Date): string {
 	return date.toLocaleDateString("sv-SE");
@@ -212,6 +214,11 @@ export function WorkerCalendar({
 		setSelectedDay(monthStartOf(today) === next ? today : next);
 	}
 
+	function selectDay(day: string) {
+		tapLight();
+		setSelectedDay(day);
+	}
+
 	function goToday() {
 		setMonthStart(monthStartOf(today));
 		setSelectedDay(today);
@@ -288,11 +295,8 @@ export function WorkerCalendar({
 										}
 										isToday={day === today}
 										isSelected={day === selectedDay}
-										entries={shiftsByDay.get(day) ?? []}
-										onPress={() => {
-											tapLight();
-											setSelectedDay(day);
-										}}
+										entries={shiftsByDay.get(day) ?? NO_ENTRIES}
+										onSelect={selectDay}
 									/>
 								))}
 							</View>
@@ -349,14 +353,14 @@ function DayCell({
 	isToday,
 	isSelected,
 	entries,
-	onPress,
+	onSelect,
 }: {
 	day: string;
 	inMonth: boolean;
 	isToday: boolean;
 	isSelected: boolean;
 	entries: CalendarShift[];
-	onPress: () => void;
+	onSelect: (day: string) => void;
 }) {
 	const { theme } = useAppTheme();
 	const dayNumber = new Date(`${day}T12:00:00`).getDate();
@@ -369,11 +373,12 @@ function DayCell({
 				: theme.textTertiary;
 
 	return (
-		<Pressable
+		<PressableScale
+			pressedScale={0.92}
 			accessibilityRole="button"
 			accessibilityLabel={`${longDayLabel(day)}${isToday ? ", today" : ""}, ${entries.length} shift${entries.length === 1 ? "" : "s"}`}
 			accessibilityState={{ selected: isSelected }}
-			onPress={onPress}
+			onPress={() => onSelect(day)}
 			style={{
 				flex: 1,
 				alignItems: "center",
@@ -426,6 +431,6 @@ function DayCell({
 					/>
 				))}
 			</View>
-		</Pressable>
+		</PressableScale>
 	);
 }

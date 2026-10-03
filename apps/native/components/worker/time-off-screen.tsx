@@ -33,6 +33,7 @@ import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { confirmAction } from "@/lib/confirm-action";
 import { useDisplayPrefs } from "@/lib/display";
+import { tapSuccess } from "@/lib/haptics";
 import {
 	formatDateKey,
 	formatLeaveHours,
@@ -209,10 +210,6 @@ export function TimeOffScreen() {
 	const { employment } = useCurrentEmployment();
 	const leaveTypes = useLeaveTypes(selected ?? undefined);
 	const pto = usePtoBalances(selected ?? undefined, employment?.id);
-	const calendarTokens = useCalendarTokens(selected ?? undefined);
-	const createCalendarToken = useCreateMyCalendarToken(selected ?? undefined);
-	const revokeCalendarToken = useRevokeCalendarToken(selected ?? undefined);
-	const forecast = useLeaveForecast(selected ?? undefined, employment?.id, 6);
 	const qc = useQueryClient();
 	const c = useQuery({
 		queryKey: ["constraints", selected],
@@ -246,8 +243,6 @@ export function TimeOffScreen() {
 	const [uploadingRequestId, setUploadingRequestId] = useState<string | null>(
 		null,
 	);
-	const [forecastOpen, setForecastOpen] = useState(false);
-	const [calendarUrl, setCalendarUrl] = useState<string | null>(null);
 
 	const typeById = useMemo(() => {
 		const map = new Map<string, LeaveTypeDto>();
@@ -255,14 +250,6 @@ export function TimeOffScreen() {
 			map.set(type.id, type);
 		return map;
 	}, [leaveTypes.data]);
-	const myCalendarToken =
-		(calendarTokens.data ?? []).find(
-			(token) => token.employmentId === employment?.id && !token.revokedAt,
-		) ?? null;
-	const calendarDiagnostics = useCalendarTokenDiagnostics(
-		selected ?? undefined,
-		myCalendarToken?.id,
-	);
 	const encashableTypes = (leaveTypes.data?.leaveTypes ?? []).filter(
 		(type) => type.policy?.encashmentEnabled,
 	);
@@ -345,6 +332,7 @@ export function TimeOffScreen() {
 				body: { note: preference.trim() === "" ? null : preference.trim() },
 			});
 			await qc.invalidateQueries({ queryKey: ["constraints", selected] });
+			tapSuccess();
 			Alert.alert("Saved", "Work Preference updated.");
 		} catch (e) {
 			Alert.alert("Could not save", (e as Error).message);
@@ -392,6 +380,7 @@ export function TimeOffScreen() {
 				setOffReason("");
 				await qc.invalidateQueries({ queryKey: ["constraints", selected] });
 				await qc.invalidateQueries({ queryKey: ["pto", selected] });
+				tapSuccess();
 				Alert.alert("Updated", "Your pending request was updated.");
 			} else {
 				const window = {
@@ -422,6 +411,7 @@ export function TimeOffScreen() {
 				await qc.invalidateQueries({ queryKey: ["constraints", selected] });
 				await qc.invalidateQueries({ queryKey: ["pto", selected] });
 				await qc.invalidateQueries({ queryKey: ["leave-forecast", selected] });
+				tapSuccess();
 				Alert.alert(
 					"Requested",
 					recurring
@@ -456,6 +446,7 @@ export function TimeOffScreen() {
 			await qc.invalidateQueries({ queryKey: ["constraints", selected] });
 			await qc.invalidateQueries({ queryKey: ["pto", selected] });
 			await qc.invalidateQueries({ queryKey: ["leave-forecast", selected] });
+			tapSuccess();
 			Alert.alert("Cancelled", "Any charged balance was restored.");
 		} catch (e) {
 			Alert.alert("Could not cancel", (e as Error).message);
@@ -507,19 +498,12 @@ export function TimeOffScreen() {
 				throw new Error(message);
 			}
 			await qc.invalidateQueries({ queryKey: ["constraints", selected] });
+			tapSuccess();
 			Alert.alert("Attached", "The document was uploaded.");
 		} catch (e) {
 			Alert.alert("Could not attach", (e as Error).message);
 		} finally {
 			setUploadingRequestId(null);
-		}
-	}
-	async function shareCalendarLink() {
-		if (!calendarUrl) return;
-		try {
-			await Share.share({ message: calendarUrl, url: calendarUrl });
-		} catch {
-			// The share sheet can be dismissed; there is nothing to recover.
 		}
 	}
 	if (c.isLoading)
@@ -1028,153 +1012,205 @@ export function TimeOffScreen() {
 				leaveTypes={encashableTypes}
 			/>
 
-			<Section
-				title="Calendar sync"
-				caption="Subscribe to your published schedule and approved leave in a calendar app."
-			>
-				<Card>
-					{myCalendarToken ? (
-						<>
-							<Badge label="Link active" tone="success" dot />
-							{calendarUrl ? (
-								<AppText
-									variant="footnote"
-									tone="secondary"
-									numberOfLines={1}
-									selectable
-								>
-									{calendarUrl}
-								</AppText>
-							) : (
-								<Hint>Create a new link to share its URL again.</Hint>
-							)}
-							{calendarDiagnostics.data ? (
-								<Hint>
-									{calendarDiagnostics.data.feedOk
-										? `Feed OK · ${calendarDiagnostics.data.eventCount} events · ${calendarDiagnostics.data.timezone} · fetched ${calendarDiagnostics.data.fetchCount} time${calendarDiagnostics.data.fetchCount === 1 ? "" : "s"}${calendarDiagnostics.data.lastUsedAt ? " · last fetched recently" : " · not fetched by an app yet"}`
-										: "This link was revoked; create a new one."}
-								</Hint>
-							) : null}
-							<Hint>
-								Google Calendar: Settings → Add calendar → From URL (refreshes
-								about daily). Apple Calendar: add a subscribed calendar.
-								Outlook: Add calendar → Subscribe from web.
-							</Hint>
-							<View style={styles.actionsRow}>
-								{calendarUrl ? (
-									<Button
-										label="Share link"
-										icon="envelope"
-										onPress={() => void shareCalendarLink()}
-										style={{ flex: 1 }}
-									/>
-								) : null}
-								<Button
-									variant="destructive"
-									label="Revoke"
-									disabled={revokeCalendarToken.isPending}
-									style={{ flex: 1 }}
-									onPress={() =>
-										confirmAction({
-											title: "Revoke this calendar link?",
-											message:
-												"Calendar apps using this link will stop updating. You can create a new link later.",
-											confirmLabel: "Revoke",
-											destructive: true,
-											onConfirm: () =>
-												revokeCalendarToken.mutate(myCalendarToken.id, {
-													onSuccess: () => {
-														setCalendarUrl(null);
-														Alert.alert("Revoked", "Calendar link revoked.");
-													},
-													onError: (e) =>
-														Alert.alert(
-															"Could not revoke",
-															(e as Error).message,
-														),
-												}),
-										})
-									}
-								/>
-							</View>
-						</>
-					) : (
-						<Button
-							label="Create calendar link"
-							icon="calendar"
-							variant="tinted"
-							loading={createCalendarToken.isPending}
-							onPress={() =>
-								createCalendarToken.mutate(undefined, {
-									onSuccess: (result) => {
-										setCalendarUrl(
-											result.token.url
-												? `${getServerUrl()}${result.token.url}`
-												: null,
-										);
-										Alert.alert("Created", "Calendar link created.");
-									},
-									onError: (e) =>
-										Alert.alert("Could not create", (e as Error).message),
-								})
-							}
-						/>
-					)}
-				</Card>
-			</Section>
+			<CalendarSyncSection
+				workplaceId={selected ?? undefined}
+				employmentId={employment?.id}
+			/>
 
-			<Card>
-				<ListRow
-					icon="history"
-					iconTone="neutral"
-					title="Leave forecast"
-					subtitle="Accrual, planned usage, and balance for 6 months"
-					chevron={false}
-					onPress={() => setForecastOpen((open) => !open)}
-					trailing={
-						<AppText variant="footnote" tone="tint" weight="600">
-							{forecastOpen ? "Hide" : "Show"}
-						</AppText>
-					}
-				/>
-				{forecastOpen ? (
-					<FadeSwap style={{ gap: spacing.lg }}>
-						{forecast.isLoading ? (
-							<Skeleton width="70%" />
-						) : (forecast.data ?? []).length === 0 ? (
-							<Hint>No accrual policies to forecast yet.</Hint>
-						) : (
-							(forecast.data ?? []).map((entry) => (
-								<View key={entry.leaveTypeId} style={{ gap: spacing.xs }}>
-									<AppText variant="callout" weight="600">
-										{entry.leaveTypeName}
-									</AppText>
-									<AppText variant="footnote" tone="secondary">
-										Starting {formatLeaveHours(entry.startingMinutes)}
-										{entry.pendingMinutes > 0
-											? ` · ${formatLeaveHours(entry.pendingMinutes)} pending`
-											: ""}
-									</AppText>
-									{entry.points.slice(0, 6).map((point) => (
-										<AppText
-											key={point.month}
-											variant="footnote"
-											tone="secondary"
-											tabular
-										>
-											{formatLeaveMonth(point.month)}: +
-											{formatLeaveHours(point.accruedMinutes)} · −
-											{formatLeaveHours(point.plannedUsageMinutes)} planned ·{" "}
-											{formatLeaveHours(point.balanceMinutes)} balance
-										</AppText>
-									))}
-								</View>
-							))
-						)}
-					</FadeSwap>
-				) : null}
-			</Card>
+			<LeaveForecastCard
+				workplaceId={selected ?? undefined}
+				employmentId={employment?.id}
+			/>
 		</Screen>
+	);
+}
+
+function CalendarSyncSection({
+	workplaceId,
+	employmentId,
+}: {
+	workplaceId: string | undefined;
+	employmentId: string | undefined;
+}) {
+	const calendarTokens = useCalendarTokens(workplaceId);
+	const createCalendarToken = useCreateMyCalendarToken(workplaceId);
+	const revokeCalendarToken = useRevokeCalendarToken(workplaceId);
+	const [calendarUrl, setCalendarUrl] = useState<string | null>(null);
+	const myCalendarToken =
+		(calendarTokens.data ?? []).find(
+			(token) => token.employmentId === employmentId && !token.revokedAt,
+		) ?? null;
+	const calendarDiagnostics = useCalendarTokenDiagnostics(
+		workplaceId,
+		myCalendarToken?.id,
+	);
+
+	async function shareCalendarLink() {
+		if (!calendarUrl) return;
+		try {
+			await Share.share({ message: calendarUrl, url: calendarUrl });
+		} catch {
+			// The share sheet can be dismissed; there is nothing to recover.
+		}
+	}
+
+	return (
+		<Section
+			title="Calendar sync"
+			caption="Subscribe to your published schedule and approved leave in a calendar app."
+		>
+			<Card>
+				{myCalendarToken ? (
+					<>
+						<Badge label="Link active" tone="success" dot />
+						{calendarUrl ? (
+							<AppText
+								variant="footnote"
+								tone="secondary"
+								numberOfLines={1}
+								selectable
+							>
+								{calendarUrl}
+							</AppText>
+						) : (
+							<Hint>Create a new link to share its URL again.</Hint>
+						)}
+						{calendarDiagnostics.data ? (
+							<Hint>
+								{calendarDiagnostics.data.feedOk
+									? `Feed OK · ${calendarDiagnostics.data.eventCount} events · ${calendarDiagnostics.data.timezone} · fetched ${calendarDiagnostics.data.fetchCount} time${calendarDiagnostics.data.fetchCount === 1 ? "" : "s"}${calendarDiagnostics.data.lastUsedAt ? " · last fetched recently" : " · not fetched by an app yet"}`
+									: "This link was revoked; create a new one."}
+							</Hint>
+						) : null}
+						<Hint>
+							Google Calendar: Settings → Add calendar → From URL (refreshes
+							about daily). Apple Calendar: add a subscribed calendar. Outlook:
+							Add calendar → Subscribe from web.
+						</Hint>
+						<View style={styles.actionsRow}>
+							{calendarUrl ? (
+								<Button
+									label="Share link"
+									icon="envelope"
+									onPress={() => void shareCalendarLink()}
+									style={{ flex: 1 }}
+								/>
+							) : null}
+							<Button
+								variant="destructive"
+								label="Revoke"
+								disabled={revokeCalendarToken.isPending}
+								style={{ flex: 1 }}
+								onPress={() =>
+									confirmAction({
+										title: "Revoke this calendar link?",
+										message:
+											"Calendar apps using this link will stop updating. You can create a new link later.",
+										confirmLabel: "Revoke",
+										destructive: true,
+										onConfirm: () =>
+											revokeCalendarToken.mutate(myCalendarToken.id, {
+												onSuccess: () => {
+													setCalendarUrl(null);
+													Alert.alert("Revoked", "Calendar link revoked.");
+												},
+												onError: (e) =>
+													Alert.alert("Could not revoke", (e as Error).message),
+											}),
+									})
+								}
+							/>
+						</View>
+					</>
+				) : (
+					<Button
+						label="Create calendar link"
+						icon="calendar"
+						variant="tinted"
+						loading={createCalendarToken.isPending}
+						onPress={() =>
+							createCalendarToken.mutate(undefined, {
+								onSuccess: (result) => {
+									setCalendarUrl(
+										result.token.url
+											? `${getServerUrl()}${result.token.url}`
+											: null,
+									);
+									Alert.alert("Created", "Calendar link created.");
+								},
+								onError: (e) =>
+									Alert.alert("Could not create", (e as Error).message),
+							})
+						}
+					/>
+				)}
+			</Card>
+		</Section>
+	);
+}
+
+function LeaveForecastCard({
+	workplaceId,
+	employmentId,
+}: {
+	workplaceId: string | undefined;
+	employmentId: string | undefined;
+}) {
+	const [forecastOpen, setForecastOpen] = useState(false);
+	const forecast = useLeaveForecast(workplaceId, employmentId, 6);
+
+	return (
+		<Card>
+			<ListRow
+				icon="history"
+				iconTone="neutral"
+				title="Leave forecast"
+				subtitle="Accrual, planned usage, and balance for 6 months"
+				chevron={false}
+				onPress={() => setForecastOpen((open) => !open)}
+				trailing={
+					<AppText variant="footnote" tone="tint" weight="600">
+						{forecastOpen ? "Hide" : "Show"}
+					</AppText>
+				}
+			/>
+			{forecastOpen ? (
+				<FadeSwap style={{ gap: spacing.lg }}>
+					{forecast.isLoading ? (
+						<Skeleton width="70%" />
+					) : (forecast.data ?? []).length === 0 ? (
+						<Hint>No accrual policies to forecast yet.</Hint>
+					) : (
+						(forecast.data ?? []).map((entry) => (
+							<View key={entry.leaveTypeId} style={{ gap: spacing.xs }}>
+								<AppText variant="callout" weight="600">
+									{entry.leaveTypeName}
+								</AppText>
+								<AppText variant="footnote" tone="secondary">
+									Starting {formatLeaveHours(entry.startingMinutes)}
+									{entry.pendingMinutes > 0
+										? ` · ${formatLeaveHours(entry.pendingMinutes)} pending`
+										: ""}
+								</AppText>
+								{entry.points.slice(0, 6).map((point) => (
+									<AppText
+										key={point.month}
+										variant="footnote"
+										tone="secondary"
+										tabular
+									>
+										{formatLeaveMonth(point.month)}: +
+										{formatLeaveHours(point.accruedMinutes)} · −
+										{formatLeaveHours(point.plannedUsageMinutes)} planned ·{" "}
+										{formatLeaveHours(point.balanceMinutes)} balance
+									</AppText>
+								))}
+							</View>
+						))
+					)}
+				</FadeSwap>
+			) : null}
+		</Card>
 	);
 }
 

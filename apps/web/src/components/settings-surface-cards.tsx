@@ -34,7 +34,9 @@ import {
 	UsersIcon,
 } from "lucide-react";
 import {
+	lazy,
 	type ReactNode,
+	Suspense,
 	useCallback,
 	useDeferredValue,
 	useMemo,
@@ -48,7 +50,6 @@ import {
 	SettingsCrudCard,
 	SettingsFormSheet,
 } from "@/components/settings/crud";
-import { LeavePolicySheet } from "@/components/settings/leave-policies-card";
 import { TimePicker } from "@/components/time-picker";
 import { api } from "@/lib/api";
 import {
@@ -59,6 +60,13 @@ import {
 	type WorkerDto,
 } from "@/lib/queries";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
+import { useMountedOnce } from "@/lib/use-mounted-once";
+
+const LeavePolicySheet = lazy(() =>
+	import("@/components/settings/leave-policies-card").then((m) => ({
+		default: m.LeavePolicySheet,
+	})),
+);
 
 type Group = { id: string; name: string; employmentIds: string[] };
 type Tag = { id: string; name: string };
@@ -558,6 +566,7 @@ export function LeaveTypesCard({
 	const [approvalChainId, setApprovalChainId] = useState("default");
 	const [policyTarget, setPolicyTarget] = useState<LeaveTypeDto | null>(null);
 	const [policyOpen, setPolicyOpen] = useState(false);
+	const policyMounted = useMountedOnce(policyOpen);
 
 	const chainName = useCallback(
 		(id: string) =>
@@ -897,12 +906,16 @@ export function LeaveTypesCard({
 				</form>
 			</SettingsFormSheet>
 
-			<LeavePolicySheet
-				workplaceId={workplaceId}
-				leaveType={policyTarget}
-				open={policyOpen}
-				onOpenChange={setPolicyOpen}
-			/>
+			{policyMounted ? (
+				<Suspense fallback={null}>
+					<LeavePolicySheet
+						workplaceId={workplaceId}
+						leaveType={policyTarget}
+						open={policyOpen}
+						onOpenChange={setPolicyOpen}
+					/>
+				</Suspense>
+			) : null}
 		</>
 	);
 }

@@ -1,5 +1,5 @@
 import { Badge } from "@SchedulesManager/ui/components/badge";
-import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { cn } from "@SchedulesManager/ui/lib/utils";
 
 import { formatLeaveHours } from "@/lib/leave";
@@ -61,8 +61,11 @@ export function LeaveLedgerList({
 }) {
 	if (isLoading) {
 		return (
-			<div className="flex items-center gap-2 p-4 text-muted-foreground text-sm">
-				<Spinner /> Loading ledger…
+			<div role="status" className="flex flex-col gap-2 p-4">
+				<span className="sr-only">Loading ledger…</span>
+				<Skeleton className="h-9 w-full" />
+				<Skeleton className="h-9 w-full" />
+				<Skeleton className="h-9 w-full" />
 			</div>
 		);
 	}

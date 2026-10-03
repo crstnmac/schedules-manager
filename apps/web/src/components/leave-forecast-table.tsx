@@ -1,4 +1,4 @@
-import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import {
 	Table,
 	TableBody,
@@ -35,8 +35,11 @@ export function LeaveForecastTable({
 }) {
 	if (isLoading) {
 		return (
-			<div className="flex items-center gap-2 p-4 text-muted-foreground text-sm">
-				<Spinner /> Loading forecast…
+			<div role="status" className="flex flex-col gap-2 p-4">
+				<span className="sr-only">Loading forecast…</span>
+				<Skeleton className="h-9 w-full" />
+				<Skeleton className="h-9 w-full" />
+				<Skeleton className="h-9 w-full" />
 			</div>
 		);
 	}

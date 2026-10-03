@@ -28,8 +28,8 @@ import {
 	useRequestPickup,
 } from "@/lib/queries";
 import { formatDay } from "@/lib/time";
-import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
+import { useStablePrefs } from "./-shared/use-stable-prefs";
 
 export const Route = createFileRoute("/worker/openshifts")({
 	component: OpenShiftsPage,
@@ -74,13 +74,18 @@ const searchShift = (shift: OpenShiftDto) => [
 	shift.locationName,
 ];
 const shiftId = (shift: OpenShiftDto) => shift.id;
+const NO_SHIFTS: OpenShiftDto[] = [];
+const DEFAULT_SORT = { id: "when", direction: "asc" } as const;
 
 function OpenShiftsPage() {
 	const { workplace } = useWorkplace();
-	const { formatShiftRange } = useDisplayPrefs();
+	const { formatShiftRange } = useStablePrefs();
 	const openShifts = useOpenShifts(workplace?.id);
 	const requestPickup = useRequestPickup();
-	const shifts = openShifts.data?.openShifts ?? [];
+	const shifts = openShifts.data?.openShifts ?? NO_SHIFTS;
+	const requestPickupMutate = requestPickup.mutate;
+	const requestPickupPending = requestPickup.isPending;
+	const requestPickupVariables = requestPickup.variables;
 
 	const columns = useMemo(
 		() =>
@@ -135,14 +140,14 @@ function OpenShiftsPage() {
 							);
 						}
 						const pendingThis =
-							requestPickup.isPending && requestPickup.variables === shift.id;
+							requestPickupPending && requestPickupVariables === shift.id;
 						return (
 							<div className="flex justify-end">
 								<Button
 									size="sm"
-									disabled={requestPickup.isPending}
+									disabled={requestPickupPending}
 									onClick={() =>
-										requestPickup.mutate(shift.id, {
+										requestPickupMutate(shift.id, {
 											onSuccess: () =>
 												toast.success(
 													"Pickup requested. Your manager will decide.",
@@ -159,7 +164,12 @@ function OpenShiftsPage() {
 					},
 				}),
 			]),
-		[formatShiftRange, requestPickup],
+		[
+			formatShiftRange,
+			requestPickupMutate,
+			requestPickupPending,
+			requestPickupVariables,
+		],
 	);
 
 	const filters = useMemo(
@@ -175,7 +185,7 @@ function OpenShiftsPage() {
 		search: searchShift,
 		filters,
 		sorts: SORTS,
-		defaultSort: { id: "when", direction: "asc" },
+		defaultSort: DEFAULT_SORT,
 	});
 
 	return (

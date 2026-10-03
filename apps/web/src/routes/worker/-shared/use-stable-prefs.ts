@@ -1,26 +1,25 @@
 import { useMemo } from "react";
-import { formatLeaveRange } from "./leave";
-import { useMe } from "./queries";
+import { formatLeaveRange } from "@/lib/leave";
+import { useMe } from "@/lib/queries";
 import {
 	formatClockTime,
 	formatMinute,
-	formatPersonName,
 	formatShiftRange,
-	type NameFormat,
 	type TimeFormat,
-} from "./time";
+} from "@/lib/time";
 
-export function useDisplayPrefs() {
+/**
+ * Same formatters as `useDisplayPrefs`, but with identities that only change
+ * when the viewer's time format does. Lets column definitions and derived rows
+ * stay memoised instead of rebuilding on every render.
+ */
+export function useStablePrefs() {
 	const me = useMe();
 	const timeFormat: TimeFormat = me.data?.profile.timeFormat ?? "12h";
-	const nameFormat: NameFormat = me.data?.profile.nameFormat ?? "full";
-
 	return useMemo(
 		() => ({
 			timeFormat,
-			nameFormat,
 			formatMinute: (minute: number) => formatMinute(minute, timeFormat),
-			/** Pass the row's Location zone when it has one. */
 			formatClockTime: (iso?: string, timeZone?: string | null) =>
 				formatClockTime(iso, timeFormat, timeZone),
 			formatShiftRange: (
@@ -30,9 +29,7 @@ export function useDisplayPrefs() {
 			) => formatShiftRange(startMinute, endMinute, overnight, timeFormat),
 			formatLeaveRange: (input: Parameters<typeof formatLeaveRange>[0]) =>
 				formatLeaveRange(input, timeFormat),
-			formatPerson: (fullName: string | null | undefined, email: string) =>
-				formatPersonName(fullName, email, nameFormat),
 		}),
-		[timeFormat, nameFormat],
+		[timeFormat],
 	);
 }

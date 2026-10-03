@@ -26,6 +26,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@SchedulesManager/ui/components/select";
+import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import {
 	Tabs,
@@ -41,7 +42,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeftIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AppDocument } from "@/components/app-page";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
@@ -530,6 +531,247 @@ function WorkerLeaveSection({
 	);
 }
 
+type WorkerRow = NonNullable<
+	ReturnType<typeof useWorkers>["data"]
+>["workers"][number];
+
+/**
+ * Profile form state lives here so keystrokes do not re-render the PTO and
+ * document tables. Fetched data is still copied into the form whenever the
+ * worker record changes.
+ */
+function EmploymentProfileCard({
+	worker,
+	workplaceId,
+	employmentId,
+}: {
+	worker: WorkerRow;
+	workplaceId: string | undefined;
+	employmentId: string;
+}) {
+	const queryClient = useQueryClient();
+	const [wage, setWage] = useState("");
+	const [contactName, setContactName] = useState("");
+	const [contactPhone, setContactPhone] = useState("");
+	const [kioskPin, setKioskPin] = useState("");
+
+	useEffect(() => {
+		setWage(
+			worker.hourlyWageCents == null
+				? ""
+				: (worker.hourlyWageCents / 100).toFixed(2),
+		);
+		setContactName(worker.emergencyContactName ?? "");
+		setContactPhone(worker.emergencyContactPhone ?? "");
+		setKioskPin("");
+	}, [worker]);
+
+	const saveProfile = useMutation({
+		mutationFn: () =>
+			api(`/v1/workplaces/${workplaceId}/employments/${employmentId}/profile`, {
+				method: "PATCH",
+				body: {
+					hourlyWageCents:
+						wage.trim() === "" ? null : Math.round(Number(wage) * 100),
+					emergencyContactName: contactName.trim() || null,
+					emergencyContactPhone: contactPhone.trim() || null,
+					...(kioskPin ? { kioskPin } : {}),
+				},
+			}),
+		onSuccess: () => {
+			setKioskPin("");
+			queryClient.invalidateQueries({
+				queryKey: ["workplaces", workplaceId, "workers"],
+			});
+			toast.success("Employment profile saved.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle>Profile and wage</CardTitle>
+				<CardDescription>
+					Hourly rate, kiosk PIN, and emergency contact.
+				</CardDescription>
+			</CardHeader>
+			<CardContent className="flex flex-col gap-4">
+				<FieldGroup className="grid gap-3 sm:grid-cols-2">
+					<Field>
+						<FieldLabel htmlFor="employment-wage">
+							Wage rate (dollars per hour)
+						</FieldLabel>
+						<Input
+							id="employment-wage"
+							type="number"
+							min={0}
+							step="0.01"
+							value={wage}
+							onChange={(event) => setWage(event.target.value)}
+						/>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="worker-kiosk-pin">Worker kiosk PIN</FieldLabel>
+						<Input
+							id="worker-kiosk-pin"
+							inputMode="numeric"
+							pattern="\d{4,8}"
+							minLength={4}
+							maxLength={8}
+							value={kioskPin}
+							onChange={(event) =>
+								setKioskPin(event.target.value.replace(/\D/g, ""))
+							}
+							placeholder={
+								worker.kioskEnabled ? "Enter a new PIN" : "4–8 digits"
+							}
+						/>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="emergency-contact-name">
+							Emergency contact name
+						</FieldLabel>
+						<Input
+							id="emergency-contact-name"
+							value={contactName}
+							onChange={(event) => setContactName(event.target.value)}
+						/>
+					</Field>
+					<Field>
+						<FieldLabel htmlFor="emergency-contact-phone">
+							Emergency contact phone
+						</FieldLabel>
+						<Input
+							id="emergency-contact-phone"
+							type="tel"
+							value={contactPhone}
+							onChange={(event) => setContactPhone(event.target.value)}
+						/>
+					</Field>
+				</FieldGroup>
+				<Button
+					className="self-start"
+					disabled={
+						saveProfile.isPending ||
+						(Boolean(kioskPin) && !/^\d{4,8}$/.test(kioskPin))
+					}
+					onClick={() => saveProfile.mutate()}
+				>
+					{saveProfile.isPending ? <Spinner data-icon="inline-start" /> : null}
+					Save employment
+				</Button>
+			</CardContent>
+		</Card>
+	);
+}
+
+function AddDocumentForm({
+	workplaceId,
+	employmentId,
+}: {
+	workplaceId: string | undefined;
+	employmentId: string;
+}) {
+	const queryClient = useQueryClient();
+	const [documentTitle, setDocumentTitle] = useState("");
+	const [documentUrl, setDocumentUrl] = useState("");
+	const [documentNote, setDocumentNote] = useState("");
+	const addDocument = useMutation({
+		mutationFn: () =>
+			api(
+				`/v1/workplaces/${workplaceId}/employments/${employmentId}/documents`,
+				{
+					method: "POST",
+					body: {
+						title: documentTitle.trim(),
+						url: documentUrl.trim() || undefined,
+						note: documentNote.trim() || undefined,
+					},
+				},
+			),
+		onSuccess: () => {
+			setDocumentTitle("");
+			setDocumentUrl("");
+			setDocumentNote("");
+			queryClient.invalidateQueries({
+				queryKey: ["employment-documents", workplaceId, employmentId],
+			});
+			toast.success("Employment Document added.");
+		},
+		onError: (error) => toast.error((error as Error).message),
+	});
+	return (
+		<form
+			className="flex flex-col gap-4"
+			onSubmit={(event) => {
+				event.preventDefault();
+				addDocument.mutate();
+			}}
+		>
+			<FieldGroup>
+				<RequiredTextField
+					id="document-title"
+					label="Title"
+					value={documentTitle}
+					onValueChange={setDocumentTitle}
+				/>
+				<Field>
+					<FieldLabel htmlFor="document-url">URL (optional)</FieldLabel>
+					<Input
+						id="document-url"
+						type="url"
+						value={documentUrl}
+						onChange={(event) => setDocumentUrl(event.target.value)}
+					/>
+				</Field>
+				<Field>
+					<FieldLabel htmlFor="document-note">Note (optional)</FieldLabel>
+					<Textarea
+						id="document-note"
+						value={documentNote}
+						onChange={(event) => setDocumentNote(event.target.value)}
+					/>
+				</Field>
+			</FieldGroup>
+			<Button
+				type="submit"
+				variant="outline"
+				className="self-start"
+				disabled={addDocument.isPending}
+			>
+				Add employment document
+			</Button>
+		</form>
+	);
+}
+
+const PtoHoursInput = memo(function PtoHoursInput({
+	id,
+	initial,
+	onTyped,
+}: {
+	id: string;
+	initial: string;
+	onTyped: (value: string) => void;
+}) {
+	const [typed, setTyped] = useState<string | null>(null);
+	return (
+		<Input
+			id={id}
+			type="number"
+			min={0}
+			step="0.5"
+			className="tabular-nums"
+			value={typed ?? initial}
+			onChange={(event) => {
+				setTyped(event.target.value);
+				onTyped(event.target.value);
+			}}
+		/>
+	);
+});
+
 function EmploymentPage() {
 	const { employmentId } = Route.useParams();
 	const { workplace, kind, privileges } = useWorkplace();
@@ -563,48 +805,11 @@ function EmploymentPage() {
 				}[];
 			}>(`/v1/workplaces/${workplaceId}/employments/${employmentId}/documents`),
 	});
-	const [wage, setWage] = useState("");
-	const [contactName, setContactName] = useState("");
-	const [contactPhone, setContactPhone] = useState("");
-	const [kioskPin, setKioskPin] = useState("");
-	const [ptoMinutes, setPtoMinutes] = useState<Record<string, string>>({});
-	const [documentTitle, setDocumentTitle] = useState("");
-	const [documentUrl, setDocumentUrl] = useState("");
-	const [documentNote, setDocumentNote] = useState("");
+	// Typed PTO values live in a ref plus per-input state so keystrokes do not
+	// re-render the table; `ptoResetKey` remounts inputs after a save.
+	const ptoDrafts = useRef<Record<string, string>>({});
+	const [ptoResetKey, setPtoResetKey] = useState(0);
 
-	useEffect(() => {
-		if (!worker) return;
-		setWage(
-			worker.hourlyWageCents == null
-				? ""
-				: (worker.hourlyWageCents / 100).toFixed(2),
-		);
-		setContactName(worker.emergencyContactName ?? "");
-		setContactPhone(worker.emergencyContactPhone ?? "");
-		setKioskPin("");
-	}, [worker]);
-
-	const saveProfile = useMutation({
-		mutationFn: () =>
-			api(`/v1/workplaces/${workplaceId}/employments/${employmentId}/profile`, {
-				method: "PATCH",
-				body: {
-					hourlyWageCents:
-						wage.trim() === "" ? null : Math.round(Number(wage) * 100),
-					emergencyContactName: contactName.trim() || null,
-					emergencyContactPhone: contactPhone.trim() || null,
-					...(kioskPin ? { kioskPin } : {}),
-				},
-			}),
-		onSuccess: () => {
-			setKioskPin("");
-			queryClient.invalidateQueries({
-				queryKey: ["workplaces", workplaceId, "workers"],
-			});
-			toast.success("Employment profile saved.");
-		},
-		onError: (error) => toast.error((error as Error).message),
-	});
 	const savePto = useMutation({
 		mutationFn: (input: { leaveTypeId: string; minutes: number }) =>
 			api(`/v1/workplaces/${workplaceId}/employments/${employmentId}/pto`, {
@@ -612,12 +817,10 @@ function EmploymentPage() {
 				body: input,
 			}),
 		onSuccess: (_data, variables) => {
-			setPtoMinutes((values) => {
-				if (!(variables.leaveTypeId in values)) return values;
-				const next = { ...values };
-				delete next[variables.leaveTypeId];
-				return next;
-			});
+			if (variables.leaveTypeId in ptoDrafts.current) {
+				delete ptoDrafts.current[variables.leaveTypeId];
+				setPtoResetKey((key) => key + 1);
+			}
 			queryClient.invalidateQueries({
 				queryKey: ["pto", workplaceId, employmentId],
 			});
@@ -625,31 +828,6 @@ function EmploymentPage() {
 		},
 		onError: (error) => toast.error((error as Error).message),
 	});
-	const addDocument = useMutation({
-		mutationFn: () =>
-			api(
-				`/v1/workplaces/${workplaceId}/employments/${employmentId}/documents`,
-				{
-					method: "POST",
-					body: {
-						title: documentTitle.trim(),
-						url: documentUrl.trim() || undefined,
-						note: documentNote.trim() || undefined,
-					},
-				},
-			),
-		onSuccess: () => {
-			setDocumentTitle("");
-			setDocumentUrl("");
-			setDocumentNote("");
-			queryClient.invalidateQueries({
-				queryKey: ["employment-documents", workplaceId, employmentId],
-			});
-			toast.success("Employment Document added.");
-		},
-		onError: (error) => toast.error((error as Error).message),
-	});
-
 	const displayName = worker
 		? formatPerson(worker.profile.fullName, worker.profile.email)
 		: "Worker";
@@ -674,22 +852,13 @@ function EmploymentPage() {
 								(balance) => balance.leaveTypeId === row.original.id,
 							)?.minutes ?? 0;
 						return (
-							<Input
+							<PtoHoursInput
+								key={`${row.original.id}-${ptoResetKey}`}
 								id={`pto-${row.original.id}`}
-								type="number"
-								min={0}
-								step="0.5"
-								className="tabular-nums"
-								value={
-									ptoMinutes[row.original.id] ??
-									(current / 60).toFixed(current % 60 === 0 ? 0 : 1)
-								}
-								onChange={(event) =>
-									setPtoMinutes((values) => ({
-										...values,
-										[row.original.id]: event.target.value,
-									}))
-								}
+								initial={(current / 60).toFixed(current % 60 === 0 ? 0 : 1)}
+								onTyped={(value) => {
+									ptoDrafts.current[row.original.id] = value;
+								}}
 							/>
 						);
 					},
@@ -713,8 +882,9 @@ function EmploymentPage() {
 										savePto.mutate({
 											leaveTypeId: row.original.id,
 											minutes: Math.round(
-												Number(ptoMinutes[row.original.id] ?? current / 60) *
-													60,
+												Number(
+													ptoDrafts.current[row.original.id] ?? current / 60,
+												) * 60,
 											),
 										})
 									}
@@ -726,7 +896,7 @@ function EmploymentPage() {
 					},
 				}),
 			]),
-		[pto.data?.balances, ptoMinutes, savePto],
+		[pto.data?.balances, ptoResetKey, savePto],
 	);
 	const documentColumns = useMemo(
 		() =>
@@ -801,8 +971,10 @@ function EmploymentPage() {
 			</div>
 
 			{workers.isPending ? (
-				<div className="flex items-center gap-2 text-muted-foreground text-sm">
-					<Spinner /> Loading worker…
+				<div role="status" className="flex flex-col gap-4">
+					<span className="sr-only">Loading worker…</span>
+					<Skeleton className="h-56 w-full rounded-xl" />
+					<Skeleton className="h-40 w-full rounded-xl" />
 				</div>
 			) : null}
 
@@ -826,84 +998,11 @@ function EmploymentPage() {
 
 			{worker ? (
 				<div className="flex flex-col gap-4">
-					<Card>
-						<CardHeader>
-							<CardTitle>Profile and wage</CardTitle>
-							<CardDescription>
-								Hourly rate, kiosk PIN, and emergency contact.
-							</CardDescription>
-						</CardHeader>
-						<CardContent className="flex flex-col gap-4">
-							<FieldGroup className="grid gap-3 sm:grid-cols-2">
-								<Field>
-									<FieldLabel htmlFor="employment-wage">
-										Wage rate (dollars per hour)
-									</FieldLabel>
-									<Input
-										id="employment-wage"
-										type="number"
-										min={0}
-										step="0.01"
-										value={wage}
-										onChange={(event) => setWage(event.target.value)}
-									/>
-								</Field>
-								<Field>
-									<FieldLabel htmlFor="worker-kiosk-pin">
-										Worker kiosk PIN
-									</FieldLabel>
-									<Input
-										id="worker-kiosk-pin"
-										inputMode="numeric"
-										pattern="\d{4,8}"
-										minLength={4}
-										maxLength={8}
-										value={kioskPin}
-										onChange={(event) =>
-											setKioskPin(event.target.value.replace(/\D/g, ""))
-										}
-										placeholder={
-											worker.kioskEnabled ? "Enter a new PIN" : "4–8 digits"
-										}
-									/>
-								</Field>
-								<Field>
-									<FieldLabel htmlFor="emergency-contact-name">
-										Emergency contact name
-									</FieldLabel>
-									<Input
-										id="emergency-contact-name"
-										value={contactName}
-										onChange={(event) => setContactName(event.target.value)}
-									/>
-								</Field>
-								<Field>
-									<FieldLabel htmlFor="emergency-contact-phone">
-										Emergency contact phone
-									</FieldLabel>
-									<Input
-										id="emergency-contact-phone"
-										type="tel"
-										value={contactPhone}
-										onChange={(event) => setContactPhone(event.target.value)}
-									/>
-								</Field>
-							</FieldGroup>
-							<Button
-								className="self-start"
-								disabled={
-									saveProfile.isPending ||
-									(Boolean(kioskPin) && !/^\d{4,8}$/.test(kioskPin))
-								}
-								onClick={() => saveProfile.mutate()}
-							>
-								{saveProfile.isPending ? (
-									<Spinner data-icon="inline-start" />
-								) : null}
-								Save employment
-							</Button>
-						</CardContent>
-					</Card>
+					<EmploymentProfileCard
+						worker={worker}
+						workplaceId={workplaceId}
+						employmentId={employmentId}
+					/>
 
 					<Card>
 						<CardHeader>
@@ -978,51 +1077,10 @@ function EmploymentPage() {
 									}
 								/>
 							</div>
-							<form
-								className="flex flex-col gap-4"
-								onSubmit={(event) => {
-									event.preventDefault();
-									addDocument.mutate();
-								}}
-							>
-								<FieldGroup>
-									<RequiredTextField
-										id="document-title"
-										label="Title"
-										value={documentTitle}
-										onValueChange={setDocumentTitle}
-									/>
-									<Field>
-										<FieldLabel htmlFor="document-url">
-											URL (optional)
-										</FieldLabel>
-										<Input
-											id="document-url"
-											type="url"
-											value={documentUrl}
-											onChange={(event) => setDocumentUrl(event.target.value)}
-										/>
-									</Field>
-									<Field>
-										<FieldLabel htmlFor="document-note">
-											Note (optional)
-										</FieldLabel>
-										<Textarea
-											id="document-note"
-											value={documentNote}
-											onChange={(event) => setDocumentNote(event.target.value)}
-										/>
-									</Field>
-								</FieldGroup>
-								<Button
-									type="submit"
-									variant="outline"
-									className="self-start"
-									disabled={addDocument.isPending}
-								>
-									Add employment document
-								</Button>
-							</form>
+							<AddDocumentForm
+								workplaceId={workplaceId}
+								employmentId={employmentId}
+							/>
 						</CardContent>
 					</Card>
 				</div>

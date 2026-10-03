@@ -1,5 +1,5 @@
 import { Button } from "@SchedulesManager/ui/components/button";
-import { Spinner } from "@SchedulesManager/ui/components/spinner";
+import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 
 export type QueryFeedbackState = {
 	isLoading: boolean;
@@ -33,11 +33,11 @@ export function QueryFeedback({
 		);
 	if (query.isLoading)
 		return (
-			<div
-				role="status"
-				className="flex items-center gap-2 p-4 text-muted-foreground text-sm"
-			>
-				<Spinner /> Loading {label}…
+			<div role="status" className="flex flex-col gap-2 p-4">
+				<span className="sr-only">Loading {label}…</span>
+				<Skeleton className="h-4 w-1/3" />
+				<Skeleton className="h-10 w-full" />
+				<Skeleton className="h-10 w-full" />
 			</div>
 		);
 	return null;

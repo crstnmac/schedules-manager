@@ -21,7 +21,13 @@ import {
 	ListFilterIcon,
 	XIcon,
 } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+	type ReactNode,
+	useDeferredValue,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
 
 import {
 	TablePagination,
@@ -170,22 +176,29 @@ export function useListView<T>({
 		() => new Set(),
 	);
 
+	// Keep typing responsive on long lists: filtering runs at lower priority.
+	const deferredSearch = useDeferredValue(search);
 	const filtered = useMemo(
 		() =>
 			applyListView(rows, {
-				search,
+				search: deferredSearch,
 				searchText,
 				filters,
 				filterValues,
 				sort,
 				sorts,
 			}),
-		[rows, search, searchText, filters, filterValues, sort, sorts],
+		[rows, deferredSearch, searchText, filters, filterValues, sort, sorts],
 	);
 
 	const pagination = useTablePagination(filtered, {
 		pageSize,
-		resetKey: JSON.stringify([search, filterValues, sort, resetKey ?? null]),
+		resetKey: JSON.stringify([
+			deferredSearch,
+			filterValues,
+			sort,
+			resetKey ?? null,
+		]),
 	});
 
 	// Drop selections that left the data (decided, deleted, or no longer
