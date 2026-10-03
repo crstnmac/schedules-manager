@@ -38,7 +38,6 @@ import {
 	formatLeaveHours,
 	formatLeaveMonth,
 	formatLeaveRange,
-	hoursToMinutes,
 	leavePolicySummary,
 	todayIsoDate,
 } from "@/lib/leave";
@@ -48,7 +47,6 @@ import {
 	useCalendarTokenDiagnostics,
 	useCalendarTokens,
 	useCreateMyCalendarToken,
-	useCreateMyLeaveEncashment,
 	useCurrentEmployment,
 	useLeaveForecast,
 	useLeaveTypes,
@@ -58,6 +56,7 @@ import {
 import { getServerUrl } from "@/lib/server-url";
 import { useSelectedWorkplaceId } from "@/lib/workplace-store";
 import { spacing } from "@/theme";
+import { EncashSection } from "./encash-section";
 
 interface ConstraintsResponse {
 	unavailability: {
@@ -213,7 +212,6 @@ export function TimeOffScreen() {
 	const calendarTokens = useCalendarTokens(selected ?? undefined);
 	const createCalendarToken = useCreateMyCalendarToken(selected ?? undefined);
 	const revokeCalendarToken = useRevokeCalendarToken(selected ?? undefined);
-	const createEncashment = useCreateMyLeaveEncashment(selected ?? undefined);
 	const forecast = useLeaveForecast(selected ?? undefined, employment?.id, 6);
 	const qc = useQueryClient();
 	const c = useQuery({
@@ -250,10 +248,6 @@ export function TimeOffScreen() {
 	);
 	const [forecastOpen, setForecastOpen] = useState(false);
 	const [calendarUrl, setCalendarUrl] = useState<string | null>(null);
-	const [encashOpen, setEncashOpen] = useState(false);
-	const [encashLeaveTypeId, setEncashLeaveTypeId] = useState("");
-	const [encashHours, setEncashHours] = useState("8");
-	const [encashNote, setEncashNote] = useState("");
 
 	const typeById = useMemo(() => {
 		const map = new Map<string, LeaveTypeDto>();
@@ -528,31 +522,6 @@ export function TimeOffScreen() {
 			// The share sheet can be dismissed; there is nothing to recover.
 		}
 	}
-	async function submitEncashment() {
-		if (!encashLeaveTypeId) {
-			Alert.alert("Leave type", "Choose a leave type to encash.");
-			return;
-		}
-		const minutes = hoursToMinutes(encashHours);
-		if (minutes <= 0) {
-			Alert.alert("Hours", "Enter how many hours to encash.");
-			return;
-		}
-		try {
-			await createEncashment.mutateAsync({
-				leaveTypeId: encashLeaveTypeId,
-				minutes,
-				note: encashNote.trim() || undefined,
-			});
-			setEncashOpen(false);
-			setEncashHours("8");
-			setEncashNote("");
-			Alert.alert("Requested", "Your manager will review the encashment.");
-		} catch (e) {
-			Alert.alert("Could not request", (e as Error).message);
-		}
-	}
-
 	if (c.isLoading)
 		return (
 			<Screen>
@@ -1054,64 +1023,10 @@ export function TimeOffScreen() {
 				</Section>
 			</Appear>
 
-			{encashableTypes.length > 0 ? (
-				<Section
-					title="Encash leave"
-					caption="Turn unused leave into pay. A Manager must approve the request."
-				>
-					<Card>
-						{encashOpen ? (
-							<FadeSwap style={{ gap: spacing.lg }}>
-								<ChoiceChips
-									accessibilityLabel="Leave type to encash"
-									options={encashableTypes.map((type) => ({
-										value: type.id,
-										label: type.name,
-									}))}
-									value={encashLeaveTypeId}
-									onChange={setEncashLeaveTypeId}
-								/>
-								<NativeField
-									label="Hours"
-									value={encashHours}
-									onChange={setEncashHours}
-									keyboardType="decimal-pad"
-								/>
-								<NativeField
-									label="Note (optional)"
-									value={encashNote}
-									onChange={setEncashNote}
-								/>
-								<View style={styles.actionsRow}>
-									<Button
-										label="Cancel"
-										variant="secondary"
-										onPress={() => setEncashOpen(false)}
-										style={{ flex: 1 }}
-									/>
-									<Button
-										label="Request"
-										loading={createEncashment.isPending}
-										onPress={() => void submitEncashment()}
-										style={{ flex: 1 }}
-									/>
-								</View>
-							</FadeSwap>
-						) : (
-							<Button
-								variant="tinted"
-								label="Encash leave"
-								onPress={() => {
-									setEncashLeaveTypeId(
-										(current) => current || encashableTypes[0]?.id || "",
-									);
-									setEncashOpen(true);
-								}}
-							/>
-						)}
-					</Card>
-				</Section>
-			) : null}
+			<EncashSection
+				workplaceId={selected ?? undefined}
+				leaveTypes={encashableTypes}
+			/>
 
 			<Section
 				title="Calendar sync"

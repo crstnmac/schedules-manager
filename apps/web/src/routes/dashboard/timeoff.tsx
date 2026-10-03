@@ -62,7 +62,7 @@ import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CalendarOffIcon, PaperclipIcon, Trash2Icon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AppPage, AppPageBody, AppPageHeader } from "@/components/app-page";
 import { ConfirmAction } from "@/components/confirm-action";
@@ -282,6 +282,30 @@ function ApprovalStepChips({
 	);
 }
 
+/**
+ * Uncontrolled-from-the-parent text field for dialog reasons. Keystrokes stay
+ * in local state and are mirrored to a ref so the (very large) page component
+ * does not rerender on every character.
+ */
+function ReasonInput({
+	valueRef,
+	...props
+}: Omit<React.ComponentProps<typeof Input>, "value" | "onChange"> & {
+	valueRef: React.MutableRefObject<string>;
+}) {
+	const [value, setValue] = useState("");
+	return (
+		<Input
+			{...props}
+			value={value}
+			onChange={(event) => {
+				valueRef.current = event.target.value;
+				setValue(event.target.value);
+			}}
+		/>
+	);
+}
+
 function EmergencyBadge() {
 	return (
 		<Badge variant="destructive" className="uppercase">
@@ -317,14 +341,14 @@ function TimeOffPage() {
 	const [importOpen, setImportOpen] = useState(false);
 	const [editing, setEditing] = useState<TimeOffRequestDto | null>(null);
 	const [declineId, setDeclineId] = useState<string | null>(null);
-	const [declineReason, setDeclineReason] = useState("");
+	const declineReasonRef = useRef("");
 	const [approvalDecline, setApprovalDecline] =
 		useState<PendingApprovalDto | null>(null);
-	const [approvalDeclineReason, setApprovalDeclineReason] = useState("");
+	const approvalDeclineReasonRef = useRef("");
 	const [bulkDeclineOpen, setBulkDeclineOpen] = useState(false);
-	const [bulkDeclineReason, setBulkDeclineReason] = useState("");
+	const bulkDeclineReasonRef = useRef("");
 	const [expediteId, setExpediteId] = useState<string | null>(null);
-	const [expediteReason, setExpediteReason] = useState("");
+	const expediteReasonRef = useRef("");
 	const [delegationOpen, setDelegationOpen] = useState(false);
 
 	const canManageSettings = hasCapability(
@@ -357,7 +381,7 @@ function TimeOffPage() {
 			invalidateLeave();
 			decisionList.selection?.clear();
 			setBulkDeclineOpen(false);
-			setBulkDeclineReason("");
+			bulkDeclineReasonRef.current = "";
 			const applied = result.approved + result.declined;
 			if (input.decision === "approved") {
 				posthog?.capture("time_off_approved", {
@@ -510,7 +534,7 @@ function TimeOffPage() {
 		onSuccess: (_, input) => {
 			invalidateLeave();
 			setDeclineId(null);
-			setDeclineReason("");
+			declineReasonRef.current = "";
 			if (input.decision === "approved") {
 				posthog?.capture("time_off_approved");
 			} else {
@@ -547,7 +571,7 @@ function TimeOffPage() {
 		onSuccess: (_, input) => {
 			invalidateLeave();
 			setApprovalDecline(null);
-			setApprovalDeclineReason("");
+			approvalDeclineReasonRef.current = "";
 			if (input.decision === "approved") {
 				posthog?.capture("time_off_approved", { step: true });
 			} else {
@@ -577,7 +601,7 @@ function TimeOffPage() {
 		onSuccess: () => {
 			invalidateLeave();
 			setExpediteId(null);
-			setExpediteReason("");
+			expediteReasonRef.current = "";
 			posthog?.capture("time_off_expedited");
 			toast.success("Emergency override applied. The request is approved.");
 		},
@@ -840,7 +864,7 @@ function TimeOffPage() {
 												size="sm"
 												disabled={bulkDecision.isPending}
 												onClick={() => {
-													setBulkDeclineReason("");
+													bulkDeclineReasonRef.current = "";
 													setBulkDeclineOpen(true);
 												}}
 											>
@@ -872,11 +896,11 @@ function TimeOffPage() {
 												})
 											}
 											onDecline={() => {
-												setDeclineReason("");
+												declineReasonRef.current = "";
 												setDeclineId(request.id);
 											}}
 											onExpedite={() => {
-												setExpediteReason("");
+												expediteReasonRef.current = "";
 												setExpediteId(request.id);
 											}}
 										/>
@@ -902,7 +926,7 @@ function TimeOffPage() {
 								})
 							}
 							onDecline={(item) => {
-								setApprovalDeclineReason("");
+								approvalDeclineReasonRef.current = "";
 								setApprovalDecline(item);
 							}}
 						/>
@@ -1084,7 +1108,7 @@ function TimeOffPage() {
 				onOpenChange={(open) => {
 					if (!open) {
 						setDeclineId(null);
-						setDeclineReason("");
+						declineReasonRef.current = "";
 					}
 				}}
 			>
@@ -1103,10 +1127,9 @@ function TimeOffPage() {
 							})()}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<Input
+					<ReasonInput
 						id="decline-reason"
-						value={declineReason}
-						onChange={(event) => setDeclineReason(event.target.value)}
+						valueRef={declineReasonRef}
 						placeholder="Optional reason"
 						aria-label="Decline reason"
 					/>
@@ -1120,7 +1143,7 @@ function TimeOffPage() {
 								decide.mutate({
 									requestId: declineId,
 									decision: "declined",
-									reason: declineReason.trim() || undefined,
+									reason: declineReasonRef.current.trim() || undefined,
 								});
 							}}
 						>
@@ -1136,7 +1159,7 @@ function TimeOffPage() {
 				onOpenChange={(open) => {
 					if (!open) {
 						setApprovalDecline(null);
-						setApprovalDeclineReason("");
+						approvalDeclineReasonRef.current = "";
 					}
 				}}
 			>
@@ -1149,10 +1172,9 @@ function TimeOffPage() {
 								: "The worker will see this decision. A reason is optional."}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<Input
+					<ReasonInput
 						id="approval-decline-reason"
-						value={approvalDeclineReason}
-						onChange={(event) => setApprovalDeclineReason(event.target.value)}
+						valueRef={approvalDeclineReasonRef}
 						placeholder="Optional reason"
 						aria-label="Decline reason"
 					/>
@@ -1167,7 +1189,7 @@ function TimeOffPage() {
 									requestId: approvalDecline.requestId,
 									approvalId: approvalDecline.approvalId,
 									decision: "declined",
-									reason: approvalDeclineReason.trim() || undefined,
+									reason: approvalDeclineReasonRef.current.trim() || undefined,
 								});
 							}}
 						>
@@ -1185,7 +1207,7 @@ function TimeOffPage() {
 				onOpenChange={(open) => {
 					if (!open) {
 						setBulkDeclineOpen(false);
-						setBulkDeclineReason("");
+						bulkDeclineReasonRef.current = "";
 					}
 				}}
 			>
@@ -1199,10 +1221,9 @@ function TimeOffPage() {
 							and is shared with everyone in this batch.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<Input
+					<ReasonInput
 						id="bulk-decline-reason"
-						value={bulkDeclineReason}
-						onChange={(event) => setBulkDeclineReason(event.target.value)}
+						valueRef={bulkDeclineReasonRef}
 						placeholder="Optional reason"
 						aria-label="Decline reason"
 					/>
@@ -1215,7 +1236,7 @@ function TimeOffPage() {
 								bulkDecision.mutate({
 									requestIds: selectedPending.map((request) => request.id),
 									decision: "declined",
-									reason: bulkDeclineReason.trim() || undefined,
+									reason: bulkDeclineReasonRef.current.trim() || undefined,
 								})
 							}
 						>
@@ -1233,7 +1254,7 @@ function TimeOffPage() {
 				onOpenChange={(open) => {
 					if (!open) {
 						setExpediteId(null);
-						setExpediteReason("");
+						expediteReasonRef.current = "";
 					}
 				}}
 			>
@@ -1247,10 +1268,9 @@ function TimeOffPage() {
 							immediately, and records your reason against each skipped step.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<Input
+					<ReasonInput
 						id="expedite-reason"
-						value={expediteReason}
-						onChange={(event) => setExpediteReason(event.target.value)}
+						valueRef={expediteReasonRef}
 						placeholder="Reason for the emergency override"
 						aria-label="Expedite reason"
 					/>
@@ -1259,7 +1279,7 @@ function TimeOffPage() {
 						<AlertDialogAction
 							disabled={expedite.isPending}
 							onClick={(event) => {
-								if (expediteReason.trim().length === 0) {
+								if (expediteReasonRef.current.trim().length === 0) {
 									event.preventDefault();
 									toast.error("Add a reason for the override.");
 									return;
@@ -1267,7 +1287,7 @@ function TimeOffPage() {
 								if (!expediteId) return;
 								expedite.mutate({
 									requestId: expediteId,
-									reason: expediteReason.trim(),
+									reason: expediteReasonRef.current.trim(),
 								});
 							}}
 						>
@@ -2733,7 +2753,7 @@ function EncashmentsPanel({
 	const [declineTarget, setDeclineTarget] = useState<LeaveEncashmentDto | null>(
 		null,
 	);
-	const [declineReason, setDeclineReason] = useState("");
+	const declineReasonRef = useRef("");
 	const [createOpen, setCreateOpen] = useState(false);
 
 	const decide = useMutation({
@@ -2755,7 +2775,7 @@ function EncashmentsPanel({
 		onSuccess: (_, input) => {
 			onChanged();
 			setDeclineTarget(null);
-			setDeclineReason("");
+			declineReasonRef.current = "";
 			posthog?.capture(
 				input.decision === "approved"
 					? "leave_encashment_approved"
@@ -2917,7 +2937,7 @@ function EncashmentsPanel({
 											variant="outline"
 											disabled={busy}
 											onClick={() => {
-												setDeclineReason("");
+												declineReasonRef.current = "";
 												setDeclineTarget(encashment);
 											}}
 										>
@@ -2947,7 +2967,7 @@ function EncashmentsPanel({
 				onOpenChange={(open) => {
 					if (!open) {
 						setDeclineTarget(null);
-						setDeclineReason("");
+						declineReasonRef.current = "";
 					}
 				}}
 			>
@@ -2960,10 +2980,9 @@ function EncashmentsPanel({
 								: "The worker will see this decision. A reason is optional."}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
-					<Input
+					<ReasonInput
 						id="encashment-decline-reason"
-						value={declineReason}
-						onChange={(event) => setDeclineReason(event.target.value)}
+						valueRef={declineReasonRef}
 						placeholder="Optional reason"
 						aria-label="Decline reason"
 					/>
@@ -2977,7 +2996,7 @@ function EncashmentsPanel({
 								decide.mutate({
 									encashmentId: declineTarget.id,
 									decision: "declined",
-									reason: declineReason.trim() || undefined,
+									reason: declineReasonRef.current.trim() || undefined,
 								});
 							}}
 						>

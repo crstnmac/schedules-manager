@@ -32,6 +32,7 @@ import {
 	useClockOut,
 	useMe,
 	useMySchedule,
+	usePrefetchLikelyScreens,
 	usePublishedVersion,
 	useRespondToAcceptance,
 } from "@/lib/queries";
@@ -75,6 +76,7 @@ export function WorkerHome() {
 	const workplaceId = employment?.workplace.id;
 
 	const schedule = useMySchedule(workplaceId);
+	usePrefetchLikelyScreens(workplaceId);
 	const clockIn = useClockIn();
 	const clockOut = useClockOut();
 	const [scope, setScope] = useState<Scope>("mine");

@@ -232,9 +232,9 @@ function CoveragePage() {
 
 	const [tab, setTab] = useState<"releases" | "swaps" | "pickups">("releases");
 
-	const releases = data?.releases ?? [];
-	const pickups = data?.pickups ?? [];
-	const swapItems = swaps.data ?? [];
+	const releases = useMemo(() => data?.releases ?? [], [data?.releases]);
+	const pickups = useMemo(() => data?.pickups ?? [], [data?.pickups]);
+	const swapItems = useMemo(() => swaps.data ?? [], [swaps.data]);
 
 	const releaseColumns = useMemo(
 		() =>

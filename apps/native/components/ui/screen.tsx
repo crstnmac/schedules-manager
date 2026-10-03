@@ -8,6 +8,11 @@ import {
 	View,
 	type ViewStyle,
 } from "react-native";
+import Animated, {
+	FadeIn,
+	FadeInDown,
+	ReduceMotion,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { gutter, spacing, useAppTheme } from "@/theme";
@@ -95,12 +100,12 @@ export function Screen({
 }
 
 /**
- * Wrapper for blocks that arrive with data. Static (no animation); `index`
- * is accepted for call-site compatibility.
+ * Wrapper for blocks that arrive with data. Fades and rises in on the UI
+ * thread, staggered by `index` (capped); skipped when reduce-motion is on.
  */
 export function Appear({
 	children,
-	index: _index = 0,
+	index = 0,
 	style,
 }: {
 	children: React.ReactNode;
@@ -108,7 +113,14 @@ export function Appear({
 	style?: StyleProp<ViewStyle>;
 }) {
 	return (
-		<View style={style}>{children}</View>
+		<Animated.View
+			entering={FadeInDown.delay(Math.min(index, 6) * 40)
+				.duration(260)
+				.reduceMotion(ReduceMotion.System)}
+			style={style}
+		>
+			{children}
+		</Animated.View>
 	);
 }
 
@@ -121,6 +133,11 @@ export function FadeSwap({
 	style?: StyleProp<ViewStyle>;
 }) {
 	return (
-		<View style={style}>{children}</View>
+		<Animated.View
+			entering={FadeIn.duration(180).reduceMotion(ReduceMotion.System)}
+			style={style}
+		>
+			{children}
+		</Animated.View>
 	);
 }

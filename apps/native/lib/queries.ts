@@ -5,7 +5,7 @@ import {
 	useQuery,
 	useQueryClient,
 } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import { api } from "./api";
 import { useSelectedWorkplaceId } from "./workplace-store";
@@ -327,13 +327,35 @@ export interface WorkplaceMessage {
 	createdAt: string;
 }
 
+const conversationsOptions = (workplaceId: string | undefined) => ({
+	queryKey: ["conversations", workplaceId] as const,
+	queryFn: () =>
+		api<{ conversations: WorkplaceConversation[] }>(
+			`/v1/workplaces/${workplaceId}/conversations`,
+		).then((data) => data.conversations),
+});
+
+/**
+ * Warm the cache for the screens a worker most likely opens next, so tabs
+ * paint instantly. Idle-time and best-effort: failures are ignored and data
+ * younger than the default staleTime is not refetched.
+ */
+export function usePrefetchLikelyScreens(workplaceId: string | undefined) {
+	const queryClient = useQueryClient();
+	useEffect(() => {
+		if (!workplaceId) return;
+		const handle = setTimeout(() => {
+			void queryClient.prefetchQuery(openShiftsOptions(workplaceId));
+			void queryClient.prefetchQuery(notificationsOptions(workplaceId));
+			void queryClient.prefetchQuery(conversationsOptions(workplaceId));
+		}, 800);
+		return () => clearTimeout(handle);
+	}, [queryClient, workplaceId]);
+}
+
 export function useConversations(workplaceId: string | undefined) {
 	return useQuery({
-		queryKey: ["conversations", workplaceId],
-		queryFn: () =>
-			api<{ conversations: WorkplaceConversation[] }>(
-				`/v1/workplaces/${workplaceId}/conversations`,
-			).then((data) => data.conversations),
+		...conversationsOptions(workplaceId),
 		enabled: Boolean(workplaceId),
 	});
 }
@@ -680,11 +702,15 @@ export interface OpenShiftsResponse {
 	}[];
 }
 
+const openShiftsOptions = (workplaceId: string | undefined) => ({
+	queryKey: ["open-shifts", workplaceId] as const,
+	queryFn: () =>
+		api<OpenShiftsResponse>(`/v1/workplaces/${workplaceId}/open-shifts`),
+});
+
 export function useOpenShifts(workplaceId: string | undefined, enabled = true) {
 	return useQuery({
-		queryKey: ["open-shifts", workplaceId],
-		queryFn: () =>
-			api<OpenShiftsResponse>(`/v1/workplaces/${workplaceId}/open-shifts`),
+		...openShiftsOptions(workplaceId),
 		enabled: Boolean(workplaceId) && enabled,
 	});
 }
@@ -748,16 +774,25 @@ export interface InboxNotification {
 	createdAt: string;
 }
 
+type NotificationsResponse = {
+	unreadCount: number;
+	notifications: InboxNotification[];
+};
+
+const notificationsOptions = (workplaceId: string | undefined) => ({
+	queryKey: ["notifications", workplaceId] as const,
+	queryFn: () =>
+		api<NotificationsResponse>(
+			`/v1/workplaces/${workplaceId}/my/notifications`,
+		),
+});
+
 export function useNotifications(
 	workplaceId: string | undefined,
 	enabled = true,
 ) {
 	return useQuery({
-		queryKey: ["notifications", workplaceId],
-		queryFn: () =>
-			api<{ unreadCount: number; notifications: InboxNotification[] }>(
-				`/v1/workplaces/${workplaceId}/my/notifications`,
-			),
+		...notificationsOptions(workplaceId),
 		enabled: Boolean(workplaceId) && enabled,
 	});
 }
@@ -770,7 +805,36 @@ export function useMarkNotificationRead(workplaceId: string | undefined) {
 				`/v1/workplaces/${workplaceId}/my/notifications/${notificationId}/read`,
 				{ method: "POST" },
 			),
-		onSuccess: () => {
+		// Optimistic: flip the row to read immediately, roll back on failure.
+		onMutate: async (notificationId: string) => {
+			await queryClient.cancelQueries({ queryKey: ["notifications"] });
+			const previous = queryClient.getQueriesData<NotificationsResponse>({
+				queryKey: ["notifications"],
+			});
+			const readAt = new Date().toISOString();
+			queryClient.setQueriesData<NotificationsResponse>(
+				{ queryKey: ["notifications"] },
+				(data) => {
+					const target = data?.notifications.find(
+						(n) => n.id === notificationId && !n.readAt,
+					);
+					if (!data || !target) return data;
+					return {
+						unreadCount: Math.max(0, data.unreadCount - 1),
+						notifications: data.notifications.map((n) =>
+							n.id === notificationId ? { ...n, readAt } : n,
+						),
+					};
+				},
+			);
+			return { previous };
+		},
+		onError: (_error, _id, context) => {
+			for (const [key, data] of context?.previous ?? []) {
+				queryClient.setQueryData(key, data);
+			}
+		},
+		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: ["notifications"] });
 		},
 	});

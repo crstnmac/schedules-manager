@@ -101,6 +101,8 @@ const rowId = (row: TimesheetRow) => row.id;
 const canDecide = (row: TimesheetRow) =>
 	row.approvalStatus === "pending" && Boolean(row.clockedOutAt);
 
+const NO_ROWS: TimesheetRow[] = [];
+
 function TimesheetsPage() {
 	const { workplace } = useWorkplace();
 	const sheets = useTimesheets(workplace?.id);
@@ -158,7 +160,7 @@ function TimesheetsPage() {
 		},
 	});
 
-	const rows = sheets.data?.timesheets ?? [];
+	const rows = sheets.data?.timesheets ?? NO_ROWS;
 	const list = useListView<TimesheetRow>({
 		rows,
 		getRowId: rowId,

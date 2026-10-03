@@ -24,7 +24,7 @@ import { Spinner } from "@SchedulesManager/ui/components/spinner";
 import { Textarea } from "@SchedulesManager/ui/components/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PlusIcon, RepeatIcon, SearchIcon, Trash2Icon } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { createDataColumnHelper } from "@/components/data-table";
@@ -147,15 +147,16 @@ export function PatternsCard({
 		() => workers.filter((worker) => worker.status === "active"),
 		[workers],
 	);
+	const deferredMemberSearch = useDeferredValue(memberSearch);
 	const visibleWorkers = useMemo(() => {
-		const term = memberSearch.trim().toLowerCase();
+		const term = deferredMemberSearch.trim().toLowerCase();
 		if (!term) return activeWorkers;
 		return activeWorkers.filter((worker) =>
 			formatPerson(worker.profile.fullName, worker.profile.email)
 				.toLowerCase()
 				.includes(term),
 		);
-	}, [activeWorkers, formatPerson, memberSearch]);
+	}, [activeWorkers, formatPerson, deferredMemberSearch]);
 
 	const locationName = useCallback(
 		(id: string | null) =>

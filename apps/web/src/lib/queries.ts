@@ -169,6 +169,7 @@ export function usePendingInvitations(enabled = true) {
 		queryKey: ["invitations", "pending"],
 		queryFn: () => api<PendingInvitationsResponse>("/v1/invitations/pending"),
 		enabled,
+		staleTime: 60_000,
 	});
 }
 

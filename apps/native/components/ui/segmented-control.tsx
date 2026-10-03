@@ -1,12 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
+import Animated, {
+	useAnimatedStyle,
+	useReducedMotion,
+	useSharedValue,
+	withSpring,
+} from "react-native-reanimated";
 
 import { tapLight } from "@/lib/haptics";
 import { radius, spacing, useAppTheme } from "@/theme";
 import { AppText } from "./text";
 
 /**
- * Segmented switch whose thumb jumps between options. Drawn in RN so it matches the brand on both platforms.
+ * Segmented switch whose thumb springs between options. Drawn in RN so it matches the brand on both platforms.
  */
 export function SegmentedControl<T extends string>({
 	options,
@@ -24,6 +30,18 @@ export function SegmentedControl<T extends string>({
 		options.findIndex((option) => option.value === value),
 	);
 	const segment = trackWidth > 0 ? (trackWidth - 4) / options.length : 0;
+	const reduceMotion = useReducedMotion();
+	const offset = useSharedValue(0);
+	const target = index * segment;
+	useEffect(() => {
+		offset.value = reduceMotion
+			? target
+			: withSpring(target, { damping: 20, stiffness: 260, mass: 0.7 });
+	}, [target, reduceMotion, offset]);
+	const thumbStyle = useAnimatedStyle(() => ({
+		transform: [{ translateX: offset.value }],
+	}));
+
 	return (
 		<View
 			accessibilityRole="tablist"
@@ -38,7 +56,7 @@ export function SegmentedControl<T extends string>({
 			}}
 		>
 			{segment > 0 ? (
-				<View
+				<Animated.View
 					style={[
 						{
 							position: "absolute",

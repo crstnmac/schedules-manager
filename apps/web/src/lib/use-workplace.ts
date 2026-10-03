@@ -1,6 +1,8 @@
 import { useMe } from "./queries";
 import { setWorkplaceTimeZone } from "./time";
 
+const NO_CAPABILITIES = { scheduling: false, operations: false };
+
 export function useWorkplace() {
 	const me = useMe();
 	const employments = me.data?.employments ?? [];
@@ -15,9 +17,6 @@ export function useWorkplace() {
 		kind: employment?.kind ?? null,
 		employmentId: employment?.id ?? null,
 		privileges: employment?.privileges ?? null,
-		capabilities: employment?.capabilities ?? {
-			scheduling: false,
-			operations: false,
-		},
+		capabilities: employment?.capabilities ?? NO_CAPABILITIES,
 	};
 }

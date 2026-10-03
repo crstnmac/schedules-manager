@@ -346,9 +346,15 @@ function WorkersPage() {
 		);
 	}
 
-	const activeWorkers =
-		workers.data?.workers.filter((worker) => worker.status === "active") ?? [];
-	const invitations = workers.data?.invitations ?? [];
+	const workerRows = workers.data?.workers;
+	const activeWorkers = useMemo(
+		() => workerRows?.filter((worker) => worker.status === "active") ?? [],
+		[workerRows],
+	);
+	const invitations = useMemo(
+		() => workers.data?.invitations ?? [],
+		[workers.data?.invitations],
+	);
 
 	const teamList = useListView<WorkerDto>({
 		rows: activeWorkers,
@@ -421,12 +427,16 @@ function WorkersPage() {
 			),
 		refetchInterval: 15_000,
 	});
-	const latestDeliveries = new Map<string, InvitationEmailDelivery>();
-	for (const delivery of deliveryQuery.data?.deliveries ?? []) {
-		if (!latestDeliveries.has(delivery.invitationId)) {
-			latestDeliveries.set(delivery.invitationId, delivery);
+	const deliveries = deliveryQuery.data?.deliveries;
+	const latestDeliveries = useMemo(() => {
+		const map = new Map<string, InvitationEmailDelivery>();
+		for (const delivery of deliveries ?? []) {
+			if (!map.has(delivery.invitationId)) {
+				map.set(delivery.invitationId, delivery);
+			}
 		}
-	}
+		return map;
+	}, [deliveries]);
 
 	const workerColumns = useMemo(
 		() =>
@@ -674,9 +684,12 @@ function WorkersPage() {
 		[deliveryQuery.isPending, latestDeliveries, resend],
 	);
 
-	const pendingCount = invitations.filter(
-		(invitation) => invitation.status === "pending",
-	).length;
+	const pendingCount = useMemo(
+		() =>
+			invitations.filter((invitation) => invitation.status === "pending")
+				.length,
+		[invitations],
+	);
 
 	return (
 		<AppPage>

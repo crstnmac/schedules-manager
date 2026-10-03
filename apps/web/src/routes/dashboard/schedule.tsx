@@ -123,20 +123,29 @@ import {
 	UsersIcon,
 	XIcon,
 } from "lucide-react";
-import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import {
+	type CSSProperties,
+	lazy,
+	memo,
+	Suspense,
+	useCallback,
+	useDeferredValue,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
 import { DatePicker } from "@/components/date-picker";
 import { ImportSheet } from "@/components/import-sheet";
-import { BulkEditDialog } from "@/components/schedule/bulk-edit-dialog";
 import {
 	ScheduleMobileBoard,
 	ScheduleMobileBoardSkeleton,
 } from "@/components/schedule/mobile-board";
-import { PatternApplyDialog } from "@/components/schedule/pattern-apply-dialog";
-import { PublishSelectionDialog } from "@/components/schedule/publish-selection-dialog";
 import { ScheduleMonthGrid } from "@/components/schedule-month-grid";
 import { ShiftTile } from "@/components/schedule-shift-tile";
 import { TimePicker } from "@/components/time-picker";
@@ -190,6 +199,22 @@ import {
 } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
+
+const BulkEditDialog = lazy(() =>
+	import("@/components/schedule/bulk-edit-dialog").then((m) => ({
+		default: m.BulkEditDialog,
+	})),
+);
+const PatternApplyDialog = lazy(() =>
+	import("@/components/schedule/pattern-apply-dialog").then((m) => ({
+		default: m.PatternApplyDialog,
+	})),
+);
+const PublishSelectionDialog = lazy(() =>
+	import("@/components/schedule/publish-selection-dialog").then((m) => ({
+		default: m.PublishSelectionDialog,
+	})),
+);
 
 export const Route = createFileRoute("/dashboard/schedule")({
 	component: SchedulePage,
@@ -745,7 +770,7 @@ function cellConstraints(
 	return constraints;
 }
 
-function ScheduleDropCell({
+const ScheduleDropCell = memo(function ScheduleDropCell({
 	employmentId,
 	date,
 	className,
@@ -768,6 +793,7 @@ function ScheduleDropCell({
 			ref={ref}
 			className={cn(
 				className,
+				"transition-colors duration-150 motion-reduce:transition-none",
 				isDropTarget &&
 					"bg-primary/10 ring-2 ring-primary/45 ring-inset motion-reduce:transition-none",
 			)}
@@ -775,7 +801,7 @@ function ScheduleDropCell({
 			{children}
 		</div>
 	);
-}
+});
 
 function initials(name: string): string {
 	return name
@@ -798,6 +824,17 @@ const SKELETON_DAYS = [
 const SKELETON_ROWS = ["a", "b", "c", "d"] as const;
 
 type GridDensity = "compact" | "comfortable";
+
+/** Stable identity callback that always invokes the latest closure. */
+function useStableCallback<Args extends unknown[], R>(
+	fn: (...args: Args) => R,
+): (...args: Args) => R {
+	const ref = useRef(fn);
+	useLayoutEffect(() => {
+		ref.current = fn;
+	});
+	return useCallback((...args: Args) => ref.current(...args), []);
+}
 
 function ScheduleGridSkeleton() {
 	return (
@@ -1504,8 +1541,9 @@ function SchedulePage() {
 		}
 		saveSales.mutate({ day, amountCents: Math.round(dollars * 100) });
 	}
+	const deferredWorkerQuery = useDeferredValue(workerQuery);
 	const filteredStaff = useMemo(() => {
-		const query = workerQuery.trim().toLocaleLowerCase();
+		const query = deferredWorkerQuery.trim().toLocaleLowerCase();
 		return (data?.staff ?? []).filter((member) => {
 			if (
 				query &&
@@ -1536,7 +1574,7 @@ function SchedulePage() {
 		positionFilter,
 		scheduleIndex.hoursByEmploymentId,
 		staffStateFilter,
-		workerQuery,
+		deferredWorkerQuery,
 	]);
 	const visibleStaff = filteredStaff.slice(0, visibleStaffCount);
 	const hasStaffFilters =
@@ -1636,6 +1674,11 @@ function SchedulePage() {
 				: [...current, shiftId],
 		);
 	}
+
+	const stableOpenEdit = useStableCallback(openEdit);
+	const stableToggleSelect = useStableCallback((shift: ScheduleShiftDto) =>
+		toggleShiftSelect(shift.id),
+	);
 
 	function openCreate(date: string) {
 		if (!data) return;
@@ -4086,10 +4129,8 @@ function SchedulePage() {
 																		<ShiftTile
 																			key={shift.id}
 																			shift={shift}
-																			onOpen={openEdit}
-																			onToggleSelect={() =>
-																				toggleShiftSelect(shift.id)
-																			}
+																			onOpen={stableOpenEdit}
+																			onToggleSelect={stableToggleSelect}
 																			selected={selectedShiftIds.includes(
 																				shift.id,
 																			)}
@@ -4224,10 +4265,8 @@ function SchedulePage() {
 																		<ShiftTile
 																			key={shift.id}
 																			shift={shift}
-																			onOpen={openEdit}
-																			onToggleSelect={() =>
-																				toggleShiftSelect(shift.id)
-																			}
+																			onOpen={stableOpenEdit}
+																			onToggleSelect={stableToggleSelect}
 																			selected={selectedShiftIds.includes(
 																				shift.id,
 																			)}
@@ -4274,10 +4313,8 @@ function SchedulePage() {
 																		<ShiftTile
 																			key={shift.id}
 																			shift={shift}
-																			onOpen={openEdit}
-																			onToggleSelect={() =>
-																				toggleShiftSelect(shift.id)
-																			}
+																			onOpen={stableOpenEdit}
+																			onToggleSelect={stableToggleSelect}
 																			selected={selectedShiftIds.includes(
 																				shift.id,
 																			)}
@@ -4682,38 +4719,40 @@ function SchedulePage() {
 					});
 				}}
 			/>
-			<PatternApplyDialog
-				open={patternOpen}
-				onOpenChange={setPatternOpen}
-				locationId={activeLocationId}
-				weekStart={weekStart}
-				patterns={patterns.data ?? []}
-				teamId={activeTeamId}
-				onApplied={handlePatternApplied}
-			/>
-			<PublishSelectionDialog
-				open={publishSelectionOpen}
-				onOpenChange={setPublishSelectionOpen}
-				scheduleId={schedule.data?.schedule.id ?? ""}
-				shiftIds={selectedShiftIds}
-				onPublished={() => {
-					setSelectedShiftIds([]);
-					void invalidate();
-				}}
-			/>
-			<BulkEditDialog
-				open={bulkEditOpen}
-				onOpenChange={setBulkEditOpen}
-				locationId={activeLocationId}
-				weekStart={weekStart}
-				shiftIds={selectedShiftIds}
-				workers={(data?.staff ?? []).map((member) => ({
-					employmentId: member.employmentId,
-					name: member.name || member.email,
-				}))}
-				teamId={activeTeamId}
-				onEdited={handleBulkEdited}
-			/>
+			<Suspense fallback={null}>
+				<PatternApplyDialog
+					open={patternOpen}
+					onOpenChange={setPatternOpen}
+					locationId={activeLocationId}
+					weekStart={weekStart}
+					patterns={patterns.data ?? []}
+					teamId={activeTeamId}
+					onApplied={handlePatternApplied}
+				/>
+				<PublishSelectionDialog
+					open={publishSelectionOpen}
+					onOpenChange={setPublishSelectionOpen}
+					scheduleId={schedule.data?.schedule.id ?? ""}
+					shiftIds={selectedShiftIds}
+					onPublished={() => {
+						setSelectedShiftIds([]);
+						void invalidate();
+					}}
+				/>
+				<BulkEditDialog
+					open={bulkEditOpen}
+					onOpenChange={setBulkEditOpen}
+					locationId={activeLocationId}
+					weekStart={weekStart}
+					shiftIds={selectedShiftIds}
+					workers={(data?.staff ?? []).map((member) => ({
+						employmentId: member.employmentId,
+						name: member.name || member.email,
+					}))}
+					teamId={activeTeamId}
+					onEdited={handleBulkEdited}
+				/>
+			</Suspense>
 		</section>
 	);
 }

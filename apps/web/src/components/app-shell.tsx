@@ -31,7 +31,7 @@ import {
 	SearchIcon,
 	Settings2Icon,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 
 import {
 	AppShellSearch,
@@ -96,7 +96,7 @@ function WorkplaceHeader({
 	);
 }
 
-function NavLinkRow({
+const NavLinkRow = memo(function NavLinkRow({
 	item,
 	active,
 	onNavigate,
@@ -128,9 +128,9 @@ function NavLinkRow({
 			) : null}
 		</Link>
 	);
-}
+});
 
-function NavList({
+const NavList = memo(function NavList({
 	label,
 	groups,
 	pathname,
@@ -163,9 +163,9 @@ function NavList({
 			))}
 		</nav>
 	);
-}
+});
 
-function ProfileMenu({
+const ProfileMenu = memo(function ProfileMenu({
 	profile,
 	isSigningOut,
 	onSignOut,
@@ -253,9 +253,9 @@ function ProfileMenu({
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);
-}
+});
 
-function MobileTabBar({
+const MobileTabBar = memo(function MobileTabBar({
 	items,
 	pathname,
 	onMore,
@@ -298,7 +298,7 @@ function MobileTabBar({
 			</button>
 		</nav>
 	);
-}
+});
 
 /**
  * The shared workspace frame for managers and workers: one sidebar for
@@ -355,11 +355,30 @@ export function AppShell({
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, []);
 
-	const searchLinks: ShellSearchLink[] = [
-		...groups.flatMap((group) => group.items),
-		{ ...inbox, description: "Notifications" },
-		...(settings ? [{ ...settings, description: "Workplace settings" }] : []),
-	];
+	const searchLinks = useMemo<ShellSearchLink[]>(
+		() => [
+			...groups.flatMap((group) => group.items),
+			{ ...inbox, description: "Notifications" },
+			...(settings ? [{ ...settings, description: "Workplace settings" }] : []),
+		],
+		[groups, inbox, settings],
+	);
+	const openMenu = useCallback(() => setMenuOpen(true), []);
+	const closeMenu = useCallback(() => setMenuOpen(false), []);
+	const menuGroups = useMemo(
+		() => [
+			...groups,
+			...(settings
+				? [
+						{
+							label: "Workspace",
+							items: [{ ...settings, description: "Workplace settings" }],
+						},
+					]
+				: []),
+		],
+		[groups, settings],
+	);
 	const settingsActive = settings ? isActive(settings, pathname) : false;
 	const inboxActive = isActive(inbox, pathname);
 
@@ -525,7 +544,7 @@ export function AppShell({
 						<MobileTabBar
 							items={mobileTabs}
 							pathname={pathname}
-							onMore={() => setMenuOpen(true)}
+							onMore={openMenu}
 						/>
 					) : null}
 				</div>
@@ -540,24 +559,9 @@ export function AppShell({
 					<div className="grid flex-1 content-start gap-4 overflow-y-auto p-3">
 						<NavList
 							label={`${navLabel} (menu)`}
-							groups={[
-								...groups,
-								...(settings
-									? [
-											{
-												label: "Workspace",
-												items: [
-													{
-														...settings,
-														description: "Workplace settings",
-													},
-												],
-											},
-										]
-									: []),
-							]}
+							groups={menuGroups}
 							pathname={pathname}
-							onNavigate={() => setMenuOpen(false)}
+							onNavigate={closeMenu}
 						/>
 						<PilotFeedback
 							variant="ghost"

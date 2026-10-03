@@ -3,6 +3,7 @@ import { Button } from "@SchedulesManager/ui/components/button";
 import { cn } from "@SchedulesManager/ui/lib/utils";
 import { useDraggable } from "@dnd-kit/react";
 import { AlertTriangleIcon } from "lucide-react";
+import { memo } from "react";
 import type { ScheduleResponse, ScheduleShiftDto } from "@/lib/queries";
 import {
 	formatCompactShiftRange,
@@ -16,7 +17,7 @@ function statusVariant(tone: "danger" | "warning" | "info") {
 	return "secondary" as const;
 }
 
-export function ShiftTile({
+export const ShiftTile = memo(function ShiftTile({
 	shift,
 	onOpen,
 	onToggleSelect,
@@ -89,7 +90,7 @@ export function ShiftTile({
 				onOpen(shift);
 			}}
 			className={cn(
-				"h-auto w-full cursor-grab touch-none flex-col items-stretch gap-1 overflow-hidden whitespace-normal rounded-md border px-2 py-1.5 text-left active:cursor-grabbing motion-reduce:transition-none [@media(hover:hover)]:hover:shadow-sm",
+				"h-auto w-full cursor-grab touch-none flex-col items-stretch gap-1 overflow-hidden whitespace-normal rounded-md border px-2 py-1.5 text-left transition-[transform,box-shadow,opacity] duration-150 active:scale-[0.98] active:cursor-grabbing motion-reduce:transition-none [@media(hover:hover)]:hover:shadow-sm",
 				compact ? "min-h-9 gap-0.5 py-1" : "min-h-11",
 				(isDragging || isDropping) && "opacity-45 ring-2 ring-primary/30",
 				selected && "ring-2 ring-primary",
@@ -140,4 +141,4 @@ export function ShiftTile({
 			) : null}
 		</Button>
 	);
-}
+});

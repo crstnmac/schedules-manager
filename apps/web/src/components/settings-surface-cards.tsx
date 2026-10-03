@@ -33,7 +33,13 @@ import {
 	TagsIcon,
 	UsersIcon,
 } from "lucide-react";
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import {
+	type ReactNode,
+	useCallback,
+	useDeferredValue,
+	useMemo,
+	useState,
+} from "react";
 import { toast } from "sonner";
 
 import { createDataColumnHelper } from "@/components/data-table";
@@ -168,15 +174,16 @@ export function GroupsCard({
 		() => workers.filter((worker) => worker.status === "active"),
 		[workers],
 	);
+	const deferredMemberSearch = useDeferredValue(memberSearch);
 	const visibleWorkers = useMemo(() => {
-		const term = memberSearch.trim().toLowerCase();
+		const term = deferredMemberSearch.trim().toLowerCase();
 		if (!term) return activeWorkers;
 		return activeWorkers.filter((worker) =>
 			formatPerson(worker.profile.fullName, worker.profile.email)
 				.toLowerCase()
 				.includes(term),
 		);
-	}, [activeWorkers, formatPerson, memberSearch]);
+	}, [activeWorkers, formatPerson, deferredMemberSearch]);
 
 	const resetForm = useCallback(() => {
 		setEditingId(null);

@@ -53,6 +53,24 @@ export default defineConfig(({ mode }) => {
 				),
 			},
 		},
+		build: {
+			rollupOptions: {
+				output: {
+					// Heavy, rarely-changing vendor libs get their own long-cached
+					// chunks. Charts and maps are intentionally left to the
+					// router's per-route splitting: forcing them into a named chunk
+					// pulls shared helpers in and makes the entry preload them.
+					manualChunks(id: string) {
+						if (!id.includes("node_modules")) return undefined;
+						if (/[\\/]node_modules[\\/]read-excel-file[\\/]/.test(id))
+							return "vendor-spreadsheet";
+						if (/[\\/]node_modules[\\/]posthog-js[\\/]/.test(id))
+							return "vendor-posthog";
+						return undefined;
+					},
+				},
+			},
+		},
 		plugins: [
 			tailwindcss(),
 			tanstackRouter({

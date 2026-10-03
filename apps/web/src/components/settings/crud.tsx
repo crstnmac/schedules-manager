@@ -40,7 +40,7 @@ import {
 	Trash2Icon,
 	XIcon,
 } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useDeferredValue, useMemo, useState } from "react";
 
 import {
 	createDataColumnHelper,
@@ -107,15 +107,16 @@ export function SettingsCrudCard<TData extends RowData>({
 	const [search, setSearch] = useState("");
 	const [deleteTarget, setDeleteTarget] = useState<TData | null>(null);
 
+	const deferredSearch = useDeferredValue(search);
 	const filtered = useMemo(() => {
-		const term = search.trim().toLowerCase();
+		const term = deferredSearch.trim().toLowerCase();
 		if (!getSearchText || !term) return data;
 		return data.filter((row) =>
 			getSearchText(row).toLowerCase().includes(term),
 		);
-	}, [data, getSearchText, search]);
+	}, [data, getSearchText, deferredSearch]);
 
-	const isFiltering = Boolean(getSearchText && search.trim());
+	const isFiltering = Boolean(getSearchText && deferredSearch.trim());
 
 	const helper = useMemo(() => createDataColumnHelper<TData>(), []);
 
@@ -175,7 +176,7 @@ export function SettingsCrudCard<TData extends RowData>({
 				</EmptyMedia>
 				<EmptyTitle>No matches</EmptyTitle>
 				<EmptyDescription>
-					Nothing matches “{search.trim()}”. Try a different search.
+					Nothing matches “{deferredSearch.trim()}”. Try a different search.
 				</EmptyDescription>
 			</EmptyHeader>
 			<EmptyContent>

@@ -147,6 +147,29 @@ interface LeaveReportResponse {
 	};
 }
 
+const hoursConfig = {
+	hours: { label: "Hours", color: "var(--chart-2)" },
+} satisfies ChartConfig;
+const costConfig = {
+	labor: { label: "Labor cost", color: "var(--chart-4)" },
+	sales: { label: "Sales", color: "var(--chart-2)" },
+} satisfies ChartConfig;
+const percentConfig = {
+	laborPercent: { label: "Labor %", color: "var(--chart-3)" },
+} satisfies ChartConfig;
+const workerConfig = {
+	hours: { label: "Hours", color: "var(--chart-2)" },
+} satisfies ChartConfig;
+const coverageConfig = {
+	fillRate: { label: "Fill rate", color: "var(--chart-2)" },
+	utilization: { label: "Utilization", color: "var(--chart-4)" },
+} satisfies ChartConfig;
+const requestConfig = {
+	approved: { label: "Approved", color: "var(--chart-2)" },
+	declined: { label: "Declined", color: "var(--chart-4)" },
+	pending: { label: "Pending", color: "var(--chart-3)" },
+} satisfies ChartConfig;
+
 function ReportsPage() {
 	const { workplace, kind, privileges } = useWorkplace();
 	const canViewReports = hasCapability(
@@ -216,39 +239,34 @@ function ReportsPage() {
 	const coverageTotals = coverage.data?.totals;
 	const coverageLocations = coverage.data?.byLocation ?? [];
 
-	const requestRows = requests.data?.requests ?? [];
+	const requestRows = useMemo(
+		() => requests.data?.requests ?? [],
+		[requests.data],
+	);
+	const requestChartData = useMemo(
+		() =>
+			requestRows.map((row) => ({
+				label: REQUEST_LABELS[row.type],
+				approved: row.approved,
+				declined: row.declined,
+				pending: row.pending,
+			})),
+		[requestRows],
+	);
 
-	const hoursConfig = {
-		hours: { label: "Hours", color: "var(--chart-2)" },
-	} satisfies ChartConfig;
-	const costConfig = {
-		labor: { label: "Labor cost", color: "var(--chart-4)" },
-		sales: { label: "Sales", color: "var(--chart-2)" },
-	} satisfies ChartConfig;
-	const percentConfig = {
-		laborPercent: { label: "Labor %", color: "var(--chart-3)" },
-	} satisfies ChartConfig;
-	const positionConfig = {
-		hours: { label: "Hours" },
-		...Object.fromEntries(
-			positions.map((position) => [
-				position.key,
-				{ label: position.name, color: position.color },
-			]),
-		),
-	} satisfies ChartConfig;
-	const workerConfig = {
-		hours: { label: "Hours", color: "var(--chart-2)" },
-	} satisfies ChartConfig;
-	const coverageConfig = {
-		fillRate: { label: "Fill rate", color: "var(--chart-2)" },
-		utilization: { label: "Utilization", color: "var(--chart-4)" },
-	} satisfies ChartConfig;
-	const requestConfig = {
-		approved: { label: "Approved", color: "var(--chart-2)" },
-		declined: { label: "Declined", color: "var(--chart-4)" },
-		pending: { label: "Pending", color: "var(--chart-3)" },
-	} satisfies ChartConfig;
+	const positionConfig = useMemo(
+		() =>
+			({
+				hours: { label: "Hours" },
+				...Object.fromEntries(
+					positions.map((position) => [
+						position.key,
+						{ label: position.name, color: position.color },
+					]),
+				),
+			}) satisfies ChartConfig,
+		[positions],
+	);
 
 	const totals = summary.data?.totals;
 	const hasData = (summary.data?.byDate.length ?? 0) > 0;
@@ -1004,15 +1022,7 @@ function ReportsPage() {
 										config={requestConfig}
 										className="h-[240px] w-full"
 									>
-										<BarChart
-											accessibilityLayer
-											data={requestRows.map((row) => ({
-												label: REQUEST_LABELS[row.type],
-												approved: row.approved,
-												declined: row.declined,
-												pending: row.pending,
-											}))}
-										>
+										<BarChart accessibilityLayer data={requestChartData}>
 											<CartesianGrid vertical={false} />
 											<XAxis
 												dataKey="label"

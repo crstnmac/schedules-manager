@@ -1,16 +1,10 @@
 import { useState } from "react";
-import {
-	ActivityIndicator,
-	Alert,
-	Pressable,
-	StyleSheet,
-	Text,
-	View,
-} from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
 	Button,
 	Card,
+	CardListSkeleton,
 	NativeField,
 	Screen,
 	useAppTheme,
@@ -79,7 +73,7 @@ export default function KioskScreen() {
 
 	return (
 		<Screen>
-			{locations.isLoading ? <ActivityIndicator color={theme.primary} /> : null}
+			{locations.isLoading ? <CardListSkeleton count={1} /> : null}
 			<Card>
 				{locations.data && locations.data.length > 0 ? (
 					<>

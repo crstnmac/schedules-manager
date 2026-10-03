@@ -1,5 +1,14 @@
 import type * as React from "react";
+import { useEffect } from "react";
 import { type DimensionValue, View } from "react-native";
+import Animated, {
+	cancelAnimation,
+	useAnimatedStyle,
+	useReducedMotion,
+	useSharedValue,
+	withRepeat,
+	withTiming,
+} from "react-native-reanimated";
 
 import { friendlyMessage } from "@/lib/friendly-message";
 import { radius, spacing, useAppTheme } from "@/theme";
@@ -95,16 +104,29 @@ export function Skeleton({
 	rounded?: number;
 }) {
 	const { theme } = useAppTheme();
+	const reduceMotion = useReducedMotion();
+	const pulse = useSharedValue(1);
+
+	useEffect(() => {
+		if (reduceMotion) return;
+		pulse.value = withRepeat(withTiming(0.55, { duration: 800 }), -1, true);
+		return () => cancelAnimation(pulse);
+	}, [reduceMotion, pulse]);
+
+	const animatedStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
 
 	return (
-		<View
-			style={{
-				width,
-				height,
-				borderRadius: rounded,
-				borderCurve: "continuous",
-				backgroundColor: theme.surfaceMuted,
-			}}
+		<Animated.View
+			style={[
+				{
+					width,
+					height,
+					borderRadius: rounded,
+					borderCurve: "continuous",
+					backgroundColor: theme.surfaceMuted,
+				},
+				animatedStyle,
+			]}
 		/>
 	);
 }

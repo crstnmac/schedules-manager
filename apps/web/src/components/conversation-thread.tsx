@@ -44,7 +44,15 @@ import {
 	SquarePenIcon,
 	XIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+	memo,
+	useCallback,
+	useDeferredValue,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 
 import { AppPane, AppRail, AppSplit } from "@/components/app-page";
 import type { ConversationDto, ConversationMessageDto } from "@/lib/queries";
@@ -117,6 +125,196 @@ function previewText(thread: ConversationDto) {
 	return last.mine ? `You: ${clipped}` : clipped;
 }
 
+const ThreadRow = memo(function ThreadRow({
+	thread,
+	selected,
+	onSelect,
+}: {
+	thread: ConversationDto;
+	selected: boolean;
+	onSelect: (id: string) => void;
+}) {
+	const label = thread.title;
+	return (
+		<button
+			type="button"
+			aria-current={selected ? "true" : undefined}
+			onClick={() => onSelect(thread.id)}
+			className={cn(
+				"flex w-full items-start gap-3 rounded-lg px-2.5 py-2.5 text-left transition-colors",
+				selected
+					? "bg-secondary text-secondary-foreground"
+					: "[@media(hover:hover)]:hover:bg-muted/60",
+			)}
+		>
+			{thread.kind === "workplace" ? (
+				<span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+					<MessageSquareIcon />
+				</span>
+			) : (
+				<Avatar size="default" className="size-9">
+					<AvatarFallback>{authorInitials(label)}</AvatarFallback>
+				</Avatar>
+			)}
+			<span className="min-w-0 flex-1">
+				<span className="flex items-baseline justify-between gap-2">
+					<span className="truncate font-medium text-sm">{label}</span>
+					{thread.lastMessage ? (
+						<span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+							{formatThreadTime(thread.lastMessage.createdAt)}
+						</span>
+					) : null}
+				</span>
+				<span className="mt-0.5 line-clamp-1 text-muted-foreground text-xs">
+					{previewText(thread)}
+				</span>
+			</span>
+		</button>
+	);
+});
+
+function PersonRow({
+	person,
+	existing,
+	startDirectPending,
+	onChoose,
+}: {
+	person: MessagePerson;
+	existing: boolean;
+	startDirectPending: boolean;
+	onChoose: (person: MessagePerson) => void | Promise<void>;
+}) {
+	return (
+		<button
+			type="button"
+			role="option"
+			disabled={startDirectPending && !existing}
+			onClick={() => void onChoose(person)}
+			className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left transition-colors disabled:opacity-50 [@media(hover:hover)]:hover:bg-muted/60"
+		>
+			<Avatar size="default" className="size-9">
+				<AvatarFallback>{authorInitials(person.name)}</AvatarFallback>
+			</Avatar>
+			<span className="min-w-0 flex-1">
+				<span className="block truncate font-medium text-sm">
+					{person.name}
+				</span>
+				<span className="block truncate text-muted-foreground text-xs">
+					{person.email}
+				</span>
+			</span>
+			<span className="shrink-0 text-muted-foreground text-xs">
+				{startDirectPending && !existing ? (
+					<Spinner className="size-3.5" />
+				) : existing ? (
+					"Open"
+				) : (
+					"Message"
+				)}
+			</span>
+		</button>
+	);
+}
+
+const MessageRow = memo(function MessageRow({
+	message,
+	mine,
+	showIdentity,
+}: {
+	message: ConversationMessageDto;
+	mine: boolean;
+	showIdentity: boolean;
+}) {
+	return (
+		<Message
+			align={mine ? "end" : "start"}
+			className="motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:animate-in motion-safe:duration-150"
+		>
+			{!mine ? (
+				showIdentity ? (
+					<MessageAvatar>
+						<Avatar size="sm">
+							<AvatarFallback>{authorInitials(message.author)}</AvatarFallback>
+						</Avatar>
+					</MessageAvatar>
+				) : (
+					<span aria-hidden className="size-6 shrink-0" />
+				)
+			) : null}
+			<MessageContent>
+				{showIdentity ? (
+					<MessageHeader>{mine ? "You" : message.author}</MessageHeader>
+				) : null}
+				<Bubble
+					variant={mine ? "default" : "secondary"}
+					align={mine ? "end" : "start"}
+				>
+					<BubbleContent className="whitespace-pre-wrap">
+						{message.body}
+					</BubbleContent>
+				</Bubble>
+				<MessageFooter>{formatMessageTime(message.createdAt)}</MessageFooter>
+			</MessageContent>
+		</Message>
+	);
+});
+
+/** Owns the draft so typing never rerenders the thread list or messages. */
+function Composer({
+	conversationId,
+	sendPending,
+	onSend,
+	placeholder,
+	hint,
+}: {
+	conversationId: string | undefined;
+	sendPending?: boolean;
+	onSend: (body: string) => void;
+	placeholder: string;
+	hint: string;
+}) {
+	const [draft, setDraft] = useState("");
+
+	function submit(event: React.FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		const next = draft.trim();
+		if (!next || !conversationId || sendPending) return;
+		onSend(next);
+		setDraft("");
+	}
+
+	return (
+		<form className="shrink-0 border-t bg-background p-3" onSubmit={submit}>
+			<InputGroup className="h-auto items-end">
+				<InputGroupTextarea
+					value={draft}
+					onChange={(event) => setDraft(event.target.value)}
+					placeholder={placeholder}
+					aria-label={placeholder}
+					rows={1}
+					onKeyDown={(event) => {
+						if (event.key === "Enter" && !event.shiftKey) {
+							event.preventDefault();
+							event.currentTarget.form?.requestSubmit();
+						}
+					}}
+				/>
+				<InputGroupAddon align="inline-end">
+					<InputGroupButton
+						type="submit"
+						size="icon-sm"
+						disabled={!conversationId || !draft.trim() || Boolean(sendPending)}
+						aria-label={sendPending ? "Sending" : "Send message"}
+					>
+						{sendPending ? <Spinner /> : <SendIcon />}
+					</InputGroupButton>
+				</InputGroupAddon>
+			</InputGroup>
+			<p className="mt-1.5 text-muted-foreground text-xs">{hint}</p>
+		</form>
+	);
+}
+
 export function ConversationWorkspace({
 	threads,
 	threadsLoading,
@@ -162,7 +360,9 @@ export function ConversationWorkspace({
 		threads[0] ??
 		null;
 	const conversationId = active?.id;
-	const [draft, setDraft] = useState("");
+	const onSelectRef = useRef(onSelect);
+	onSelectRef.current = onSelect;
+	const handleSelect = useCallback((id: string) => onSelectRef.current(id), []);
 	const [composeOpen, setComposeOpen] = useState(false);
 	const [composeQuery, setComposeQuery] = useState("");
 	const composeSearchRef = useRef<HTMLInputElement>(null);
@@ -185,8 +385,9 @@ export function ConversationWorkspace({
 		return map;
 	}, [threads]);
 
+	const deferredComposeQuery = useDeferredValue(composeQuery);
 	const filteredPeople = useMemo(() => {
-		const query = composeQuery.trim().toLowerCase();
+		const query = deferredComposeQuery.trim().toLowerCase();
 		const people = (composePeople ?? []).filter(
 			(person) => person.employmentId !== currentEmploymentId,
 		);
@@ -196,7 +397,7 @@ export function ConversationWorkspace({
 				person.name.toLowerCase().includes(query) ||
 				person.email.toLowerCase().includes(query),
 		);
-	}, [composePeople, composeQuery, currentEmploymentId]);
+	}, [composePeople, deferredComposeQuery, currentEmploymentId]);
 
 	const items = useMemo(() => {
 		const rows: Array<
@@ -228,14 +429,6 @@ export function ConversationWorkspace({
 		}
 		return rows;
 	}, [currentEmploymentId, messages]);
-
-	function submit(event: React.FormEvent<HTMLFormElement>) {
-		event.preventDefault();
-		const next = draft.trim();
-		if (!next || !conversationId || sendPending) return;
-		onSend(next);
-		setDraft("");
-	}
 
 	const composerPlaceholder = active
 		? active.kind === "workplace"
@@ -319,49 +512,20 @@ export function ConversationWorkspace({
 							) : null}
 							{!composeLoading && filteredPeople.length === 0 ? (
 								<p className="px-3 py-8 text-center text-muted-foreground text-xs">
-									{composeQuery.trim()
+									{deferredComposeQuery.trim()
 										? "No one matches that search."
 										: "No people available to message."}
 								</p>
 							) : null}
-							{filteredPeople.map((person) => {
-								const existingId = existingDirectByPerson.get(
-									person.employmentId,
-								);
-								return (
-									<button
-										key={person.employmentId}
-										type="button"
-										role="option"
-										disabled={startDirectPending && !existingId}
-										onClick={() => void choosePerson(person)}
-										className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left transition-colors disabled:opacity-50 [@media(hover:hover)]:hover:bg-muted/60"
-									>
-										<Avatar size="default" className="size-9">
-											<AvatarFallback>
-												{authorInitials(person.name)}
-											</AvatarFallback>
-										</Avatar>
-										<span className="min-w-0 flex-1">
-											<span className="block truncate font-medium text-sm">
-												{person.name}
-											</span>
-											<span className="block truncate text-muted-foreground text-xs">
-												{person.email}
-											</span>
-										</span>
-										<span className="shrink-0 text-muted-foreground text-xs">
-											{startDirectPending && !existingId ? (
-												<Spinner className="size-3.5" />
-											) : existingId ? (
-												"Open"
-											) : (
-												"Message"
-											)}
-										</span>
-									</button>
-								);
-							})}
+							{filteredPeople.map((person) => (
+								<PersonRow
+									key={person.employmentId}
+									person={person}
+									existing={existingDirectByPerson.has(person.employmentId)}
+									startDirectPending={Boolean(startDirectPending)}
+									onChoose={choosePerson}
+								/>
+							))}
 						</div>
 					</>
 				) : (
@@ -413,51 +577,14 @@ export function ConversationWorkspace({
 								</div>
 							) : null}
 							<div className="flex flex-col gap-0.5 p-1.5">
-								{threads.map((thread) => {
-									const selected = thread.id === conversationId;
-									const label = thread.title;
-									return (
-										<button
-											key={thread.id}
-											type="button"
-											aria-current={selected ? "true" : undefined}
-											onClick={() => onSelect(thread.id)}
-											className={cn(
-												"flex w-full items-start gap-3 rounded-lg px-2.5 py-2.5 text-left transition-colors",
-												selected
-													? "bg-secondary text-secondary-foreground"
-													: "[@media(hover:hover)]:hover:bg-muted/60",
-											)}
-										>
-											{thread.kind === "workplace" ? (
-												<span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-													<MessageSquareIcon />
-												</span>
-											) : (
-												<Avatar size="default" className="size-9">
-													<AvatarFallback>
-														{authorInitials(label)}
-													</AvatarFallback>
-												</Avatar>
-											)}
-											<span className="min-w-0 flex-1">
-												<span className="flex items-baseline justify-between gap-2">
-													<span className="truncate font-medium text-sm">
-														{label}
-													</span>
-													{thread.lastMessage ? (
-														<span className="shrink-0 text-muted-foreground text-xs tabular-nums">
-															{formatThreadTime(thread.lastMessage.createdAt)}
-														</span>
-													) : null}
-												</span>
-												<span className="mt-0.5 line-clamp-1 text-muted-foreground text-xs">
-													{previewText(thread)}
-												</span>
-											</span>
-										</button>
-									);
-								})}
+								{threads.map((thread) => (
+									<ThreadRow
+										key={thread.id}
+										thread={thread}
+										selected={thread.id === conversationId}
+										onSelect={handleSelect}
+									/>
+								))}
 							</div>
 						</div>
 					</>
@@ -576,44 +703,11 @@ export function ConversationWorkspace({
 															messageId={item.message.id}
 															scrollAnchor={item.mine}
 														>
-															<Message align={item.mine ? "end" : "start"}>
-																{!item.mine ? (
-																	item.showIdentity ? (
-																		<MessageAvatar>
-																			<Avatar size="sm">
-																				<AvatarFallback>
-																					{authorInitials(item.message.author)}
-																				</AvatarFallback>
-																			</Avatar>
-																		</MessageAvatar>
-																	) : (
-																		<span
-																			aria-hidden
-																			className="size-6 shrink-0"
-																		/>
-																	)
-																) : null}
-																<MessageContent>
-																	{item.showIdentity ? (
-																		<MessageHeader>
-																			{item.mine ? "You" : item.message.author}
-																		</MessageHeader>
-																	) : null}
-																	<Bubble
-																		variant={
-																			item.mine ? "default" : "secondary"
-																		}
-																		align={item.mine ? "end" : "start"}
-																	>
-																		<BubbleContent className="whitespace-pre-wrap">
-																			{item.message.body}
-																		</BubbleContent>
-																	</Bubble>
-																	<MessageFooter>
-																		{formatMessageTime(item.message.createdAt)}
-																	</MessageFooter>
-																</MessageContent>
-															</Message>
+															<MessageRow
+																message={item.message}
+																mine={item.mine}
+																showIdentity={item.showIdentity}
+															/>
 														</MessageScrollerItem>
 													),
 												)
@@ -624,43 +718,17 @@ export function ConversationWorkspace({
 							</MessageScroller>
 						</MessageScrollerProvider>
 
-						<form
-							className="shrink-0 border-t bg-background p-3"
-							onSubmit={submit}
-						>
-							<InputGroup className="h-auto items-end">
-								<InputGroupTextarea
-									value={draft}
-									onChange={(event) => setDraft(event.target.value)}
-									placeholder={composerPlaceholder}
-									aria-label={composerPlaceholder}
-									rows={1}
-									onKeyDown={(event) => {
-										if (event.key === "Enter" && !event.shiftKey) {
-											event.preventDefault();
-											event.currentTarget.form?.requestSubmit();
-										}
-									}}
-								/>
-								<InputGroupAddon align="inline-end">
-									<InputGroupButton
-										type="submit"
-										size="icon-sm"
-										disabled={
-											!conversationId || !draft.trim() || Boolean(sendPending)
-										}
-										aria-label={sendPending ? "Sending" : "Send message"}
-									>
-										{sendPending ? <Spinner /> : <SendIcon />}
-									</InputGroupButton>
-								</InputGroupAddon>
-							</InputGroup>
-							<p className="mt-1.5 text-muted-foreground text-xs">
-								{active.kind === "direct" && active.counterpart
+						<Composer
+							conversationId={conversationId}
+							sendPending={sendPending}
+							onSend={onSend}
+							placeholder={composerPlaceholder}
+							hint={
+								active.kind === "direct" && active.counterpart
 									? `Private with ${active.counterpart.name} · Enter to send`
-									: "Visible to everyone · Enter to send · Shift+Enter for a new line"}
-							</p>
-						</form>
+									: "Visible to everyone · Enter to send · Shift+Enter for a new line"
+							}
+						/>
 					</>
 				) : (
 					<div className="flex min-h-0 flex-1 items-center justify-center p-6">

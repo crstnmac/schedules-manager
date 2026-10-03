@@ -180,6 +180,9 @@ export function ConversationThread({
 				keyboardDismissMode="interactive"
 				keyboardShouldPersistTaps="handled"
 				onEndReachedThreshold={0.3}
+				initialNumToRender={15}
+				maxToRenderPerBatch={10}
+				windowSize={9}
 				onEndReached={messages.loadOlder}
 				ListFooterComponent={
 					messages.isFetchingPreviousPage ? (

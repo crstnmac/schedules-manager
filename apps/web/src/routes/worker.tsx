@@ -15,7 +15,7 @@ import {
 	MessageSquareIcon,
 	TimerIcon,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 
 import { AppShell, type ShellNavGroup } from "@/components/app-shell";
@@ -110,6 +110,17 @@ const navigationGroups: { label: string; items: WorkerNavItem[] }[] = [
 
 const navigation = navigationGroups.flatMap((group) => group.items);
 
+const primaryTabs = [
+	"/worker",
+	"/worker/openshifts",
+	"/worker/availability",
+	"/worker/messages",
+];
+const shortTabLabels: Record<string, string> = {
+	"/worker": "Schedule",
+	"/worker/availability": "Requests",
+};
+
 function WorkerLayout() {
 	const posthog = usePostHog();
 	const { isLoading: authLoading, isSigningOut, user, signOut } = useAuth();
@@ -144,15 +155,71 @@ function WorkerLayout() {
 		posthog?.group("workplace", workplace.id, { name: workplace.name });
 		posthog?.register({ workplace_id: workplace.id, employment_kind: kind });
 	}, [kind, posthog, workplace]);
-	const handleSignOut = async () => {
-		try {
-			await signOut();
-		} catch (error) {
+	const handleSignOut = useCallback(() => {
+		void signOut().catch((error: unknown) => {
 			toast.error(
 				error instanceof Error ? error.message : "Could not sign out",
 			);
-		}
-	};
+		});
+	}, [signOut]);
+	const sidebarGroups = useMemo<ShellNavGroup[]>(
+		() =>
+			navigationGroups
+				.map((group) => ({
+					label: group.label,
+					items: group.items
+						.filter(
+							(item) =>
+								item.to !== "/worker/inbox" &&
+								(!item.operations || showTimecard),
+						)
+						.map((item) => ({
+							to: item.to,
+							label: item.label,
+							description: item.description,
+							icon: item.icon,
+							match: item.to,
+							exact: item.exact,
+						})),
+				}))
+				.filter((group) => group.items.length > 0),
+		[showTimecard],
+	);
+	const mobileTabs = useMemo(
+		() =>
+			primaryTabs
+				.map((to) =>
+					sidebarGroups.flatMap((g) => g.items).find((i) => i.to === to),
+				)
+				.filter((item): item is NonNullable<typeof item> => Boolean(item))
+				.map((item) => ({
+					...item,
+					label: shortTabLabels[String(item.to)] ?? item.label,
+				})),
+		[sidebarGroups],
+	);
+	const inboxLink = useMemo(
+		() => ({
+			to: "/worker/inbox" as const,
+			label: "Inbox",
+			icon: BellIcon,
+			match: "/worker/inbox",
+			unreadCount,
+		}),
+		[unreadCount],
+	);
+	const shellProfile = useMemo(
+		() =>
+			profile
+				? {
+						displayName,
+						email: profile.fullName ? profile.email : null,
+						initials: profileInitials(profile),
+						kind: "Worker",
+					}
+				: undefined,
+		[profile, displayName],
+	);
 
 	if (authLoading) {
 		return (
@@ -185,41 +252,6 @@ function WorkerLayout() {
 		return <Navigate to="/worker" replace />;
 	}
 
-	const sidebarGroups: ShellNavGroup[] = navigationGroups
-		.map((group) => ({
-			label: group.label,
-			items: group.items
-				.filter(
-					(item) =>
-						item.to !== "/worker/inbox" && (!item.operations || showTimecard),
-				)
-				.map((item) => ({
-					to: item.to,
-					label: item.label,
-					description: item.description,
-					icon: item.icon,
-					match: item.to,
-					exact: item.exact,
-				})),
-		}))
-		.filter((group) => group.items.length > 0);
-	const primaryTabs = [
-		"/worker",
-		"/worker/openshifts",
-		"/worker/availability",
-		"/worker/messages",
-	];
-	const mobileTabs = primaryTabs
-		.map((to) => sidebarGroups.flatMap((g) => g.items).find((i) => i.to === to))
-		.filter((item): item is NonNullable<typeof item> => Boolean(item))
-		.map((item) => {
-			const short: Record<string, string> = {
-				"/worker": "Schedule",
-				"/worker/availability": "Requests",
-			};
-			return { ...item, label: short[String(item.to)] ?? item.label };
-		});
-
 	return (
 		<AppShell
 			workplaceId={workplace.id}
@@ -229,25 +261,10 @@ function WorkerLayout() {
 			pathname={pathname}
 			routeId={routeId}
 			groups={sidebarGroups}
-			inbox={{
-				to: "/worker/inbox",
-				label: "Inbox",
-				icon: BellIcon,
-				match: "/worker/inbox",
-				unreadCount,
-			}}
-			profile={
-				profile
-					? {
-							displayName,
-							email: profile.fullName ? profile.email : null,
-							initials: profileInitials(profile),
-							kind: "Worker",
-						}
-					: undefined
-			}
+			inbox={inboxLink}
+			profile={shellProfile}
 			isSigningOut={isSigningOut}
-			onSignOut={() => void handleSignOut()}
+			onSignOut={handleSignOut}
 			onTheme={setTheme}
 			mobileTabs={mobileTabs}
 		/>
