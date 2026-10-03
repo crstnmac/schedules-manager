@@ -1,19 +1,35 @@
-import { useLayoutEffect, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 
 /**
- * Tiny external store for the selected shift ids. Each grid tile subscribes to
- * its own id, so toggling a selection re-renders only the tiles whose state
- * actually changed instead of every row/cell in the schedule grid.
+ * Tiny external store that owns the selected shift ids. Each grid tile
+ * subscribes to its own id, so toggling a selection re-renders only the tiles
+ * whose state actually changed — and neither the page nor the grid rows hold
+ * the selection in React state at all.
  */
 export interface ShiftSelectionStore {
 	subscribe: (listener: () => void) => () => void;
 	has: (id: string) => boolean;
-	set: (ids: readonly string[]) => void;
+	/** Stable snapshot: the same array until the selection changes. */
+	getIds: () => string[];
+	set: (ids: string[]) => void;
+	toggle: (id: string) => void;
+	clear: () => void;
 }
 
+const EMPTY: string[] = [];
+
 export function createShiftSelectionStore(): ShiftSelectionStore {
+	let ids: string[] = EMPTY;
 	let selected: ReadonlySet<string> = new Set();
 	const listeners = new Set<() => void>();
+	const emit = () => {
+		for (const listener of listeners) listener();
+	};
+	const set = (next: string[]) => {
+		ids = next.length === 0 ? EMPTY : [...next];
+		selected = new Set(ids);
+		emit();
+	};
 	return {
 		subscribe(listener) {
 			listeners.add(listener);
@@ -22,21 +38,19 @@ export function createShiftSelectionStore(): ShiftSelectionStore {
 			};
 		},
 		has: (id) => selected.has(id),
-		set(ids) {
-			selected = new Set(ids);
-			for (const listener of listeners) listener();
+		getIds: () => ids,
+		set,
+		toggle(id) {
+			set(
+				selected.has(id)
+					? ids.filter((current) => current !== id)
+					: [...ids, id],
+			);
+		},
+		clear() {
+			if (ids.length > 0) set(EMPTY);
 		},
 	};
-}
-
-/** Mirrors the page's selected ids into the store after each change. */
-export function useShiftSelectionSync(
-	store: ShiftSelectionStore,
-	ids: readonly string[],
-) {
-	useLayoutEffect(() => {
-		store.set(ids);
-	}, [store, ids]);
 }
 
 export function useShiftSelected(store: ShiftSelectionStore, id: string) {
@@ -44,5 +58,14 @@ export function useShiftSelected(store: ShiftSelectionStore, id: string) {
 		store.subscribe,
 		() => store.has(id),
 		() => false,
+	);
+}
+
+/** The selected ids, re-rendering the caller only when the selection changes. */
+export function useShiftSelectionIds(store: ShiftSelectionStore) {
+	return useSyncExternalStore(
+		store.subscribe,
+		store.getIds,
+		() => EMPTY as string[],
 	);
 }

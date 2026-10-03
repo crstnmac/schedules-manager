@@ -3,43 +3,9 @@ import {
 	AlertDescription,
 	AlertTitle,
 } from "@SchedulesManager/ui/components/alert";
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogMedia,
-	AlertDialogTitle,
-	AlertDialogTrigger,
-} from "@SchedulesManager/ui/components/alert-dialog";
 import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import { Card, CardHeader } from "@SchedulesManager/ui/components/card";
-import { Checkbox } from "@SchedulesManager/ui/components/checkbox";
-import {
-	Collapsible,
-	CollapsibleContent,
-	CollapsibleTrigger,
-} from "@SchedulesManager/ui/components/collapsible";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "@SchedulesManager/ui/components/dialog";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuGroup,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "@SchedulesManager/ui/components/dropdown-menu";
 import {
 	Empty,
 	EmptyContent,
@@ -48,95 +14,34 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "@SchedulesManager/ui/components/empty";
-import {
-	Field,
-	FieldDescription,
-	FieldGroup,
-	FieldLabel,
-} from "@SchedulesManager/ui/components/field";
-import { Input } from "@SchedulesManager/ui/components/input";
-import {
-	InputGroup,
-	InputGroupAddon,
-	InputGroupInput,
-} from "@SchedulesManager/ui/components/input-group";
-import {
-	Popover,
-	PopoverContent,
-	PopoverDescription,
-	PopoverHeader,
-	PopoverTitle,
-	PopoverTrigger,
-} from "@SchedulesManager/ui/components/popover";
-import {
-	Select,
-	SelectContent,
-	SelectGroup,
-	SelectItem,
-	SelectLabel,
-	SelectTrigger,
-	SelectValue,
-} from "@SchedulesManager/ui/components/select";
-import { Separator } from "@SchedulesManager/ui/components/separator";
 import { Skeleton } from "@SchedulesManager/ui/components/skeleton";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
-import { Textarea } from "@SchedulesManager/ui/components/textarea";
-import {
-	ToggleGroup,
-	ToggleGroupItem,
-} from "@SchedulesManager/ui/components/toggle-group";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "@SchedulesManager/ui/components/tooltip";
-import { cn } from "@SchedulesManager/ui/lib/utils";
 import { DragDropProvider, type DragEndEvent } from "@dnd-kit/react";
-import { usePostHog } from "@posthog/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import {
-	AlertTriangleIcon,
-	ChevronDownIcon,
-	ChevronLeftIcon,
-	ChevronRightIcon,
-	CopyIcon,
-	EllipsisIcon,
-	LayoutTemplateIcon,
-	ListFilterIcon,
-	MapPinIcon,
-	PlusIcon,
-	SearchIcon,
-	SendIcon,
-	TagsIcon,
-	Trash2Icon,
-	UserPlusIcon,
-	UsersIcon,
-	XIcon,
-} from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { AlertTriangleIcon, MapPinIcon, TagsIcon } from "lucide-react";
 import {
 	type CSSProperties,
-	lazy,
-	Suspense,
 	useCallback,
 	useDeferredValue,
 	useEffect,
-	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
 } from "react";
-import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { ConfirmAction } from "@/components/confirm-action";
 import { createDataColumnHelper, DataTable } from "@/components/data-table";
-import { DatePicker } from "@/components/date-picker";
-import { ImportSheet } from "@/components/import-sheet";
-import { formatDayLabel, weekdayShort } from "@/components/schedule/format";
 import {
 	ScheduleMobileBoard,
 	ScheduleMobileBoardSkeleton,
 } from "@/components/schedule/mobile-board";
+import {
+	DEFAULT_SCHEDULE_FILTERS,
+	type GridDensity,
+	ScheduleFilterBar,
+	type ScheduleFilters,
+} from "@/components/schedule/schedule-filter-bar";
 import {
 	ScheduleDayHeader,
 	type ScheduleDayInfo,
@@ -148,98 +53,60 @@ import {
 	shiftMatchesSurface,
 } from "@/components/schedule/schedule-grid";
 import {
-	createShiftSelectionStore,
-	useShiftSelectionSync,
-} from "@/components/schedule/selection-store";
+	ScheduleToolbar,
+	type ScheduleViewMode,
+} from "@/components/schedule/schedule-toolbar";
+import { ScheduleSelectionBars } from "@/components/schedule/selection-bars";
+import { createShiftSelectionStore } from "@/components/schedule/selection-store";
+import {
+	ShiftEditorDialog,
+	type ShiftEditorHandle,
+	type ShiftMoveRequest,
+} from "@/components/schedule/shift-editor-dialog";
+import { workerNeedsPositionApproval } from "@/components/schedule/shift-form";
+import { useInvalidateSchedule } from "@/components/schedule/use-schedule-invalidate";
+import { useStableCallback } from "@/components/schedule/use-stable-callback";
 import { ScheduleMonthGrid } from "@/components/schedule-month-grid";
-import { TimePicker } from "@/components/time-picker";
 import { api } from "@/lib/api";
 import { hasCapability } from "@/lib/privileges";
 import type {
 	AcceptancesResponse,
-	ChangePreviewResponse,
 	ScheduleResponse,
 	ScheduleShiftDto,
 	ScheduleTimeclockEntry,
 } from "@/lib/queries";
 import {
 	useAcceptances,
-	useApplyScheduleTemplate,
-	useEditTimeEntry,
-	useGroups,
 	useHolidays,
 	useLocations,
-	useMarkAttendance,
 	useMySchedule,
 	useRespondToAcceptance,
-	useSaveScheduleTemplate,
 	useSchedule,
 	useScheduleCalendar,
 	useScheduleLabor,
 	useScheduleTeams,
-	useScheduleTemplates,
 	useScheduleTimeclock,
-	useShiftPatterns,
-	useTags,
 	useTimeBlocks,
 	useWorkplaceSettings,
 } from "@/lib/queries";
-import {
-	addCalendarMonths,
-	addDays,
-	formatMonthLabel,
-	monthStartForView,
-	monthStartOf,
-	positionColor,
-	weekStartOf,
-} from "@/lib/schedule-calendar";
-import { shiftOverlapsTimeOff } from "@/lib/schedule-timeoff";
-import {
-	datetimeLocalToIso,
-	formatDay,
-	isoToDatetimeLocal,
-	WEEKDAY_NAMES,
-	workplaceTodayKey,
-} from "@/lib/time";
+import { addDays, monthStartOf, weekStartOf } from "@/lib/schedule-calendar";
+import { formatDay, WEEKDAY_NAMES, workplaceTodayKey } from "@/lib/time";
 import { useDisplayPrefs } from "@/lib/use-display-prefs";
 import { useWorkplace } from "@/lib/use-workplace";
-
-const BulkEditDialog = lazy(() =>
-	import("@/components/schedule/bulk-edit-dialog").then((m) => ({
-		default: m.BulkEditDialog,
-	})),
-);
-const PatternApplyDialog = lazy(() =>
-	import("@/components/schedule/pattern-apply-dialog").then((m) => ({
-		default: m.PatternApplyDialog,
-	})),
-);
-const PublishSelectionDialog = lazy(() =>
-	import("@/components/schedule/publish-selection-dialog").then((m) => ({
-		default: m.PublishSelectionDialog,
-	})),
-);
 
 export const Route = createFileRoute("/dashboard/schedule")({
 	component: SchedulePage,
 });
 
-/** Sentinel for "no policy group override" in the approval policy Select. */
-
-/** Sentinel for the Location's primary (team-less) schedule in the team Select. */
-const PRIMARY_TEAM = "__primary_team__";
-
 type StaffRow = ScheduleResponse["staff"][number];
 type HoursRow = ScheduleResponse["hours"][number];
 type AcceptanceRow = AcceptancesResponse["acceptances"][number];
 type PublicationRow = ScheduleResponse["publication"]["versions"][number];
-type ChangeRow = ChangePreviewResponse["changes"][number];
 
 const staffHelper = createDataColumnHelper<StaffRow>();
 const hoursHelper = createDataColumnHelper<HoursRow>();
 const acceptanceHelper = createDataColumnHelper<AcceptanceRow>();
 const publicationHelper = createDataColumnHelper<PublicationRow>();
-const changeHelper = createDataColumnHelper<ChangeRow>();
 
 function staffConstraintText(
 	member: StaffRow,
@@ -443,266 +310,6 @@ const publicationColumns = publicationHelper.columns([
 		),
 	}),
 ]);
-const changeColumns = changeHelper.columns([
-	changeHelper.accessor("material", {
-		header: "Kind",
-		cell: ({ getValue }) =>
-			getValue() ? <Badge variant="secondary">Material</Badge> : "—",
-	}),
-	changeHelper.accessor("summary", { header: "Change" }),
-]);
-
-function formatWeekLabel(weekStart: string): string {
-	const start = new Date(`${weekStart}T12:00:00`);
-	const end = new Date(`${addDays(weekStart, 6)}T12:00:00`);
-	const fmt = (d: Date) =>
-		d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-	return `${fmt(start)} – ${fmt(end)}`;
-}
-
-function PublicationBadge({
-	publication,
-}: {
-	publication: {
-		latestVersionNumber: number | null;
-		publishedAt: string | null;
-		hasUnpublishedChanges: boolean;
-		versions: {
-			id: string;
-			versionNumber: number;
-			workers: {
-				employmentId: string;
-				name: string;
-				status: "sent" | "delivered" | "acknowledged";
-			}[];
-		}[];
-	};
-}) {
-	const published = publication.latestVersionNumber != null;
-	const dirty = publication.hasUnpublishedChanges;
-	const currentWorkers = published
-		? (publication.versions.find(
-				(version) => version.versionNumber === publication.latestVersionNumber,
-			)?.workers ?? [])
-		: [];
-	const acknowledged = currentWorkers.filter(
-		(worker) => worker.status === "acknowledged",
-	).length;
-
-	const badge = published ? (
-		<Badge variant={dirty ? "secondary" : "default"}>
-			{dirty
-				? `Draft · v${publication.latestVersionNumber} live`
-				: `Published v${publication.latestVersionNumber}`}
-		</Badge>
-	) : (
-		<Badge variant="secondary">Draft</Badge>
-	);
-
-	if (!published) {
-		return (
-			<Tooltip>
-				<TooltipTrigger render={<span className="inline-flex">{badge}</span>} />
-				<TooltipContent>This week has not been published yet.</TooltipContent>
-			</Tooltip>
-		);
-	}
-
-	return (
-		<Popover>
-			<PopoverTrigger
-				nativeButton={false}
-				render={<span className="inline-flex">{badge}</span>}
-			/>
-			<PopoverContent align="end" className="w-64">
-				<PopoverHeader>
-					<PopoverTitle>
-						{dirty
-							? `Published v${publication.latestVersionNumber} · draft changes`
-							: `Published v${publication.latestVersionNumber}`}
-					</PopoverTitle>
-					<PopoverDescription>
-						{acknowledged} of {currentWorkers.length} workers have seen this
-						version.
-					</PopoverDescription>
-				</PopoverHeader>
-				{currentWorkers.length > 0 ? (
-					<ul className="flex max-h-48 flex-col gap-1.5 overflow-y-auto">
-						{currentWorkers.map((worker) => (
-							<li
-								key={worker.employmentId}
-								className="flex items-center justify-between gap-2 text-xs"
-							>
-								<span className="truncate">{worker.name}</span>
-								<Badge
-									variant={
-										worker.status === "acknowledged"
-											? "default"
-											: worker.status === "delivered"
-												? "secondary"
-												: "outline"
-									}
-								>
-									{worker.status === "acknowledged"
-										? "Seen"
-										: worker.status === "delivered"
-											? "Delivered"
-											: "Sent"}
-								</Badge>
-							</li>
-						))}
-					</ul>
-				) : null}
-				{dirty ? (
-					<p className="text-muted-foreground text-xs">
-						Edit the draft, then publish to send the changes.
-					</p>
-				) : null}
-			</PopoverContent>
-		</Popover>
-	);
-}
-
-interface ShiftFormState {
-	shiftId: string | null;
-	employmentId: string;
-	positionId: string;
-	date: string;
-	startMinute: number;
-	endMinute: number;
-	note: string;
-	unavailabilityOverrideReason: string;
-	tagIds: string[];
-	taskTitles: string;
-}
-
-function emptyForm(date: string): ShiftFormState {
-	return {
-		shiftId: null,
-		employmentId: "",
-		positionId: "",
-		date,
-		startMinute: 9 * 60,
-		endMinute: 17 * 60,
-		note: "",
-		unavailabilityOverrideReason: "",
-		tagIds: [],
-		taskTitles: "",
-	};
-}
-
-function staffWindowOverlaps(
-	window: {
-		kind: "recurring" | "date";
-		weekday: number | null;
-		date: string | null;
-		startMinute: number;
-		endMinute: number;
-	},
-	date: string,
-	startMinute: number,
-	endMinute: number,
-): boolean {
-	const overnight = endMinute <= startMinute;
-	const dates = overnight ? [date, addDays(date, 1)] : [date];
-	const shiftStartAbs = startMinute;
-	const shiftEndAbs = overnight ? endMinute + 1440 : endMinute;
-
-	for (const key of dates) {
-		if (window.kind === "recurring" && window.weekday !== null) {
-			if (new Date(`${key}T12:00:00`).getDay() !== window.weekday) continue;
-		} else if (window.kind === "date" && window.date) {
-			if (window.date !== key) continue;
-		} else {
-			continue;
-		}
-		const offset = key === date ? 0 : 1440;
-		const winStart = window.startMinute + offset;
-		const winEnd = window.endMinute + offset;
-		if (shiftStartAbs < winEnd && winStart < shiftEndAbs) return true;
-	}
-	return false;
-}
-
-function dayOffset(weekStart: string, date: string): number {
-	const start = new Date(`${weekStart}T12:00:00`).getTime();
-	const day = new Date(`${date}T12:00:00`).getTime();
-	return Math.round((day - start) / 86_400_000);
-}
-
-function shiftRangeMinutes(
-	weekStart: string,
-	date: string,
-	startMinute: number,
-	endMinute: number,
-): [number, number] {
-	const start = dayOffset(weekStart, date) * 1440 + startMinute;
-	const overnight = endMinute <= startMinute;
-	const endDate = overnight ? addDays(date, 1) : date;
-	const end = dayOffset(weekStart, endDate) * 1440 + endMinute;
-	return [start, end];
-}
-
-function defaultAddDate(weekStart: string, timeZone: string): string {
-	const today = workplaceTodayKey(timeZone);
-	const last = addDays(weekStart, 6);
-	if (today >= weekStart && today <= last) return today;
-	return weekStart;
-}
-
-function positionsForWorker(
-	positions: ScheduleResponse["positions"],
-	member: ScheduleResponse["staff"][number] | undefined,
-) {
-	if (!member || member.positionIds.length === 0) return positions;
-	return positions.filter((position) =>
-		member.positionIds.includes(position.id),
-	);
-}
-
-function workerNeedsPositionApproval(
-	member: ScheduleResponse["staff"][number] | undefined,
-	positionId: string,
-): boolean {
-	if (!positionId) return false;
-	const positionIds =
-		member?.kind === "worker" ? member.positionIds : undefined;
-	if (!positionIds || positionIds.length === 0) return false;
-	return !positionIds.includes(positionId);
-}
-
-type PositionApproval =
-	| {
-			kind: "save";
-			form: ShiftFormState;
-			workerName: string;
-			positionName: string;
-			shiftCount: number;
-	  }
-	| {
-			kind: "move";
-			shift: ScheduleShiftDto;
-			employmentId: string;
-			date: string;
-			workerName: string;
-			positionName: string;
-	  };
-
-function positionApprovalCopy(approval: PositionApproval) {
-	const consequence =
-		approval.kind === "move"
-			? "moves this shift"
-			: approval.shiftCount > 1
-				? `adds ${approval.shiftCount} shifts`
-				: approval.form.shiftId
-					? "saves this shift"
-					: "adds this shift";
-	return {
-		title: `Add ${approval.positionName} to ${approval.workerName}?`,
-		description: `${approval.workerName} isn’t approved for ${approval.positionName} yet. Confirming adds this Position to their Employment, then ${consequence}.`,
-		confirmLabel: `Add ${approval.positionName} and ${approval.kind === "move" ? "move" : "save"}`,
-	};
-}
 
 const SKELETON_DAYS = [
 	"mon",
@@ -714,19 +321,6 @@ const SKELETON_DAYS = [
 	"sun",
 ] as const;
 const SKELETON_ROWS = ["a", "b", "c", "d"] as const;
-
-type GridDensity = "compact" | "comfortable";
-
-/** Stable identity callback that always invokes the latest closure. */
-function useStableCallback<Args extends unknown[], R>(
-	fn: (...args: Args) => R,
-): (...args: Args) => R {
-	const ref = useRef(fn);
-	useLayoutEffect(() => {
-		ref.current = fn;
-	});
-	return useCallback((...args: Args) => ref.current(...args), []);
-}
 
 function ScheduleGridSkeleton() {
 	return (
@@ -771,49 +365,17 @@ function ScheduleGridSkeleton() {
 	);
 }
 
-function ScheduleMetric({
-	value,
-	label,
-	tone = "default",
-}: {
-	value: string | number;
-	label: string;
-	tone?: "default" | "emphasis" | "danger";
-}) {
-	return (
-		<Badge
-			variant={tone === "danger" ? "destructive" : "outline"}
-			className={cn(
-				"h-6 gap-1 rounded-md px-2 font-normal tabular-nums",
-				tone === "emphasis" && "border-primary/30 bg-primary/5 text-foreground",
-			)}
-		>
-			<span className="font-semibold">{value}</span>
-			<span
-				className={cn(
-					tone === "danger" ? "opacity-90" : "text-muted-foreground",
-				)}
-			>
-				{label}
-			</span>
-		</Badge>
-	);
-}
-
 function SchedulePage() {
 	const { workplace, kind, privileges, capabilities } = useWorkplace();
-	const navigate = useNavigate();
 	const subject = kind ? { kind, privileges: privileges ?? null } : null;
 	const canManage = hasCapability(subject, "schedule.manage");
 	const canPublish = hasCapability(subject, "schedule.publish");
 	const { formatMinute, timeFormat } = useDisplayPrefs();
 	const stableFormatMinute = useStableCallback(formatMinute);
-	const posthog = usePostHog();
 	const scheduleStaffColumns = useMemo(
 		() => createScheduleStaffColumns(formatMinute),
 		[formatMinute],
 	);
-	const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
 	const settings = useWorkplaceSettings(workplace?.id);
 	const weekStartDay = settings.data?.weekStartDay ?? 1;
 	const [weekStart, setWeekStart] = useState(() =>
@@ -826,45 +388,27 @@ function SchedulePage() {
 		);
 	}, [weekStartDay]);
 	const [visibleStaffCount, setVisibleStaffCount] = useState(40);
-	const [workerQuery, setWorkerQuery] = useState("");
-	const [positionFilter, setPositionFilter] = useState("all");
+	const [filters, setFilters] = useState(DEFAULT_SCHEDULE_FILTERS);
+	const {
+		workerQuery,
+		positionFilter,
+		staffStateFilter,
+		groupFilter,
+		tagFilter,
+		timeBlockFilter,
+	} = filters;
 	const [todayFocus, setTodayFocus] = useState(false);
-	const [viewMode, setViewMode] = useState<"week" | "day" | "month">("week");
+	const [viewMode, setViewMode] = useState<ScheduleViewMode>("week");
 	const [monthAnchor, setMonthAnchor] = useState(() =>
 		monthStartOf(workplaceTodayKey()),
 	);
 	const [selectedDay, setSelectedDay] = useState(() => workplaceTodayKey());
-	const [groupFilter, setGroupFilter] = useState("all");
-	const [tagFilter, setTagFilter] = useState("all");
-	const [timeBlockFilter, setTimeBlockFilter] = useState("all");
-	const [selectedShiftIds, setSelectedShiftIds] = useState<string[]>([]);
 	const [selectionStore] = useState(createShiftSelectionStore);
-	useShiftSelectionSync(selectionStore, selectedShiftIds);
-	const [patternOpen, setPatternOpen] = useState(false);
-	const [scheduleImportOpen, setScheduleImportOpen] = useState(false);
-	const [publishSelectionOpen, setPublishSelectionOpen] = useState(false);
-	const [bulkEditOpen, setBulkEditOpen] = useState(false);
-	const [copiedShifts, setCopiedShifts] = useState<
-		{
-			positionId: string;
-			startMinute: number;
-			endMinute: number;
-			note: string | null;
-		}[]
-	>([]);
-	const [repeatWeeks, setRepeatWeeks] = useState("1");
-	const [templateName, setTemplateName] = useState("");
-	const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
-	const [copyPreviousConfirmOpen, setCopyPreviousConfirmOpen] = useState(false);
-	const [punchReason, setPunchReason] = useState("");
-	const [punchInLocal, setPunchInLocal] = useState("");
-	const [punchOutLocal, setPunchOutLocal] = useState("");
-	const [punchStillOpen, setPunchStillOpen] = useState(false);
-	const [staffStateFilter, setStaffStateFilter] = useState("all");
 	const [gridDensity, setGridDensity] = useState<GridDensity>("comfortable");
 	const locations = useLocations(workplace?.id);
 	const [locationId, setLocationId] = useState<string | undefined>(undefined);
 	const [teamId, setTeamId] = useState<string | null>(null);
+	const editorRef = useRef<ShiftEditorHandle>(null);
 
 	const activeLocationId = locationId ?? locations.data?.[0]?.id;
 	const teams = useScheduleTeams(activeLocationId);
@@ -879,13 +423,7 @@ function SchedulePage() {
 		viewMode === "month",
 		activeTeamId,
 	);
-	const templates = useScheduleTemplates(activeLocationId);
-	const saveTemplate = useSaveScheduleTemplate(activeLocationId);
-	const applyTemplate = useApplyScheduleTemplate(activeLocationId);
-	const groups = useGroups(workplace?.id);
-	const tags = useTags(workplace?.id);
 	const timeBlocks = useTimeBlocks(activeLocationId);
-	const patterns = useShiftPatterns(workplace?.id);
 	const holidays = useHolidays(workplace?.id, {
 		from: weekStart,
 		to: addDays(weekStart, 6),
@@ -898,8 +436,6 @@ function SchedulePage() {
 		}
 		return map;
 	}, [holidays.data?.holidays]);
-	const markAttendance = useMarkAttendance(workplace?.id);
-	const editTimeEntry = useEditTimeEntry(workplace?.id);
 	const acceptances = useAcceptances(schedule.data?.schedule.id);
 	const queryClient = useQueryClient();
 	const mySchedule = useMySchedule(workplace?.id);
@@ -919,153 +455,11 @@ function SchedulePage() {
 			),
 		[respondToAcceptance, myAcceptanceIds, queryClient],
 	);
-	const [form, setForm] = useState<ShiftFormState | null>(null);
-	const [addDates, setAddDates] = useState<string[]>([]);
-	const [addEmploymentIds, setAddEmploymentIds] = useState<string[]>([]);
-	const [positionApproval, setPositionApproval] =
-		useState<PositionApproval | null>(null);
-	const [publishPreview, setPublishPreview] =
-		useState<ChangePreviewResponse | null>(null);
-	useEffect(() => {
-		setHeaderTarget(document.getElementById("schedule-header-controls"));
-	}, []);
-
-	async function invalidate() {
-		// Only the week under edit and this location's calendar go stale —
-		// invalidating the ["schedule"] prefix would mark every location/week
-		// stale and refetch them on visit. Shift edits change labor, but not
-		// time-clock state (punches live on published versions).
-		await queryClient.invalidateQueries({
-			queryKey: ["schedule", activeLocationId, weekStart, activeTeamId],
-		});
-		await queryClient.invalidateQueries({
-			queryKey: ["schedule-labor", activeLocationId, weekStart, activeTeamId],
-		});
-		await queryClient.invalidateQueries({
-			queryKey: ["schedule-calendar", activeLocationId, activeTeamId],
-		});
-		await queryClient.refetchQueries({
-			queryKey: ["schedule", activeLocationId, weekStart, activeTeamId],
-		});
-	}
-
-	function handlePatternApplied() {
-		void queryClient.invalidateQueries({
-			queryKey: ["schedule", activeLocationId, weekStart, activeTeamId],
-		});
-		toast.success("Shift pattern applied.");
-	}
-
-	function handleBulkEdited() {
-		setSelectedShiftIds([]);
-		void invalidate();
-	}
-
-	const createOrUpdate = useMutation({
-		mutationFn: async (
-			state: ShiftFormState & { approvePosition?: boolean },
-		) => {
-			if (!activeLocationId) throw new Error("No location selected");
-			const approvePosition = state.approvePosition === true;
-			if (state.shiftId) {
-				await api(`/v1/shifts/${state.shiftId}`, {
-					method: "PATCH",
-					body: {
-						employmentId: state.employmentId || null,
-						positionId: state.positionId,
-						date: state.date,
-						startMinute: state.startMinute,
-						endMinute: state.endMinute,
-						note: state.note || null,
-						unavailabilityOverrideReason:
-							state.unavailabilityOverrideReason.trim() || null,
-						...(approvePosition ? { approvePosition: true } : {}),
-					},
-				});
-				await api(`/v1/shifts/${state.shiftId}/tags`, {
-					method: "POST",
-					body: { tagIds: state.tagIds },
-				});
-				const titles = state.taskTitles
-					.split("\n")
-					.map((line) => line.trim())
-					.filter(Boolean);
-				if (titles.length > 0) {
-					await api(`/v1/shifts/${state.shiftId}/tasks`, {
-						method: "POST",
-						body: { titles },
-					});
-				}
-				return { count: 1, approvePosition };
-			}
-			const dates = addDates.length > 0 ? addDates : [state.date];
-			const employmentIds: Array<string | null> =
-				addEmploymentIds.length > 0
-					? addEmploymentIds
-					: [state.employmentId || null];
-			await Promise.all(
-				employmentIds.flatMap((employmentId) =>
-					dates.map((date) =>
-						api(
-							`/v1/locations/${activeLocationId}/schedules/${weekStart}/shifts`,
-							{
-								method: "POST",
-								body: {
-									employmentId,
-									positionId: state.positionId,
-									date,
-									startMinute: state.startMinute,
-									endMinute: state.endMinute,
-									note: state.note || undefined,
-									unavailabilityOverrideReason:
-										state.unavailabilityOverrideReason.trim() || undefined,
-									...(approvePosition ? { approvePosition: true } : {}),
-									teamId: activeTeamId,
-								},
-							},
-						),
-					),
-				),
-			);
-			return {
-				count: employmentIds.length * dates.length,
-				approvePosition,
-			};
-		},
-		onSuccess: async (result) => {
-			setForm(null);
-			setAddDates([]);
-			setAddEmploymentIds([]);
-			setPositionApproval(null);
-			await invalidate();
-			if (result.approvePosition) {
-				await queryClient.invalidateQueries({
-					queryKey: ["workplaces", workplace?.id, "workers"],
-				});
-			}
-			posthog?.capture("shift_created", {
-				shift_count: result.count,
-				position_approved: result.approvePosition,
-				week_start: weekStart,
-			});
-			toast.success(
-				result.count > 1 ? `${result.count} shifts added.` : "Shift saved.",
-			);
-		},
-		onError: (error) => toast.error((error as Error).message),
-	});
-
-	const removeShift = useMutation({
-		mutationFn: (shiftId: string) =>
-			api(`/v1/shifts/${shiftId}`, { method: "DELETE" }),
-		onSuccess: async () => {
-			setForm(null);
-			await invalidate();
-			posthog?.capture("shift_deleted", { week_start: weekStart });
-			toast.success("Shift removed.");
-		},
-		onError: (error) => toast.error((error as Error).message),
-	});
+	const invalidate = useInvalidateSchedule(
+		activeLocationId,
+		weekStart,
+		activeTeamId,
+	);
 
 	const moveShift = useMutation({
 		mutationFn: async ({
@@ -1073,12 +467,7 @@ function SchedulePage() {
 			employmentId,
 			date,
 			approvePosition,
-		}: {
-			shift: ScheduleShiftDto;
-			employmentId: string | null;
-			date: string;
-			approvePosition?: boolean;
-		}) => {
+		}: ShiftMoveRequest) => {
 			await api(`/v1/shifts/${shift.id}`, {
 				method: "PATCH",
 				body: {
@@ -1096,7 +485,7 @@ function SchedulePage() {
 			return { approvePosition: approvePosition === true };
 		},
 		onSuccess: async (result, variables) => {
-			setPositionApproval(null);
+			editorRef.current?.closeApproval();
 			await invalidate();
 			if (result.approvePosition) {
 				await queryClient.invalidateQueries({
@@ -1118,72 +507,6 @@ function SchedulePage() {
 		onError: (error) => toast.error((error as Error).message),
 	});
 
-	const copyPrevious = useMutation({
-		mutationFn: () =>
-			api(
-				`/v1/locations/${activeLocationId}/schedules/${weekStart}/copy-previous`,
-				{ method: "POST", body: { teamId: activeTeamId } },
-			),
-		onSuccess: async () => {
-			await invalidate();
-			toast.success("Previous week copied.");
-		},
-		onError: (error) => toast.error((error as Error).message),
-	});
-
-	const autoAssign = useMutation({
-		mutationFn: () =>
-			api<{ assigned: number }>(
-				`/v1/locations/${activeLocationId}/schedules/${weekStart}/auto-assign`,
-				{ method: "POST", body: { teamId: activeTeamId } },
-			),
-		onSuccess: async (result) => {
-			await invalidate();
-			toast.success(
-				result.assigned === 0
-					? "No unassigned Shifts could be filled."
-					: `Assigned ${result.assigned} Shift${result.assigned === 1 ? "" : "s"}.`,
-			);
-		},
-		onError: (error) => toast.error((error as Error).message),
-	});
-
-	const bulkShifts = useMutation({
-		mutationFn: (body: {
-			shiftIds: string[];
-			delete?: boolean;
-			employmentId?: string | null;
-		}) =>
-			api(`/v1/locations/${activeLocationId}/schedules/${weekStart}/bulk`, {
-				method: "POST",
-				body: { ...body, teamId: activeTeamId },
-			}),
-		onSuccess: async () => {
-			setSelectedShiftIds([]);
-			await invalidate();
-			toast.success("Bulk change saved.");
-		},
-		onError: (error) => toast.error((error as Error).message),
-	});
-
-	const pasteShifts = useMutation({
-		mutationFn: (date: string) =>
-			api<{ pasted: number }>(
-				`/v1/locations/${activeLocationId}/schedules/${weekStart}/paste`,
-				{
-					method: "POST",
-					body: { date, shifts: copiedShifts, teamId: activeTeamId },
-				},
-			),
-		onSuccess: async (result: { pasted: number }) => {
-			await invalidate();
-			toast.success(
-				`Pasted ${result.pasted} Shift${result.pasted === 1 ? "" : "s"}.`,
-			);
-		},
-		onError: (error) => toast.error((error as Error).message),
-	});
-
 	const saveSales = useMutation({
 		mutationFn: ({ day, amountCents }: { day: string; amountCents: number }) =>
 			api(`/v1/locations/${activeLocationId}/sales/${day}`, {
@@ -1197,84 +520,6 @@ function SchedulePage() {
 		onError: (error) => toast.error((error as Error).message),
 	});
 
-	const repeatShift = useMutation({
-		mutationFn: (input: { shiftId: string; weeks: number }) =>
-			api<{ copied: number }>(`/v1/shifts/${input.shiftId}/repeat`, {
-				method: "POST",
-				body: { weeks: input.weeks },
-			}),
-		onSuccess: async (result: { copied: number }) => {
-			await invalidate();
-			toast.success(
-				`Copied this Shift onto ${result.copied} later week${result.copied === 1 ? "" : "s"}.`,
-			);
-		},
-		onError: (error) => toast.error((error as Error).message),
-	});
-
-	const previewPublish = useMutation({
-		mutationFn: async () => {
-			const scheduleId = schedule.data?.schedule.id;
-			if (!scheduleId) throw new Error("No schedule loaded");
-			return api<ChangePreviewResponse>(
-				`/v1/schedules/${scheduleId}/change-preview`,
-			);
-		},
-		onSuccess: (preview) => setPublishPreview(preview),
-		onError: (error) => toast.error((error as Error).message),
-	});
-
-	const publish = useMutation({
-		mutationFn: async () => {
-			const scheduleId = schedule.data?.schedule.id;
-			if (!scheduleId) throw new Error("No schedule loaded");
-			return api<{
-				version: { versionNumber: number; workers: number };
-				changes: {
-					total: number;
-					material: number;
-					acceptancesRequired: number;
-				};
-			}>(`/v1/schedules/${scheduleId}/publish`, { method: "POST" });
-		},
-		onSuccess: async (result) => {
-			setPublishPreview(null);
-			await invalidate();
-			await queryClient.invalidateQueries({
-				queryKey: ["acceptances", schedule.data?.schedule.id],
-			});
-			// A new version re-links punches and republishes rollups.
-			await queryClient.invalidateQueries({
-				queryKey: [
-					"schedule-timeclock",
-					activeLocationId,
-					weekStart,
-					activeTeamId,
-				],
-			});
-			await queryClient.invalidateQueries({
-				queryKey: ["schedule-labor", activeLocationId, weekStart, activeTeamId],
-			});
-			await queryClient.invalidateQueries({ queryKey: ["my-schedule"] });
-			await queryClient.invalidateQueries({ queryKey: ["notifications"] });
-			posthog?.capture("schedule_published", {
-				version_number: result.version.versionNumber,
-				worker_count: result.version.workers,
-				total_changes: result.changes.total,
-				material_changes: result.changes.material,
-				acceptances_required: result.changes.acceptancesRequired,
-				week_start: weekStart,
-			});
-			const acceptanceNote =
-				result.changes.acceptancesRequired > 0
-					? ` ${result.changes.acceptancesRequired} late change(s) need worker acceptance.`
-					: "";
-			toast.success(
-				`Published version ${result.version.versionNumber} to ${result.version.workers} worker(s).${acceptanceNote}`,
-			);
-		},
-		onError: (error) => toast.error((error as Error).message),
-	});
 	const retryPublicationPush = useMutation({
 		mutationFn: async (versionId: string) => {
 			const scheduleId = schedule.data?.schedule.id;
@@ -1366,24 +611,6 @@ function SchedulePage() {
 		return map;
 	}, [calendar.data?.timeclock, timeclockQuery.data]);
 
-	function syncPunchFields(shift: ScheduleShiftDto | undefined) {
-		const timezone = data?.schedule.timezone ?? "America/Chicago";
-		const timeclock = shift ? timeclockByShiftId.get(shift.id) : undefined;
-		setPunchInLocal(
-			isoToDatetimeLocal(
-				timeclock?.clockedInAt ?? shift?.startsAt ?? "",
-				timezone,
-			),
-		);
-		setPunchOutLocal(
-			isoToDatetimeLocal(
-				timeclock?.clockedOutAt ?? shift?.endsAt ?? "",
-				timezone,
-			),
-		);
-		setPunchStillOpen(timeclock?.status === "open");
-		setPunchReason("");
-	}
 	const onClockCount = (
 		viewMode === "month"
 			? (calendar.data?.timeclock ?? [])
@@ -1487,28 +714,19 @@ function SchedulePage() {
 		() => filteredStaff.slice(0, visibleStaffCount),
 		[filteredStaff, visibleStaffCount],
 	);
-	const hasStaffFilters =
-		workerQuery.trim().length > 0 ||
-		positionFilter !== "all" ||
-		staffStateFilter !== "all" ||
-		groupFilter !== "all" ||
-		tagFilter !== "all" ||
-		timeBlockFilter !== "all";
-	const activeSelectFilterCount =
-		Number(positionFilter !== "all") +
-		Number(staffStateFilter !== "all") +
-		Number(groupFilter !== "all") +
-		Number(tagFilter !== "all") +
-		Number(timeBlockFilter !== "all");
-	const clearStaffFilters = () => {
-		setWorkerQuery("");
-		setPositionFilter("all");
-		setStaffStateFilter("all");
-		setGroupFilter("all");
-		setTagFilter("all");
-		setTimeBlockFilter("all");
+	const handleFilterChange = useCallback(
+		(key: keyof ScheduleFilters, value: string) => {
+			setFilters((current) => ({ ...current, [key]: value }));
+			if (key !== "tagFilter" && key !== "timeBlockFilter") {
+				setVisibleStaffCount(40);
+			}
+		},
+		[],
+	);
+	const clearStaffFilters = useCallback(() => {
+		setFilters(DEFAULT_SCHEDULE_FILTERS);
 		setVisibleStaffCount(40);
-	};
+	}, []);
 
 	const timeBlockRows = timeBlocks.data?.timeBlocks;
 	const surfaceFilter = useMemo<ScheduleSurfaceFilter>(() => {
@@ -1595,146 +813,51 @@ function SchedulePage() {
 		[gridDensity, visibleDays.length],
 	);
 
-	function openEdit(shift: ScheduleShiftDto) {
-		setAddDates([]);
-		setAddEmploymentIds([]);
-		syncPunchFields(shift);
-		setForm({
-			shiftId: shift.id,
-			employmentId: shift.employmentId ?? "",
-			positionId: shift.positionId,
-			date: shift.date,
-			startMinute: shift.startMinute,
-			endMinute: shift.endMinute,
-			note: shift.note ?? "",
-			unavailabilityOverrideReason: shift.unavailabilityOverrideReason ?? "",
-			tagIds: shift.tagIds,
-			taskTitles: "",
-		});
-	}
-
-	function toggleShiftSelect(shiftId: string) {
-		setSelectedShiftIds((current) =>
-			current.includes(shiftId)
-				? current.filter((id) => id !== shiftId)
-				: [...current, shiftId],
-		);
-	}
-
-	const stableOpenEdit = useStableCallback(openEdit);
-	const stableToggleSelect = useStableCallback((shift: ScheduleShiftDto) =>
-		toggleShiftSelect(shift.id),
+	// The editor dialog owns its open/draft state; everything else reaches it
+	// through these stable, identity-preserving callbacks.
+	const openEdit = useCallback(
+		(shift: ScheduleShiftDto) => editorRef.current?.openEdit(shift),
+		[],
 	);
-	const stableAddShift = useStableCallback(
-		(member: ScheduleResponse["staff"][number], day: string) => {
-			const draft = emptyForm(day);
-			draft.employmentId = member.employmentId;
-			const positions = positionsForWorker(data?.positions ?? [], member);
-			if (positions.length === 1) draft.positionId = positions[0]?.id ?? "";
-			setAddDates([day]);
-			setAddEmploymentIds([member.employmentId]);
-			syncPunchFields(undefined);
-			setForm(draft);
+	const openCreate = useCallback(
+		(date: string) => editorRef.current?.openCreate(date),
+		[],
+	);
+	const openAddShift = useCallback(
+		(member: ScheduleResponse["staff"][number], day: string) =>
+			editorRef.current?.openAdd(member, day),
+		[],
+	);
+	const resetEditor = useCallback(() => editorRef.current?.reset(), []);
+	const toggleSelect = useCallback(
+		(shift: ScheduleShiftDto) => selectionStore.toggle(shift.id),
+		[selectionStore],
+	);
+	const confirmMove = useStableCallback((request: ShiftMoveRequest) =>
+		moveShift.mutate(request),
+	);
+
+	const handleSelectDay = useCallback(
+		(day: string) => {
+			setWeekStart(weekStartOf(new Date(`${day}T12:00:00`), weekStartDay));
+			setSelectedDay(day);
+			setMonthAnchor(monthStartOf(day));
+			setViewMode("day");
+			setTodayFocus(false);
+			editorRef.current?.reset();
 		},
+		[weekStartDay],
 	);
-
-	function openCreate(date: string) {
-		if (!data) return;
-		if (data.positions.length === 0) {
-			toast.error("Add a position in settings before scheduling.");
-			return;
-		}
-		const draft = emptyForm(date);
-		if (data.positions.length === 1) {
-			draft.positionId = data.positions[0]?.id ?? "";
-		}
-		setAddDates([date]);
-		setAddEmploymentIds([]);
-		syncPunchFields(undefined);
-		setForm(draft);
-	}
-
-	const stableOpenCreate = useStableCallback(openCreate);
-
-	function createShiftCount(state: ShiftFormState) {
-		if (state.shiftId) return 1;
-		const dates = addDates.length > 0 ? addDates.length : 1;
-		const workers = Math.max(addEmploymentIds.length, 1);
-		return workers * dates;
-	}
-
-	function queueShiftSave(state: ShiftFormState) {
-		const positionName =
-			data?.positions.find((position) => position.id === state.positionId)
-				?.name ?? "this position";
-		if (state.shiftId) {
-			const member = data?.staff.find(
-				(candidate) => candidate.employmentId === state.employmentId,
+	const handleOpenMonthShift = useCallback(
+		(shift: ScheduleShiftDto) => {
+			setWeekStart(
+				weekStartOf(new Date(`${shift.date}T12:00:00`), weekStartDay),
 			);
-			if (workerNeedsPositionApproval(member, state.positionId)) {
-				setPositionApproval({
-					kind: "save",
-					form: state,
-					workerName: member?.name ?? "this worker",
-					positionName,
-					shiftCount: 1,
-				});
-				return;
-			}
-			createOrUpdate.mutate(state);
-			return;
-		}
-		const employmentIds =
-			addEmploymentIds.length > 0
-				? addEmploymentIds
-				: state.employmentId
-					? [state.employmentId]
-					: [];
-		const needingApproval = employmentIds
-			.map((employmentId) =>
-				data?.staff.find(
-					(candidate) => candidate.employmentId === employmentId,
-				),
-			)
-			.filter((member): member is NonNullable<typeof member> =>
-				Boolean(
-					member && workerNeedsPositionApproval(member, state.positionId),
-				),
-			);
-		if (needingApproval.length > 0) {
-			const first = needingApproval[0]?.name ?? "this worker";
-			const workerName =
-				needingApproval.length === 1
-					? first
-					: `${first} and ${needingApproval.length - 1} other${needingApproval.length === 2 ? "" : "s"}`;
-			setPositionApproval({
-				kind: "save",
-				form: state,
-				workerName,
-				positionName,
-				shiftCount: createShiftCount(state),
-			});
-			return;
-		}
-		createOrUpdate.mutate(state);
-	}
-
-	function submit(event: React.FormEvent<HTMLFormElement>) {
-		event.preventDefault();
-		if (!form) return;
-		if (!canSave) return;
-		queueShiftSave(form);
-	}
-
-	function toggleAddDate(date: string) {
-		setAddDates((current) => {
-			const next = current.includes(date)
-				? current.filter((candidate) => candidate !== date)
-				: [...current, date].sort();
-			if (next.length > 0 && form) setForm({ ...form, date: next[0] ?? date });
-			return next;
-		});
-	}
+			setSelectedDay(shift.date);
+			editorRef.current?.openEdit(shift);
+		},
+		[weekStartDay],
+	);
 
 	async function handleShiftDragEnd(event: DragEndEvent) {
 		if (event.canceled) return;
@@ -1771,7 +894,7 @@ function SchedulePage() {
 		) {
 			const suspended = event.suspend();
 			suspended.abort();
-			setPositionApproval({
+			editorRef.current?.requestMoveApproval({
 				kind: "move",
 				shift,
 				employmentId: targetData.employmentId,
@@ -1795,98 +918,6 @@ function SchedulePage() {
 		}
 	}
 
-	const selectedCreateEmploymentIds = form?.shiftId
-		? form.employmentId
-			? [form.employmentId]
-			: []
-		: addEmploymentIds.length > 0
-			? addEmploymentIds
-			: form?.employmentId
-				? [form.employmentId]
-				: [];
-	const selectedCreateStaff = selectedCreateEmploymentIds
-		.map((employmentId) =>
-			data?.staff.find((member) => member.employmentId === employmentId),
-		)
-		.filter((member): member is NonNullable<typeof member> => Boolean(member));
-	const selectedStaff = selectedCreateStaff[0];
-	const allowedPositions = positionsForWorker(
-		data?.positions ?? [],
-		selectedStaff,
-	);
-	const checkDates =
-		form?.shiftId || addDates.length === 0
-			? form
-				? [form.date]
-				: []
-			: addDates;
-	const overlappingWindows = selectedCreateStaff.flatMap((member) =>
-		(member.unavailability ?? []).filter((window) =>
-			checkDates.some((date) =>
-				form
-					? staffWindowOverlaps(window, date, form.startMinute, form.endMinute)
-					: false,
-			),
-		),
-	);
-	const needsOverride = overlappingWindows.length > 0;
-	const positionNeedsApproval = selectedCreateStaff.some((member) =>
-		workerNeedsPositionApproval(member, form?.positionId ?? ""),
-	);
-	const overlappingShift = selectedCreateEmploymentIds.length
-		? (data?.shifts ?? []).find((shift) => {
-				if (
-					!shift.employmentId ||
-					!selectedCreateEmploymentIds.includes(shift.employmentId)
-				)
-					return false;
-				if (form?.shiftId && shift.id === form.shiftId) return false;
-				if (!form) return false;
-				return checkDates.some((date) => {
-					const [aStart, aEnd] = shiftRangeMinutes(
-						weekStart,
-						date,
-						form.startMinute,
-						form.endMinute,
-					);
-					const [bStart, bEnd] = shiftRangeMinutes(
-						weekStart,
-						shift.date,
-						shift.startMinute,
-						shift.endMinute,
-					);
-					return aStart < bEnd && bStart < aEnd;
-				});
-			})
-		: undefined;
-	const overlappingTimeOff = selectedCreateStaff
-		.flatMap((member) => member.timeOff ?? [])
-		.find((request) => {
-			if (request.status !== "approved" || !form) return false;
-			return checkDates.some((date) =>
-				shiftOverlapsTimeOff(
-					request,
-					date,
-					form.startMinute,
-					form.endMinute,
-					scheduleTimeZone,
-				),
-			);
-		});
-	const pendingAddCount = form ? createShiftCount(form) : 0;
-	const canSave =
-		canManage &&
-		Boolean(
-			form?.positionId &&
-				(form.shiftId || addDates.length > 0) &&
-				form.startMinute !== form.endMinute &&
-				(!needsOverride || form.unavailabilityOverrideReason.trim()),
-		);
-
-	const selectedShiftTimeclock = form?.shiftId
-		? timeclockByShiftId.get(form.shiftId)
-		: undefined;
-	const selectedShiftAssigned = Boolean(form?.employmentId);
 	const constrainedStaff = (data?.staff ?? []).filter(
 		(member) =>
 			(member.unavailability?.length ?? 0) > 0 ||
@@ -1899,721 +930,55 @@ function SchedulePage() {
 		(acceptances.data?.acceptances.length ?? 0) > 0 ||
 		(data?.publication.versions.length ?? 0) > 0;
 	const showScheduleDetails: boolean = false;
-	const locationItems = (locations.data ?? []).map((location) => ({
-		label: location.name,
-		value: location.id,
-	}));
-	const workerItems = [
-		{ label: "Open (no worker yet)", value: null },
-		...(data?.staff ?? []).map((member) => ({
-			label: member.name,
-			value: member.employmentId,
-		})),
-	];
-	const positionItems = [
-		{ label: "Choose…", value: null },
-		...(data?.positions ?? []).map((position) => ({
-			label: position.name,
-			value: position.id,
-		})),
-	];
-	const otherPositions = (data?.positions ?? []).filter(
-		(position) =>
-			!allowedPositions.some((allowed) => allowed.id === position.id),
-	);
-	const showPositionGroups =
-		Boolean(selectedStaff) &&
-		allowedPositions.length > 0 &&
-		otherPositions.length > 0;
-	const approvalCopy = positionApproval
-		? positionApprovalCopy(positionApproval)
-		: null;
 	return (
 		<section className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
 			<h1 className="sr-only">Schedule</h1>
 			<div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-none">
-				{headerTarget
-					? createPortal(
-							<div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-2">
-								<div className="flex min-w-0 flex-wrap items-center gap-1">
-									<Select
-										items={locationItems}
-										value={activeLocationId ?? null}
-										onValueChange={(value) => {
-											if (!value) return;
-											setLocationId(value);
-											setTeamId(null);
-											setForm(null);
-										}}
-									>
-										<SelectTrigger
-											aria-label="Location"
-											size="sm"
-											className="min-w-0 max-w-36 border-transparent bg-transparent font-medium shadow-none [@media(hover:hover)]:hover:bg-muted"
-										>
-											<MapPinIcon />
-											<SelectValue placeholder="Location" />
-										</SelectTrigger>
-										<SelectContent alignItemWithTrigger={false}>
-											<SelectGroup>
-												{locationItems.map((item) => (
-													<SelectItem key={item.value} value={item.value}>
-														{item.label}
-													</SelectItem>
-												))}
-											</SelectGroup>
-										</SelectContent>
-									</Select>
-									{(teams.data ?? []).length > 0 ? (
-										<Select
-											items={[
-												{ label: "Primary", value: PRIMARY_TEAM },
-												...(teams.data ?? []).map((team) => ({
-													label: team.name,
-													value: team.id,
-												})),
-											]}
-											value={activeTeamId ?? PRIMARY_TEAM}
-											onValueChange={(value) => {
-												setTeamId(
-													value && value !== PRIMARY_TEAM ? value : null,
-												);
-												setForm(null);
-											}}
-										>
-											<SelectTrigger
-												aria-label="Schedule team"
-												size="sm"
-												className="min-w-0 max-w-36 border-transparent bg-transparent font-medium shadow-none [@media(hover:hover)]:hover:bg-muted"
-											>
-												<UsersIcon />
-												<SelectValue placeholder="Primary" />
-											</SelectTrigger>
-											<SelectContent alignItemWithTrigger={false}>
-												<SelectGroup>
-													<SelectItem value={PRIMARY_TEAM}>Primary</SelectItem>
-													{(teams.data ?? []).map((team) => (
-														<SelectItem key={team.id} value={team.id}>
-															{team.name}
-														</SelectItem>
-													))}
-												</SelectGroup>
-											</SelectContent>
-										</Select>
-									) : null}
-									<div className="flex shrink-0 items-center">
-										<Button
-											variant="ghost"
-											size="icon-sm"
-											aria-label={
-												viewMode === "month"
-													? "Previous month"
-													: "Previous week"
-											}
-											onClick={() => {
-												if (viewMode === "month") {
-													setMonthAnchor((current) =>
-														addCalendarMonths(current, -1),
-													);
-												} else {
-													setWeekStart((current) => addDays(current, -7));
-												}
-												setForm(null);
-											}}
-										>
-											<ChevronLeftIcon />
-										</Button>
-										<DatePicker
-											id="schedule-week"
-											value={viewMode === "month" ? monthAnchor : weekStart}
-											displayValue={
-												viewMode === "month"
-													? formatMonthLabel(monthAnchor)
-													: formatWeekLabel(weekStart)
-											}
-											buttonClassName="h-8 w-auto min-w-0 border-transparent bg-transparent px-1.5 font-medium tabular-nums shadow-none [@media(hover:hover)]:hover:bg-muted"
-											onValueChange={(date) => {
-												setWeekStart(
-													weekStartOf(
-														new Date(`${date}T12:00:00`),
-														weekStartDay,
-													),
-												);
-												setMonthAnchor(monthStartOf(date));
-												setSelectedDay(date);
-												setForm(null);
-											}}
-										/>
-										<Button
-											variant="ghost"
-											size="icon-sm"
-											aria-label={
-												viewMode === "month" ? "Next month" : "Next week"
-											}
-											onClick={() => {
-												if (viewMode === "month") {
-													setMonthAnchor((current) =>
-														addCalendarMonths(current, 1),
-													);
-												} else {
-													setWeekStart((current) => addDays(current, 7));
-												}
-												setForm(null);
-											}}
-										>
-											<ChevronRightIcon />
-										</Button>
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={() => {
-												const todayKey = workplaceTodayKey(scheduleTimeZone);
-												setWeekStart(
-													weekStartOf(
-														new Date(`${todayKey}T12:00:00`),
-														weekStartDay,
-													),
-												);
-												setMonthAnchor(monthStartOf(todayKey));
-												setSelectedDay(todayKey);
-												setViewMode((current) =>
-													current === "month" ? "week" : current,
-												);
-												setTodayFocus(false);
-												setForm(null);
-											}}
-										>
-											Today
-										</Button>
-									</div>
-								</div>
-
-								<div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
-									{publicationState ? (
-										<PublicationBadge publication={publicationState} />
-									) : null}
-									<Select
-										items={[
-											{ label: "Week", value: "week" },
-											{ label: "Day", value: "day" },
-											{ label: "Month", value: "month" },
-										]}
-										value={viewMode}
-										onValueChange={(value) => {
-											if (
-												value === "week" ||
-												value === "day" ||
-												value === "month"
-											) {
-												setViewMode(value);
-												setTodayFocus(value === "day");
-												if (value === "month") {
-													setMonthAnchor(monthStartForView(weekStart));
-												}
-												if (value === "day" && !days.includes(selectedDay)) {
-													setSelectedDay(weekStart);
-												}
-											}
-										}}
-									>
-										<SelectTrigger
-											aria-label="Schedule view"
-											size="sm"
-											className="w-[5.5rem]"
-										>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent alignItemWithTrigger={false}>
-											<SelectGroup>
-												<SelectItem value="week">Week</SelectItem>
-												<SelectItem value="day">Day</SelectItem>
-												<SelectItem value="month">Month</SelectItem>
-											</SelectGroup>
-										</SelectContent>
-									</Select>
-									<DropdownMenu>
-										<DropdownMenuTrigger
-											render={
-												<Button
-													variant="ghost"
-													size="icon-sm"
-													disabled={!activeLocationId}
-												/>
-											}
-										>
-											<EllipsisIcon />
-											<span className="sr-only">More schedule actions</span>
-										</DropdownMenuTrigger>
-										<DropdownMenuContent align="end" className="min-w-56">
-											<DropdownMenuGroup>
-												<DropdownMenuItem
-													disabled={!canManage || !activeLocationId}
-													onClick={() => setScheduleImportOpen(true)}
-												>
-													Import shifts from CSV
-												</DropdownMenuItem>
-												<DropdownMenuItem
-													disabled={
-														!canManage ||
-														copyPrevious.isPending ||
-														!activeLocationId
-													}
-													onClick={() => {
-														if (data && data.shifts.length > 0) {
-															setCopyPreviousConfirmOpen(true);
-														} else {
-															copyPrevious.mutate();
-														}
-													}}
-												>
-													{copyPrevious.isPending ? <Spinner /> : null}
-													Copy last week
-												</DropdownMenuItem>
-												<DropdownMenuItem
-													disabled={
-														!canManage ||
-														saveTemplate.isPending ||
-														!data ||
-														data.shifts.length === 0
-													}
-													onClick={() => {
-														setTemplateName("");
-														setSaveTemplateOpen(true);
-													}}
-												>
-													Save as template
-												</DropdownMenuItem>
-												<DropdownMenuItem
-													disabled={
-														!canManage ||
-														!activeLocationId ||
-														(patterns.data ?? []).length === 0
-													}
-													onClick={() => setPatternOpen(true)}
-												>
-													<LayoutTemplateIcon />
-													Apply pattern
-												</DropdownMenuItem>
-												{capabilities.operations ? (
-													<DropdownMenuItem
-														disabled={
-															!canManage ||
-															autoAssign.isPending ||
-															!data ||
-															openShiftCount === 0
-														}
-														onClick={() => autoAssign.mutate()}
-													>
-														Auto-assign open shifts
-													</DropdownMenuItem>
-												) : (
-													<DropdownMenuItem
-														onClick={() =>
-															navigate({
-																to: "/dashboard/settings/subscription",
-															})
-														}
-													>
-														Auto-assign open shifts (Operations plan)
-													</DropdownMenuItem>
-												)}
-											</DropdownMenuGroup>
-											<DropdownMenuSeparator />
-											<DropdownMenuGroup>
-												<DropdownMenuItem
-													render={
-														<Link to="/dashboard/settings/schedule-teams" />
-													}
-												>
-													<UsersIcon />
-													Manage teams
-												</DropdownMenuItem>
-											</DropdownMenuGroup>
-											{(templates.data ?? []).length > 0 ? (
-												<>
-													<DropdownMenuSeparator />
-													<DropdownMenuGroup>
-														{(templates.data ?? []).map((template) => (
-															<DropdownMenuItem
-																key={template.id}
-																disabled={!canManage || applyTemplate.isPending}
-																onClick={() =>
-																	applyTemplate.mutate(
-																		{
-																			weekStart,
-																			templateId: template.id,
-																			teamId: activeTeamId,
-																		},
-																		{
-																			onSuccess: () =>
-																				toast.success(
-																					`Applied “${template.name}”. Review the draft before publishing.`,
-																				),
-																			onError: (error) =>
-																				toast.error((error as Error).message),
-																		},
-																	)
-																}
-															>
-																Apply {template.name}
-															</DropdownMenuItem>
-														))}
-													</DropdownMenuGroup>
-												</>
-											) : null}
-										</DropdownMenuContent>
-									</DropdownMenu>
-									<Tooltip>
-										<TooltipTrigger
-											render={
-												<span className="inline-flex">
-													<Button
-														size="sm"
-														disabled={
-															!canPublish ||
-															previewPublish.isPending ||
-															!schedule.data ||
-															(publicationState?.latestVersionNumber != null &&
-																!publicationState.hasUnpublishedChanges)
-														}
-														onClick={() => previewPublish.mutate()}
-													>
-														{previewPublish.isPending ? (
-															<Spinner data-icon="inline-start" />
-														) : null}
-														Publish
-													</Button>
-												</span>
-											}
-										/>
-										{publicationState?.latestVersionNumber != null &&
-										!publicationState.hasUnpublishedChanges ? (
-											<TooltipContent>
-												This week is published and unchanged. Edit the schedule
-												to start a new draft.
-											</TooltipContent>
-										) : null}
-									</Tooltip>
-									<Button
-										size="sm"
-										variant="outline"
-										disabled={
-											!canManage || !data || data.positions.length === 0
-										}
-										onClick={() =>
-											openCreate(defaultAddDate(weekStart, scheduleTimeZone))
-										}
-									>
-										<PlusIcon data-icon="inline-start" />
-										Add
-									</Button>
-								</div>
-							</div>,
-							headerTarget,
-						)
-					: null}
-				<div className="flex min-w-0 flex-wrap items-center gap-2 border-b bg-background px-3 py-1.5 print:hidden">
-					{data && data.staff.length > 0 ? (
-						<>
-							<InputGroup className="min-w-36 max-w-52 flex-1 sm:flex-none">
-								<InputGroupAddon align="inline-start">
-									<SearchIcon />
-								</InputGroupAddon>
-								<InputGroupInput
-									aria-label="Search workers"
-									placeholder="Search"
-									value={workerQuery}
-									onChange={(event) => {
-										setWorkerQuery(event.target.value);
-										setVisibleStaffCount(40);
-									}}
-								/>
-							</InputGroup>
-							<Popover>
-								<PopoverTrigger render={<Button variant="ghost" size="sm" />}>
-									<ListFilterIcon data-icon="inline-start" />
-									Filters
-									{activeSelectFilterCount > 0 ? (
-										<Badge
-											variant="secondary"
-											className="ml-1 size-5 px-0 tabular-nums"
-										>
-											{activeSelectFilterCount}
-										</Badge>
-									) : null}
-								</PopoverTrigger>
-								<PopoverContent align="start" className="w-72">
-									<PopoverHeader>
-										<PopoverTitle>Filters</PopoverTitle>
-									</PopoverHeader>
-									<FieldGroup className="gap-3">
-										<Field>
-											<FieldLabel>Position</FieldLabel>
-											<Select
-												items={[
-													{ label: "All positions", value: "all" },
-													...data.positions.map((position) => ({
-														label: position.name,
-														value: position.id,
-													})),
-												]}
-												value={positionFilter}
-												onValueChange={(value) => {
-													if (!value) return;
-													setPositionFilter(value);
-													setVisibleStaffCount(40);
-												}}
-											>
-												<SelectTrigger className="w-full">
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent alignItemWithTrigger={false}>
-													<SelectGroup>
-														<SelectItem value="all">All positions</SelectItem>
-														{data.positions.map((position) => (
-															<SelectItem key={position.id} value={position.id}>
-																{position.name}
-															</SelectItem>
-														))}
-													</SelectGroup>
-												</SelectContent>
-											</Select>
-										</Field>
-										<Field>
-											<FieldLabel>Schedule state</FieldLabel>
-											<Select
-												items={[
-													{ label: "All workers", value: "all" },
-													{ label: "Scheduled", value: "scheduled" },
-													{ label: "Unscheduled", value: "unscheduled" },
-													{
-														label: "Has constraints",
-														value: "constraints",
-													},
-												]}
-												value={staffStateFilter}
-												onValueChange={(value) => {
-													if (!value) return;
-													setStaffStateFilter(value);
-													setVisibleStaffCount(40);
-												}}
-											>
-												<SelectTrigger className="w-full">
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent alignItemWithTrigger={false}>
-													<SelectGroup>
-														<SelectItem value="all">All workers</SelectItem>
-														<SelectItem value="scheduled">Scheduled</SelectItem>
-														<SelectItem value="unscheduled">
-															Unscheduled
-														</SelectItem>
-														<SelectItem value="constraints">
-															Has constraints
-														</SelectItem>
-													</SelectGroup>
-												</SelectContent>
-											</Select>
-										</Field>
-										{(groups.data?.groups ?? []).length > 0 ? (
-											<Field>
-												<FieldLabel>Worker group</FieldLabel>
-												<Select
-													items={[
-														{ label: "All groups", value: "all" },
-														...(groups.data?.groups ?? []).map((group) => ({
-															label: group.name,
-															value: group.id,
-														})),
-													]}
-													value={groupFilter}
-													onValueChange={(value) => {
-														if (!value) return;
-														setGroupFilter(value);
-														setVisibleStaffCount(40);
-													}}
-												>
-													<SelectTrigger className="w-full">
-														<SelectValue />
-													</SelectTrigger>
-													<SelectContent alignItemWithTrigger={false}>
-														<SelectGroup>
-															<SelectItem value="all">All groups</SelectItem>
-															{(groups.data?.groups ?? []).map((group) => (
-																<SelectItem key={group.id} value={group.id}>
-																	{group.name}
-																</SelectItem>
-															))}
-														</SelectGroup>
-													</SelectContent>
-												</Select>
-											</Field>
-										) : null}
-										{(tags.data?.tags ?? []).length > 0 ? (
-											<Field>
-												<FieldLabel>Shift tag</FieldLabel>
-												<Select
-													items={[
-														{ label: "All tags", value: "all" },
-														...(tags.data?.tags ?? []).map((tag) => ({
-															label: tag.name,
-															value: tag.id,
-														})),
-													]}
-													value={tagFilter}
-													onValueChange={(value) => {
-														if (!value) return;
-														setTagFilter(value);
-													}}
-												>
-													<SelectTrigger className="w-full">
-														<SelectValue />
-													</SelectTrigger>
-													<SelectContent alignItemWithTrigger={false}>
-														<SelectGroup>
-															<SelectItem value="all">All tags</SelectItem>
-															{(tags.data?.tags ?? []).map((tag) => (
-																<SelectItem key={tag.id} value={tag.id}>
-																	{tag.name}
-																</SelectItem>
-															))}
-														</SelectGroup>
-													</SelectContent>
-												</Select>
-											</Field>
-										) : null}
-										{(timeBlocks.data?.timeBlocks ?? []).length > 0 ? (
-											<Field>
-												<FieldLabel>Time block</FieldLabel>
-												<Select
-													items={[
-														{ label: "All time blocks", value: "all" },
-														...(timeBlocks.data?.timeBlocks ?? []).map(
-															(part) => ({
-																label: part.name,
-																value: part.id,
-															}),
-														),
-													]}
-													value={timeBlockFilter}
-													onValueChange={(value) => {
-														if (!value) return;
-														setTimeBlockFilter(value);
-													}}
-												>
-													<SelectTrigger className="w-full">
-														<SelectValue />
-													</SelectTrigger>
-													<SelectContent alignItemWithTrigger={false}>
-														<SelectGroup>
-															<SelectItem value="all">
-																All time blocks
-															</SelectItem>
-															{(timeBlocks.data?.timeBlocks ?? []).map(
-																(part) => (
-																	<SelectItem key={part.id} value={part.id}>
-																		{part.name}
-																	</SelectItem>
-																),
-															)}
-														</SelectGroup>
-													</SelectContent>
-												</Select>
-											</Field>
-										) : null}
-										{viewMode !== "month" ? (
-											<Field>
-												<FieldLabel>Density</FieldLabel>
-												<ToggleGroup
-													aria-label="Schedule grid density"
-													value={[gridDensity]}
-													variant="outline"
-													size="sm"
-													spacing={0}
-													className="w-full"
-													onValueChange={(value) => {
-														const next = value[0];
-														if (next === "compact" || next === "comfortable") {
-															setGridDensity(next);
-														}
-													}}
-												>
-													<ToggleGroupItem className="flex-1" value="compact">
-														Compact
-													</ToggleGroupItem>
-													<ToggleGroupItem
-														className="flex-1"
-														value="comfortable"
-													>
-														Comfortable
-													</ToggleGroupItem>
-												</ToggleGroup>
-											</Field>
-										) : null}
-										{data.positions.length > 0 ? (
-											<Field>
-												<FieldLabel>Position colors</FieldLabel>
-												<ul
-													className="flex list-none flex-wrap gap-x-3 gap-y-1.5"
-													aria-label="Position colors"
-												>
-													{data.positions.map((position) => (
-														<li
-															key={position.id}
-															className="flex items-center gap-1.5 text-muted-foreground text-xs"
-														>
-															<span
-																className={cn(
-																	"size-1.5 rounded-full",
-																	positionColor(position.name).dot,
-																)}
-																aria-hidden
-															/>
-															{position.name}
-														</li>
-													))}
-												</ul>
-											</Field>
-										) : null}
-									</FieldGroup>
-								</PopoverContent>
-							</Popover>
-							{hasStaffFilters ? (
-								<Button variant="ghost" size="sm" onClick={clearStaffFilters}>
-									<XIcon data-icon="inline-start" />
-									Clear
-								</Button>
-							) : null}
-						</>
-					) : null}
-
-					{data &&
-					(openShiftCount > 0 || conflictCount > 0 || onClockCount > 0) ? (
-						<div className="ml-auto flex min-w-0 items-center gap-1.5">
-							{openShiftCount > 0 ? (
-								<ScheduleMetric
-									value={openShiftCount}
-									label="open"
-									tone="emphasis"
-								/>
-							) : null}
-							{conflictCount > 0 ? (
-								<ScheduleMetric
-									value={conflictCount}
-									label={conflictCount === 1 ? "conflict" : "conflicts"}
-									tone="danger"
-								/>
-							) : null}
-							{onClockCount > 0 ? (
-								<ScheduleMetric
-									value={onClockCount}
-									label="on clock"
-									tone="emphasis"
-								/>
-							) : null}
-						</div>
-					) : null}
-				</div>
+				<ScheduleToolbar
+					locations={locations.data}
+					teams={teams.data}
+					locationId={activeLocationId}
+					teamId={activeTeamId}
+					weekStart={weekStart}
+					weekStartDay={weekStartDay}
+					monthAnchor={monthAnchor}
+					selectedDay={selectedDay}
+					days={days}
+					viewMode={viewMode}
+					scheduleTimeZone={scheduleTimeZone}
+					publication={publicationState}
+					scheduleId={data?.schedule.id}
+					shiftCount={data?.shifts.length}
+					openShiftCount={openShiftCount}
+					conflictCount={conflictCount}
+					canManage={canManage}
+					canPublish={canPublish}
+					canAdd={canManage && canAddShift}
+					setLocationId={setLocationId}
+					setTeamId={setTeamId}
+					setWeekStart={setWeekStart}
+					setMonthAnchor={setMonthAnchor}
+					setSelectedDay={setSelectedDay}
+					setViewMode={setViewMode}
+					setTodayFocus={setTodayFocus}
+					onResetEditor={resetEditor}
+					onAddShift={openCreate}
+				/>
+				<ScheduleFilterBar
+					hasData={data !== undefined}
+					hasStaff={(data?.staff.length ?? 0) > 0}
+					positions={data?.positions}
+					locationId={activeLocationId}
+					filters={filters}
+					onFilterChange={handleFilterChange}
+					onClearFilters={clearStaffFilters}
+					density={gridDensity}
+					onDensityChange={setGridDensity}
+					showDensity={viewMode !== "month"}
+					openShiftCount={openShiftCount}
+					conflictCount={conflictCount}
+					onClockCount={onClockCount}
+				/>
 
 				<div className="flex min-h-0 flex-1 flex-col">
 					{schedule.isError ? (
@@ -2682,1069 +1047,33 @@ function SchedulePage() {
 						</Empty>
 					) : null}
 
-					<Dialog
-						open={form !== null && data !== undefined}
-						onOpenChange={(open) => {
-							if (!open) {
-								if (positionApproval) return;
-								setForm(null);
-								setAddDates([]);
-								setAddEmploymentIds([]);
-							}
-						}}
-					>
-						<DialogContent
-							className="flex max-h-[min(40rem,90vh)] w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
-							showCloseButton
-						>
-							{form && data ? (
-								<form
-									onSubmit={submit}
-									className="flex min-h-0 flex-1 flex-col"
-								>
-									<DialogHeader className="border-b px-6 py-4 pr-12">
-										<DialogTitle>
-											{form.shiftId ? "Edit shift" : "Add shifts"}
-										</DialogTitle>
-										<DialogDescription>
-											Times are in {data.schedule.timezone}.
-											{form.shiftId
-												? " Leave the worker open if you have not assigned anyone yet."
-												: " Add workers and days — leave workers empty for open shifts."}
-										</DialogDescription>
-									</DialogHeader>
-									<div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-										<FieldGroup>
-											{(timeBlocks.data?.timeBlocks ?? []).length > 0 ||
-											(timeBlocks.data?.shiftTemplates ?? []).length > 0 ? (
-												<div className="grid gap-2 sm:grid-cols-2">
-													{(timeBlocks.data?.timeBlocks ?? []).length > 0 ? (
-														<Select
-															items={(timeBlocks.data?.timeBlocks ?? []).map(
-																(block) => ({
-																	label: `${block.name} · ${formatMinute(block.startMinute)}–${formatMinute(block.endMinute)}`,
-																	value: block.id,
-																}),
-															)}
-															value={null}
-															onValueChange={(value) => {
-																const block = (
-																	timeBlocks.data?.timeBlocks ?? []
-																).find((row) => row.id === value);
-																if (!block) return;
-																setForm({
-																	...form,
-																	startMinute: block.startMinute,
-																	endMinute: block.endMinute,
-																});
-															}}
-														>
-															<SelectTrigger className="w-full">
-																<SelectValue placeholder="Apply time block" />
-															</SelectTrigger>
-															<SelectContent alignItemWithTrigger={false}>
-																<SelectGroup>
-																	{(timeBlocks.data?.timeBlocks ?? []).map(
-																		(block) => (
-																			<SelectItem
-																				key={block.id}
-																				value={block.id}
-																			>
-																				{block.name}
-																			</SelectItem>
-																		),
-																	)}
-																</SelectGroup>
-															</SelectContent>
-														</Select>
-													) : null}
-													{(timeBlocks.data?.shiftTemplates ?? []).length >
-													0 ? (
-														<Select
-															items={(
-																timeBlocks.data?.shiftTemplates ?? []
-															).map((template) => ({
-																label: template.name,
-																value: template.id,
-															}))}
-															value={null}
-															onValueChange={(value) => {
-																const template = (
-																	timeBlocks.data?.shiftTemplates ?? []
-																).find((row) => row.id === value);
-																if (!template) return;
-																setForm({
-																	...form,
-																	positionId: template.positionId,
-																	startMinute: template.startMinute,
-																	endMinute: template.endMinute,
-																	note: template.note ?? form.note,
-																});
-															}}
-														>
-															<SelectTrigger className="w-full">
-																<SelectValue placeholder="Apply shift template" />
-															</SelectTrigger>
-															<SelectContent alignItemWithTrigger={false}>
-																<SelectGroup>
-																	{(timeBlocks.data?.shiftTemplates ?? []).map(
-																		(template) => (
-																			<SelectItem
-																				key={template.id}
-																				value={template.id}
-																			>
-																				{template.name}
-																			</SelectItem>
-																		),
-																	)}
-																</SelectGroup>
-															</SelectContent>
-														</Select>
-													) : null}
-												</div>
-											) : null}
-											<div className="grid grid-cols-[4.75rem_minmax(0,1fr)] items-start gap-x-3 gap-y-4">
-												<span className="pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-													{form.shiftId ? "Day" : "Days"}
-												</span>
-												<div className="min-w-0">
-													{form.shiftId ? (
-														<DatePicker
-															id="shift-date"
-															value={form.date}
-															onValueChange={(date) =>
-																setForm({ ...form, date })
-															}
-															disabled={(date) => {
-																const key = date.toLocaleDateString("sv-SE");
-																return (
-																	key < weekStart || key > addDays(weekStart, 6)
-																);
-															}}
-														/>
-													) : (
-														<div
-															id="shift-date"
-															className="grid grid-cols-4 gap-1.5 sm:grid-cols-7"
-														>
-															{days.map((date) => {
-																const selected = addDates.includes(date);
-																return (
-																	<Button
-																		key={date}
-																		type="button"
-																		variant={selected ? "default" : "outline"}
-																		className="h-auto min-h-11 flex-col gap-0.5 px-1 py-1.5 tabular-nums"
-																		aria-pressed={selected}
-																		onClick={() => toggleAddDate(date)}
-																	>
-																		<span
-																			className={cn(
-																				"text-xs",
-																				selected
-																					? "text-primary-foreground/80"
-																					: "text-muted-foreground",
-																			)}
-																		>
-																			{weekdayShort(date)}
-																		</span>
-																		<span className="font-medium">
-																			{new Date(`${date}T12:00:00`).getDate()}
-																		</span>
-																	</Button>
-																);
-															})}
-														</div>
-													)}
-												</div>
+					<ShiftEditorDialog
+						ref={editorRef}
+						data={data}
+						locationId={activeLocationId}
+						weekStart={weekStart}
+						teamId={activeTeamId}
+						days={days}
+						canManage={canManage}
+						timeclockByShiftId={timeclockByShiftId}
+						movePending={moveShift.isPending}
+						onConfirmMove={confirmMove}
+					/>
 
-												<span className="pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-													Time
-												</span>
-												<div className="flex min-w-0 flex-col gap-1.5">
-													<div className="grid grid-cols-2 gap-2">
-														<TimePicker
-															id="shift-start"
-															value={form.startMinute}
-															onValueChange={(startMinute) =>
-																setForm({ ...form, startMinute })
-															}
-														/>
-														<TimePicker
-															id="shift-end"
-															value={form.endMinute}
-															onValueChange={(endMinute) =>
-																setForm({ ...form, endMinute })
-															}
-															overnightAfterMinute={form.startMinute}
-														/>
-													</div>
-													{form.endMinute <= form.startMinute ? (
-														<p className="text-muted-foreground text-xs">
-															Continues overnight into the next day.
-														</p>
-													) : null}
-												</div>
-
-												<span className="pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-													Position
-												</span>
-												<div className="flex min-w-0 flex-col gap-1.5">
-													<Select
-														items={positionItems}
-														value={form.positionId || null}
-														onValueChange={(positionId) =>
-															setForm({
-																...form,
-																positionId: positionId ?? "",
-															})
-														}
-													>
-														<SelectTrigger
-															id="shift-position"
-															className="w-full"
-														>
-															<SelectValue />
-														</SelectTrigger>
-														<SelectContent alignItemWithTrigger={false}>
-															<SelectGroup>
-																<SelectItem value={null}>Choose…</SelectItem>
-															</SelectGroup>
-															{showPositionGroups ? (
-																<>
-																	<SelectGroup>
-																		<SelectLabel>
-																			Approved for {selectedStaff?.name}
-																		</SelectLabel>
-																		{allowedPositions.map((position) => (
-																			<SelectItem
-																				key={position.id}
-																				value={position.id}
-																			>
-																				{position.name}
-																			</SelectItem>
-																		))}
-																	</SelectGroup>
-																	<SelectGroup>
-																		<SelectLabel>Other positions</SelectLabel>
-																		{otherPositions.map((position) => (
-																			<SelectItem
-																				key={position.id}
-																				value={position.id}
-																			>
-																				{position.name}
-																			</SelectItem>
-																		))}
-																	</SelectGroup>
-																</>
-															) : (
-																<SelectGroup>
-																	{(data.positions ?? []).map((position) => (
-																		<SelectItem
-																			key={position.id}
-																			value={position.id}
-																		>
-																			{position.name}
-																		</SelectItem>
-																	))}
-																</SelectGroup>
-															)}
-														</SelectContent>
-													</Select>
-													{positionNeedsApproval ? (
-														<Alert role="status">
-															<UserPlusIcon />
-															<AlertTitle>
-																{selectedCreateStaff.length > 1
-																	? `${selectedCreateStaff.length} workers aren’t approved`
-																	: `${selectedStaff?.name ?? "This worker"} isn’t approved`}{" "}
-																for{" "}
-																{data.positions.find(
-																	(position) => position.id === form.positionId,
-																)?.name ?? "this position"}
-															</AlertTitle>
-															<AlertDescription>
-																You can add this Position to their Employment
-																when you save. It will apply to future shifts
-																too.
-															</AlertDescription>
-														</Alert>
-													) : null}
-												</div>
-
-												<span className="pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-													{form.shiftId ? "Worker" : "Workers"}
-												</span>
-												<div className="flex min-w-0 flex-col gap-1.5">
-													{form.shiftId ? (
-														<Select
-															items={workerItems}
-															value={form.employmentId || null}
-															onValueChange={(employmentId) => {
-																const nextEmploymentId = employmentId ?? "";
-																const member = data.staff.find(
-																	(candidate) =>
-																		candidate.employmentId === nextEmploymentId,
-																);
-																let positionId = form.positionId;
-																if (!positionId) {
-																	const allowed = positionsForWorker(
-																		data.positions,
-																		member,
-																	);
-																	if (allowed.length === 1) {
-																		positionId = allowed[0]?.id ?? "";
-																	}
-																}
-																setForm({
-																	...form,
-																	employmentId: nextEmploymentId,
-																	positionId,
-																	unavailabilityOverrideReason: "",
-																});
-															}}
-														>
-															<SelectTrigger
-																id="shift-worker"
-																className="w-full"
-															>
-																<SelectValue />
-															</SelectTrigger>
-															<SelectContent alignItemWithTrigger={false}>
-																<SelectGroup>
-																	{workerItems.map((item) => (
-																		<SelectItem
-																			key={item.value ?? "open"}
-																			value={item.value}
-																		>
-																			{item.label}
-																		</SelectItem>
-																	))}
-																</SelectGroup>
-															</SelectContent>
-														</Select>
-													) : (
-														<>
-															<div className="flex flex-wrap items-center gap-1.5">
-																{addEmploymentIds.map((employmentId) => {
-																	const member = data.staff.find(
-																		(candidate) =>
-																			candidate.employmentId === employmentId,
-																	);
-																	const name = member?.name ?? "Worker";
-																	return (
-																		<Badge
-																			key={employmentId}
-																			variant="secondary"
-																			className="gap-1 pr-1"
-																		>
-																			{name}
-																			<Button
-																				type="button"
-																				variant="ghost"
-																				size="icon-sm"
-																				aria-label={`Remove ${name}`}
-																				onClick={() => {
-																					const next = addEmploymentIds.filter(
-																						(id) => id !== employmentId,
-																					);
-																					setAddEmploymentIds(next);
-																					setForm({
-																						...form,
-																						employmentId: next[0] ?? "",
-																						unavailabilityOverrideReason: "",
-																					});
-																				}}
-																			>
-																				<XIcon />
-																			</Button>
-																		</Badge>
-																	);
-																})}
-																{(data.staff ?? []).some(
-																	(member) =>
-																		!addEmploymentIds.includes(
-																			member.employmentId,
-																		),
-																) ? (
-																	<Select
-																		items={(data.staff ?? [])
-																			.filter(
-																				(member) =>
-																					!addEmploymentIds.includes(
-																						member.employmentId,
-																					),
-																			)
-																			.map((member) => ({
-																				label: member.name,
-																				value: member.employmentId,
-																			}))}
-																		value={null}
-																		onValueChange={(employmentId) => {
-																			if (!employmentId) return;
-																			if (
-																				addEmploymentIds.includes(employmentId)
-																			)
-																				return;
-																			const member = data.staff.find(
-																				(candidate) =>
-																					candidate.employmentId ===
-																					employmentId,
-																			);
-																			const next = [
-																				...addEmploymentIds,
-																				employmentId,
-																			];
-																			let positionId = form.positionId;
-																			if (!positionId) {
-																				const allowed = positionsForWorker(
-																					data.positions,
-																					member,
-																				);
-																				if (allowed.length === 1) {
-																					positionId = allowed[0]?.id ?? "";
-																				}
-																			}
-																			setAddEmploymentIds(next);
-																			setForm({
-																				...form,
-																				employmentId: next[0] ?? "",
-																				positionId,
-																				unavailabilityOverrideReason: "",
-																			});
-																		}}
-																	>
-																		<SelectTrigger
-																			aria-label="Add worker"
-																			className="h-7 w-auto gap-1 border-dashed px-2"
-																		>
-																			<PlusIcon className="size-3.5" />
-																			<SelectValue placeholder="Add worker" />
-																		</SelectTrigger>
-																		<SelectContent alignItemWithTrigger={false}>
-																			<SelectGroup>
-																				{(data.staff ?? [])
-																					.filter(
-																						(member) =>
-																							!addEmploymentIds.includes(
-																								member.employmentId,
-																							),
-																					)
-																					.map((member) => (
-																						<SelectItem
-																							key={member.employmentId}
-																							value={member.employmentId}
-																						>
-																							{member.name}
-																						</SelectItem>
-																					))}
-																			</SelectGroup>
-																		</SelectContent>
-																	</Select>
-																) : null}
-															</div>
-															{addEmploymentIds.length === 0 ? (
-																<p className="text-muted-foreground text-xs">
-																	No workers selected — creates open shifts.
-																</p>
-															) : null}
-														</>
-													)}
-												</div>
-
-												<span className="pt-2 font-medium text-muted-foreground text-xs uppercase tracking-wide">
-													Note
-												</span>
-												<div className="min-w-0">
-													<Input
-														id="shift-note"
-														value={form.note}
-														onChange={(event) =>
-															setForm({
-																...form,
-																note: event.target.value,
-															})
-														}
-														placeholder="Optional"
-														maxLength={200}
-													/>
-												</div>
-											</div>
-											{form.shiftId ? (
-												<Field className="rounded-lg border border-border/70">
-													<Collapsible className="group/more">
-														<CollapsibleTrigger
-															render={
-																<Button
-																	type="button"
-																	variant="ghost"
-																	className="h-auto w-full justify-between gap-2 rounded-lg px-3 py-2"
-																/>
-															}
-														>
-															More options
-															<span className="flex items-center gap-1.5 font-normal text-muted-foreground text-xs">
-																<span className="group-data-[open]/more:hidden">
-																	Tags, tasks, repeat…
-																</span>
-																<ChevronDownIcon className="size-4 transition-transform group-data-[open]/more:rotate-180" />
-															</span>
-														</CollapsibleTrigger>
-														<CollapsibleContent>
-															<Separator />
-															<FieldGroup className="gap-4 px-3 py-3">
-																{(tags.data?.tags ?? []).length > 0 ? (
-																	<Field>
-																		<FieldLabel>Shift Tags</FieldLabel>
-																		<div className="flex flex-wrap gap-2">
-																			{(tags.data?.tags ?? []).map((tag) => (
-																				<Button
-																					key={tag.id}
-																					type="button"
-																					size="sm"
-																					variant={
-																						form.tagIds.includes(tag.id)
-																							? "secondary"
-																							: "outline"
-																					}
-																					onClick={() =>
-																						setForm({
-																							...form,
-																							tagIds: form.tagIds.includes(
-																								tag.id,
-																							)
-																								? form.tagIds.filter(
-																										(id) => id !== tag.id,
-																									)
-																								: [...form.tagIds, tag.id],
-																						})
-																					}
-																				>
-																					{tag.name}
-																				</Button>
-																			))}
-																		</div>
-																	</Field>
-																) : null}
-																<Field>
-																	<FieldLabel htmlFor="shift-tasks">
-																		Shift Tasks
-																	</FieldLabel>
-																	<Textarea
-																		id="shift-tasks"
-																		value={form.taskTitles}
-																		onChange={(event) =>
-																			setForm({
-																				...form,
-																				taskTitles: event.target.value,
-																			})
-																		}
-																		placeholder="One checklist item per line"
-																	/>
-																	<FieldDescription>
-																		Saving replaces the checklist on this Shift.
-																	</FieldDescription>
-																</Field>
-																<Field>
-																	<FieldLabel htmlFor="shift-repeat">
-																		Repeat into later weeks
-																	</FieldLabel>
-																	<div className="flex gap-2">
-																		<Input
-																			id="shift-repeat"
-																			type="number"
-																			min={1}
-																			max={12}
-																			value={repeatWeeks}
-																			onChange={(event) =>
-																				setRepeatWeeks(event.target.value)
-																			}
-																		/>
-																		<Button
-																			type="button"
-																			variant="outline"
-																			disabled={repeatShift.isPending}
-																			onClick={() =>
-																				repeatShift.mutate({
-																					shiftId: form.shiftId ?? "",
-																					weeks: Math.max(
-																						1,
-																						Math.min(
-																							12,
-																							Number(repeatWeeks) || 1,
-																						),
-																					),
-																				})
-																			}
-																		>
-																			Copy forward
-																		</Button>
-																	</div>
-																</Field>
-															</FieldGroup>
-														</CollapsibleContent>
-													</Collapsible>
-												</Field>
-											) : null}
-											{needsOverride ? (
-												<Field>
-													<FieldLabel htmlFor="shift-override">
-														Unavailability override
-													</FieldLabel>
-													<Textarea
-														id="shift-override"
-														required
-														value={form.unavailabilityOverrideReason}
-														onChange={(event) =>
-															setForm({
-																...form,
-																unavailabilityOverrideReason:
-																	event.target.value,
-															})
-														}
-														placeholder="Why this worker is scheduled anyway"
-													/>
-													<FieldDescription>
-														This worker marked unavailability during this time.
-														Record a reason to schedule them anyway. Preferences
-														never block scheduling.
-													</FieldDescription>
-												</Field>
-											) : null}
-											{selectedStaff?.preference ? (
-												<p className="text-muted-foreground text-xs">
-													Preference (does not block):{" "}
-													{selectedStaff.preference}
-												</p>
-											) : null}
-											{overlappingShift ? (
-												<Alert variant="destructive">
-													<AlertTriangleIcon />
-													<AlertTitle>Overlaps another shift</AlertTitle>
-													<AlertDescription>
-														{overlappingShift.positionName} on{" "}
-														{formatDayLabel(overlappingShift.date)}. You can
-														still save; it will show as a conflict on the week.
-													</AlertDescription>
-												</Alert>
-											) : null}
-											{overlappingTimeOff ? (
-												<Alert variant="destructive">
-													<AlertTriangleIcon />
-													<AlertTitle>During approved time off</AlertTitle>
-													<AlertDescription>
-														This worker has approved time off covering this
-														window. You can still save; it will show as a
-														conflict.
-													</AlertDescription>
-												</Alert>
-											) : null}
-											{selectedShiftTimeclock?.versionShiftId &&
-											selectedShiftAssigned ? (
-												<Field>
-													<FieldLabel>Today operations</FieldLabel>
-													<FieldDescription>
-														These marks stay on the published Shift. They do not
-														change the schedule. Punch times use{" "}
-														{data.schedule.timezone}.
-													</FieldDescription>
-													{selectedShiftTimeclock.attendance ? (
-														<Badge variant="destructive">
-															{selectedShiftTimeclock.attendance === "no_show"
-																? "No-show"
-																: selectedShiftTimeclock.attendance === "sick"
-																	? "Sick"
-																	: "Late"}
-														</Badge>
-													) : null}
-													<div className="flex flex-wrap gap-2">
-														<Button
-															type="button"
-															size="sm"
-															variant="outline"
-															disabled={markAttendance.isPending}
-															onClick={() =>
-																markAttendance.mutate(
-																	{
-																		versionShiftId:
-																			selectedShiftTimeclock.versionShiftId,
-																		kind: "late",
-																	},
-																	{
-																		onSuccess: () => {
-																			queryClient.invalidateQueries({
-																				queryKey: [
-																					"schedule-timeclock",
-																					activeLocationId,
-																					weekStart,
-																				],
-																			});
-																			toast.success("Marked late.");
-																		},
-																		onError: (error) =>
-																			toast.error((error as Error).message),
-																	},
-																)
-															}
-														>
-															Late
-														</Button>
-														<Button
-															type="button"
-															size="sm"
-															variant="outline"
-															disabled={markAttendance.isPending}
-															onClick={() =>
-																markAttendance.mutate(
-																	{
-																		versionShiftId:
-																			selectedShiftTimeclock.versionShiftId,
-																		kind: "no_show",
-																	},
-																	{
-																		onSuccess: () => {
-																			queryClient.invalidateQueries({
-																				queryKey: [
-																					"schedule-timeclock",
-																					activeLocationId,
-																					weekStart,
-																				],
-																			});
-																			toast.success("Marked no-show.");
-																		},
-																		onError: (error) =>
-																			toast.error((error as Error).message),
-																	},
-																)
-															}
-														>
-															No-show
-														</Button>
-														<Button
-															type="button"
-															size="sm"
-															variant="outline"
-															disabled={markAttendance.isPending}
-															onClick={() =>
-																markAttendance.mutate(
-																	{
-																		versionShiftId:
-																			selectedShiftTimeclock.versionShiftId,
-																		kind: "sick",
-																	},
-																	{
-																		onSuccess: () => {
-																			queryClient.invalidateQueries({
-																				queryKey: [
-																					"schedule-timeclock",
-																					activeLocationId,
-																					weekStart,
-																				],
-																			});
-																			toast.success("Marked sick.");
-																		},
-																		onError: (error) =>
-																			toast.error((error as Error).message),
-																	},
-																)
-															}
-														>
-															Sick
-														</Button>
-													</div>
-													<Field>
-														<FieldLabel htmlFor="punch-in">Clock in</FieldLabel>
-														<Input
-															id="punch-in"
-															type="datetime-local"
-															step={60}
-															className="h-9"
-															value={punchInLocal}
-															onChange={(event) =>
-																setPunchInLocal(event.target.value)
-															}
-														/>
-													</Field>
-													<Field>
-														<FieldLabel htmlFor="punch-out">
-															Clock out
-														</FieldLabel>
-														<Input
-															id="punch-out"
-															type="datetime-local"
-															step={60}
-															className="h-9"
-															disabled={punchStillOpen}
-															value={punchOutLocal}
-															onChange={(event) =>
-																setPunchOutLocal(event.target.value)
-															}
-														/>
-													</Field>
-													<Field orientation="horizontal">
-														<Checkbox
-															id="punch-open"
-															checked={punchStillOpen}
-															onCheckedChange={(checked) =>
-																setPunchStillOpen(checked === true)
-															}
-														/>
-														<FieldLabel
-															htmlFor="punch-open"
-															className="font-normal"
-														>
-															Still on the clock
-														</FieldLabel>
-													</Field>
-													<Input
-														aria-label="Time Entry correction reason"
-														placeholder="Reason for punch correction"
-														value={punchReason}
-														onChange={(event) =>
-															setPunchReason(event.target.value)
-														}
-													/>
-													<Button
-														type="button"
-														size="sm"
-														variant="outline"
-														disabled={
-															editTimeEntry.isPending ||
-															punchReason.trim().length < 3 ||
-															!punchInLocal ||
-															(!punchStillOpen && !punchOutLocal)
-														}
-														onClick={() => {
-															const timezone = data.schedule.timezone;
-															const clockedInAt = datetimeLocalToIso(
-																punchInLocal,
-																timezone,
-															);
-															if (!clockedInAt) {
-																toast.error("Clock-in time is not valid");
-																return;
-															}
-															const clockedOutAt = punchStillOpen
-																? null
-																: datetimeLocalToIso(punchOutLocal, timezone);
-															if (!punchStillOpen && !clockedOutAt) {
-																toast.error("Clock-out time is not valid");
-																return;
-															}
-															editTimeEntry.mutate(
-																{
-																	versionShiftId:
-																		selectedShiftTimeclock.versionShiftId,
-																	clockedInAt,
-																	clockedOutAt,
-																	reason: punchReason.trim(),
-																},
-																{
-																	onSuccess: () => {
-																		queryClient.invalidateQueries({
-																			queryKey: [
-																				"schedule-timeclock",
-																				activeLocationId,
-																				weekStart,
-																			],
-																		});
-																		setPunchReason("");
-																		toast.success("Time Entry saved.");
-																	},
-																	onError: (error) =>
-																		toast.error((error as Error).message),
-																},
-															);
-														}}
-													>
-														{selectedShiftTimeclock.status
-															? "Correct Time Entry"
-															: "Record missed punch"}
-													</Button>
-												</Field>
-											) : null}
-										</FieldGroup>
-									</div>
-									<DialogFooter className="mx-0 mb-0 rounded-none border-t px-6 py-4">
-										<Button
-											type="submit"
-											size="sm"
-											disabled={createOrUpdate.isPending || !canSave}
-										>
-											{createOrUpdate.isPending ? (
-												<Spinner data-icon="inline-start" />
-											) : null}
-											{form.shiftId
-												? "Save"
-												: `Add ${pendingAddCount} shift${pendingAddCount === 1 ? "" : "s"}`}
-										</Button>
-										{form.shiftId ? (
-											<Button
-												type="button"
-												variant="outline"
-												size="sm"
-												disabled={createOrUpdate.isPending || !canSave}
-												onClick={() =>
-													queueShiftSave({ ...form, shiftId: null })
-												}
-											>
-												<CopyIcon data-icon="inline-start" />
-												Save as copy
-											</Button>
-										) : null}
-										{form.shiftId ? (
-											<AlertDialog>
-												<AlertDialogTrigger
-													render={
-														<Button type="button" variant="outline" size="sm" />
-													}
-												>
-													<Trash2Icon data-icon="inline-start" />
-													Delete
-												</AlertDialogTrigger>
-												<AlertDialogContent size="sm">
-													<AlertDialogHeader>
-														<AlertDialogMedia className="bg-destructive/10 text-destructive">
-															<Trash2Icon />
-														</AlertDialogMedia>
-														<AlertDialogTitle>
-															Delete this shift?
-														</AlertDialogTitle>
-														<AlertDialogDescription>
-															This removes the shift from the current draft.
-														</AlertDialogDescription>
-													</AlertDialogHeader>
-													<AlertDialogFooter>
-														<AlertDialogCancel>Cancel</AlertDialogCancel>
-														<AlertDialogAction
-															variant="destructive"
-															onClick={() =>
-																removeShift.mutate(form.shiftId ?? "")
-															}
-														>
-															Delete
-														</AlertDialogAction>
-													</AlertDialogFooter>
-												</AlertDialogContent>
-											</AlertDialog>
-										) : null}
-									</DialogFooter>
-								</form>
-							) : null}
-						</DialogContent>
-					</Dialog>
-
-					{copiedShifts.length > 0 && viewMode !== "month" ? (
-						<div className="flex flex-wrap items-center gap-2 border-b bg-muted/30 px-3 py-2 print:hidden">
-							<span className="text-muted-foreground text-xs tabular-nums">
-								{copiedShifts.length} shift
-								{copiedShifts.length === 1 ? "" : "s"} copied
-							</span>
-							<Select
-								items={[
-									{ label: "Paste onto day", value: null },
-									...days.map((day) => ({
-										label: formatDayLabel(day),
-										value: day,
-									})),
-								]}
-								value={null}
-								onValueChange={(value) => {
-									if (value) pasteShifts.mutate(value);
-								}}
-							>
-								<SelectTrigger aria-label="Paste copied shifts onto a day">
-									<SelectValue placeholder="Paste onto day" />
-								</SelectTrigger>
-								<SelectContent alignItemWithTrigger={false}>
-									<SelectGroup>
-										{days.map((day) => (
-											<SelectItem key={day} value={day}>
-												{formatDayLabel(day)}
-											</SelectItem>
-										))}
-									</SelectGroup>
-								</SelectContent>
-							</Select>
-							<Button
-								size="sm"
-								variant="ghost"
-								onClick={() => setCopiedShifts([])}
-							>
-								Clear
-							</Button>
-						</div>
-					) : null}
-
-					{selectedShiftIds.length > 0 ? (
-						<div className="flex flex-wrap items-center gap-2 border-b bg-muted/40 px-3 py-2 print:hidden">
-							<Badge variant="secondary" className="tabular-nums">
-								{selectedShiftIds.length} selected
-							</Badge>
-							<Button
-								size="sm"
-								variant="outline"
-								disabled={!canManage || !data || bulkShifts.isPending}
-								onClick={() => setBulkEditOpen(true)}
-							>
-								Bulk edit
-							</Button>
-							<Button
-								size="sm"
-								variant="outline"
-								onClick={() => {
-									const picked = (data?.shifts ?? []).filter((shift) =>
-										selectedShiftIds.includes(shift.id),
-									);
-									setCopiedShifts(
-										picked.map((shift) => ({
-											positionId: shift.positionId,
-											startMinute: shift.startMinute,
-											endMinute: shift.endMinute,
-											note: shift.note,
-										})),
-									);
-									toast.success("Shifts copied.");
-								}}
-							>
-								Copy
-							</Button>
-							<ConfirmAction
-								trigger="Delete"
-								triggerVariant="destructive"
-								destructive
-								title={`Delete ${selectedShiftIds.length} selected ${selectedShiftIds.length === 1 ? "shift" : "shifts"}?`}
-								description="This removes them from the draft. Publish to let the team see the change."
-								confirmLabel="Delete shifts"
-								disabled={!canManage || bulkShifts.isPending}
-								onConfirm={() =>
-									bulkShifts.mutate({
-										shiftIds: selectedShiftIds,
-										delete: true,
-									})
-								}
-							/>
-							<Button
-								size="sm"
-								variant="outline"
-								disabled={!canPublish || !schedule.data}
-								onClick={() => setPublishSelectionOpen(true)}
-							>
-								<SendIcon data-icon="inline-start" />
-								Publish selected
-							</Button>
-							<Button
-								size="sm"
-								variant="ghost"
-								onClick={() => setSelectedShiftIds([])}
-							>
-								Clear
-							</Button>
-							<p className="text-muted-foreground text-xs">
-								Shift-click or ⌘-click a shift to select.
-							</p>
-						</div>
-					) : null}
+					<ScheduleSelectionBars
+						store={selectionStore}
+						shifts={data?.shifts}
+						staff={data?.staff}
+						hasData={data !== undefined}
+						scheduleId={data?.schedule.id}
+						locationId={activeLocationId}
+						weekStart={weekStart}
+						teamId={activeTeamId}
+						days={days}
+						showPaste={viewMode !== "month"}
+						canManage={canManage}
+						canPublish={canPublish}
+					/>
 
 					{viewMode === "month" ? (
 						<div className="flex min-h-0 flex-1 flex-col">
@@ -3756,26 +1085,8 @@ function SchedulePage() {
 								timeclockByShiftId={timeclockByShiftId}
 								filterShift={shiftMatchesCalendarFilters}
 								isPending={calendar.isPending && !calendar.data}
-								onSelectDay={(day) => {
-									setWeekStart(
-										weekStartOf(new Date(`${day}T12:00:00`), weekStartDay),
-									);
-									setSelectedDay(day);
-									setMonthAnchor(monthStartOf(day));
-									setViewMode("day");
-									setTodayFocus(false);
-									setForm(null);
-								}}
-								onOpenShift={(shift) => {
-									setWeekStart(
-										weekStartOf(
-											new Date(`${shift.date}T12:00:00`),
-											weekStartDay,
-										),
-									);
-									setSelectedDay(shift.date);
-									openEdit(shift);
-								}}
+								onSelectDay={handleSelectDay}
+								onOpenShift={handleOpenMonthShift}
 							/>
 						</div>
 					) : null}
@@ -3838,9 +1149,9 @@ function SchedulePage() {
 												timeclockByShiftId={timeclockByShiftId}
 												store={selectionStore}
 												formatMinute={stableFormatMinute}
-												onOpenShift={stableOpenEdit}
-												onToggleSelect={stableToggleSelect}
-												onAddShift={stableAddShift}
+												onOpenShift={openEdit}
+												onToggleSelect={toggleSelect}
+												onAddShift={openAddShift}
 											/>
 										))}
 										{filteredStaff.length === 0 ? (
@@ -3886,8 +1197,8 @@ function SchedulePage() {
 												disabled={moveShift.isPending}
 												timeclockByShiftId={timeclockByShiftId}
 												store={selectionStore}
-												onOpenShift={stableOpenEdit}
-												onToggleSelect={stableToggleSelect}
+												onOpenShift={openEdit}
+												onToggleSelect={toggleSelect}
 											/>
 										) : null}
 
@@ -3900,8 +1211,8 @@ function SchedulePage() {
 												disabled={moveShift.isPending}
 												timeclockByShiftId={timeclockByShiftId}
 												store={selectionStore}
-												onOpenShift={stableOpenEdit}
-												onToggleSelect={stableToggleSelect}
+												onOpenShift={openEdit}
+												onToggleSelect={toggleSelect}
 											/>
 										) : null}
 									</div>
@@ -3924,8 +1235,8 @@ function SchedulePage() {
 							timeclockByShiftId={timeclockByShiftId}
 							canManage={canManage}
 							shiftsPending={moveShift.isPending}
-							onOpenShift={stableOpenEdit}
-							onCreateShift={stableOpenCreate}
+							onOpenShift={openEdit}
+							onCreateShift={openCreate}
 						/>
 					) : null}
 
@@ -4067,264 +1378,6 @@ function SchedulePage() {
 					) : null}
 				</div>
 			</div>
-			<AlertDialog
-				open={positionApproval !== null}
-				onOpenChange={(open) => {
-					if (!open && !createOrUpdate.isPending && !moveShift.isPending) {
-						setPositionApproval(null);
-					}
-				}}
-			>
-				<AlertDialogContent className="sm:max-w-md">
-					{positionApproval && approvalCopy ? (
-						<>
-							<AlertDialogHeader>
-								<AlertDialogTitle>{approvalCopy.title}</AlertDialogTitle>
-								<AlertDialogDescription>
-									{approvalCopy.description}
-								</AlertDialogDescription>
-							</AlertDialogHeader>
-							<AlertDialogFooter>
-								<AlertDialogCancel
-									disabled={createOrUpdate.isPending || moveShift.isPending}
-								>
-									Cancel
-								</AlertDialogCancel>
-								<AlertDialogAction
-									disabled={createOrUpdate.isPending || moveShift.isPending}
-									onClick={(event) => {
-										event.preventDefault();
-										if (positionApproval.kind === "save") {
-											createOrUpdate.mutate({
-												...positionApproval.form,
-												approvePosition: true,
-											});
-											return;
-										}
-										moveShift.mutate({
-											shift: positionApproval.shift,
-											employmentId: positionApproval.employmentId,
-											date: positionApproval.date,
-											approvePosition: true,
-										});
-									}}
-								>
-									{createOrUpdate.isPending || moveShift.isPending ? (
-										<Spinner data-icon="inline-start" />
-									) : null}
-									{approvalCopy.confirmLabel}
-								</AlertDialogAction>
-							</AlertDialogFooter>
-						</>
-					) : null}
-				</AlertDialogContent>
-			</AlertDialog>
-			<AlertDialog
-				open={publishPreview !== null}
-				onOpenChange={(open) => {
-					if (!open) setPublishPreview(null);
-				}}
-			>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Publish this draft?</AlertDialogTitle>
-						<AlertDialogDescription>
-							{conflictCount > 0
-								? `This draft has ${conflictCount} conflict(s). Publishing creates and sends a new immutable schedule version.`
-								: "Publishing creates and sends a new immutable schedule version. Future edits begin the next draft."}
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					{publishPreview?.hasPublishedVersion &&
-					publishPreview.changes.length > 0 ? (
-						<DataTable
-							fill={false}
-							bounded
-							columns={changeColumns}
-							data={publishPreview.changes}
-							getRowId={(row, index) => `${row.kind}-${row.summary}-${index}`}
-							className="[&_tbody_tr:last-child]:border-b-0"
-						/>
-					) : null}
-					{publishPreview && publishPreview.wouldRequireAcceptance > 0 ? (
-						<p className="text-muted-foreground text-xs">
-							{publishPreview.wouldRequireAcceptance} change(s) start within the{" "}
-							{publishPreview.noticeWindowHours}h notice window and will require
-							worker acceptance.
-						</p>
-					) : null}
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction
-							disabled={publish.isPending}
-							onClick={() => publish.mutate()}
-						>
-							{publish.isPending ? <Spinner data-icon="inline-start" /> : null}
-							Publish now
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
-			<AlertDialog
-				open={copyPreviousConfirmOpen}
-				onOpenChange={setCopyPreviousConfirmOpen}
-			>
-				<AlertDialogContent size="sm">
-					<AlertDialogHeader>
-						<AlertDialogTitle>Copy last week into this draft?</AlertDialogTitle>
-						<AlertDialogDescription>
-							This draft already has {data?.shifts.length ?? 0}{" "}
-							{data?.shifts.length === 1 ? "shift" : "shifts"}. Copying adds
-							last week’s shifts on top of them — it does not replace them.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction
-							disabled={copyPrevious.isPending}
-							onClick={(event) => {
-								event.preventDefault();
-								setCopyPreviousConfirmOpen(false);
-								copyPrevious.mutate();
-							}}
-						>
-							{copyPrevious.isPending ? (
-								<Spinner data-icon="inline-start" />
-							) : null}
-							Copy and add
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
-			<AlertDialog open={saveTemplateOpen} onOpenChange={setSaveTemplateOpen}>
-				<AlertDialogContent size="sm">
-					<AlertDialogHeader>
-						<AlertDialogTitle>Save this week as a template</AlertDialogTitle>
-						<AlertDialogDescription>
-							Stores this draft’s Shift times, Positions, and assignments so you
-							can apply them to another week. Applying replaces that week’s
-							draft.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<Field>
-						<FieldLabel htmlFor="template-name">Template name</FieldLabel>
-						<Input
-							id="template-name"
-							value={templateName}
-							onChange={(event) => setTemplateName(event.target.value)}
-							placeholder="Weekday opening"
-						/>
-					</Field>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Cancel</AlertDialogCancel>
-						<AlertDialogAction
-							disabled={
-								saveTemplate.isPending || templateName.trim().length === 0
-							}
-							onClick={(event) => {
-								event.preventDefault();
-								saveTemplate.mutate(
-									{
-										weekStart,
-										name: templateName.trim(),
-										teamId: activeTeamId,
-									},
-									{
-										onSuccess: () => {
-											setSaveTemplateOpen(false);
-											toast.success("Template saved.");
-										},
-										onError: (error) => toast.error((error as Error).message),
-									},
-								);
-							}}
-						>
-							{saveTemplate.isPending ? (
-								<Spinner data-icon="inline-start" />
-							) : null}
-							Save template
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
-			<ImportSheet<{
-				line: number;
-				date: string;
-				position: string;
-				email: string | null;
-				workerName: string | null;
-				startsAt: string;
-			}>
-				key={`${activeLocationId}-${weekStart}-${activeTeamId}`}
-				open={scheduleImportOpen}
-				requireAllValid
-				onOpenChange={setScheduleImportOpen}
-				title="Import shifts into this draft"
-				description="Upload one workweek at a time. Preview validates every shift; a file with errors imports nothing. Workers and positions must already exist. Sling names must uniquely match active workers. No shifts are published automatically."
-				modes={
-					activeLocationId
-						? [
-								{
-									value: "schedule",
-									label: "Schedule CSV",
-									importPath: `/v1/locations/${activeLocationId}/schedules/${weekStart}/import${activeTeamId ? `?teamId=${activeTeamId}` : ""}`,
-									templatePath: `/v1/locations/${activeLocationId}/schedules/import/template.csv`,
-									templateFileName: "schedule-import-template.csv",
-									successNoun: "shift(s)",
-									help: "Upload a Sling schedule CSV directly, or use the template with date, start time, end time, position, and worker email. Sling names must match uniquely; open shifts have no worker. All shifts go to the selected jooling location.",
-								},
-							]
-						: []
-				}
-				renderEntry={(entry) => (
-					<span>
-						{entry.date} · {entry.position} ·{" "}
-						{entry.email ?? entry.workerName ?? "Open shift"}
-					</span>
-				)}
-				entryKey={(entry) =>
-					`${entry.line}-${entry.startsAt}-${entry.position}`
-				}
-				onImported={() => {
-					void invalidate();
-					posthog?.capture("schedule_import_completed", {
-						week_start: weekStart,
-					});
-				}}
-			/>
-			<Suspense fallback={null}>
-				<PatternApplyDialog
-					open={patternOpen}
-					onOpenChange={setPatternOpen}
-					locationId={activeLocationId}
-					weekStart={weekStart}
-					patterns={patterns.data ?? []}
-					teamId={activeTeamId}
-					onApplied={handlePatternApplied}
-				/>
-				<PublishSelectionDialog
-					open={publishSelectionOpen}
-					onOpenChange={setPublishSelectionOpen}
-					scheduleId={schedule.data?.schedule.id ?? ""}
-					shiftIds={selectedShiftIds}
-					onPublished={() => {
-						setSelectedShiftIds([]);
-						void invalidate();
-					}}
-				/>
-				<BulkEditDialog
-					open={bulkEditOpen}
-					onOpenChange={setBulkEditOpen}
-					locationId={activeLocationId}
-					weekStart={weekStart}
-					shiftIds={selectedShiftIds}
-					workers={(data?.staff ?? []).map((member) => ({
-						employmentId: member.employmentId,
-						name: member.name || member.email,
-					}))}
-					teamId={activeTeamId}
-					onEdited={handleBulkEdited}
-				/>
-			</Suspense>
 		</section>
 	);
 }
