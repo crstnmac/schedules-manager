@@ -210,7 +210,7 @@ function ManagerClockPage() {
 						? "You’re on the clock. Punch out when this shift ends."
 						: "Clock in for your assigned published Shift, then review punches below."
 				}
-				className="border-0 px-0 py-0"
+				className="border-0 p-0 md:p-0"
 			/>
 
 			{schedule.isLoading ? (

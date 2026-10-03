@@ -7,7 +7,6 @@ import { Badge } from "@SchedulesManager/ui/components/badge";
 import { Button } from "@SchedulesManager/ui/components/button";
 import {
 	Card,
-	CardAction,
 	CardContent,
 	CardDescription,
 	CardFooter,
@@ -328,7 +327,7 @@ function NextShiftHero({
 
 function WorkerHome() {
 	const { formatMinute, formatShiftRange } = useDisplayPrefs();
-	const { workplace, capabilities } = useWorkplace();
+	const { workplace } = useWorkplace();
 	const schedule = useMySchedule(workplace?.id);
 	const acknowledge = useAcknowledge();
 	const respond = useRespondToAcceptance();
@@ -745,16 +744,6 @@ function WorkerHome() {
 							<ToggleGroupItem value="week">Week</ToggleGroupItem>
 							<ToggleGroupItem value="calendar">Calendar</ToggleGroupItem>
 						</ToggleGroup>
-						{capabilities.operations ? (
-							<Button
-								size="sm"
-								variant="outline"
-								nativeButton={false}
-								render={<Link to="/worker/timecard" />}
-							>
-								My timecard
-							</Button>
-						) : null}
 					</div>
 				}
 			/>
@@ -804,16 +793,6 @@ function WorkerHome() {
 								<CardDescription>
 									Your next assigned shift will appear here once it’s published.
 								</CardDescription>
-								<CardAction>
-									<Button
-										size="sm"
-										variant="outline"
-										nativeButton={false}
-										render={<Link to="/worker/openshifts" />}
-									>
-										Browse open shifts
-									</Button>
-								</CardAction>
 							</CardHeader>
 						</Card>
 					)

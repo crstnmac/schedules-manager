@@ -21,9 +21,25 @@ export const Route = createFileRoute("/consent")({
 	validateSearch: (search: Record<string, unknown>) => ({
 		client_id: typeof search.client_id === "string" ? search.client_id : "",
 		scope: typeof search.scope === "string" ? search.scope : "",
+		redirect_uri:
+			typeof search.redirect_uri === "string" ? search.redirect_uri : "",
 	}),
 	component: ConsentComponent,
 });
+
+/**
+ * SEC-010: self-registered clients may use app schemes and loopback
+ * redirects, so show where the grant goes before the user allows it.
+ */
+function redirectLabel(redirectUri: string): string | null {
+	if (!redirectUri) return null;
+	try {
+		const url = new URL(redirectUri);
+		return url.host ? `${url.protocol}//${url.host}` : url.protocol;
+	} catch {
+		return redirectUri.slice(0, 120);
+	}
+}
 
 function ConsentComponent() {
 	const { isLoading, user } = useAuth();
@@ -33,6 +49,7 @@ function ConsentComponent() {
 	const [denied, setDenied] = useState(false);
 
 	const requestedScopes = (search.scope ?? "").split(" ").filter(Boolean);
+	const returnsTo = redirectLabel(search.redirect_uri);
 	const [selectedScopes, setSelectedScopes] = useState(() => requestedScopes);
 
 	function toggleScope(scope: string, selected: boolean) {
@@ -147,6 +164,13 @@ function ConsentComponent() {
 						An application wants to connect to your jooling Workplace as{" "}
 						{user.name || user.email}. Review what it can do:
 					</CardDescription>
+					{returnsTo ? (
+						<p className="text-muted-foreground text-sm">
+							After you decide, you'll be sent to{" "}
+							<span className="font-medium text-foreground">{returnsTo}</span>.
+							Only continue if you started this connection there.
+						</p>
+					) : null}
 				</CardHeader>
 				<CardFooter className="flex-col items-start gap-4">
 					<fieldset

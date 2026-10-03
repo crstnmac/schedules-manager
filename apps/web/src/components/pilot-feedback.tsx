@@ -35,9 +35,11 @@ import { api } from "@/lib/api";
 export function PilotFeedback({
 	workplaceId,
 	buttonClassName,
+	variant = "outline",
 }: {
 	workplaceId: string;
 	buttonClassName?: string;
+	variant?: "outline" | "ghost";
 }) {
 	const [open, setOpen] = useState(false);
 	const [category, setCategory] = useState<"problem" | "idea" | "question">(
@@ -81,7 +83,7 @@ export function PilotFeedback({
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger
 				render={
-					<Button variant="outline" size="sm" className={buttonClassName} />
+					<Button variant={variant} size="sm" className={buttonClassName} />
 				}
 			>
 				<MessageSquareMoreIcon data-icon="inline-start" /> Pilot feedback

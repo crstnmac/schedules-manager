@@ -18,32 +18,28 @@ import {
 	SheetTitle,
 } from "@SchedulesManager/ui/components/sheet";
 import { Spinner } from "@SchedulesManager/ui/components/spinner";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "@SchedulesManager/ui/components/tooltip";
 import { cn } from "@SchedulesManager/ui/lib/utils";
 import { Link, type LinkProps, Outlet } from "@tanstack/react-router";
 import {
 	BellIcon,
+	ChevronsUpDownIcon,
 	LockIcon,
 	LogOutIcon,
 	type LucideIcon,
 	MenuIcon,
+	MoreHorizontalIcon,
 	SearchIcon,
+	Settings2Icon,
 } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
-	AppShellAside,
 	AppShellSearch,
 	type ShellSearchLink,
 } from "@/components/app-shell-panels";
 import { DocsLink } from "@/components/docs-link";
 import { LogoMark } from "@/components/logo-mark";
 import { PilotFeedback } from "@/components/pilot-feedback";
-import type { InboxNotification } from "@/lib/queries";
 
 export type ShellLink = {
 	to: LinkProps["to"];
@@ -73,81 +69,10 @@ const isActive = (
 	pathname: string,
 ) => (item.exact ? pathname === item.match : pathname.startsWith(item.match));
 
-const RAIL_BUTTON =
-	"size-9 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground";
-const RAIL_ACTIVE = "bg-sidebar-accent text-sidebar-accent-foreground";
-
-function RailLink({
-	link,
-	active,
-	badge,
-	onClick,
-}: {
-	link: ShellLink;
-	active: boolean;
-	badge?: number;
-	onClick?: () => void;
-}) {
-	return (
-		<Tooltip>
-			<TooltipTrigger
-				render={
-					<Link
-						to={link.to}
-						aria-label={link.label}
-						aria-current={active ? "page" : undefined}
-						onClick={onClick}
-						className={cn(
-							buttonVariants({ variant: "ghost", size: "icon" }),
-							RAIL_BUTTON,
-							"relative",
-							active && RAIL_ACTIVE,
-						)}
-					/>
-				}
-			>
-				<link.icon strokeWidth={1.5} />
-				{badge ? (
-					<span className="absolute top-1 right-1 grid min-w-4 place-items-center rounded-full bg-primary px-1 font-medium text-primary-foreground text-xs leading-4">
-						{badge > 99 ? "99+" : badge}
-					</span>
-				) : null}
-			</TooltipTrigger>
-			<TooltipContent side="right">{link.label}</TooltipContent>
-		</Tooltip>
-	);
-}
-
-function RailButton({
-	label,
-	icon: Icon,
-	onClick,
-}: {
-	label: string;
-	icon: LucideIcon;
-	onClick: () => void;
-}) {
-	return (
-		<Tooltip>
-			<TooltipTrigger
-				render={
-					<button
-						type="button"
-						aria-label={label}
-						onClick={onClick}
-						className={cn(
-							buttonVariants({ variant: "ghost", size: "icon" }),
-							RAIL_BUTTON,
-						)}
-					/>
-				}
-			>
-				<Icon strokeWidth={1.5} />
-			</TooltipTrigger>
-			<TooltipContent side="right">{label}</TooltipContent>
-		</Tooltip>
-	);
-}
+const ROW =
+	"flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm text-sidebar-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring [@media(hover:hover)]:hover:bg-sidebar-accent/70";
+const ROW_ACTIVE =
+	"bg-sidebar-accent font-medium text-sidebar-accent-foreground";
 
 function WorkplaceHeader({
 	workplaceName,
@@ -157,8 +82,8 @@ function WorkplaceHeader({
 	roleLabel: string;
 }) {
 	return (
-		<div className="flex items-center gap-2.5 rounded-lg border border-sidebar-border bg-sidebar-accent/60 px-2.5 py-2">
-			<LogoMark size={28} className="rounded-md" />
+		<div className="flex items-center gap-2.5 px-1">
+			<LogoMark size={32} className="rounded-lg" />
 			<div className="grid min-w-0 flex-1 leading-tight">
 				<span className="truncate font-semibold text-sm" title={workplaceName}>
 					{workplaceName}
@@ -168,6 +93,40 @@ function WorkplaceHeader({
 				</span>
 			</div>
 		</div>
+	);
+}
+
+function NavLinkRow({
+	item,
+	active,
+	onNavigate,
+}: {
+	item: ShellNavItem;
+	active: boolean;
+	onNavigate?: () => void;
+}) {
+	return (
+		<Link
+			to={item.to}
+			aria-current={active ? "page" : undefined}
+			onClick={onNavigate}
+			className={cn(ROW, active && ROW_ACTIVE)}
+		>
+			<item.icon
+				className={cn(
+					"size-4 shrink-0",
+					active ? "text-primary" : "text-muted-foreground",
+				)}
+				strokeWidth={1.75}
+			/>
+			<span className="min-w-0 flex-1 truncate">{item.label}</span>
+			{item.locked ? (
+				<LockIcon
+					className="size-3.5 shrink-0 text-muted-foreground"
+					aria-label="Needs the Operations plan"
+				/>
+			) : null}
+		</Link>
 	);
 }
 
@@ -183,91 +142,25 @@ function NavList({
 	onNavigate?: () => void;
 }) {
 	return (
-		<nav aria-label={label} className="grid gap-4">
+		<nav aria-label={label} className="grid gap-5">
 			{groups.map((group) => (
 				<div key={group.label} className="grid gap-1">
-					<p className="px-2 font-medium text-muted-foreground text-xs">
+					<p className="px-2.5 font-medium text-muted-foreground text-xs">
 						{group.label}
 					</p>
 					<ul className="grid gap-0.5">
-						{group.items.map((item) => {
-							const active = isActive(item, pathname);
-							return (
-								<li key={item.match}>
-									<Link
-										to={item.to}
-										aria-current={active ? "page" : undefined}
-										onClick={onNavigate}
-										className={cn(
-											"flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sidebar-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring [@media(hover:hover)]:hover:bg-sidebar-accent/70",
-											active &&
-												"bg-sidebar-accent text-sidebar-accent-foreground",
-										)}
-									>
-										<span
-											className={cn(
-												"grid size-8 shrink-0 place-items-center rounded-full border border-sidebar-border bg-background text-muted-foreground",
-												active && "text-foreground",
-											)}
-										>
-											<item.icon className="size-4" strokeWidth={1.75} />
-										</span>
-										<span className="grid min-w-0 flex-1 leading-tight">
-											<span className="truncate font-medium text-sm">
-												{item.label}
-											</span>
-											<span className="truncate text-muted-foreground text-xs">
-												{item.description}
-											</span>
-										</span>
-										{item.locked ? (
-											<LockIcon
-												className="size-3.5 shrink-0 text-muted-foreground"
-												aria-label="Needs the Operations plan"
-											/>
-										) : null}
-									</Link>
-								</li>
-							);
-						})}
+						{group.items.map((item) => (
+							<li key={item.match}>
+								<NavLinkRow
+									item={item}
+									active={isActive(item, pathname)}
+									onNavigate={onNavigate}
+								/>
+							</li>
+						))}
 					</ul>
 				</div>
 			))}
-		</nav>
-	);
-}
-
-function PageTabs({
-	label,
-	items,
-	pathname,
-}: {
-	label: string;
-	items: ShellNavItem[];
-	pathname: string;
-}) {
-	return (
-		<nav
-			aria-label={label}
-			className="inline-flex shrink-0 overflow-hidden rounded-lg border bg-background"
-		>
-			{items.map((item) => {
-				const active = isActive(item, pathname);
-				return (
-					<Link
-						key={item.match}
-						to={item.to}
-						aria-current={active ? "page" : undefined}
-						className={cn(
-							"inline-flex h-8 items-center gap-1.5 whitespace-nowrap border-r px-3.5 font-medium text-muted-foreground text-sm outline-none transition-colors last:border-r-0 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset [@media(hover:hover)]:hover:text-foreground",
-							active && "bg-muted text-foreground",
-						)}
-					>
-						{item.label}
-						{item.locked ? <LockIcon className="size-3" /> : null}
-					</Link>
-				);
-			})}
 		</nav>
 	);
 }
@@ -277,13 +170,14 @@ function ProfileMenu({
 	isSigningOut,
 	onSignOut,
 	onTheme,
-	side,
+	variant,
 }: {
 	profile: ShellProfile;
 	isSigningOut: boolean;
 	onSignOut: () => void;
 	onTheme: (theme: "light" | "dark" | "system") => void;
-	side: "right" | "bottom";
+	/** `row` is the full-width sidebar footer; `avatar` is the compact top bar. */
+	variant: "row" | "avatar";
 }) {
 	return (
 		<DropdownMenu>
@@ -292,15 +186,37 @@ function ProfileMenu({
 				render={
 					<button
 						type="button"
-						className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+						className={cn(
+							"outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+							variant === "row"
+								? "flex w-full items-center gap-2.5 rounded-lg p-2 text-left [@media(hover:hover)]:hover:bg-sidebar-accent/70"
+								: "rounded-full",
+						)}
 					/>
 				}
 			>
 				<Avatar>
 					<AvatarFallback>{profile.initials}</AvatarFallback>
 				</Avatar>
+				{variant === "row" ? (
+					<>
+						<span className="grid min-w-0 flex-1 leading-tight">
+							<span className="truncate font-medium text-sm">
+								{profile.displayName}
+							</span>
+							<span className="truncate text-muted-foreground text-xs">
+								{profile.email ?? profile.kind}
+							</span>
+						</span>
+						<ChevronsUpDownIcon className="size-4 shrink-0 text-muted-foreground" />
+					</>
+				) : null}
 			</DropdownMenuTrigger>
-			<DropdownMenuContent side={side} align="end" className="min-w-56">
+			<DropdownMenuContent
+				side={variant === "row" ? "top" : "bottom"}
+				align={variant === "row" ? "start" : "end"}
+				className="min-w-56"
+			>
 				<DropdownMenuGroup>
 					<DropdownMenuLabel>
 						<p className="truncate" title={profile.displayName}>
@@ -339,10 +255,56 @@ function ProfileMenu({
 	);
 }
 
+function MobileTabBar({
+	items,
+	pathname,
+	onMore,
+}: {
+	items: ShellNavItem[];
+	pathname: string;
+	onMore: () => void;
+}) {
+	const tab =
+		"flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 font-medium text-[0.6875rem] outline-none transition-colors focus-visible:bg-muted";
+	return (
+		<nav
+			aria-label="Primary"
+			className="flex shrink-0 border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden print:hidden"
+		>
+			{items.map((item) => {
+				const active = isActive(item, pathname);
+				return (
+					<Link
+						key={item.match}
+						to={item.to}
+						aria-current={active ? "page" : undefined}
+						className={cn(
+							tab,
+							active ? "text-primary" : "text-muted-foreground",
+						)}
+					>
+						<item.icon className="size-5" strokeWidth={active ? 2 : 1.5} />
+						<span className="max-w-full truncate">{item.label}</span>
+					</Link>
+				);
+			})}
+			<button
+				type="button"
+				onClick={onMore}
+				className={cn(tab, "text-muted-foreground")}
+			>
+				<MoreHorizontalIcon className="size-5" strokeWidth={1.5} />
+				More
+			</button>
+		</nav>
+	);
+}
+
 /**
- * The shared workspace frame for managers and workers: a left rail of global
- * shortcuts, a contextual sidebar, a tabbed main column, an optional right
- * sidebar, and a status bar along the bottom.
+ * The shared workspace frame for managers and workers: one sidebar for
+ * navigation and account, and a slim top bar for search, help, and
+ * notifications. Every destination lives in exactly one place. Phones get the
+ * sidebar as a drawer, plus a bottom tab bar when `mobileTabs` is set.
  */
 export function AppShell({
 	workplaceId,
@@ -352,17 +314,14 @@ export function AppShell({
 	pathname,
 	routeId,
 	groups,
-	home,
 	inbox,
 	settings,
 	profile,
 	isSigningOut,
 	onSignOut,
 	onTheme,
-	title,
 	scheduleControls = false,
-	quickLinks = [],
-	notifications = [],
+	mobileTabs,
 }: {
 	workplaceId: string;
 	workplaceName: string;
@@ -371,19 +330,16 @@ export function AppShell({
 	pathname: string;
 	routeId: string | undefined;
 	groups: ShellNavGroup[];
-	home: ShellLink & { match: string };
 	inbox: ShellLink & { match: string; unreadCount: number };
 	settings?: ShellLink & { match: string };
 	profile?: ShellProfile;
 	isSigningOut: boolean;
 	onSignOut: () => void;
 	onTheme: (theme: "light" | "dark" | "system") => void;
-	/** Page heading shown in the top bar when the section has no tabs. */
-	title: ReactNode;
 	/** The schedule page portals its controls into the top bar. */
 	scheduleControls?: boolean;
-	quickLinks?: ShellLink[];
-	notifications?: InboxNotification[];
+	/** Destinations for the phone bottom bar, in order. */
+	mobileTabs?: ShellNavItem[];
 }) {
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [searchOpen, setSearchOpen] = useState(false);
@@ -399,124 +355,157 @@ export function AppShell({
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, []);
 
-	const activeGroup = groups.find((group) =>
-		group.items.some((item) => isActive(item, pathname)),
-	);
-	const tabs =
-		activeGroup && activeGroup.items.length > 1 ? activeGroup.items : null;
 	const searchLinks: ShellSearchLink[] = [
-		{ ...home, description: "Your starting page" },
-		{ ...inbox, description: "Notifications" },
 		...groups.flatMap((group) => group.items),
+		{ ...inbox, description: "Notifications" },
 		...(settings ? [{ ...settings, description: "Workplace settings" }] : []),
 	];
-	const homeActive = isActive({ ...home, exact: true }, pathname);
-	const inboxActive = isActive(inbox, pathname);
 	const settingsActive = settings ? isActive(settings, pathname) : false;
+	const inboxActive = isActive(inbox, pathname);
 
 	return (
 		<div className="flex h-svh min-h-0 flex-col bg-sidebar text-sidebar-foreground">
 			<div className="flex min-h-0 flex-1">
-				<div
-					data-sidebar="sidebar"
-					className="hidden w-14 shrink-0 flex-col items-center gap-1 border-sidebar-border border-r py-3 md:flex"
-				>
-					<RailLink link={home} active={homeActive} />
-					<RailButton
-						label="Search"
-						icon={SearchIcon}
-						onClick={() => setSearchOpen(true)}
-					/>
-					<RailLink
-						link={inbox}
-						active={inboxActive}
-						badge={inbox.unreadCount}
-					/>
-					<div className="mt-auto grid justify-items-center gap-1">
-						<DocsLink className={RAIL_BUTTON} />
-						{settings ? (
-							<RailLink link={settings} active={settingsActive} />
-						) : null}
-						{profile ? (
-							<div className="mt-2">
-								<ProfileMenu
-									profile={profile}
-									isSigningOut={isSigningOut}
-									onSignOut={onSignOut}
-									onTheme={onTheme}
-									side="right"
-								/>
-							</div>
-						) : null}
-					</div>
-				</div>
-
 				<aside
 					data-sidebar="sidebar"
-					className="hidden w-64 shrink-0 flex-col gap-4 overflow-y-auto border-sidebar-border border-r p-3 lg:flex"
+					className="hidden w-60 shrink-0 flex-col gap-4 p-3 md:flex"
 				>
 					<WorkplaceHeader
 						workplaceName={workplaceName}
 						roleLabel={roleLabel}
 					/>
-					<NavList label={navLabel} groups={groups} pathname={pathname} />
+					<div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">
+						<NavList label={navLabel} groups={groups} pathname={pathname} />
+					</div>
+					<div className="grid gap-0.5 border-sidebar-border border-t pt-3">
+						{settings ? (
+							<Link
+								to={settings.to}
+								aria-current={settingsActive ? "page" : undefined}
+								className={cn(ROW, settingsActive && ROW_ACTIVE)}
+							>
+								<Settings2Icon
+									className={cn(
+										"size-4 shrink-0",
+										settingsActive ? "text-primary" : "text-muted-foreground",
+									)}
+									strokeWidth={1.75}
+								/>
+								{settings.label}
+							</Link>
+						) : null}
+						<PilotFeedback
+							variant="ghost"
+							workplaceId={workplaceId}
+							buttonClassName={cn(ROW, "w-full justify-start font-normal")}
+						/>
+						{profile ? (
+							<ProfileMenu
+								variant="row"
+								profile={profile}
+								isSigningOut={isSigningOut}
+								onSignOut={onSignOut}
+								onTheme={onTheme}
+							/>
+						) : null}
+					</div>
 				</aside>
 
 				<div
 					data-sidebar="inset"
 					className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background md:rounded-tl-xl md:border-sidebar-border md:border-t md:border-l"
 				>
-					<header className="flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-2 md:px-4">
+					<header className="flex min-h-14 shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2 md:flex-nowrap md:px-4">
 						<button
 							type="button"
 							aria-label="Open navigation"
 							onClick={() => setMenuOpen(true)}
 							className={cn(
 								buttonVariants({ variant: "ghost", size: "icon" }),
-								"-ml-1 lg:hidden",
+								"-ml-1 md:hidden",
 							)}
 						>
 							<MenuIcon />
 						</button>
-						{tabs ? (
-							<PageTabs
-								label={`${activeGroup?.label ?? "Section"} pages`}
-								items={tabs}
-								pathname={pathname}
-							/>
-						) : scheduleControls ? null : (
-							<div className="min-w-0 font-medium text-sm">{title}</div>
-						)}
+						<div className="min-w-0 truncate font-semibold text-sm md:hidden">
+							{workplaceName}
+						</div>
+						<button
+							type="button"
+							onClick={() => setSearchOpen(true)}
+							aria-label="Search pages"
+							className={cn(
+								"hidden h-8 items-center gap-2 rounded-lg border bg-muted/40 px-2.5 text-muted-foreground text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 md:flex [@media(hover:hover)]:hover:bg-muted",
+								scheduleControls ? "w-9 justify-center px-0" : "w-64",
+							)}
+						>
+							<SearchIcon className="size-4 shrink-0" strokeWidth={1.75} />
+							{scheduleControls ? null : (
+								<>
+									<span className="flex-1 text-left">Search</span>
+									<kbd className="rounded border bg-background px-1.5 font-sans text-xs">
+										⌘K
+									</kbd>
+								</>
+							)}
+						</button>
 						{scheduleControls ? (
 							<div
 								id="schedule-header-controls"
-								className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto overscroll-x-contain"
+								className="order-last flex min-w-0 basis-full items-center gap-2 overflow-x-auto overscroll-x-contain md:order-none md:flex-1 md:basis-auto"
 							/>
 						) : (
 							<div className="flex-1" />
 						)}
-						<div className="flex items-center gap-1 md:hidden">
+						<div className="ml-auto flex shrink-0 items-center gap-1">
+							<button
+								type="button"
+								aria-label="Search pages"
+								onClick={() => setSearchOpen(true)}
+								className={cn(
+									buttonVariants({ variant: "ghost", size: "icon" }),
+									"md:hidden",
+								)}
+							>
+								<SearchIcon strokeWidth={1.5} />
+							</button>
+							<DocsLink
+								className={cn(
+									"hidden md:inline-flex",
+									scheduleControls && "md:hidden 2xl:inline-flex",
+								)}
+							/>
 							<Link
 								to={inbox.to}
-								aria-label={inbox.label}
+								aria-label={
+									inbox.unreadCount > 0
+										? `${inbox.label}, ${inbox.unreadCount} unread`
+										: inbox.label
+								}
+								aria-current={inboxActive ? "page" : undefined}
 								className={cn(
 									buttonVariants({ variant: "ghost", size: "icon" }),
 									"relative",
+									inboxActive && "bg-muted",
 								)}
 							>
 								<BellIcon strokeWidth={1.5} />
 								{inbox.unreadCount > 0 ? (
-									<span className="absolute top-1 right-1 size-2 rounded-full bg-primary" />
+									<span className="absolute top-1 right-1 grid min-w-4 place-items-center rounded-full bg-primary px-1 font-medium text-primary-foreground text-xs leading-4">
+										{inbox.unreadCount > 99 ? "99+" : inbox.unreadCount}
+									</span>
 								) : null}
 							</Link>
 							{profile ? (
-								<ProfileMenu
-									profile={profile}
-									isSigningOut={isSigningOut}
-									onSignOut={onSignOut}
-									onTheme={onTheme}
-									side="bottom"
-								/>
+								<div className="md:hidden">
+									<ProfileMenu
+										variant="avatar"
+										profile={profile}
+										isSigningOut={isSigningOut}
+										onSignOut={onSignOut}
+										onTheme={onTheme}
+									/>
+								</div>
 							) : null}
 						</div>
 					</header>
@@ -532,38 +521,15 @@ export function AppShell({
 							<Outlet />
 						</PageFade>
 					</main>
+					{mobileTabs ? (
+						<MobileTabBar
+							items={mobileTabs}
+							pathname={pathname}
+							onMore={() => setMenuOpen(true)}
+						/>
+					) : null}
 				</div>
-
-				{scheduleControls ? null : (
-					<AppShellAside
-						inbox={inbox}
-						notifications={notifications}
-						quickLinks={quickLinks}
-					/>
-				)}
 			</div>
-
-			<footer className="flex h-9 shrink-0 items-center gap-3 border-sidebar-border border-t px-3 text-muted-foreground text-xs print:hidden">
-				<span className="flex min-w-0 items-center gap-2">
-					<span
-						aria-hidden="true"
-						className="size-1.5 shrink-0 rounded-full bg-success"
-					/>
-					<span className="truncate">
-						{workplaceName} · {roleLabel}
-					</span>
-				</span>
-				<span className="ml-auto hidden items-center gap-1 sm:flex">
-					Search
-					<kbd className="rounded border bg-background px-1.5 font-sans text-xs">
-						Ctrl K
-					</kbd>
-				</span>
-				<PilotFeedback
-					workplaceId={workplaceId}
-					buttonClassName="h-6 px-2 text-xs ml-auto sm:ml-0"
-				/>
-			</footer>
 
 			<Sheet open={menuOpen} onOpenChange={setMenuOpen}>
 				<SheetContent side="left">
@@ -592,6 +558,11 @@ export function AppShell({
 							]}
 							pathname={pathname}
 							onNavigate={() => setMenuOpen(false)}
+						/>
+						<PilotFeedback
+							variant="ghost"
+							workplaceId={workplaceId}
+							buttonClassName={cn(ROW, "w-full justify-start font-normal")}
 						/>
 					</div>
 				</SheetContent>

@@ -203,15 +203,22 @@ function WorkerLayout() {
 				})),
 		}))
 		.filter((group) => group.items.length > 0);
-	const quickLinks = [
-		{ to: "/worker/openshifts", label: "Open shifts", icon: InboxIcon },
-		{
-			to: "/worker/availability",
-			label: "Time off & availability",
-			icon: Clock3Icon,
-		},
-		{ to: "/worker/messages", label: "Messages", icon: MessageSquareIcon },
-	] as const;
+	const primaryTabs = [
+		"/worker",
+		"/worker/openshifts",
+		"/worker/availability",
+		"/worker/messages",
+	];
+	const mobileTabs = primaryTabs
+		.map((to) => sidebarGroups.flatMap((g) => g.items).find((i) => i.to === to))
+		.filter((item): item is NonNullable<typeof item> => Boolean(item))
+		.map((item) => {
+			const short: Record<string, string> = {
+				"/worker": "Schedule",
+				"/worker/availability": "Requests",
+			};
+			return { ...item, label: short[String(item.to)] ?? item.label };
+		});
 
 	return (
 		<AppShell
@@ -222,12 +229,6 @@ function WorkerLayout() {
 			pathname={pathname}
 			routeId={routeId}
 			groups={sidebarGroups}
-			home={{
-				to: "/worker",
-				label: "My schedule",
-				icon: CalendarDaysIcon,
-				match: "/worker",
-			}}
 			inbox={{
 				to: "/worker/inbox",
 				label: "Inbox",
@@ -248,9 +249,7 @@ function WorkerLayout() {
 			isSigningOut={isSigningOut}
 			onSignOut={() => void handleSignOut()}
 			onTheme={setTheme}
-			title={activePage}
-			quickLinks={[...quickLinks]}
-			notifications={inbox.data?.notifications}
+			mobileTabs={mobileTabs}
 		/>
 	);
 }

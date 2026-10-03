@@ -56,13 +56,19 @@ main :is([data-slot="badge"], [data-slot="table-head"]) {
 }
 
 /*
- * Flush worker pages run edge-to-edge, so their cards own their inset instead
- * of relying on page-body padding.
+ * A framed page panel is already the container, so cards inside it shed their
+ * own frame (otherwise the panel edge and the card edge draw a double border)
+ * and stacked cards are separated by a single hairline instead.
  */
-.card-inset [data-slot="card"] > [data-slot="card-header"],
-.card-inset [data-slot="card"] > [data-slot="card-content"],
-.card-inset [data-slot="card"] > [data-slot="card-footer"] {
-	padding-inline: var(--card-spacing);
+[data-slot="app-panel"] [data-slot="card"] {
+	box-shadow: none;
+	background: transparent;
+	border-radius: 0;
+}
+
+[data-slot="app-panel"] [data-slot="card"] + [data-slot="card"] {
+	border-top: 1px solid var(--border);
+	padding-top: var(--card-spacing);
 }
 
 .schedule-grid-scroll {

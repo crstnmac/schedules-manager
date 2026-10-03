@@ -168,14 +168,6 @@ const railOnly: string[] = [
 	"/dashboard/settings/workplace",
 ];
 
-/** Shortcuts shown in the right sidebar. */
-const quickLinkTargets: string[] = [
-	"/dashboard/schedule",
-	"/dashboard/timeoff",
-	"/dashboard/workers",
-	"/dashboard/announcements",
-];
-
 function navigationVisibleFor(
 	item: (typeof navigation)[number],
 	subject: {
@@ -322,9 +314,6 @@ function DashboardLayout() {
 	const canSeeSettings = visibleNavigation.some(
 		(item) => item.to === "/dashboard/settings/workplace",
 	);
-	const quickLinks = visibleNavigation
-		.filter((item) => quickLinkTargets.includes(item.to))
-		.map((item) => ({ to: item.to, label: item.label, icon: item.icon }));
 
 	return (
 		<AppShell
@@ -335,12 +324,6 @@ function DashboardLayout() {
 			pathname={pathname}
 			routeId={routeId}
 			groups={sidebarGroups}
-			home={{
-				to: "/dashboard",
-				label: "Overview",
-				icon: LayoutDashboardIcon,
-				match: "/dashboard",
-			}}
 			inbox={{
 				to: "/dashboard/activity",
 				label: "Activity",
@@ -371,10 +354,7 @@ function DashboardLayout() {
 			isSigningOut={isSigningOut}
 			onSignOut={() => void handleSignOut()}
 			onTheme={setTheme}
-			title={headerLabel}
 			scheduleControls={isSchedule}
-			quickLinks={quickLinks}
-			notifications={inbox.data?.notifications}
 		/>
 	);
 }

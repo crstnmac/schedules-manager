@@ -142,7 +142,7 @@ export function DataTable<TData extends RowData>({
 	}
 
 	const cards = stacked ? (
-		<ul className="flex min-h-0 flex-1 flex-col gap-3 md:hidden">
+		<ul className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 md:hidden">
 			{dataTable.getRowModel().rows.map((row) => {
 				const detailCells = row
 					.getAllCells()

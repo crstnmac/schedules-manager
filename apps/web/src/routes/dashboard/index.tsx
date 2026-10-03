@@ -47,7 +47,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
 	AlarmClockIcon,
 	BellRingIcon,
-	CalendarDaysIcon,
 	ChevronRightIcon,
 	CircleCheckIcon,
 	CircleIcon,
@@ -462,14 +461,6 @@ function Overview() {
 								</SelectContent>
 							</Select>
 						) : null}
-						<Button
-							size="sm"
-							nativeButton={false}
-							render={<Link to="/dashboard/schedule" />}
-						>
-							<CalendarDaysIcon data-icon="inline-start" />
-							Open schedule
-						</Button>
 					</div>
 				</div>
 				{settings.isError || locations.isError || currentSchedule.isError ? (

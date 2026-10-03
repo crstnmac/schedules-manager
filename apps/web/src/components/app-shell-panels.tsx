@@ -5,17 +5,13 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@SchedulesManager/ui/components/dialog";
-import { cn } from "@SchedulesManager/ui/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { SearchIcon } from "lucide-react";
 import { useRef, useState } from "react";
 
 import type { ShellLink } from "@/components/app-shell";
-import type { InboxNotification } from "@/lib/queries";
 
 export type ShellSearchLink = ShellLink & { description: string };
-
-const RECENT_LIMIT = 5;
 
 export function AppShellSearch({
 	open,
@@ -96,102 +92,5 @@ export function AppShellSearch({
 				</ul>
 			</DialogContent>
 		</Dialog>
-	);
-}
-
-const shortDate = (iso: string) =>
-	new Date(iso).toLocaleDateString(undefined, {
-		month: "short",
-		day: "numeric",
-	});
-
-/** Right sidebar: shortcuts plus the latest notifications. */
-export function AppShellAside({
-	inbox,
-	notifications,
-	quickLinks,
-}: {
-	inbox: ShellLink & { unreadCount: number };
-	notifications: InboxNotification[];
-	quickLinks: ShellLink[];
-}) {
-	const recent = notifications.slice(0, RECENT_LIMIT);
-	return (
-		<aside
-			aria-label="Highlights"
-			className="hidden w-80 shrink-0 flex-col gap-5 overflow-y-auto border-sidebar-border border-l p-4 xl:flex print:hidden"
-		>
-			{quickLinks.length > 0 ? (
-				<section className="grid gap-2">
-					<h2 className="font-medium text-sm">Quick links</h2>
-					<ul className="grid gap-0.5 rounded-lg border bg-background p-1">
-						{quickLinks.map((link) => (
-							<li key={String(link.to)}>
-								<Link
-									to={link.to}
-									className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm outline-none focus-visible:bg-muted [@media(hover:hover)]:hover:bg-muted"
-								>
-									<span className="grid size-6 place-items-center rounded-full border bg-sidebar text-muted-foreground">
-										<link.icon className="size-3.5" />
-									</span>
-									{link.label}
-								</Link>
-							</li>
-						))}
-					</ul>
-				</section>
-			) : null}
-			<section className="grid gap-2">
-				<div className="flex items-baseline justify-between gap-2">
-					<h2 className="font-medium text-sm">Recent notifications</h2>
-					<Link
-						to={inbox.to}
-						className="text-muted-foreground text-xs underline-offset-4 hover:underline"
-					>
-						View all
-					</Link>
-				</div>
-				{recent.length === 0 ? (
-					<p className="rounded-lg border border-dashed p-4 text-center text-muted-foreground text-sm">
-						You’re all caught up.
-					</p>
-				) : (
-					<ul className="grid gap-1">
-						{recent.map((item) => (
-							<li key={item.id}>
-								<Link
-									to={inbox.to}
-									className="flex items-start gap-2.5 rounded-lg px-2 py-1.5 outline-none focus-visible:bg-background [@media(hover:hover)]:hover:bg-background"
-								>
-									<span
-										aria-hidden="true"
-										className={cn(
-											"mt-1.5 size-2 shrink-0 rounded-full",
-											item.readAt ? "bg-border" : "bg-primary",
-										)}
-									/>
-									<span className="grid min-w-0 leading-snug">
-										<span
-											className={cn(
-												"truncate text-sm",
-												!item.readAt && "font-medium",
-											)}
-										>
-											{item.title}
-										</span>
-										<span className="line-clamp-2 text-muted-foreground text-xs">
-											{item.body}
-										</span>
-										<span className="text-muted-foreground text-xs">
-											{shortDate(item.createdAt)}
-										</span>
-									</span>
-								</Link>
-							</li>
-						))}
-					</ul>
-				)}
-			</section>
-		</aside>
 	);
 }

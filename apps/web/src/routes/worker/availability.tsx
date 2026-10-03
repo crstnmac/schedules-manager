@@ -1084,7 +1084,7 @@ function AvailabilityPage() {
 							</TabsList>
 						</div>
 
-						<div className="card-inset min-h-0 flex-1 overflow-y-auto">
+						<div className="min-h-0 flex-1 overflow-y-auto">
 							<TabsContent value="time-off" className="flex flex-col gap-4">
 								<Card>
 									<CardHeader>
