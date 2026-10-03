@@ -42,23 +42,23 @@ restaurantSignUpUrl.searchParams.set("opening_restaurant", "1");
 const faqs = [
 	[
 		"Who is jooling for?",
-		"jooling is built for hourly teams in hospitality, retail, healthcare, and beyond. Managers plan and publish schedules, while team members stay on top of their shifts and requests.",
+		"jooling is for hourly teams in restaurants, retail, healthcare, and hotels. Managers make and publish schedules. Workers see their shifts and send requests.",
 	],
 	[
-		"Can my team use it on mobile?",
-		"Yes. Teammates can check shifts, submit availability, and respond to schedule changes on the web or in the mobile app.",
+		"Can my workers use it on a phone?",
+		"Yes. Workers can see their shifts, send their availability, and answer schedule changes. They can do this on the web or in the mobile app.",
 	],
 	[
-		"What if the schedule changes?",
-		"Affected teammates are notified when you publish a change. You can track acknowledgements, and important late changes can require their acceptance.",
+		"What happens when the schedule changes?",
+		"When you publish a change, jooling tells the workers it affects. You can see who acknowledged the change. For an important late change, the worker must accept it.",
 	],
 	[
-		"Can I manage multiple locations?",
-		"Yes. Create locations and roles, then give managers access to the teams and schedules they oversee.",
+		"Can I manage more than one location?",
+		"Yes. Add your locations and roles. Then give each manager access to the schedules they control.",
 	],
 	[
 		"How does the free trial work?",
-		"Every plan starts with 30 days free, and new restaurants can opt into a 90-day trial. You can invite your whole team and use the complete plan before your first charge, then manage or cancel billing at any time.",
+		"Each plan starts with 30 days free. A new restaurant can get a 90-day trial. Invite all your workers and use the full plan before the first charge. You can change or cancel your billing at any time.",
 	],
 ] as const;
 
@@ -66,27 +66,27 @@ const plans = [
 	{
 		id: "schedule",
 		name: "Schedule",
-		tagline: "For clear, dependable scheduling",
+		tagline: "For simple, reliable scheduling",
 		perLocation: { monthly: 39, annual: 31 },
 		features: [
-			"Weekly schedules and reusable templates",
-			"Availability, time off, open shifts, and swaps",
-			"Versioned publishing and change history",
-			"Team notifications and messaging",
-			"Unlimited workers and managers",
+			"Weekly schedules and templates you can use again",
+			"Availability, time off, open shifts, and shift swaps",
+			"Schedule versions and change history",
+			"Notifications and messages for workers",
+			"No limit on workers and managers",
 		],
 		recommended: false,
 	},
 	{
 		id: "operations",
 		name: "Operations",
-		tagline: "For complete workforce operations",
+		tagline: "For full workforce operations",
 		perLocation: { monthly: 79, annual: 63 },
 		features: [
 			"Everything in Schedule",
-			"Time clock, kiosk, and geofencing",
+			"Time clock, kiosk, and geofence",
 			"Attendance, breaks, and timesheet approval",
-			"Labor cost and overtime reporting",
+			"Labor cost and overtime reports",
 			"Auto-assign and workforce controls",
 		],
 		recommended: true,
@@ -98,33 +98,33 @@ const locationRange = { min: 1, max: 25 };
 const capabilities = [
 	{
 		icon: Repeat,
-		title: "Open shifts & swaps",
-		body: "Post uncovered work, let teammates pick it up or trade, and approve in one place.",
+		title: "Open shifts and swaps",
+		body: "Post a shift that has no worker. Workers can take it or swap it. You approve it in one place.",
 	},
 	{
 		icon: CalendarDays,
-		title: "Availability & time off",
-		body: "See who can work before you assign, with requests visible as you plan.",
+		title: "Availability and time off",
+		body: "See who can work before you assign a shift. See time-off requests as you plan.",
 	},
 	{
 		icon: FileClock,
-		title: "Versioned publishing",
-		body: "Every publish is a version. See what changed and who acknowledged it.",
+		title: "Schedule versions",
+		body: "Each publish makes a new version. See what changed and who acknowledged it.",
 	},
 	{
 		icon: Clock,
-		title: "Time clock & kiosk",
-		body: "Clock in by phone or shared kiosk, with geofencing and break tracking.",
+		title: "Time clock and kiosk",
+		body: "Workers start work on a phone or a shared kiosk. The geofence and break records help you check the time.",
 	},
 	{
 		icon: CircleDollarSign,
 		title: "Labor cost",
-		body: "Track labor cost and overtime before the week goes out, not after.",
+		body: "See labor cost and overtime before you publish the week.",
 	},
 	{
 		icon: Layers,
-		title: "Every location",
-		body: "Roles and managers per location, each on its own clock and time zone.",
+		title: "All locations",
+		body: "Each location has its own roles, managers, and time zone.",
 	},
 ];
 
@@ -135,7 +135,7 @@ function Announcement() {
 		<div className="dk-announcement">
 			<p>
 				<span className="dk-announcement-tag">New</span>
-				Opening a restaurant? New restaurant workplaces get 90 days free.{" "}
+				Do you open a restaurant? A new restaurant workplace gets 90 days free.{" "}
 				<Link href="#opening-restaurant">Read more</Link>
 			</p>
 			<button
@@ -156,7 +156,7 @@ function ScheduleShot() {
 				name="product-schedule"
 				width={2940}
 				height={1720}
-				alt="The jooling weekly schedule in the web product, showing shifts by person and role, published version, open shifts and a conflict"
+				alt="The jooling weekly schedule on the web. It shows shifts for each worker and role, the published version, open shifts, and a conflict"
 			/>
 		</div>
 	);
@@ -172,17 +172,17 @@ function Hero() {
 		>
 			<div className="dk-hero-split">
 				<motion.h1 variants={fadeUp}>
-					Employee scheduling software for hourly teams.
+					Scheduling software for hourly teams.
 				</motion.h1>
 				<motion.div className="dk-hero-aside" variants={fadeUp}>
 					<p>
-						Build and publish the week, handle changes as they happen, and keep
-						everyone in sync. No worker fees — your whole team is included.
+						Make and publish the week. Do changes when they occur. Keep everyone informed.
+						There is no fee for workers.
 					</p>
 					<div className="dk-hero-actions">
 						<PrimaryCTA>Start 30 days free</PrimaryCTA>
 						<Link className="dk-btn dk-btn-ghost" href="#product-demo">
-							See it in action
+							See the product
 						</Link>
 					</div>
 				</motion.div>
@@ -196,15 +196,15 @@ function Hero() {
 
 function Industries() {
 	const items = [
-		{ icon: Coffee, label: "Cafés & restaurants", href: "/restaurant" },
+		{ icon: Coffee, label: "Cafés and restaurants", href: "/restaurant" },
 		{ icon: ShoppingBag, label: "Retail", href: "/retail" },
 		{ icon: HeartPulse, label: "Healthcare" },
-		{ icon: Utensils, label: "Hospitality" },
-		{ icon: Users, label: "Your team, too" },
+		{ icon: Utensils, label: "Hotels" },
+		{ icon: Users, label: "Your team" },
 	];
 	return (
 		<section className="dk-industries dk-container" aria-label="Built for">
-			<p>Built for hourly teams in</p>
+			<p>For hourly teams in</p>
 			<div className="dk-industry-row">
 				{items.map(({ icon: Icon, label, href }) =>
 					href ? (
@@ -228,25 +228,25 @@ const workflowSteps = [
 		id: "setup",
 		icon: MapPin,
 		title: "Set up your workplace",
-		body: "Add each location, role, and teammate.",
+		body: "Add each location, role, and worker.",
 	},
 	{
 		id: "build",
 		icon: CalendarDays,
-		title: "Build the schedule",
-		body: "Assign shifts around availability and resolve uncovered work.",
+		title: "Make the schedule",
+		body: "Assign shifts to match availability. Fill shifts that have no worker.",
 	},
 	{
 		id: "publish",
 		icon: Send,
 		title: "Publish the week",
-		body: "Notify the team and track acknowledgements.",
+		body: "Tell the workers. See who acknowledged.",
 	},
 	{
 		id: "change",
 		icon: FileClock,
-		title: "Handle the change",
-		body: "Keep later changes with the schedule, versioned and visible.",
+		title: "Do a change",
+		body: "Each later change is a new version of the schedule. You can see it.",
 	},
 ] as const;
 
@@ -256,7 +256,7 @@ function Workflow() {
 			<SectionHeading
 				eyebrow="How it works"
 				title="Set up. Schedule. Send."
-				lede="Take the week from an empty workplace to a published schedule — and keep it right as the week moves."
+				lede="Go from an empty workplace to a published schedule. Then keep the schedule correct during the week."
 			/>
 			<ol className="dk-steps">
 				{workflowSteps.map(({ id, icon: Icon, title, body }, index) => (
@@ -279,7 +279,7 @@ function Capabilities() {
 		<section className="dk-section dk-container" aria-labelledby="dk-cap-title">
 			<Reveal as="header" className="dk-section-heading">
 				<p className="dk-eyebrow">One place for the week</p>
-				<h2 id="dk-cap-title">Everything around the schedule.</h2>
+				<h2 id="dk-cap-title">Everything for the schedule.</h2>
 			</Reveal>
 			<div className="dk-cap-grid">
 				{capabilities.map(({ icon: Icon, title, body }) => (
@@ -304,7 +304,7 @@ function PhoneMockup() {
 				width={780}
 				height={1688}
 				loading="lazy"
-				alt="The jooling worker app showing the next shift, a published-schedule notice, and a shift change to accept"
+				alt="The jooling worker app. It shows the next shift, a notice of a published schedule, and a shift change to accept"
 			/>
 		</div>
 	);
@@ -316,17 +316,17 @@ function Team() {
 			<div className="dk-team">
 				<Reveal className="dk-team-copy">
 					<p className="dk-eyebrow">For your team</p>
-					<h2>Built for managers. Loved by the team.</h2>
+					<h2>Made for managers. Easy for workers.</h2>
 					<p className="dk-lede">
-						The schedule is a big part of someone’s life. Give your people the
-						clarity and flexibility to plan around it.
+						A schedule affects the life of a worker. Give your workers clear
+						information so that they can plan.
 					</p>
 					<ul className="dk-checklist">
 						{[
-							"The next shift, always easy to find",
-							"Availability and time off, without the chase",
-							"Clear updates when something changes",
-							"A shared plan, on web and mobile",
+							"The next shift is easy to find",
+							"Availability and time off, with no extra work",
+							"A clear message when a shift changes",
+							"One schedule on the web and on mobile",
 						].map((item) => (
 							<li key={item}>
 								<Check size={14} /> {item}
@@ -336,7 +336,7 @@ function Team() {
 					<div className="dk-hero-actions">
 						<PrimaryCTA />
 						<Link className="dk-text-link dk-arrow-link" href="/worker-app">
-							Explore the worker app <ArrowRight size={14} />
+							See the worker app <ArrowRight size={14} />
 						</Link>
 					</div>
 				</Reveal>
@@ -353,10 +353,10 @@ function Switching() {
 		<section className="dk-section dk-container" id="switching">
 			<div className="dk-split-cards">
 				<Reveal className="dk-card">
-					<p className="dk-eyebrow">Making a move?</p>
+					<p className="dk-eyebrow">Do you change tools?</p>
 					<h2 className="dk-card-title">Bring your next week with you.</h2>
 					<p className="dk-lede">
-						Move your schedule into a draft, review it, then publish when it’s
+						Put your schedule in a draft. Check it. Publish it when it is
 						ready.
 					</p>
 					<nav className="dk-switch-list" aria-label="Switching guides">
@@ -369,20 +369,20 @@ function Switching() {
 					</nav>
 				</Reveal>
 				<Reveal className="dk-card" id="opening-restaurant">
-					<p className="dk-eyebrow">Opening a restaurant?</p>
+					<p className="dk-eyebrow">Do you open a restaurant?</p>
 					<h2 className="dk-card-title">
 						Make the first schedule before opening day.
 					</h2>
 					<p className="dk-lede">
-						Set up roles and your team, start from a reusable weekly schedule,
-						and publish only when the plan is ready. New restaurant workplaces
-						can try jooling for 90 days at their first checkout.
+						Set up your roles and workers. Start from a weekly template. Publish
+						only when the plan is ready. A new restaurant workplace can use
+						jooling free for 90 days.
 					</p>
 					<div className="dk-opening-stat">
 						<span className="dk-opening-num">90</span>
 						<span>
 							days free
-							<small>for new restaurant workplaces</small>
+							<small>for a new restaurant workplace</small>
 						</span>
 					</div>
 					<PrimaryCTA href={restaurantSignUpUrl.toString()}>
@@ -408,9 +408,9 @@ function Pricing() {
 		<section className="dk-section dk-container" id="pricing">
 			<SectionHeading
 				className="is-centered"
-				eyebrow="Simple pricing"
-				title="One price for the place. Everyone included."
-				lede="Every feature, every worker. One clear price per location — slide to see what your workplaces would pay."
+				eyebrow="Pricing"
+				title="One price for each location. All workers included."
+				lede="Each plan has all workers. The price is for each location. Move the slider to see your price."
 			/>
 			<div className="dk-pricing-config">
 				<fieldset className="dk-segmented">
@@ -513,8 +513,8 @@ function Pricing() {
 				})}
 			</div>
 			<p className="dk-pricing-note">
-				No worker fees. No setup fee. Your team keeps access to its schedule
-				history.
+				There is no fee for workers. There is no setup fee. Your workers keep access to their
+				schedule history.
 			</p>
 		</section>
 	);
@@ -525,11 +525,11 @@ function Faq() {
 		<section className="dk-section dk-container" id="faq">
 			<div className="dk-faq">
 				<SectionHeading
-					eyebrow="Questions, answered"
-					title="Glad you asked."
+					eyebrow="Questions"
+					title="Your questions, with answers."
 					lede={
 						<>
-							Everything your team needs to get started. More in the{" "}
+							Find the basic answers here. Find more in the{" "}
 							<Link className="dk-inline-link" href={docsUrl}>
 								docs
 							</Link>
@@ -564,7 +564,11 @@ export function HomePage() {
 			<Switching />
 			<Pricing />
 			<Faq />
-			<FinalCTA />
+			<FinalCTA
+				badge="Your week, ready"
+				title="A clear plan makes a good week."
+				body="Make the schedule. Keep your workers informed. Spend your time on other work."
+			/>
 		</DarkPage>
 	);
 }
