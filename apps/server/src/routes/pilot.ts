@@ -17,6 +17,7 @@ import { Elysia, t } from "elysia";
 import {
 	requirePrivilege,
 	requireSession,
+	requireUnscoped,
 	requireWorkplaceMember,
 } from "../context";
 import { csvAttachment } from "../csv-import";
@@ -50,7 +51,13 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 		"/workplaces/:workplaceId/pilot-status",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"reports.view",
+			);
+			// Covers every Location, so it needs Workplace-wide access.
+			await requireUnscoped(actor);
 
 			const [
 				locationRows,
@@ -198,11 +205,13 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 		"/workplaces/:workplaceId/reminders/unacknowledged",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"schedule.publish",
 			);
+			// Covers every Location, so it needs Workplace-wide access.
+			await requireUnscoped(actor);
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `schedule.reminder:${params.workplaceId}`,
@@ -270,7 +279,13 @@ export const pilotRoutes = new Elysia({ prefix: "/v1", tags: ["Pilot"] })
 		"/workplaces/:workplaceId/invitations/import",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+			);
+			// Covers every Location, so it needs Workplace-wide access.
+			await requireUnscoped(actor);
 			const dryRun = body.dryRun ?? false;
 			if (dryRun) {
 				return {

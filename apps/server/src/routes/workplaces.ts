@@ -15,6 +15,7 @@ import {
 	listActiveEmployments,
 	requirePrivilege,
 	requireSession,
+	requireUnscoped,
 } from "../context";
 import { BadRequestError, ForbiddenError } from "../errors";
 import { fillPlaceFromAddress } from "../geocode";
@@ -222,7 +223,13 @@ export const workplacesRoutes = new Elysia({
 		"/workplaces/:workplaceId",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const existing = await loadWorkplace(params.workplaceId);
 			// Time clock settings are Operations features. Only a changed value
 			// needs the plan: forms send every field back, and a Schedule plan

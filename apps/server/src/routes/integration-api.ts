@@ -38,6 +38,11 @@ import {
 } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { requireSubscriptionCapability } from "../billing";
+import {
+	assertEmploymentInScope,
+	assertLocationsGrantable,
+	employmentVisibleIn,
+} from "../context";
 import { enqueueInvitationEmail } from "../email-outbox";
 import {
 	BadRequestError,
@@ -53,6 +58,7 @@ import {
 import { laborCents, laborPercent } from "../labor";
 import { decideLeaveRequest } from "../leave-approvals";
 import { writeAudit } from "../notify";
+import { consumeRateLimitOrThrow } from "../rate-limit";
 import { firstRow } from "../rows";
 import {
 	assertWeekStartDay,
@@ -62,7 +68,12 @@ import {
 	weekStartOfDateKey,
 	zonedDayInfo,
 } from "../time";
-import { decidePickup, decideRelease } from "./coverage";
+import {
+	assertPickupInScope,
+	assertReleaseInScope,
+	decidePickup,
+	decideRelease,
+} from "./coverage";
 import {
 	closeOpenMarketplaceForShifts,
 	publishScheduleNow,
@@ -70,6 +81,7 @@ import {
 import {
 	assertAssignmentValid,
 	assertDateInWeek,
+	assertPositionInWorkplace,
 	type Conflict,
 	computeConflicts,
 	getOrCreateSchedule,
@@ -150,6 +162,11 @@ async function locationForKey(
 		throw new ForbiddenError("No access to this location");
 	}
 	return location;
+}
+
+/** The actor's Location scope as a set (null = every Location). */
+function actorScope(actor: IntegrationActor): Set<string> | null {
+	return actor.locationScope === null ? null : new Set(actor.locationScope);
 }
 
 /** Restricts a workplace-wide Location list to the actor's scope. */
@@ -385,6 +402,16 @@ export const integrationApiRoutes = new Elysia({
 							workforce.locationScope.get(row.employment.id) ?? []
 						).map((id) => ({ id, name: locationNames.get(id) ?? "Unknown" })),
 					}))
+					.filter((worker) => {
+						// SEC-013: scoped credentials see their Locations' people and
+						// people without Location assignments (who work everywhere).
+						const scope = actorScope(actor);
+						return (
+							scope === null ||
+							worker.locations.length === 0 ||
+							worker.locations.some((location) => scope.has(location.id))
+						);
+					})
 					.sort((a, b) => a.name.localeCompare(b.name)),
 			};
 		},
@@ -400,9 +427,16 @@ export const integrationApiRoutes = new Elysia({
 		"/worker-invitations",
 		async ({ headers, body }) => {
 			const actor = await requireIntegrationActor(headers, "workers.write");
+			// SEC-009: this path emails the invitee, so bound it like the web invite.
+			consumeRateLimitOrThrow(
+				`invitation.create:${actor.profileId ?? actor.workplaceId}`,
+				"invitationCreate",
+			);
 			const email = body.email.trim().toLowerCase();
 			assertDeliverableWorkerEmail(email);
 			const locationIds = [...new Set(body.locationIds ?? [])];
+			// A scoped credential hires into its own Locations only.
+			assertLocationsGrantable(actorScope(actor), "viewer", locationIds);
 			const positionIds = [...new Set(body.positionIds ?? [])];
 
 			const [existingProfile] = await db
@@ -849,6 +883,9 @@ export const integrationApiRoutes = new Elysia({
 						eq(locations.workplaceId, workplaceId),
 						eq(schedules.weekStartDate, query.weekStart),
 						eq(openShifts.status, "open"),
+						actor.locationScope
+							? inArray(locations.id, actor.locationScope)
+							: undefined,
 					),
 				)
 				.orderBy(asc(shifts.startsAt));
@@ -935,6 +972,7 @@ export const integrationApiRoutes = new Elysia({
 				.where(
 					and(
 						eq(employments.workplaceId, workplaceId),
+						employmentVisibleIn(actorScope(actor)),
 						query.status ? eq(timeOffRequests.status, query.status) : undefined,
 						query.employmentId
 							? eq(timeOffRequests.employmentId, query.employmentId)
@@ -1010,6 +1048,7 @@ export const integrationApiRoutes = new Elysia({
 						and(
 							eq(employments.workplaceId, workplaceId),
 							eq(shiftReleases.status, "pending"),
+							employmentVisibleIn(actorScope(actor)),
 						),
 					),
 				db
@@ -1026,6 +1065,7 @@ export const integrationApiRoutes = new Elysia({
 						and(
 							eq(employments.workplaceId, workplaceId),
 							eq(shiftPickups.status, "pending"),
+							employmentVisibleIn(actorScope(actor)),
 						),
 					),
 				db
@@ -1043,6 +1083,7 @@ export const integrationApiRoutes = new Elysia({
 						and(
 							eq(employments.workplaceId, workplaceId),
 							eq(timeEntries.approvalStatus, "pending"),
+							employmentVisibleIn(actorScope(actor)),
 						),
 					),
 			]);
@@ -1076,6 +1117,14 @@ export const integrationApiRoutes = new Elysia({
 			const actor = await requireIntegrationActor(headers, "requests.write");
 			if (!actor.profileId)
 				throw new ForbiddenError("A human manager must own this credential");
+			const [request] = await db
+				.select({ employmentId: timeOffRequests.employmentId })
+				.from(timeOffRequests)
+				.where(eq(timeOffRequests.id, params.requestId))
+				.limit(1);
+			if (request) {
+				await assertEmploymentInScope(actorScope(actor), request.employmentId);
+			}
 			const result = await decideLeaveRequest({
 				workplaceId: actor.workplaceId,
 				requestId: params.requestId,
@@ -1109,6 +1158,7 @@ export const integrationApiRoutes = new Elysia({
 			const actor = await requireIntegrationActor(headers, "requests.write");
 			if (!actor.profileId)
 				throw new ForbiddenError("A human manager must own this credential");
+			await assertReleaseInScope(actorScope(actor), params.releaseId);
 			return decideRelease(
 				actor.profileId,
 				actor.workplaceId,
@@ -1136,6 +1186,7 @@ export const integrationApiRoutes = new Elysia({
 					"Approving a pickup publishes a Schedule Version and requires schedule.write plus schedule.publish",
 				);
 			}
+			await assertPickupInScope(actorScope(actor), params.pickupId);
 			return decidePickup(
 				actor.profileId,
 				actor.workplaceId,
@@ -1177,7 +1228,12 @@ export const integrationApiRoutes = new Elysia({
 							db
 								.select({ id: employments.id })
 								.from(employments)
-								.where(eq(employments.workplaceId, actor.workplaceId)),
+								.where(
+									and(
+										eq(employments.workplaceId, actor.workplaceId),
+										employmentVisibleIn(actorScope(actor)),
+									),
+								),
 						),
 					),
 				)
@@ -1415,6 +1471,7 @@ export const integrationApiRoutes = new Elysia({
 				)
 				.limit(1);
 			if (!row) throw new NotFoundError("Worker not found at this Workplace");
+			await assertEmploymentInScope(actorScope(actor), row.employment.id);
 
 			const weekEnd = shiftDays(query.weekStart, 7);
 			const [
@@ -1828,6 +1885,9 @@ export const integrationApiRoutes = new Elysia({
 				endsAt,
 				body.unavailabilityOverrideReason,
 			);
+			if (body.positionId) {
+				await assertPositionInWorkplace(body.positionId, location.workplaceId);
+			}
 
 			const shift = await db.transaction(async () => {
 				if (body.employmentId) {
@@ -1898,6 +1958,9 @@ export const integrationApiRoutes = new Elysia({
 					? existing.employmentId
 					: body.employmentId;
 			const positionId = body.positionId ?? existing.positionId;
+			if (body.positionId) {
+				await assertPositionInWorkplace(body.positionId, location.workplaceId);
+			}
 
 			const date =
 				body.date ?? zonedDayInfo(existing.startsAt, location.timezone).dateKey;

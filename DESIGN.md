@@ -82,6 +82,8 @@ Every control is a component from `packages/ui` (shadcn, base-nova style). `apps
 
 Geist for headings and figures (page titles, card titles, stat values, the hero time); Inter for everything else. Page titles are `text-xl md:text-2xl font-semibold tracking-tight`. Times, dates, counts, and money use tabular numerals.
 
+The standalone account-deletion document uses an Iowan Old Style / Palatino / Book Antiqua / Georgia serif stack for its long-form legal copy. Its title stays at the `1.5rem` page-title size.
+
 ## Layout
 
 - **Shell:** shadcn `Sidebar variant="inset" collapsible="icon"`. Manager nav is grouped Plan / Team / Time, with Activity and Settings pinned at the bottom. The header holds the sidebar trigger, a vertical separator, and a `Breadcrumb`.

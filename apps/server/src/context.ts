@@ -12,7 +12,17 @@ import {
 	workplaceSubscriptions,
 	workplaces,
 } from "@SchedulesManager/db";
-import { and, eq } from "drizzle-orm";
+import {
+	type AnyColumn,
+	and,
+	eq,
+	exists,
+	inArray,
+	notExists,
+	or,
+	type SQL,
+	sql,
+} from "drizzle-orm";
 
 import { type AuthenticatedUser, AuthenticationError, auth } from "./auth";
 import { requireActiveSubscription } from "./billing";
@@ -153,6 +163,171 @@ export function hasPrivilege(
 	const explicit = employment.privileges;
 	if (!explicit || explicit.length === 0) return true;
 	return explicit.includes(privilege);
+}
+
+/** A Manager with no explicit privileges: full access, including over other Managers. */
+export function isFullManager(
+	employment: Pick<Employment, "kind" | "privileges">,
+): boolean {
+	return (
+		employment.kind === "manager" && (employment.privileges ?? []).length === 0
+	);
+}
+
+/**
+ * Nobody grants more than they hold: only a full Manager creates Managers,
+ * and a Viewer's privileges must all be ones the actor already has.
+ */
+export function assertCanAssignRole(
+	actor: Employment,
+	kind: Employment["kind"] | (string & {}),
+	privileges: readonly EmploymentPrivilege[],
+): void {
+	if (kind === "worker") return;
+	if (kind === "manager" && !isFullManager(actor)) {
+		throw new ForbiddenError("Only a full Manager can grant the Manager role");
+	}
+	const missing = privileges.filter(
+		(privilege) => !hasPrivilege(actor, privilege),
+	);
+	if (missing.length > 0) {
+		throw new ForbiddenError(
+			`You cannot grant privileges you do not hold: ${missing.join(", ")}`,
+		);
+	}
+}
+
+/**
+ * Only a full Manager changes or deactivates a Manager, and nobody changes
+ * someone holding privileges they lack.
+ */
+export function assertCanManageEmployment(
+	actor: Employment,
+	target: Pick<Employment, "kind" | "privileges">,
+): void {
+	if (target.kind === "manager" && !isFullManager(actor)) {
+		throw new ForbiddenError("Only a full Manager can change a Manager");
+	}
+	const outranks = (target.privileges ?? []).some(
+		(privilege) => !hasPrivilege(actor, privilege as EmploymentPrivilege),
+	);
+	if (outranks) {
+		throw new ForbiddenError(
+			"You cannot change someone who holds privileges you do not",
+		);
+	}
+}
+
+/**
+ * The Locations an actor may hand out access to: `null` when unrestricted
+ * (Managers and Viewers without explicit Location assignments).
+ */
+export async function grantableLocations(
+	actor: Employment,
+): Promise<Set<string> | null> {
+	if (actor.kind === "manager") return null;
+	const rows = await db
+		.select({ locationId: employmentLocations.locationId })
+		.from(employmentLocations)
+		.where(eq(employmentLocations.employmentId, actor.id));
+	return rows.length === 0 ? null : new Set(rows.map((row) => row.locationId));
+}
+
+/**
+ * Location scope, as in other multi-location scheduling tools: a Viewer
+ * assigned to Locations only manages those Locations and the people who work
+ * there. Full Managers and Viewers without assignments are unrestricted.
+ * People without Location assignments work everywhere, so everyone sees them.
+ */
+export async function requireLocationPrivilege(
+	profileId: string,
+	location: { id: string; workplaceId: string },
+	privilege: EmploymentPrivilege,
+	options?: { withoutSubscription?: boolean },
+): Promise<Employment> {
+	const employment = await requirePrivilege(
+		profileId,
+		location.workplaceId,
+		privilege,
+		options,
+	);
+	const scope = await grantableLocations(employment);
+	if (scope && !scope.has(location.id)) {
+		throw new ForbiddenError("You do not have access to this Location");
+	}
+	return employment;
+}
+
+/** SQL filter: the Employment is visible within `scope` (null = no filter). */
+export function employmentVisibleIn(
+	scope: Set<string> | null,
+	employmentId: AnyColumn = employments.id,
+): SQL | undefined {
+	if (scope === null) return undefined;
+	const assigned = db
+		.select({ one: sql`1` })
+		.from(employmentLocations)
+		.where(eq(employmentLocations.employmentId, employmentId));
+	return or(
+		notExists(assigned),
+		exists(
+			db
+				.select({ one: sql`1` })
+				.from(employmentLocations)
+				.where(
+					and(
+						eq(employmentLocations.employmentId, employmentId),
+						inArray(employmentLocations.locationId, [...scope]),
+					),
+				),
+		),
+	);
+}
+
+/** Throws unless the Employment is visible within `scope`. */
+export async function assertEmploymentInScope(
+	scope: Set<string> | null,
+	employmentId: string,
+): Promise<void> {
+	if (scope === null) return;
+	const rows = await db
+		.select({ locationId: employmentLocations.locationId })
+		.from(employmentLocations)
+		.where(eq(employmentLocations.employmentId, employmentId));
+	if (rows.length > 0 && !rows.some((row) => scope.has(row.locationId))) {
+		throw new ForbiddenError(
+			"This person works at a Location you do not manage",
+		);
+	}
+}
+
+/** Throws for Location-scoped actors: the action exposes every Location. */
+export async function requireUnscoped(actor: Employment): Promise<void> {
+	if ((await grantableLocations(actor)) !== null) {
+		throw new ForbiddenError(
+			"This action covers every Location, so it needs Workplace-wide access",
+		);
+	}
+}
+
+/**
+ * A Location-scoped actor may only grant Viewer access inside their own
+ * Locations; an empty set means every Location, so it is refused too.
+ */
+export function assertLocationsGrantable(
+	grantable: Set<string> | null,
+	kind: Employment["kind"] | (string & {}),
+	locationIds: readonly string[],
+): void {
+	if (grantable === null || kind === "worker") return;
+	if (
+		locationIds.length === 0 ||
+		locationIds.some((locationId) => !grantable.has(locationId))
+	) {
+		throw new ForbiddenError(
+			"You can only grant access to Locations you are assigned to",
+		);
+	}
 }
 
 /**

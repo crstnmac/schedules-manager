@@ -21,10 +21,15 @@ import {
 } from "@SchedulesManager/db";
 import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
-
 import { requireSubscriptionCapability } from "../billing";
-import { requirePrivilege, requireSession } from "../context";
+import {
+	grantableLocations,
+	requirePrivilege,
+	requireSession,
+	requireUnscoped,
+} from "../context";
 import { csvCell as csvEscape } from "../csv-import";
+import { ForbiddenError } from "../errors";
 import { laborPercent } from "../labor";
 import { computeLaborByEntry, distributeByWeight } from "../reports-labor";
 import { minutesByZonedDate } from "../time";
@@ -73,6 +78,8 @@ async function loadReportEntries(input: {
 	workplaceId: string;
 	from: Date;
 	to: Date;
+	/** Location-scoped reports only include these Locations (null = all). */
+	scope: Set<string> | null;
 }): Promise<ReportEntry[]> {
 	const rows = await db
 		.select({
@@ -105,6 +112,7 @@ async function loadReportEntries(input: {
 				eq(employments.workplaceId, input.workplaceId),
 				gte(timeEntries.clockedInAt, input.from),
 				lte(timeEntries.clockedInAt, input.to),
+				input.scope ? inArray(locations.id, [...input.scope]) : undefined,
 			),
 		);
 
@@ -292,7 +300,12 @@ export const reportRoutes = new Elysia({
 		"/workplaces/:workplaceId/reports/payroll-time.csv",
 		async ({ headers, params, query, set }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"reports.view",
+			);
+			const scope = await grantableLocations(actor);
 			await requireSubscriptionCapability(params.workplaceId, "timesheets");
 			if (query.from > query.to) {
 				set.status = 400;
@@ -315,6 +328,7 @@ export const reportRoutes = new Elysia({
 					workplaceId: params.workplaceId,
 					from,
 					to,
+					scope,
 				})
 			)
 				.filter(
@@ -376,7 +390,12 @@ export const reportRoutes = new Elysia({
 		"/workplaces/:workplaceId/reports/hours.csv",
 		async ({ headers, params, query, set }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"reports.view",
+			);
+			const scope = await grantableLocations(actor);
 			await requireSubscriptionCapability(params.workplaceId, "labor_reports");
 			const from = new Date(`${query.from}T00:00:00Z`);
 			const to = new Date(`${query.to}T23:59:59Z`);
@@ -385,6 +404,7 @@ export const reportRoutes = new Elysia({
 				workplaceId: params.workplaceId,
 				from,
 				to,
+				scope,
 			});
 
 			const lines = [
@@ -431,7 +451,13 @@ export const reportRoutes = new Elysia({
 		"/workplaces/:workplaceId/reports/summary",
 		async ({ headers, params, query }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"reports.view",
+			);
+			// Mixes workplace-wide sales/request data; not yet Location-filtered.
+			await requireUnscoped(actor);
 			await requireSubscriptionCapability(params.workplaceId, "labor_reports");
 			const from = new Date(`${query.from}T00:00:00Z`);
 			const to = new Date(`${query.to}T23:59:59Z`);
@@ -440,6 +466,7 @@ export const reportRoutes = new Elysia({
 				workplaceId: params.workplaceId,
 				from,
 				to,
+				scope: null,
 			});
 
 			const salesRows = await db
@@ -576,7 +603,12 @@ export const reportRoutes = new Elysia({
 		"/workplaces/:workplaceId/reports/attendance",
 		async ({ headers, params, query }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"reports.view",
+			);
+			const scope = await grantableLocations(actor);
 			await requireSubscriptionCapability(params.workplaceId, "attendance");
 
 			const from = new Date(`${query.from}T00:00:00Z`);
@@ -608,6 +640,7 @@ export const reportRoutes = new Elysia({
 				.where(
 					and(
 						eq(locations.workplaceId, params.workplaceId),
+						scope ? inArray(locations.id, [...scope]) : undefined,
 						gte(versionShifts.startsAt, from),
 						lte(versionShifts.startsAt, to),
 					),
@@ -736,11 +769,19 @@ export const reportRoutes = new Elysia({
 		"/workplaces/:workplaceId/reports/coverage",
 		async ({ headers, params, query }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"reports.view",
+			);
+			const scope = await grantableLocations(actor);
 
 			const from = new Date(`${query.from}T00:00:00Z`);
 			const to = new Date(`${query.to}T23:59:59Z`);
 			const locationId = query.locationId;
+			if (locationId && scope && !scope.has(locationId)) {
+				throw new ForbiddenError("You do not have access to this Location");
+			}
 
 			const [shiftRows, openRows] = await Promise.all([
 				db
@@ -761,6 +802,7 @@ export const reportRoutes = new Elysia({
 							gte(shifts.startsAt, from),
 							lte(shifts.startsAt, to),
 							...(locationId ? [eq(locations.id, locationId)] : []),
+							scope ? inArray(locations.id, [...scope]) : undefined,
 						),
 					),
 				db
@@ -779,6 +821,7 @@ export const reportRoutes = new Elysia({
 							gte(shifts.startsAt, from),
 							lte(shifts.startsAt, to),
 							...(locationId ? [eq(openShifts.locationId, locationId)] : []),
+							scope ? inArray(openShifts.locationId, [...scope]) : undefined,
 						),
 					),
 			]);
@@ -849,7 +892,13 @@ export const reportRoutes = new Elysia({
 		"/workplaces/:workplaceId/reports/requests",
 		async ({ headers, params, query }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"reports.view",
+			);
+			// Mixes workplace-wide sales/request data; not yet Location-filtered.
+			await requireUnscoped(actor);
 
 			const from = new Date(`${query.from}T00:00:00Z`);
 			const to = new Date(`${query.to}T23:59:59Z`);

@@ -1,3 +1,4 @@
+import type { Employment } from "@SchedulesManager/db";
 import {
 	db,
 	employmentLocations,
@@ -11,7 +12,12 @@ import {
 	profiles,
 } from "@SchedulesManager/db";
 import { and, eq, gt, inArray } from "drizzle-orm";
-
+import {
+	assertCanAssignRole,
+	assertCanManageEmployment,
+	assertLocationsGrantable,
+	grantableLocations,
+} from "./context";
 import {
 	cell,
 	csvTemplate,
@@ -243,6 +249,8 @@ function describeSet(names: string[]): string {
 export async function importWorkerDirectory(input: {
 	workplaceId: string;
 	profileId: string;
+	/** The importing Employment; rows may not grant or change more than it holds. */
+	actor: Employment;
 	csv: string;
 	dryRun?: boolean;
 }): Promise<ImportResult<DirectoryImportEntry>> {
@@ -259,6 +267,7 @@ export async function importWorkerDirectory(input: {
 					profileId: employments.profileId,
 					status: employments.status,
 					kind: employments.kind,
+					privileges: employments.privileges,
 					email: profiles.email,
 				})
 				.from(employments)
@@ -327,6 +336,7 @@ export async function importWorkerDirectory(input: {
 		positionRows.map((row) => [row.name.toLowerCase(), row]),
 	);
 
+	const grantable = await grantableLocations(input.actor);
 	for (const row of parsed.rows) {
 		try {
 			const resolveIds = (
@@ -371,8 +381,19 @@ export async function importWorkerDirectory(input: {
 				inviteToken: null,
 			};
 
+			// SEC-002: a Manager row creates or promotes to full access.
+			const currentKind = employment?.kind ?? pendingInvitation?.kind;
+			if (row.kind && row.kind !== currentKind) {
+				assertCanAssignRole(input.actor, row.kind, []);
+			}
 			if (employment) {
 				const isSelf = employment.profileId === input.profileId;
+				if (
+					row.status === "deactivated" ||
+					(row.kind && row.kind !== employment.kind)
+				) {
+					assertCanManageEmployment(input.actor, employment);
+				}
 				if (row.status === "deactivated") {
 					if (employment.status === "deactivated") {
 						entry.changes.push("Already deactivated");
@@ -402,6 +423,22 @@ export async function importWorkerDirectory(input: {
 					const replaceKind = Boolean(row.kind && row.kind !== employment.kind);
 					if (replaceKind && isSelf) {
 						throw new Error("You cannot change your own role");
+					}
+					// SEC-002: Location/Position access follows the same rank rule,
+					// and a scoped importer only grants Viewer access inside their
+					// own Locations.
+					if (replaceLocations || replacePositions) {
+						if (isSelf) {
+							throw new Error("You cannot change your own access");
+						}
+						assertCanManageEmployment(input.actor, employment);
+					}
+					if (replaceLocations || replaceKind) {
+						assertLocationsGrantable(
+							grantable,
+							row.kind ?? employment.kind,
+							replaceLocations ? resolvedLocations.ids : currentLocationIds,
+						);
 					}
 					if (!replaceLocations && !replacePositions && !replaceKind) {
 						entry.changes.push("Nothing to change");
@@ -444,6 +481,25 @@ export async function importWorkerDirectory(input: {
 					entry.changes.push("Revoke pending invitation");
 				} else {
 					entry.action = "pending_invitation";
+					if (row.locations.length > 0) {
+						assertLocationsGrantable(
+							grantable,
+							entry.kind,
+							resolvedLocations.ids,
+						);
+					} else if (row.kind && row.kind !== pendingInvitation.kind) {
+						const current = await db
+							.select({ locationId: invitationLocations.locationId })
+							.from(invitationLocations)
+							.where(
+								eq(invitationLocations.invitationId, pendingInvitation.id),
+							);
+						assertLocationsGrantable(
+							grantable,
+							row.kind,
+							current.map((scope) => scope.locationId),
+						);
+					}
 					entry.changes.push("Update pending invitation");
 					if (row.kind && row.kind !== pendingInvitation.kind) {
 						entry.changes.push(`Role: ${pendingInvitation.kind} → ${row.kind}`);
@@ -460,6 +516,7 @@ export async function importWorkerDirectory(input: {
 					"No active or invited person with this email, so it cannot be deactivated",
 				);
 			} else {
+				assertLocationsGrantable(grantable, entry.kind, resolvedLocations.ids);
 				entry.action = "hire";
 				entry.changes.push(`${row.kind ?? "worker"} invitation`);
 				if (row.locations.length > 0) {

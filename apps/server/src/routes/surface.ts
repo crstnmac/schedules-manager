@@ -43,8 +43,14 @@ import { Elysia, t } from "elysia";
 import { requireSubscriptionCapability } from "../billing";
 
 import {
+	assertCanManageEmployment,
+	assertEmploymentInScope,
+	employmentVisibleIn,
+	grantableLocations,
+	requireLocationPrivilege,
 	requirePrivilege,
 	requireSession,
+	requireUnscoped,
 	requireWorkplaceMember,
 } from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
@@ -70,20 +76,20 @@ async function locationForManager(
 		.where(eq(locations.id, locationId))
 		.limit(1);
 	if (!location) throw new NotFoundError("Location not found");
-	await requirePrivilege(profileId, location.workplaceId, privilege, options);
+	await requireLocationPrivilege(profileId, location, privilege, options);
 	return location;
 }
 
-async function workplaceForShift(shiftId: string) {
+async function locationForShift(shiftId: string) {
 	const [row] = await db
-		.select({ workplaceId: locations.workplaceId })
+		.select({ id: locations.id, workplaceId: locations.workplaceId })
 		.from(shifts)
 		.innerJoin(schedules, eq(schedules.id, shifts.scheduleId))
 		.innerJoin(locations, eq(locations.id, schedules.locationId))
 		.where(eq(shifts.id, shiftId))
 		.limit(1);
 	if (!row) throw new NotFoundError("Shift not found");
-	return row.workplaceId;
+	return row;
 }
 
 /** The caller's own published shift on an active employment, else 404. */
@@ -151,7 +157,13 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/groups",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const group = firstRow(
 				await db
 					.insert(workerGroups)
@@ -187,7 +199,13 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/groups/:groupId",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const [group] = await db
 				.update(workerGroups)
 				.set({ name: body.name.trim() })
@@ -228,7 +246,13 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/groups/:groupId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			await db
 				.delete(workerGroups)
 				.where(
@@ -270,7 +294,13 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/tags",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "schedule.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"schedule.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const tag = firstRow(
 				await db
 					.insert(shiftTags)
@@ -292,7 +322,13 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/tags/:tagId",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "schedule.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"schedule.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const [tag] = await db
 				.update(shiftTags)
 				.set({ name: body.name.trim() })
@@ -319,7 +355,13 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/tags/:tagId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "schedule.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"schedule.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			await db
 				.delete(shiftTags)
 				.where(
@@ -382,7 +424,13 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/leave-types",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const created = firstRow(
 				await db
 					.insert(leaveTypes)
@@ -440,7 +488,13 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/leave-types/:leaveTypeId",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const [existing] = await db
 				.select()
 				.from(leaveTypes)
@@ -524,7 +578,13 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/leave-types/:leaveTypeId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const [deleted] = await db
 				.delete(leaveTypes)
 				.where(
@@ -549,7 +609,13 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/employments/:employmentId/pto",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+			);
+			const scope = await grantableLocations(actor);
+			await assertEmploymentInScope(scope, params.employmentId);
 			// Both the employment and the leave type must belong to this
 			// workplace, or the upsert could mutate another workplace's balances.
 			const [employment] = await db
@@ -616,9 +682,15 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/pto",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage", {
-				withoutSubscription: true,
-			});
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+				{
+					withoutSubscription: true,
+				},
+			);
+			const scope = await grantableLocations(actor);
 			const rows = await db
 				.select({
 					employmentId: ptoBalances.employmentId,
@@ -630,7 +702,12 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				.from(ptoBalances)
 				.innerJoin(leaveTypes, eq(leaveTypes.id, ptoBalances.leaveTypeId))
 				.innerJoin(employments, eq(employments.id, ptoBalances.employmentId))
-				.where(eq(employments.workplaceId, params.workplaceId));
+				.where(
+					and(
+						eq(employments.workplaceId, params.workplaceId),
+						employmentVisibleIn(scope),
+					),
+				);
 			const workplace = await loadWorkplace(params.workplaceId);
 			const timeZone =
 				(
@@ -1100,7 +1177,13 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/announcements",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			await assertWorkplaceEnabled(
 				params.workplaceId,
 				"announcementsEnabled",
@@ -1596,9 +1679,16 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/employments/:employmentId/documents",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage", {
-				withoutSubscription: true,
-			});
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+				{
+					withoutSubscription: true,
+				},
+			);
+			const scope = await grantableLocations(actor);
+			await assertEmploymentInScope(scope, params.employmentId);
 			const [employment] = await db
 				.select({ id: employments.id })
 				.from(employments)
@@ -1636,7 +1726,13 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/employments/:employmentId/documents",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+			);
+			const scope = await grantableLocations(actor);
+			await assertEmploymentInScope(scope, params.employmentId);
 			const [employment] = await db
 				.select({ id: employments.id })
 				.from(employments)
@@ -1678,7 +1774,28 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/employments/:employmentId/profile",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+			);
+			const [target] = await db
+				.select({ kind: employments.kind, privileges: employments.privileges })
+				.from(employments)
+				.where(
+					and(
+						eq(employments.id, params.employmentId),
+						eq(employments.workplaceId, params.workplaceId),
+					),
+				)
+				.limit(1);
+			if (!target) throw new NotFoundError("Employment not found");
+			// SEC-002: wage, contact and kiosk PIN follow the same rank rule as roles.
+			assertCanManageEmployment(actor, target);
+			await assertEmploymentInScope(
+				await grantableLocations(actor),
+				params.employmentId,
+			);
 			const values: {
 				hourlyWageCents?: number | null;
 				emergencyContactName?: string | null;
@@ -1768,9 +1885,9 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/shifts/:shiftId/tags",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			await requireLocationPrivilege(
 				profile.id,
-				await workplaceForShift(params.shiftId),
+				await locationForShift(params.shiftId),
 				"schedule.manage",
 			);
 			await db
@@ -1799,8 +1916,13 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/shifts/:shiftId/tasks",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			const workplaceId = await workplaceForShift(params.shiftId);
-			await requirePrivilege(profile.id, workplaceId, "schedule.manage");
+			const shiftLocation = await locationForShift(params.shiftId);
+			const workplaceId = shiftLocation.workplaceId;
+			await requireLocationPrivilege(
+				profile.id,
+				shiftLocation,
+				"schedule.manage",
+			);
 			await assertWorkplaceEnabled(
 				workplaceId,
 				"tasksEnabled",
@@ -2034,17 +2156,27 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/time-entries/:timeEntryId/approval",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 			);
+			const scope = await grantableLocations(actor);
 			await requireSubscriptionCapability(params.workplaceId, "timesheets");
 			// The entry must belong to an employment of the caller's workplace.
 			const [target] = await db
-				.select({ id: timeEntries.id })
+				.select({ id: timeEntries.id, locationId: schedules.locationId })
 				.from(timeEntries)
 				.innerJoin(employments, eq(employments.id, timeEntries.employmentId))
+				.innerJoin(
+					versionShifts,
+					eq(versionShifts.id, timeEntries.versionShiftId),
+				)
+				.innerJoin(
+					scheduleVersions,
+					eq(scheduleVersions.id, versionShifts.versionId),
+				)
+				.innerJoin(schedules, eq(schedules.id, scheduleVersions.scheduleId))
 				.where(
 					and(
 						eq(timeEntries.id, params.timeEntryId),
@@ -2052,7 +2184,9 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 					),
 				)
 				.limit(1);
-			if (!target) throw new NotFoundError("Time Entry not found");
+			if (!target || (scope && !scope.has(target.locationId))) {
+				throw new NotFoundError("Time Entry not found");
+			}
 			const [updated] = await db
 				.update(timeEntries)
 				.set({
@@ -2093,12 +2227,13 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 		"/workplaces/:workplaceId/timesheets",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 				{ withoutSubscription: true },
 			);
+			const scope = await grantableLocations(actor);
 			await requireSubscriptionCapability(params.workplaceId, "timesheets");
 			const rows = await db
 				.select({
@@ -2120,7 +2255,12 @@ export const surfaceRoutes = new Elysia({ prefix: "/v1" })
 				)
 				.innerJoin(schedules, eq(schedules.id, scheduleVersions.scheduleId))
 				.innerJoin(locations, eq(locations.id, schedules.locationId))
-				.where(eq(employments.workplaceId, params.workplaceId))
+				.where(
+					and(
+						eq(employments.workplaceId, params.workplaceId),
+						scope ? inArray(locations.id, [...scope]) : undefined,
+					),
+				)
 				.orderBy(desc(timeEntries.clockedInAt))
 				.limit(100);
 			return {

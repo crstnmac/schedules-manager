@@ -17,6 +17,7 @@ import { Elysia, t } from "elysia";
 import { requireSubscriptionCapability } from "../billing";
 
 import {
+	grantableLocations,
 	locationScopeFor,
 	requirePrivilege,
 	requireSession,
@@ -292,11 +293,12 @@ export const rosterRoutes = new Elysia({
 		"/workplaces/:workplaceId/version-shifts/:versionShiftId/attendance",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 			);
+			const scope = await grantableLocations(actor);
 			await requireSubscriptionCapability(params.workplaceId, "attendance");
 			return withIdempotency({
 				actorProfileId: profile.id,
@@ -321,6 +323,7 @@ export const rosterRoutes = new Elysia({
 							and(
 								eq(versionShifts.id, params.versionShiftId),
 								eq(locations.workplaceId, params.workplaceId),
+								scope ? inArray(locations.id, [...scope]) : undefined,
 							),
 						)
 						.limit(1);

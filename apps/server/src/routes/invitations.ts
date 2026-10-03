@@ -215,12 +215,23 @@ export const invitationsRoutes = new Elysia({
 								.set({
 									status: "active",
 									kind: invitationKind,
+									// SEC-002: the invitation grants exactly its kind; privileges
+									// held before deactivation are not restored.
+									privileges: [],
 									deactivatedAt: null,
 								})
 								.where(eq(employments.id, existingEmployment.id))
 								.returning(),
 						);
 
+						// SEC-002: access is exactly what this invitation grants, not
+						// the Locations/Positions held before deactivation.
+						await db
+							.delete(employmentLocations)
+							.where(eq(employmentLocations.employmentId, employment.id));
+						await db
+							.delete(employmentPositions)
+							.where(eq(employmentPositions.employmentId, employment.id));
 						await applyInvitationScopes(db, invitation.id, employment.id);
 
 						await db

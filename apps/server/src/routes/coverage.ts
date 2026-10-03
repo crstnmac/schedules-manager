@@ -20,11 +20,17 @@ import {
 import { and, desc, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import {
+	grantableLocations,
 	requirePrivilege,
 	requireSession,
 	requireWorkplaceMember,
 } from "../context";
-import { BadRequestError, ConflictError, NotFoundError } from "../errors";
+import {
+	BadRequestError,
+	ConflictError,
+	ForbiddenError,
+	NotFoundError,
+} from "../errors";
 import { withIdempotency } from "../idempotency";
 import {
 	managerEmploymentIds,
@@ -192,6 +198,48 @@ export async function assertEligible(
 		if (startsAt < request.endsAt && request.startsAt < endsAt) {
 			throw new ConflictError("This shift overlaps your approved time off");
 		}
+	}
+}
+
+/** SEC-013: a Location-scoped reviewer only decides releases at their Locations. */
+export async function assertReleaseInScope(
+	scope: Set<string> | null,
+	releaseId: string,
+): Promise<void> {
+	if (scope === null) return;
+	const [row] = await db
+		.select({ locationId: schedules.locationId })
+		.from(shiftReleases)
+		.innerJoin(
+			versionShifts,
+			eq(versionShifts.id, shiftReleases.versionShiftId),
+		)
+		.innerJoin(
+			scheduleVersions,
+			eq(scheduleVersions.id, versionShifts.versionId),
+		)
+		.innerJoin(schedules, eq(schedules.id, scheduleVersions.scheduleId))
+		.where(eq(shiftReleases.id, releaseId))
+		.limit(1);
+	if (row && !scope.has(row.locationId)) {
+		throw new ForbiddenError("You do not have access to this Location");
+	}
+}
+
+/** SEC-013: a Location-scoped reviewer only decides pickups at their Locations. */
+export async function assertPickupInScope(
+	scope: Set<string> | null,
+	pickupId: string,
+): Promise<void> {
+	if (scope === null) return;
+	const [row] = await db
+		.select({ locationId: openShifts.locationId })
+		.from(shiftPickups)
+		.innerJoin(openShifts, eq(openShifts.id, shiftPickups.openShiftId))
+		.where(eq(shiftPickups.id, pickupId))
+		.limit(1);
+	if (row && !scope.has(row.locationId)) {
+		throw new ForbiddenError("You do not have access to this Location");
 	}
 }
 
@@ -504,12 +552,13 @@ export const coverageRoutes = new Elysia({
 		"/workplaces/:workplaceId/coverage",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 				{ withoutSubscription: true },
 			);
+			const scope = await grantableLocations(actor);
 
 			const releaseRows = await db
 				.select({
@@ -532,7 +581,12 @@ export const coverageRoutes = new Elysia({
 				.innerJoin(locations, eq(locations.id, schedules.locationId))
 				.innerJoin(employments, eq(employments.id, shiftReleases.requestedBy))
 				.innerJoin(profiles, eq(profiles.id, employments.profileId))
-				.where(eq(employments.workplaceId, params.workplaceId))
+				.where(
+					and(
+						eq(employments.workplaceId, params.workplaceId),
+						scope ? inArray(locations.id, [...scope]) : undefined,
+					),
+				)
 				.orderBy(desc(shiftReleases.createdAt))
 				.limit(50);
 
@@ -549,7 +603,12 @@ export const coverageRoutes = new Elysia({
 				.innerJoin(locations, eq(locations.id, openShifts.locationId))
 				.innerJoin(employments, eq(employments.id, shiftPickups.requestedBy))
 				.innerJoin(profiles, eq(profiles.id, employments.profileId))
-				.where(eq(employments.workplaceId, params.workplaceId))
+				.where(
+					and(
+						eq(employments.workplaceId, params.workplaceId),
+						scope ? inArray(locations.id, [...scope]) : undefined,
+					),
+				)
 				.orderBy(desc(shiftPickups.createdAt))
 				.limit(50);
 
@@ -612,11 +671,13 @@ export const coverageRoutes = new Elysia({
 		"/workplaces/:workplaceId/releases/:releaseId/decision",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 			);
+			const scope = await grantableLocations(actor);
+			await assertReleaseInScope(scope, params.releaseId);
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `release.decision:${params.releaseId}`,
@@ -654,11 +715,13 @@ export const coverageRoutes = new Elysia({
 		"/workplaces/:workplaceId/pickups/:pickupId/decision",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 			);
+			const scope = await grantableLocations(actor);
+			await assertPickupInScope(scope, params.pickupId);
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `pickup.decision:${params.pickupId}`,

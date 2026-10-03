@@ -25,7 +25,7 @@ import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import {
 	listActiveEmployments,
-	requirePrivilege,
+	requireLocationPrivilege,
 	requireSession,
 	requireWorkplaceMember,
 	weekStartDayFor,
@@ -727,11 +727,7 @@ export const publicationRoutes = new Elysia({
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
 			const { schedule, location } = await scheduleContext(params.scheduleId);
-			await requirePrivilege(
-				profile.id,
-				location.workplaceId,
-				"schedule.publish",
-			);
+			await requireLocationPrivilege(profile.id, location, "schedule.publish");
 			const [version] = await db
 				.select({ id: scheduleVersions.id })
 				.from(scheduleVersions)
@@ -823,11 +819,7 @@ export const publicationRoutes = new Elysia({
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
 			const { schedule, location } = await scheduleContext(params.scheduleId);
-			await requirePrivilege(
-				profile.id,
-				location.workplaceId,
-				"schedule.publish",
-			);
+			await requireLocationPrivilege(profile.id, location, "schedule.publish");
 
 			return withIdempotency({
 				actorProfileId: profile.id,
@@ -860,11 +852,7 @@ export const publicationRoutes = new Elysia({
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
 			const { schedule, location } = await scheduleContext(params.scheduleId);
-			await requirePrivilege(
-				profile.id,
-				location.workplaceId,
-				"schedule.publish",
-			);
+			await requireLocationPrivilege(profile.id, location, "schedule.publish");
 
 			const shiftIds = [...new Set(body.shiftIds)];
 			if (shiftIds.length === 0) {
@@ -928,7 +916,7 @@ export const publicationRoutes = new Elysia({
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
 			const { schedule, location } = await scheduleContext(params.scheduleId);
-			await requirePrivilege(profile.id, location.workplaceId, "schedule.view");
+			await requireLocationPrivilege(profile.id, location, "schedule.view");
 
 			return { versions: await loadPublicationVersions(schedule.id) };
 		},

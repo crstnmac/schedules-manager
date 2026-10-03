@@ -15,6 +15,9 @@ import {
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import {
+	assertEmploymentInScope,
+	employmentVisibleIn,
+	grantableLocations,
 	requirePrivilege,
 	requireSession,
 	requireWorkplaceMember,
@@ -199,6 +202,20 @@ function windowDto(window: ResolvedLeaveWindow) {
 		startMinute: window.startMinute,
 		endMinute: window.endMinute,
 	};
+}
+
+/** SEC-013: a Location-scoped reviewer only handles their people's requests. */
+async function assertTimeOffInScope(
+	scope: Set<string> | null,
+	requestId: string,
+): Promise<void> {
+	if (scope === null) return;
+	const [request] = await db
+		.select({ employmentId: timeOffRequests.employmentId })
+		.from(timeOffRequests)
+		.where(eq(timeOffRequests.id, requestId))
+		.limit(1);
+	if (request) await assertEmploymentInScope(scope, request.employmentId);
 }
 
 export const constraintsRoutes = new Elysia({
@@ -462,11 +479,12 @@ export const constraintsRoutes = new Elysia({
 		"/workplaces/:workplaceId/unavailability/:unavailabilityId/decision",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 			);
+			const scope = await grantableLocations(actor);
 
 			const [row] = await db
 				.select({
@@ -480,6 +498,7 @@ export const constraintsRoutes = new Elysia({
 			if (!row || row.workplaceId !== params.workplaceId) {
 				throw new NotFoundError("Unavailability not found");
 			}
+			await assertEmploymentInScope(scope, row.window.employmentId);
 			if (row.window.status !== "pending") {
 				throw new ConflictError("Only pending Unavailability can be decided");
 			}
@@ -832,12 +851,13 @@ export const constraintsRoutes = new Elysia({
 		"/workplaces/:workplaceId/time-off",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 				{ withoutSubscription: true },
 			);
+			const scope = await grantableLocations(actor);
 			const timeZone = await workplaceTimeZone(params.workplaceId);
 
 			const rows = await db
@@ -864,7 +884,12 @@ export const constraintsRoutes = new Elysia({
 						eq(ptoBalances.leaveTypeId, timeOffRequests.leaveTypeId),
 					),
 				)
-				.where(eq(employments.workplaceId, params.workplaceId))
+				.where(
+					and(
+						eq(employments.workplaceId, params.workplaceId),
+						employmentVisibleIn(scope),
+					),
+				)
 				.orderBy(desc(timeOffRequests.startsAt));
 
 			// Per-worker timezone: each request resolves against the calendar of
@@ -930,6 +955,7 @@ export const constraintsRoutes = new Elysia({
 								profileId: profile.id,
 								workplaceId: params.workplaceId,
 								approval: current,
+								subjectEmploymentId: row.request.employmentId,
 							})
 						).allowed
 					: false;
@@ -995,12 +1021,13 @@ export const constraintsRoutes = new Elysia({
 		"/workplaces/:workplaceId/my/pending-approvals",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 				{ withoutSubscription: true },
 			);
+			const scope = await grantableLocations(actor);
 			const rows = await db
 				.select({
 					request: timeOffRequests,
@@ -1036,6 +1063,7 @@ export const constraintsRoutes = new Elysia({
 					and(
 						eq(employments.workplaceId, params.workplaceId),
 						eq(timeOffRequests.status, "pending"),
+						employmentVisibleIn(scope),
 					),
 				);
 
@@ -1045,6 +1073,7 @@ export const constraintsRoutes = new Elysia({
 					profileId: profile.id,
 					workplaceId: params.workplaceId,
 					approval: row.approval,
+					subjectEmploymentId: row.request.employmentId,
 				});
 				if (!authorization.allowed) continue;
 				const window = describeLeaveWindow(
@@ -1088,11 +1117,12 @@ export const constraintsRoutes = new Elysia({
 		"/workplaces/:workplaceId/time-off",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 			);
+			const scope = await grantableLocations(actor);
 
 			const [member] = await db
 				.select({
@@ -1104,6 +1134,7 @@ export const constraintsRoutes = new Elysia({
 				.from(employments)
 				.where(eq(employments.id, body.employmentId))
 				.limit(1);
+			if (member) await assertEmploymentInScope(scope, member.id);
 			if (
 				!member ||
 				member.workplaceId !== params.workplaceId ||
@@ -1278,11 +1309,13 @@ export const constraintsRoutes = new Elysia({
 		"/workplaces/:workplaceId/time-off/:requestId/expedite",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 			);
+			const scope = await grantableLocations(actor);
+			await assertTimeOffInScope(scope, params.requestId);
 			const result = await expediteLeaveRequest({
 				workplaceId: params.workplaceId,
 				requestId: params.requestId,
@@ -1319,17 +1352,19 @@ export const constraintsRoutes = new Elysia({
 		"/workplaces/:workplaceId/time-off/bulk-decision",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 			);
+			const scope = await grantableLocations(actor);
 			let approved = 0;
 			let declined = 0;
 			let pending = 0;
 			const failed: { requestId: string; message: string }[] = [];
 			for (const requestId of body.requestIds) {
 				try {
+					await assertTimeOffInScope(scope, requestId);
 					const result = await decideLeaveRequest({
 						workplaceId: params.workplaceId,
 						requestId,
@@ -1378,11 +1413,13 @@ export const constraintsRoutes = new Elysia({
 		"/workplaces/:workplaceId/time-off/:requestId",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 			);
+			const scope = await grantableLocations(actor);
+			await assertTimeOffInScope(scope, params.requestId);
 			const existing = await loadWorkplaceTimeOff(
 				params.workplaceId,
 				params.requestId,
@@ -1545,11 +1582,13 @@ export const constraintsRoutes = new Elysia({
 		"/workplaces/:workplaceId/time-off/:requestId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 			);
+			const scope = await grantableLocations(actor);
+			await assertTimeOffInScope(scope, params.requestId);
 			const existing = await loadWorkplaceTimeOff(
 				params.workplaceId,
 				params.requestId,

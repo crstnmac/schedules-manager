@@ -17,8 +17,13 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
 import { generateApiKey, requireApiKey } from "../api-key-auth";
-import { requirePrivilege, requireSession } from "../context";
+import { requirePrivilege, requireSession, requireUnscoped } from "../context";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../errors";
+import {
+	assertKeyScopesGrantable,
+	requireIntegrationActor,
+} from "../integration-auth";
+import { assertPublicHttpsUrl } from "../outbound-url";
 import { firstRow } from "../rows";
 import { generateWebhookSecret } from "../webhooks";
 
@@ -210,11 +215,12 @@ export const integrationRoutes = new Elysia({
 		"/workplaces/:workplaceId/api-keys",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const creator = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"integrations.manage",
 			);
+			assertKeyScopesGrantable(creator, body.scopes);
 			const expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
 			if (expiresAt && Number.isNaN(expiresAt.getTime())) {
 				throw new BadRequestError("expiresAt must be a valid date");
@@ -291,12 +297,14 @@ export const integrationRoutes = new Elysia({
 		"/workplaces/:workplaceId/webhook-endpoints",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"integrations.manage",
 				{ withoutSubscription: true },
 			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const endpoints = await db
 				.select({
 					id: webhookEndpoints.id,
@@ -328,11 +336,14 @@ export const integrationRoutes = new Elysia({
 		"/workplaces/:workplaceId/webhook-endpoints",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"integrations.manage",
 			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
+			await assertPublicHttpsUrl(body.url.trim());
 			const secret = generateWebhookSecret();
 			const endpoint = firstRow(
 				await db
@@ -373,11 +384,14 @@ export const integrationRoutes = new Elysia({
 		"/workplaces/:workplaceId/webhook-endpoints/:endpointId",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"integrations.manage",
 			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
+			if (body.url !== undefined) await assertPublicHttpsUrl(body.url.trim());
 			const [endpoint] = await db
 				.update(webhookEndpoints)
 				.set({
@@ -421,11 +435,13 @@ export const integrationRoutes = new Elysia({
 		"/workplaces/:workplaceId/webhook-endpoints/:endpointId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"integrations.manage",
 			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const deleted = await db
 				.delete(webhookEndpoints)
 				.where(
@@ -456,12 +472,14 @@ export const integrationRoutes = new Elysia({
 		"/workplaces/:workplaceId/webhook-deliveries",
 		async ({ headers, params, query }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"integrations.manage",
 				{ withoutSubscription: true },
 			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const limit = Math.min(100, Math.max(1, query.limit ?? 100));
 			const deliveries = await db
 				.select({
@@ -515,6 +533,8 @@ export const integrationRoutes = new Elysia({
 		"/integration/schedule",
 		async ({ headers, query }) => {
 			const { apiKey } = await requireApiKey(headers, "schedule.read");
+			// SEC-005: the key still needs a creator with access to the Workplace.
+			const actor = await requireIntegrationActor(headers, "schedule.read");
 			if (query.workplaceId !== apiKey.workplaceId) {
 				throw new ForbiddenError(
 					"This API key is scoped to a different Workplace",
@@ -528,6 +548,9 @@ export const integrationRoutes = new Elysia({
 					and(
 						eq(locations.workplaceId, query.workplaceId),
 						eq(schedules.weekStartDate, query.weekStart),
+						actor.locationScope
+							? inArray(locations.id, actor.locationScope)
+							: undefined,
 					),
 				);
 			if (scheduleRows.length === 0) {

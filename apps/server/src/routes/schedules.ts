@@ -25,7 +25,11 @@ import {
 import { and, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 import { requireSubscriptionCapability } from "../billing";
-import { requirePrivilege, requireSession, weekStartDayFor } from "../context";
+import {
+	requireLocationPrivilege,
+	requireSession,
+	weekStartDayFor,
+} from "../context";
 import { csvAttachment, type ImportFailure } from "../csv-import";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { laborCents, laborPercent } from "../labor";
@@ -74,6 +78,21 @@ const minuteSchema = t.Integer({ minimum: 0, maximum: 1440 });
 
 function scheduleTeamMatch(teamId: string | null | undefined) {
 	return teamId ? eq(schedules.teamId, teamId) : isNull(schedules.teamId);
+}
+
+/** SEC-011: a Shift may only reference a Position of its own Workplace. */
+export async function assertPositionInWorkplace(
+	positionId: string,
+	workplaceId: string,
+): Promise<void> {
+	const [position] = await db
+		.select({ id: positions.id })
+		.from(positions)
+		.where(
+			and(eq(positions.id, positionId), eq(positions.workplaceId, workplaceId)),
+		)
+		.limit(1);
+	if (!position) throw new BadRequestError("Position not found");
 }
 
 export async function getOrCreateSchedule(
@@ -1272,7 +1291,7 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requirePrivilege(profile.id, location.workplaceId, "schedule.view");
+			await requireLocationPrivilege(profile.id, location, "schedule.view");
 
 			const teamId = await resolveScheduleTeam(location.id, query.teamId);
 			return loadCalendarPayload(location, params.monthStart, teamId);
@@ -1306,7 +1325,7 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requirePrivilege(profile.id, location.workplaceId, "schedule.view");
+			await requireLocationPrivilege(profile.id, location, "schedule.view");
 			assertWeekStartDay(
 				params.weekStart,
 				await weekStartDayFor(location.workplaceId),
@@ -1353,7 +1372,7 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requirePrivilege(profile.id, location.workplaceId, "schedule.view");
+			await requireLocationPrivilege(profile.id, location, "schedule.view");
 			await requireSubscriptionCapability(location.workplaceId, "time_clock");
 			const teamId = await resolveScheduleTeam(location.id, query.teamId);
 			const [schedule] = await db
@@ -1405,7 +1424,7 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requirePrivilege(profile.id, location.workplaceId, "schedule.view");
+			await requireLocationPrivilege(profile.id, location, "schedule.view");
 			const teamId = await resolveScheduleTeam(location.id, query.teamId);
 			const schedule = await getOrCreateSchedule(
 				location.id,
@@ -1444,12 +1463,9 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requirePrivilege(
-				profile.id,
-				location.workplaceId,
-				"schedule.manage",
-				{ withoutSubscription: true },
-			);
+			await requireLocationPrivilege(profile.id, location, "schedule.manage", {
+				withoutSubscription: true,
+			});
 			csvAttachment(set, "schedule-import-template.csv");
 			return SCHEDULE_IMPORT_TEMPLATE;
 		},
@@ -1471,11 +1487,7 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requirePrivilege(
-				profile.id,
-				location.workplaceId,
-				"schedule.manage",
-			);
+			await requireLocationPrivilege(profile.id, location, "schedule.manage");
 			assertWeekStartDay(
 				params.weekStart,
 				await weekStartDayFor(location.workplaceId),
@@ -1696,11 +1708,7 @@ export const schedulesRoutes = new Elysia({
 				params.weekStart,
 				await weekStartDayFor(location.workplaceId),
 			);
-			await requirePrivilege(
-				profile.id,
-				location.workplaceId,
-				"schedule.manage",
-			);
+			await requireLocationPrivilege(profile.id, location, "schedule.manage");
 
 			const schedule = await getOrCreateSchedule(
 				location.id,
@@ -1716,6 +1724,9 @@ export const schedulesRoutes = new Elysia({
 				endsAt,
 				body.unavailabilityOverrideReason,
 			);
+			if (body.positionId) {
+				await assertPositionInWorkplace(body.positionId, location.workplaceId);
+			}
 
 			const shift = await db.transaction(async () => {
 				if (body.employmentId) {
@@ -1779,11 +1790,7 @@ export const schedulesRoutes = new Elysia({
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
 			const { location, schedule } = await shiftContext(params.shiftId);
-			await requirePrivilege(
-				profile.id,
-				location.workplaceId,
-				"schedule.manage",
-			);
+			await requireLocationPrivilege(profile.id, location, "schedule.manage");
 
 			const [existing] = await db
 				.select()
@@ -1797,6 +1804,9 @@ export const schedulesRoutes = new Elysia({
 					? existing.employmentId
 					: body.employmentId;
 			const positionId = body.positionId ?? existing.positionId;
+			if (body.positionId) {
+				await assertPositionInWorkplace(body.positionId, location.workplaceId);
+			}
 
 			const date =
 				body.date ?? zonedDayInfo(existing.startsAt, location.timezone).dateKey;
@@ -1880,11 +1890,7 @@ export const schedulesRoutes = new Elysia({
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
 			const location = await locationForShift(params.shiftId);
-			await requirePrivilege(
-				profile.id,
-				location.workplaceId,
-				"schedule.manage",
-			);
+			await requireLocationPrivilege(profile.id, location, "schedule.manage");
 
 			await db.delete(shifts).where(eq(shifts.id, params.shiftId));
 			return { ok: true as const };
@@ -1912,11 +1918,7 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requirePrivilege(
-				profile.id,
-				location.workplaceId,
-				"schedule.manage",
-			);
+			await requireLocationPrivilege(profile.id, location, "schedule.manage");
 			assertWeekStartDay(
 				params.weekStart,
 				await weekStartDayFor(location.workplaceId),
@@ -2012,11 +2014,7 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requirePrivilege(
-				profile.id,
-				location.workplaceId,
-				"schedule.manage",
-			);
+			await requireLocationPrivilege(profile.id, location, "schedule.manage");
 			await requireSubscriptionCapability(location.workplaceId, "auto_assign");
 			const teamId = await resolveScheduleTeam(location.id, body?.teamId);
 			const [schedule] = await db
@@ -2109,11 +2107,7 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requirePrivilege(
-				profile.id,
-				location.workplaceId,
-				"schedule.manage",
-			);
+			await requireLocationPrivilege(profile.id, location, "schedule.manage");
 			if (body.shiftIds.length === 0) return { updated: 0 };
 			// Every mutation below is scoped to this location's week, so shift ids
 			// from another schedule are ignored rather than wiped or retimed.
@@ -2204,11 +2198,7 @@ export const schedulesRoutes = new Elysia({
 				.where(eq(locations.id, params.locationId))
 				.limit(1);
 			if (!location) throw new NotFoundError("Location not found");
-			await requirePrivilege(
-				profile.id,
-				location.workplaceId,
-				"schedule.manage",
-			);
+			await requireLocationPrivilege(profile.id, location, "schedule.manage");
 			assertDateInWeek(body.date, params.weekStart);
 			const schedule = await getOrCreateSchedule(
 				location.id,
@@ -2272,11 +2262,7 @@ export const schedulesRoutes = new Elysia({
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
 			const { location, schedule } = await shiftContext(params.shiftId);
-			await requirePrivilege(
-				profile.id,
-				location.workplaceId,
-				"schedule.manage",
-			);
+			await requireLocationPrivilege(profile.id, location, "schedule.manage");
 			const [existing] = await db
 				.select()
 				.from(shifts)

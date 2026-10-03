@@ -23,7 +23,11 @@ import {
 	type SQL,
 } from "drizzle-orm";
 
-import { hasPrivilege } from "./context";
+import {
+	assertEmploymentInScope,
+	grantableLocations,
+	hasPrivilege,
+} from "./context";
 import { ConflictError, ForbiddenError, NotFoundError } from "./errors";
 import { describeLeaveWindow } from "./leave";
 import { applyLeaveLedger } from "./leave-ledger";
@@ -275,7 +279,20 @@ export async function authorizeApprovalDecision(input: {
 		approverEmploymentId: string | null;
 		approverPrivilege: string | null;
 	};
+	/** Whose request it is: the decider must manage one of their Locations. */
+	subjectEmploymentId: string;
 }): Promise<ApprovalAuthorization> {
+	const covers = async (decider: Employment) => {
+		try {
+			await assertEmploymentInScope(
+				await grantableLocations(decider),
+				input.subjectEmploymentId,
+			);
+			return true;
+		} catch {
+			return false;
+		}
+	};
 	const [caller] = await db
 		.select()
 		.from(employments)
@@ -289,7 +306,10 @@ export async function authorizeApprovalDecision(input: {
 		.limit(1);
 	if (!caller) return { allowed: false, via: null };
 
-	if (await employmentCanDecide({ employment: caller, ...input.approval })) {
+	if (
+		(await employmentCanDecide({ employment: caller, ...input.approval })) &&
+		(await covers(caller))
+	) {
 		return { allowed: true, via: "direct" };
 	}
 
@@ -314,7 +334,11 @@ export async function authorizeApprovalDecision(input: {
 		if (
 			delegator &&
 			delegator.status === "active" &&
-			(await employmentCanDecide({ employment: delegator, ...input.approval }))
+			(await employmentCanDecide({
+				employment: delegator,
+				...input.approval,
+			})) &&
+			(await covers(delegator))
 		) {
 			return { allowed: true, via: "delegation" };
 		}
@@ -412,6 +436,7 @@ export async function decideLeaveRequest(
 			profileId: input.profileId,
 			workplaceId: input.workplaceId,
 			approval,
+			subjectEmploymentId: request.request.employmentId,
 		});
 		if (!authorization.allowed) {
 			throw new ForbiddenError("You cannot decide this approval step");

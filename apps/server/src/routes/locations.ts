@@ -16,7 +16,12 @@ import {
 	seatsAfterLocationRemoval,
 	setSubscriptionSeats,
 } from "../billing";
-import { requirePrivilege, requireSession } from "../context";
+import {
+	requireLocationPrivilege,
+	requirePrivilege,
+	requireSession,
+	requireUnscoped,
+} from "../context";
 import {
 	BadRequestError,
 	ConflictError,
@@ -113,7 +118,13 @@ export const locationsRoutes = new Elysia({
 		"/workplaces/:workplaceId/locations",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			if (body.geofenceRadiusMeters != null) {
 				await requireSubscriptionCapability(params.workplaceId, "kiosk");
 			}
@@ -221,11 +232,7 @@ export const locationsRoutes = new Elysia({
 				.limit(1);
 
 			if (!existing) throw new NotFoundError("Location not found");
-			await requirePrivilege(
-				profile.id,
-				existing.workplaceId,
-				"settings.manage",
-			);
+			await requireLocationPrivilege(profile.id, existing, "settings.manage");
 			if (
 				body.geofenceRadiusMeters !== undefined ||
 				body.kioskPin !== undefined
@@ -332,11 +339,7 @@ export const locationsRoutes = new Elysia({
 				.limit(1);
 
 			if (!existing) throw new NotFoundError("Location not found");
-			await requirePrivilege(
-				profile.id,
-				existing.workplaceId,
-				"settings.manage",
-			);
+			await requireLocationPrivilege(profile.id, existing, "settings.manage");
 
 			const [schedule] = await db
 				.select({ id: schedules.id })

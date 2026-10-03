@@ -36,6 +36,38 @@ export function resolveLeaveDocumentPath(storageKey: string): string {
 	return resolved;
 }
 
+const HEIF_BRANDS = new Set([
+	"heic",
+	"heix",
+	"hevc",
+	"hevx",
+	"heim",
+	"heis",
+	"mif1",
+	"msf1",
+]);
+
+/** Magic-byte check for the accepted document types. */
+export function contentMatchesType(bytes: Buffer, mimeType: string): boolean {
+	const ascii = (start: number, end: number) =>
+		bytes.subarray(start, end).toString("latin1");
+	switch (mimeType) {
+		case "application/pdf":
+			return ascii(0, 5) === "%PDF-";
+		case "image/jpeg":
+			return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+		case "image/png":
+			return ascii(0, 8) === "\x89PNG\r\n\x1a\n";
+		case "image/webp":
+			return ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP";
+		case "image/heic":
+		case "image/heif":
+			return ascii(4, 8) === "ftyp" && HEIF_BRANDS.has(ascii(8, 12));
+		default:
+			return false;
+	}
+}
+
 export async function storeLeaveDocument(input: {
 	file: File;
 	workplaceId: string;
@@ -62,6 +94,11 @@ export async function storeLeaveDocument(input: {
 	if (input.file.size > LEAVE_DOCUMENT_MAX_BYTES) {
 		throw new BadRequestError("Documents must be 10 MB or smaller");
 	}
+	const bytes = Buffer.from(await input.file.arrayBuffer());
+	// SEC-012: the browser-declared type is only a claim; the bytes must agree.
+	if (!contentMatchesType(bytes, mimeType)) {
+		throw new BadRequestError("The file's contents don't match its type");
+	}
 
 	const extension =
 		EXTENSION_BY_MIME[mimeType] ??
@@ -74,7 +111,7 @@ export async function storeLeaveDocument(input: {
 	);
 	const target = resolveLeaveDocumentPath(storageKey);
 	await mkdir(path.dirname(target), { recursive: true });
-	await writeFile(target, Buffer.from(await input.file.arrayBuffer()));
+	await writeFile(target, bytes);
 	return {
 		storageKey,
 		fileName: (input.file.name || "document").slice(0, 200),

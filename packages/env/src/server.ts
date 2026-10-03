@@ -41,6 +41,27 @@ export const env = createEnv({
 		NODE_ENV: z
 			.enum(["development", "production", "test"])
 			.default("development"),
+		/**
+		 * Comma-separated IPs/CIDRs of the reverse proxy (e.g. Traefik) whose
+		 * X-Forwarded-For hop better-auth may trust for per-client rate limits.
+		 */
+		TRUSTED_PROXY_CIDRS: z
+			.string()
+			.optional()
+			.transform((value) =>
+				(value ?? "")
+					.split(",")
+					.map((entry) => entry.trim())
+					.filter(Boolean),
+			),
+		/**
+		 * Lets webhook endpoints use http and private/loopback addresses, for a
+		 * local receiver during development. Never set it in production.
+		 */
+		WEBHOOK_ALLOW_PRIVATE_URLS: z
+			.enum(["true", "false"])
+			.default("false")
+			.transform((value) => value === "true"),
 	},
 	runtimeEnv: process.env,
 	skipValidation: !!process.env.SKIP_ENV_VALIDATION,

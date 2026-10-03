@@ -37,6 +37,31 @@ const PRIVILEGE_BY_SCOPE: Record<ApiKeyScope, EmploymentPrivilege> = {
 
 const ALL_SCOPES = Object.keys(PRIVILEGE_BY_SCOPE) as ApiKeyScope[];
 
+function scopesForPrivileges(employment: Employment): Set<string> {
+	const granted = new Set<string>();
+	for (const scope of ALL_SCOPES) {
+		const privilege = PRIVILEGE_BY_SCOPE[scope];
+		if (privilege && hasPrivilege(employment, privilege)) {
+			granted.add(scope);
+		}
+	}
+	return granted;
+}
+
+/** SEC-003: a new key may only carry scopes its creator's role covers. */
+export function assertKeyScopesGrantable(
+	creator: Employment,
+	scopes: readonly ApiKeyScope[],
+): void {
+	const allowed = scopesForPrivileges(creator);
+	const missing = scopes.filter((scope) => !allowed.has(scope));
+	if (missing.length > 0) {
+		throw new ForbiddenError(
+			`You cannot grant scopes your role does not cover: ${missing.join(", ")}`,
+		);
+	}
+}
+
 export interface IntegrationActor {
 	/** How the caller authenticated. */
 	kind: "apiKey" | "principal";
@@ -64,6 +89,8 @@ function apiKeyActor(
 	workplaceId: string,
 	scopes: readonly string[],
 	createdBy: string | null,
+	owner: Employment,
+	locationScope: string[] | null,
 ): IntegrationActor {
 	const granted = new Set(scopes);
 	return {
@@ -72,8 +99,11 @@ function apiKeyActor(
 		scopes: granted,
 		profileId: createdBy,
 		employmentId: null,
-		locationScope: null,
-		canPublish: granted.has("schedule.write"),
+		// SEC-013: a key sees only the Locations its creator manages.
+		locationScope,
+		// SEC-003: publishing through a key needs the creator's publish right too.
+		canPublish:
+			granted.has("schedule.write") && hasPrivilege(owner, "schedule.publish"),
 		can: (scope) => granted.has(scope),
 	};
 }
@@ -133,20 +163,15 @@ async function principalLocationScope(
 	return rows.map((row) => row.locationId);
 }
 
-function scopesForPrivileges(employment: Employment): Set<string> {
-	const granted = new Set<string>();
-	for (const scope of ALL_SCOPES) {
-		const privilege = PRIVILEGE_BY_SCOPE[scope];
-		if (privilege && hasPrivilege(employment, privilege)) {
-			granted.add(scope);
-		}
-	}
-	return granted;
-}
-
+/**
+ * `tokenScopes` is the consented scope claim of an OAuth access token; the
+ * actor gets only what both the token and the Employment allow. `null` means a
+ * first-party session, which acts with the Employment's full privileges.
+ */
 async function principalActor(
 	profileId: string,
 	requestedWorkplaceId: string | null,
+	tokenScopes: readonly string[] | null,
 ): Promise<IntegrationActor> {
 	const { employment, workplaceId } = await resolvePrincipalWorkplace(
 		profileId,
@@ -160,6 +185,12 @@ async function principalActor(
 		);
 	}
 	const scopes = scopesForPrivileges(employment);
+	if (tokenScopes) {
+		const consented = new Set(tokenScopes);
+		for (const scope of scopes) {
+			if (!consented.has(scope)) scopes.delete(scope);
+		}
+	}
 	return {
 		kind: "principal",
 		workplaceId,
@@ -278,17 +309,45 @@ export async function requireIntegrationActor(
 	}
 
 	if (token.startsWith("jl_live_")) {
-		const key = await requireApiKey(headers, requiredScope);
+		const key = await requireApiKey(headers);
+		// SEC-003/SEC-005: a key acts as its creator, so it never outlives or
+		// outranks them; deactivation or demotion takes effect immediately.
+		const [owner] = key.apiKey.createdBy
+			? await db
+					.select()
+					.from(employments)
+					.where(
+						and(
+							eq(employments.profileId, key.apiKey.createdBy),
+							eq(employments.workplaceId, key.workplaceId),
+							eq(employments.status, "active"),
+						),
+					)
+					.limit(1)
+			: [];
+		if (!owner) {
+			throw new AuthenticationError(
+				"This API key's creator no longer has access to the Workplace",
+			);
+		}
+		const ownerScopes = scopesForPrivileges(owner);
 		const actor = apiKeyActor(
 			key.workplaceId,
-			key.apiKey.scopes,
+			key.apiKey.scopes.filter((scope) => ownerScopes.has(scope)),
 			key.apiKey.createdBy,
+			owner,
+			await principalLocationScope(owner),
 		);
+		if (requiredScope && !actor.can(requiredScope)) {
+			throw new ForbiddenError(
+				`This API key is missing the ${requiredScope} scope`,
+			);
+		}
 		await requireSubscriptionForScope(actor.workplaceId, requiredScope);
 		return actor;
 	}
 
-	let principal: { profileId: string; scopes: string[] } | null = null;
+	let principal: { profileId: string; scopes: string[] | null } | null = null;
 	if (looksLikeJwt(token)) {
 		principal = await verifyMcpAccessToken(token);
 	} else {
@@ -305,12 +364,13 @@ export async function requireIntegrationActor(
 		if (!session) {
 			throw new AuthenticationError("This session is no longer valid");
 		}
-		principal = { profileId: session.user.id, scopes: [] };
+		principal = { profileId: session.user.id, scopes: null };
 	}
 
 	const actor = await principalActor(
 		principal.profileId,
 		requestedWorkplaceId(headers),
+		principal.scopes,
 	);
 	if (requiredScope && !actor.can(requiredScope)) {
 		throw new ForbiddenError(

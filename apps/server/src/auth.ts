@@ -85,6 +85,10 @@ const oauthPlugins: BetterAuthOptions["plugins"] = [
 		// clients with PKCE; user consent still gates every authorization.
 		allowDynamicClientRegistration: true,
 		allowUnauthenticatedClientRegistration: true,
+		// SEC-006: access JWTs are verified offline, so disconnecting an
+		// assistant (which revokes its refresh token) only stops it once the
+		// current token expires; keep that window short.
+		accessTokenExpiresIn: 600,
 	}),
 	// MCP 2026-07-28 pins Client ID Metadata Documents draft-00; Claude Code
 	// prefers CIMD over the deprecated DCR fallback (plain DCR without
@@ -140,7 +144,23 @@ const authOptions: BetterAuthOptions = {
 		"jooling://",
 		...(process.env.NODE_ENV === "development" ? ["exp://**"] : []),
 	],
-	advanced: { database: { generateId: "uuid" as const } },
+	advanced: {
+		database: { generateId: "uuid" as const },
+		// SEC-008: resolve the real client IP behind the proxy so limits are
+		// per client, not one shared bucket.
+		...(env.TRUSTED_PROXY_CIDRS.length > 0
+			? { ipAddress: { trustedProxies: env.TRUSTED_PROXY_CIDRS } }
+			: {}),
+	},
+	// SEC-008: credential endpoints get much tighter limits than the default.
+	rateLimit: {
+		customRules: {
+			"/sign-in/email": { window: 60, max: 5 },
+			"/sign-up/email": { window: 60, max: 5 },
+			"/request-password-reset": { window: 300, max: 3 },
+			"/reset-password": { window: 300, max: 5 },
+		},
+	},
 	databaseHooks: {
 		user: {
 			create: {

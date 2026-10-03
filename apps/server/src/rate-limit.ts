@@ -75,6 +75,14 @@ export function sweepExpiredRateLimits(now = Date.now()): number {
 	return swept;
 }
 
+/** Gives back one unit, e.g. when an attempt counted up front succeeded. */
+export function refundRateLimit(key: string, now = Date.now()): void {
+	const existing = buckets.get(key);
+	if (existing && existing.resetAt > now && existing.count > 0) {
+		existing.count -= 1;
+	}
+}
+
 /** Fixed-window counter. Returns false when the key has already used its limit. */
 export function tryConsumeRateLimit(
 	key: string,

@@ -2,7 +2,7 @@ import { db, locations, scheduleTeams } from "@SchedulesManager/db";
 import { and, eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
-import { requirePrivilege, requireSession } from "../context";
+import { requireLocationPrivilege, requireSession } from "../context";
 import { ConflictError, NotFoundError } from "../errors";
 
 const uuid = t.String({ format: "uuid" });
@@ -40,9 +40,9 @@ async function locationWithSettings(
 		.where(eq(locations.id, locationId))
 		.limit(1);
 	if (!location) throw new NotFoundError("Location not found");
-	await requirePrivilege(
+	await requireLocationPrivilege(
 		profileId,
-		location.workplaceId,
+		location,
 		"settings.manage",
 		options,
 	);

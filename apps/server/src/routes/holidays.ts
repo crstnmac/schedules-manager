@@ -2,7 +2,7 @@ import { db, holidays } from "@SchedulesManager/db";
 import { and, eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
-import { requirePrivilege, requireSession } from "../context";
+import { requirePrivilege, requireSession, requireUnscoped } from "../context";
 import { BadRequestError, NotFoundError } from "../errors";
 import { firstRow } from "../rows";
 
@@ -100,7 +100,13 @@ export const holidayRoutes = new Elysia({
 		"/workplaces/:workplaceId/holidays",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
 				throw new BadRequestError("Date must be YYYY-MM-DD");
 			}
@@ -148,7 +154,13 @@ export const holidayRoutes = new Elysia({
 		"/workplaces/:workplaceId/holidays/:holidayId",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const [holiday] = await db
 				.update(holidays)
 				.set({
@@ -199,7 +211,13 @@ export const holidayRoutes = new Elysia({
 		"/workplaces/:workplaceId/holidays/:holidayId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			await db
 				.delete(holidays)
 				.where(

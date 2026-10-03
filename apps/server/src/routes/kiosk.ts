@@ -30,8 +30,16 @@ import {
 } from "../errors";
 import { assertClockInGeofence, roundToMinutes } from "../geo";
 import { pinMatches } from "../pin";
-import { clientIpFromRequest, tryConsumeRateLimit } from "../rate-limit";
+import {
+	clientIpFromRequest,
+	refundRateLimit,
+	tryConsumeRateLimit,
+} from "../rate-limit";
 import { firstRow } from "../rows";
+
+const KIOSK_FAILURE_POLICY = { limit: 20, windowMs: 15 * 60 * 1000 };
+// SEC-007: one message for either PIN, so the two cannot be guessed separately.
+const KIOSK_PIN_ERROR = "Location or worker PIN is not valid";
 
 export const kioskRoutes = new Elysia({ prefix: "/v1", tags: ["Kiosk"] }).post(
 	"/kiosk/clock",
@@ -44,19 +52,29 @@ export const kioskRoutes = new Elysia({ prefix: "/v1", tags: ["Kiosk"] }).post(
 			},
 		);
 		if (!limited.allowed) throw new RateLimitError();
+		// SEC-007: failed PINs also count per Location, so rotating source IPs
+		// cannot brute-force a kiosk. Successful punches never consume it.
+		// Count the attempt before the scrypt work, so parallel guesses cannot
+		// slip past the limit; a successful punch gives it back.
+		const failureKey = `kiosk-failures:${body.locationId}`;
+		if (!tryConsumeRateLimit(failureKey, KIOSK_FAILURE_POLICY).allowed) {
+			throw new RateLimitError();
+		}
+		const rejectPin = (message: string) => new BadRequestError(message);
 
 		const [location] = await db
 			.select()
 			.from(locations)
 			.where(eq(locations.id, body.locationId))
 			.limit(1);
-		if (
-			!location?.kioskPinHash ||
-			!(await pinMatches(body.locationPin, location.kioskPinHash))
-		) {
-			throw new BadRequestError("Location PIN is not valid");
-		}
-		await requireSubscriptionCapability(location.workplaceId, "kiosk");
+		if (!location?.kioskPinHash) throw rejectPin(KIOSK_PIN_ERROR);
+		// SEC-007: check both PINs every time and decide only at the end, so
+		// neither the message nor the response time reveals which PIN was
+		// wrong (otherwise each could be guessed on its own).
+		const locationPinOk = await pinMatches(
+			body.locationPin,
+			location.kioskPinHash,
+		);
 
 		// PIN hashes are per-row salted, so equality lookup is not possible:
 		// verify the PIN against each active employment of the workplace.
@@ -78,14 +96,16 @@ export const kioskRoutes = new Elysia({ prefix: "/v1", tags: ["Kiosk"] }).post(
 				verifiedWorkers.push(candidate);
 			}
 		}
-		if (verifiedWorkers.length === 0) {
-			throw new BadRequestError("Worker PIN is not valid");
+		if (!locationPinOk || verifiedWorkers.length === 0) {
+			throw rejectPin(KIOSK_PIN_ERROR);
 		}
 		if (verifiedWorkers.length > 1) {
 			throw new BadRequestError(
 				"This worker PIN is used by more than one worker. Ask a manager to set unique PINs.",
 			);
 		}
+		refundRateLimit(failureKey);
+		await requireSubscriptionCapability(location.workplaceId, "kiosk");
 		const worker = firstRow(verifiedWorkers);
 
 		const [workplace] = await db

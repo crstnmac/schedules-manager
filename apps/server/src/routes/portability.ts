@@ -16,7 +16,7 @@ import {
 
 import { eq } from "drizzle-orm";
 import { Elysia, t } from "elysia";
-import { requirePrivilege, requireSession } from "../context";
+import { requirePrivilege, requireSession, requireUnscoped } from "../context";
 import { csvAttachment, csvCell } from "../csv-import";
 
 function csv(header: string[], rows: (string | number | null | undefined)[][]) {
@@ -32,9 +32,14 @@ export const portabilityRoutes = new Elysia({
 	"/workplaces/:workplaceId/export/:dataset",
 	async ({ headers, params, set }) => {
 		const { profile } = await requireSession(headers);
-		await requirePrivilege(profile.id, params.workplaceId, "settings.manage", {
-			withoutSubscription: true,
-		});
+		const actor = await requirePrivilege(
+			profile.id,
+			params.workplaceId,
+			"settings.manage",
+			{ withoutSubscription: true },
+		);
+		// A full export covers every Location, so it needs Workplace-wide access.
+		await requireUnscoped(actor);
 		const workplaceId = params.workplaceId;
 		const dataset = params.dataset;
 		csvAttachment(set, `jooling-${dataset}.csv`);

@@ -8,7 +8,7 @@ import {
 } from "@SchedulesManager/db";
 import { and, eq, ne } from "drizzle-orm";
 import { Elysia, t } from "elysia";
-import { requirePrivilege, requireSession } from "../context";
+import { requirePrivilege, requireSession, requireUnscoped } from "../context";
 import { ConflictError, NotFoundError } from "../errors";
 import { firstRow } from "../rows";
 
@@ -54,7 +54,13 @@ export const positionsRoutes = new Elysia({
 		"/workplaces/:workplaceId/positions",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 
 			const [position] = await db
 				.insert(positions)
@@ -99,11 +105,13 @@ export const positionsRoutes = new Elysia({
 				.limit(1);
 
 			if (!existing) throw new NotFoundError("Position not found");
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				existing.workplaceId,
 				"settings.manage",
 			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 
 			if (body.name !== undefined && body.name !== existing.name) {
 				const [sibling] = await db
@@ -162,11 +170,13 @@ export const positionsRoutes = new Elysia({
 				.limit(1);
 
 			if (!existing) throw new NotFoundError("Position not found");
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				existing.workplaceId,
 				"settings.manage",
 			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 
 			const [[shift], [template], [templateShift], [assignment]] =
 				await Promise.all([

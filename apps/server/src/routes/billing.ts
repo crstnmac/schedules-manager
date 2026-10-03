@@ -27,7 +27,7 @@ import {
 	purchaseLocationSeats,
 	requireSeatBasedProduct,
 } from "../billing";
-import { requirePrivilege, requireSession } from "../context";
+import { requirePrivilege, requireSession, requireUnscoped } from "../context";
 import {
 	BadRequestError,
 	ConflictError,
@@ -42,6 +42,8 @@ function clientIp(request: Request) {
 	// receives a non-spoofable client IP for fraud signals.
 	return clientIpFromRequest(request);
 }
+
+const WEBHOOK_TOLERANCE_SECONDS = 5 * 60;
 
 /**
  * Polar secrets created on/after 2026-09-08 use the Standard Webhooks
@@ -58,6 +60,14 @@ function verifyStandardWebhook(
 	const timestamp = headers["webhook-timestamp"];
 	const signatureHeader = headers["webhook-signature"];
 	if (!id || !timestamp || !signatureHeader) return false;
+	// SEC-014: Standard Webhooks tolerance; reject stale or future timestamps.
+	const sentAt = Number(timestamp);
+	if (
+		!Number.isFinite(sentAt) ||
+		Math.abs(Date.now() / 1000 - sentAt) > WEBHOOK_TOLERANCE_SECONDS
+	) {
+		return false;
+	}
 	const base64Key = secret.startsWith("whsec_")
 		? secret.slice("whsec_".length)
 		: secret;
@@ -166,12 +176,14 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing/cancellation",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"settings.manage",
 				{ withoutSubscription: true },
 			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const [subscription] = await db
 				.select()
 				.from(workplaceSubscriptions)
@@ -253,12 +265,14 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"settings.manage",
 				{ withoutSubscription: true },
 			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const [subscription] = await db
 				.select()
 				.from(workplaceSubscriptions)
@@ -324,12 +338,14 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing/plan-state",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"settings.manage",
 				{ withoutSubscription: true },
 			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const [subscription] = await db
 				.select()
 				.from(workplaceSubscriptions)
@@ -354,12 +370,14 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing/plan-change",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"settings.manage",
 				{ withoutSubscription: true },
 			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			return db.transaction(async (tx) => {
 				const [subscription] = await tx
 					.select()
@@ -474,12 +492,14 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing/plan-change/cancel",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"settings.manage",
 				{ withoutSubscription: true },
 			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			return db.transaction(async (tx) => {
 				const [subscription] = await tx
 					.select()
@@ -535,12 +555,14 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing/location-seats",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"settings.manage",
 				{ withoutSubscription: true },
 			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			return purchaseLocationSeats(
 				params.workplaceId,
 				body.expectedPaidLocationCount,
@@ -567,12 +589,14 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing/checkout",
 		async ({ headers, params, body, request }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"settings.manage",
 				{ withoutSubscription: true },
 			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const [existing] = await db
 				.select()
 				.from(workplaceSubscriptions)
@@ -649,12 +673,14 @@ export const billingRoutes = new Elysia({ prefix: "/v1", tags: ["Billing"] })
 		"/workplaces/:workplaceId/billing/portal",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"settings.manage",
 				{ withoutSubscription: true },
 			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const [subscription] = await db
 				.select({
 					id: workplaceSubscriptions.id,

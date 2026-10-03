@@ -29,8 +29,14 @@ import {
 import { Elysia, t } from "elysia";
 
 import {
+	assertCanManageEmployment,
+	assertEmploymentInScope,
+	employmentVisibleIn,
+	grantableLocations,
+	hasPrivilege,
 	requirePrivilege,
 	requireSession,
+	requireUnscoped,
 	requireWorkplaceMember,
 } from "../context";
 import { csvAttachment, csvCell as csvEscape } from "../csv-import";
@@ -230,13 +236,33 @@ async function canViewEmployment(
 	if (!subject) return false;
 	if (member.kind !== "manager" && member.kind !== "viewer") return false;
 	try {
-		await requirePrivilege(profileId, workplaceId, "approvals.review", {
-			withoutSubscription: true,
-		});
+		const actor = await requirePrivilege(
+			profileId,
+			workplaceId,
+			"approvals.review",
+			{ withoutSubscription: true },
+		);
+		await assertEmploymentInScope(
+			await grantableLocations(actor),
+			employmentId,
+		);
 		return true;
 	} catch {
 		return false;
 	}
+}
+
+async function assertLeaveRequestInScope(
+	scope: Set<string> | null,
+	requestId: string,
+): Promise<void> {
+	if (scope === null) return;
+	const [request] = await db
+		.select({ employmentId: timeOffRequests.employmentId })
+		.from(timeOffRequests)
+		.where(eq(timeOffRequests.id, requestId))
+		.limit(1);
+	if (request) await assertEmploymentInScope(scope, request.employmentId);
 }
 
 export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
@@ -275,7 +301,13 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/leave-types/:leaveTypeId/policy",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			await assertLeaveTypesInWorkplace(params.workplaceId, [
 				params.leaveTypeId,
 			]);
@@ -425,7 +457,13 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/leave-approval-chains",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			validateSteps(body.steps);
 			const created = await db.transaction(async () => {
 				if (body.isDefault) {
@@ -480,7 +518,13 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/leave-approval-chains/:chainId",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			validateSteps(body.steps);
 			const [existing] = await db
 				.select()
@@ -546,7 +590,13 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/leave-approval-chains/:chainId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+			);
+			// Workplace-wide setting: Location-scoped managers cannot change it.
+			await requireUnscoped(actor);
 			const [deleted] = await db
 				.delete(leaveApprovalChains)
 				.where(
@@ -629,11 +679,21 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 			);
 			const delegatorId = body.delegatorEmploymentId ?? member.id;
 			if (delegatorId !== member.id) {
-				await requirePrivilege(
+				const actor = await requirePrivilege(
 					profile.id,
 					params.workplaceId,
 					"policies.manage",
 				);
+				// Workplace-wide setting: Location-scoped managers cannot change it.
+				await requireUnscoped(actor);
+				// Only on behalf of someone you outrank (never a full Manager
+				// unless you are one).
+				const [delegator] = await db
+					.select()
+					.from(employments)
+					.where(eq(employments.id, delegatorId))
+					.limit(1);
+				if (delegator) assertCanManageEmployment(actor, delegator);
 			}
 			if (body.delegateEmploymentId === delegatorId) {
 				throw new BadRequestError("Choose a different delegate");
@@ -702,11 +762,13 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 				.limit(1);
 			if (!delegation) throw new NotFoundError("Delegation not found");
 			if (delegation.delegatorEmploymentId !== member.id) {
-				await requirePrivilege(
+				const actor = await requirePrivilege(
 					profile.id,
 					params.workplaceId,
 					"policies.manage",
 				);
+				// Workplace-wide setting: Location-scoped managers cannot change it.
+				await requireUnscoped(actor);
 			}
 			await db
 				.update(leaveApprovalDelegations)
@@ -797,12 +859,13 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/leave-balances",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 				{ withoutSubscription: true },
 			);
+			const scope = await grantableLocations(actor);
 			const [employmentsList, types, balances, ledgerSums, pendingSums] =
 				await Promise.all([
 					loadEmploymentRows(params.workplaceId),
@@ -858,7 +921,24 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 
 			const activeTypes = types.filter((type) => type.active);
 			const rows = [];
-			for (const employment of employmentsList) {
+			const visible = scope
+				? new Set(
+						(
+							await db
+								.select({ id: employments.id })
+								.from(employments)
+								.where(
+									and(
+										eq(employments.workplaceId, params.workplaceId),
+										employmentVisibleIn(scope),
+									),
+								)
+						).map((row) => row.id),
+					)
+				: null;
+			for (const employment of employmentsList.filter(
+				(row) => visible === null || visible.has(row.id),
+			)) {
 				for (const type of activeTypes) {
 					const balanceRow = balances.find(
 						(row) =>
@@ -914,8 +994,14 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/leave-adjustments",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+			);
+			const scope = await grantableLocations(actor);
 			await assertEmploymentInWorkplace(params.workplaceId, body.employmentId);
+			await assertEmploymentInScope(scope, body.employmentId);
 			await assertLeaveTypesInWorkplace(params.workplaceId, [body.leaveTypeId]);
 			if (body.minutes === 0) {
 				throw new BadRequestError("Enter a non-zero adjustment");
@@ -978,7 +1064,12 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/leave-transfers",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+			);
+			const scope = await grantableLocations(actor);
 			if (body.fromLeaveTypeId === body.toLeaveTypeId) {
 				throw new BadRequestError("Choose two different Leave Types");
 			}
@@ -986,6 +1077,7 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 				throw new BadRequestError("Transfer minutes must be positive");
 			}
 			await assertEmploymentInWorkplace(params.workplaceId, body.employmentId);
+			await assertEmploymentInScope(scope, body.employmentId);
 			await assertLeaveTypesInWorkplace(params.workplaceId, [
 				body.fromLeaveTypeId,
 				body.toLeaveTypeId,
@@ -1063,12 +1155,13 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/leave-encashments",
 		async ({ headers, params, query }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 				{ withoutSubscription: true },
 			);
+			const scope = await grantableLocations(actor);
 			const rows = await db
 				.select({
 					encashment: leaveEncashments,
@@ -1086,6 +1179,7 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 				.where(
 					and(
 						eq(leaveEncashments.workplaceId, params.workplaceId),
+						employmentVisibleIn(scope),
 						query.status
 							? eq(leaveEncashments.status, query.status)
 							: undefined,
@@ -1168,12 +1262,14 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/leave-encashments",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 			);
+			const scope = await grantableLocations(actor);
 			await assertEmploymentInWorkplace(params.workplaceId, body.employmentId);
+			await assertEmploymentInScope(scope, body.employmentId);
 			const [target] = await db
 				.select({ hourlyWageCents: employments.hourlyWageCents })
 				.from(employments)
@@ -1208,11 +1304,12 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/leave-encashments/:encashmentId/decision",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 			);
+			const scope = await grantableLocations(actor);
 			const [encashment] = await db
 				.select()
 				.from(leaveEncashments)
@@ -1224,6 +1321,7 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 				)
 				.limit(1);
 			if (!encashment) throw new NotFoundError("Encashment not found");
+			await assertEmploymentInScope(scope, encashment.employmentId);
 			if (encashment.status !== "requested") {
 				throw new ConflictError("This encashment has already been decided");
 			}
@@ -1315,11 +1413,12 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/leave-encashments/:encashmentId/paid",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 			);
+			const scope = await grantableLocations(actor);
 			const [encashment] = await db
 				.select()
 				.from(leaveEncashments)
@@ -1331,6 +1430,7 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 				)
 				.limit(1);
 			if (!encashment) throw new NotFoundError("Encashment not found");
+			await assertEmploymentInScope(scope, encashment.employmentId);
 			if (encashment.status !== "approved") {
 				throw new ConflictError("Only approved encashments can be marked paid");
 			}
@@ -1432,7 +1532,13 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/leave-accruals/run",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+			);
+			// Covers every Location, so it needs Workplace-wide access.
+			await requireUnscoped(actor);
 			const asOf = body.asOf ? new Date(`${body.asOf}T23:59:59Z`) : new Date();
 			const accruals = await runLeaveAccruals({
 				workplaceId: params.workplaceId,
@@ -1465,11 +1571,13 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/time-off/import",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 			);
+			// Covers every Location, so it needs Workplace-wide access.
+			await requireUnscoped(actor);
 			const result = await importLeaveRecords({
 				workplaceId: params.workplaceId,
 				profileId: profile.id,
@@ -1527,7 +1635,13 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/leave-balances/import",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+			);
+			// Covers every Location, so it needs Workplace-wide access.
+			await requireUnscoped(actor);
 			const result = await importLeaveBalances({
 				workplaceId: params.workplaceId,
 				profileId: profile.id,
@@ -1607,7 +1721,13 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/calendar-tokens",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "settings.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"settings.manage",
+			);
+			// Covers every Location, so it needs Workplace-wide access.
+			await requireUnscoped(actor);
 			const token = firstRow(
 				await db
 					.insert(calendarFeedTokens)
@@ -1740,6 +1860,31 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 				set.status = 404;
 				return "Calendar feed not found";
 			}
+			// SEC-005: a feed stops with its holder's access. Personal feeds need
+			// an active Employment; workplace-wide feeds need their creator to
+			// still hold settings.manage.
+			const holderFilter = token.employmentId
+				? and(
+						eq(employments.id, token.employmentId),
+						eq(employments.status, "active"),
+					)
+				: token.createdByProfileId
+					? and(
+							eq(employments.profileId, token.createdByProfileId),
+							eq(employments.workplaceId, token.workplaceId),
+							eq(employments.status, "active"),
+						)
+					: null;
+			const [holder] = holderFilter
+				? await db.select().from(employments).where(holderFilter).limit(1)
+				: [];
+			if (
+				!holder ||
+				(!token.employmentId && !hasPrivilege(holder, "settings.manage"))
+			) {
+				set.status = 404;
+				return "Calendar feed not found";
+			}
 			const body = await buildLeaveCalendarFeed({
 				workplaceId: token.workplaceId,
 				employmentId: token.employmentId,
@@ -1850,10 +1995,14 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 				throw new NotFoundError("Time-off request not found");
 			}
 			if (request.request.employmentId !== member.id) {
-				await requirePrivilege(
+				const actor = await requirePrivilege(
 					profile.id,
 					params.workplaceId,
 					"approvals.review",
+				);
+				await assertEmploymentInScope(
+					await grantableLocations(actor),
+					request.request.employmentId,
 				);
 			}
 			const file = (body as { file: File }).file;
@@ -1935,10 +2084,14 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 				.limit(1);
 			if (!document) throw new NotFoundError("Document not found");
 			if (document.uploadedByProfileId !== profile.id) {
-				await requirePrivilege(
+				const actor = await requirePrivilege(
 					profile.id,
 					params.workplaceId,
 					"approvals.review",
+				);
+				await assertLeaveRequestInScope(
+					await grantableLocations(actor),
+					document.requestId,
 				);
 			}
 			void member;
@@ -1982,11 +2135,15 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 				row.employmentId ===
 				(await requireWorkplaceMember(profile.id, row.workplaceId)).id;
 			if (!isOwner) {
-				await requirePrivilege(
+				const actor = await requirePrivilege(
 					profile.id,
 					row.workplaceId,
 					"approvals.review",
 					{ withoutSubscription: true },
+				);
+				await assertEmploymentInScope(
+					await grantableLocations(actor),
+					row.employmentId,
 				);
 			}
 			const path = resolveLeaveDocumentPath(row.document.storageKey);
@@ -1995,8 +2152,11 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 				throw new NotFoundError("Document file is missing");
 			}
 			set.headers["content-type"] = row.document.mimeType;
+			// SEC-012: never render uploads as a page on the API origin.
 			set.headers["content-disposition"] =
-				`inline; filename="${row.document.fileName.replaceAll('"', "")}"`;
+				`attachment; filename="${row.document.fileName.replace(/["\r\n]/g, "")}"`;
+			set.headers["x-content-type-options"] = "nosniff";
+			set.headers["content-security-policy"] = "sandbox";
 			return new Response(file);
 		},
 		{
@@ -2011,7 +2171,13 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/reports/leave",
 		async ({ headers, params, query }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"reports.view",
+			);
+			// Covers every Location, so it needs Workplace-wide access.
+			await requireUnscoped(actor);
 			const from = query.from ?? shiftDate(new Date(), -30);
 			const to = query.to ?? shiftDate(new Date(), 30);
 			return buildLeaveReport({
@@ -2036,7 +2202,13 @@ export const leaveRoutes = new Elysia({ prefix: "/v1", tags: ["Leave"] })
 		"/workplaces/:workplaceId/reports/leave-payroll.csv",
 		async ({ headers, params, query, set }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"reports.view",
+			);
+			// Covers every Location, so it needs Workplace-wide access.
+			await requireUnscoped(actor);
 			const from = query.from ?? shiftDate(new Date(), -30);
 			const to = query.to ?? shiftDate(new Date(), 30);
 			const report = await buildLeaveReport({

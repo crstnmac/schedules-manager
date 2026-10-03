@@ -17,6 +17,7 @@ import {
 	parseCsvHeader,
 	requireHeaders,
 } from "./csv-import";
+import { BadRequestError } from "./errors";
 import { writeAudit } from "./notify";
 
 export const WORKER_IMPORT_TEMPLATE = csvTemplate(
@@ -70,12 +71,20 @@ export interface RawWorkerImportRow {
 	location: string | null;
 }
 
+export const MAX_INVITATION_IMPORT_ROWS = 500;
+
 export function parseWorkerImportCsv(text: string): {
 	rows: RawWorkerImportRow[];
 	errors: ImportFailure[];
 } {
 	const { rows: dataRows, map } = parseCsvHeader(text, HEADER_ALIASES);
 	requireHeaders(map, ["email"]);
+	// SEC-009: every row can send an invitation email, so bound one import.
+	if (dataRows.length > MAX_INVITATION_IMPORT_ROWS) {
+		throw new BadRequestError(
+			`Import at most ${MAX_INVITATION_IMPORT_ROWS} people at a time`,
+		);
+	}
 
 	const rows: RawWorkerImportRow[] = [];
 	const errors: ImportFailure[] = [];

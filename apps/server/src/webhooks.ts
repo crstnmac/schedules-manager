@@ -1,6 +1,7 @@
 import { db, webhookDeliveries, webhookEndpoints } from "@SchedulesManager/db";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
+import { assertPublicHttpsUrl } from "./outbound-url";
 
 const MAX_ATTEMPTS = 8;
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -171,7 +172,21 @@ export async function dispatchWebhookDeliveries(limit = 25) {
 
 		const rawBody = JSON.stringify(item.payload ?? null);
 		try {
+			// SEC-004: re-check at send time (DNS can change after save), never
+			// follow redirects, and keep transport errors generic so delivery
+			// logs cannot be used to probe the server's network.
+			try {
+				await assertPublicHttpsUrl(endpoint.url);
+			} catch {
+				await recordFailure(
+					item,
+					"Webhook URL does not resolve to a public https address",
+					null,
+				);
+				continue;
+			}
 			const response = await fetch(endpoint.url, {
+				redirect: "manual",
 				method: "POST",
 				headers: {
 					"content-type": "application/json",
@@ -206,8 +221,12 @@ export async function dispatchWebhookDeliveries(limit = 25) {
 				);
 			}
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			await recordFailure(item, message || "Webhook request failed", null);
+			const timedOut = error instanceof Error && error.name === "TimeoutError";
+			await recordFailure(
+				item,
+				timedOut ? "Webhook request timed out" : "Webhook request failed",
+				null,
+			);
 		}
 	}
 	return { claimed: claimed.length };

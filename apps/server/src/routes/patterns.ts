@@ -13,8 +13,19 @@ import {
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
-import { requirePrivilege, requireSession, weekStartDayFor } from "../context";
-import { BadRequestError, ConflictError, NotFoundError } from "../errors";
+import {
+	grantableLocations,
+	requireLocationPrivilege,
+	requirePrivilege,
+	requireSession,
+	weekStartDayFor,
+} from "../context";
+import {
+	BadRequestError,
+	ConflictError,
+	ForbiddenError,
+	NotFoundError,
+} from "../errors";
 import { withIdempotency } from "../idempotency";
 import { writeAudit } from "../notify";
 import { resolveScheduleTeam } from "../schedule-teams";
@@ -145,7 +156,7 @@ async function locationWithManage(profileId: string, locationId: string) {
 		.where(eq(locations.id, locationId))
 		.limit(1);
 	if (!location) throw new NotFoundError("Location not found");
-	await requirePrivilege(profileId, location.workplaceId, "schedule.manage");
+	await requireLocationPrivilege(profileId, location, "schedule.manage");
 	return location;
 }
 
@@ -407,6 +418,24 @@ function projectWeeks(input: {
 	return projected;
 }
 
+/** A Location-less pattern applies anywhere, so every scope sees it. */
+function patternInScope(
+	scope: Set<string> | null,
+	locationId: string | null,
+): boolean {
+	return scope === null || locationId === null || scope.has(locationId);
+}
+
+/** Scoped actors may only pin a pattern to one of their Locations. */
+function assertPatternLocation(
+	scope: Set<string> | null,
+	locationId: string | null,
+): void {
+	if (locationId && !patternInScope(scope, locationId)) {
+		throw new ForbiddenError("You do not have access to this Location");
+	}
+}
+
 export const patternRoutes = new Elysia({
 	prefix: "/v1",
 	tags: ["Shift Patterns"],
@@ -415,17 +444,20 @@ export const patternRoutes = new Elysia({
 		"/workplaces/:workplaceId/shift-patterns",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"schedule.manage",
 				{ withoutSubscription: true },
 			);
-			const patterns = await db
-				.select()
-				.from(shiftPatterns)
-				.where(eq(shiftPatterns.workplaceId, params.workplaceId))
-				.orderBy(shiftPatterns.name);
+			const scope = await grantableLocations(actor);
+			const patterns = (
+				await db
+					.select()
+					.from(shiftPatterns)
+					.where(eq(shiftPatterns.workplaceId, params.workplaceId))
+					.orderBy(shiftPatterns.name)
+			).filter((pattern) => patternInScope(scope, pattern.locationId));
 
 			const shiftCounts = new Map<string, number>();
 			const memberCounts = new Map<string, number>();
@@ -480,7 +512,7 @@ export const patternRoutes = new Elysia({
 		"/workplaces/:workplaceId/shift-patterns/:patternId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"schedule.manage",
@@ -496,7 +528,12 @@ export const patternRoutes = new Elysia({
 					),
 				)
 				.limit(1);
-			if (!pattern) throw new NotFoundError("Shift Pattern not found");
+			if (
+				!pattern ||
+				!patternInScope(await grantableLocations(actor), pattern.locationId)
+			) {
+				throw new NotFoundError("Shift Pattern not found");
+			}
 
 			const rows = await db
 				.select()
@@ -546,10 +583,16 @@ export const patternRoutes = new Elysia({
 		"/workplaces/:workplaceId/shift-patterns",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "schedule.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"schedule.manage",
+			);
+			const scope = await grantableLocations(actor);
 			if (body.locationId) {
 				await assertLocationInWorkplace(params.workplaceId, body.locationId);
 			}
+			assertPatternLocation(scope, body.locationId ?? null);
 			const normalized = normalizeShifts(body.cycleWeeks, body.shifts);
 			await assertPositionsInWorkplace(
 				params.workplaceId,
@@ -624,7 +667,12 @@ export const patternRoutes = new Elysia({
 		"/workplaces/:workplaceId/shift-patterns/:patternId",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "schedule.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"schedule.manage",
+			);
+			const scope = await grantableLocations(actor);
 			const [existing] = await db
 				.select()
 				.from(shiftPatterns)
@@ -635,10 +683,13 @@ export const patternRoutes = new Elysia({
 					),
 				)
 				.limit(1);
-			if (!existing) throw new NotFoundError("Shift Pattern not found");
+			if (!existing || !patternInScope(scope, existing.locationId)) {
+				throw new NotFoundError("Shift Pattern not found");
+			}
 			if (body.locationId) {
 				await assertLocationInWorkplace(params.workplaceId, body.locationId);
 			}
+			assertPatternLocation(scope, body.locationId ?? null);
 			const normalized = normalizeShifts(body.cycleWeeks, body.shifts);
 			await assertPositionsInWorkplace(
 				params.workplaceId,
@@ -725,7 +776,25 @@ export const patternRoutes = new Elysia({
 		"/workplaces/:workplaceId/shift-patterns/:patternId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "schedule.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"schedule.manage",
+			);
+			const scope = await grantableLocations(actor);
+			const [target] = await db
+				.select({ locationId: shiftPatterns.locationId })
+				.from(shiftPatterns)
+				.where(
+					and(
+						eq(shiftPatterns.id, params.patternId),
+						eq(shiftPatterns.workplaceId, params.workplaceId),
+					),
+				)
+				.limit(1);
+			if (target && !patternInScope(scope, target.locationId)) {
+				throw new NotFoundError("Shift Pattern not found");
+			}
 			const [deleted] = await db
 				.delete(shiftPatterns)
 				.where(

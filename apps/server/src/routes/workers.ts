@@ -14,10 +14,25 @@ import {
 } from "@SchedulesManager/db";
 import { and, eq, inArray } from "drizzle-orm";
 import { Elysia, t } from "elysia";
-import { requirePrivilege, requireSession } from "../context";
+import {
+	assertCanAssignRole,
+	assertCanManageEmployment,
+	assertEmploymentInScope,
+	assertLocationsGrantable,
+	employmentVisibleIn,
+	grantableLocations,
+	requirePrivilege,
+	requireSession,
+	requireUnscoped,
+} from "../context";
 import { csvAttachment } from "../csv-import";
 import { enqueueInvitationEmail } from "../email-outbox";
-import { BadRequestError, ConflictError, NotFoundError } from "../errors";
+import {
+	BadRequestError,
+	ConflictError,
+	ForbiddenError,
+	NotFoundError,
+} from "../errors";
 import { withIdempotency } from "../idempotency";
 import { consumeRateLimitOrThrow } from "../rate-limit";
 import { firstRow } from "../rows";
@@ -53,6 +68,23 @@ function assertDeliverableInvitationEmail(email: string) {
 	}
 }
 
+/** A scoped manager only handles invitations for their Locations. */
+async function assertInvitationInScope(
+	scope: Set<string> | null,
+	invitationId: string,
+): Promise<void> {
+	if (scope === null) return;
+	const rows = await db
+		.select({ locationId: invitationLocations.locationId })
+		.from(invitationLocations)
+		.where(eq(invitationLocations.invitationId, invitationId));
+	if (rows.length === 0 || rows.some((row) => !scope.has(row.locationId))) {
+		throw new ForbiddenError(
+			"This invitation covers Locations you do not manage",
+		);
+	}
+}
+
 export const workersRoutes = new Elysia({
 	prefix: "/v1",
 	tags: ["Worker"],
@@ -61,9 +93,15 @@ export const workersRoutes = new Elysia({
 		"/workplaces/:workplaceId/workers",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage", {
-				withoutSubscription: true,
-			});
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+				{
+					withoutSubscription: true,
+				},
+			);
+			const scope = await grantableLocations(actor);
 
 			const employmentRows = await db
 				.select({
@@ -72,7 +110,12 @@ export const workersRoutes = new Elysia({
 				})
 				.from(employments)
 				.innerJoin(profiles, eq(profiles.id, employments.profileId))
-				.where(eq(employments.workplaceId, params.workplaceId));
+				.where(
+					and(
+						eq(employments.workplaceId, params.workplaceId),
+						employmentVisibleIn(scope),
+					),
+				);
 
 			const employmentIds = employmentRows.map((row) => row.employment.id);
 
@@ -89,10 +132,31 @@ export const workersRoutes = new Elysia({
 						.where(inArray(employmentPositions.employmentId, employmentIds))
 				: [];
 
-			const invitationRows = await db
+			const allInvitations = await db
 				.select()
 				.from(invitations)
 				.where(eq(invitations.workplaceId, params.workplaceId));
+			// A scoped manager sees invitations for their Locations, plus ones
+			// without Locations (those people will work everywhere).
+			const invitationScopeRows =
+				scope && allInvitations.length > 0
+					? await db
+							.select()
+							.from(invitationLocations)
+							.where(
+								inArray(
+									invitationLocations.invitationId,
+									allInvitations.map((invitation) => invitation.id),
+								),
+							)
+					: [];
+			const invitationRows = allInvitations.filter((invitation) => {
+				if (!scope) return true;
+				const ids = invitationScopeRows
+					.filter((row) => row.invitationId === invitation.id)
+					.map((row) => row.locationId);
+				return ids.length === 0 || ids.some((id) => scope.has(id));
+			});
 
 			return {
 				workers: employmentRows.map(({ employment, profile: person }) => ({
@@ -149,11 +213,23 @@ export const workersRoutes = new Elysia({
 		"/workplaces/:workplaceId/invitations",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+			);
+			// SEC-002: an accepted Manager invitation grants full access.
+			assertCanAssignRole(actor, body.kind, []);
 
 			const email = normalizeEmail(body.email);
 			assertDeliverableInvitationEmail(email);
 			const requestedLocationIds = body.locationIds ?? [];
+			// A scoped manager hires into their own Locations, whatever the role.
+			assertLocationsGrantable(
+				await grantableLocations(actor),
+				body.kind === "worker" ? "viewer" : body.kind,
+				requestedLocationIds,
+			);
 			const requestedPositionIds = body.positionIds ?? [];
 
 			return withIdempotency({
@@ -323,13 +399,20 @@ export const workersRoutes = new Elysia({
 		"/workplaces/:workplaceId/workers/directory/import",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+			);
+			// A directory sync can rewrite anyone, so it needs Workplace-wide access.
+			await requireUnscoped(actor);
 			const dryRun = body.dryRun ?? false;
 			if (dryRun) {
 				return {
 					import: await importWorkerDirectory({
 						workplaceId: params.workplaceId,
 						profileId: profile.id,
+						actor,
 						csv: body.csv,
 						dryRun: true,
 					}),
@@ -349,6 +432,7 @@ export const workersRoutes = new Elysia({
 						import: await importWorkerDirectory({
 							workplaceId: params.workplaceId,
 							profileId: profile.id,
+							actor,
 							csv: body.csv,
 							dryRun: false,
 						}),
@@ -403,7 +487,11 @@ export const workersRoutes = new Elysia({
 		"/workplaces/:workplaceId/invitations/:invitationId/resend",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+			);
 
 			return withIdempotency({
 				actorProfileId: profile.id,
@@ -430,6 +518,12 @@ export const workersRoutes = new Elysia({
 						.limit(1);
 
 					if (!invitation) throw new NotFoundError("Invitation not found");
+					// SEC-002: only someone who could issue it may resend it.
+					assertCanAssignRole(actor, invitation.kind, []);
+					await assertInvitationInScope(
+						await grantableLocations(actor),
+						invitation.id,
+					);
 					if (invitation.status !== "pending") {
 						throw new ConflictError("Only pending invitations can be resent");
 					}
@@ -491,7 +585,11 @@ export const workersRoutes = new Elysia({
 		"/workplaces/:workplaceId/invitations/:invitationId",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+			);
 
 			const [invitation] = await db
 				.select()
@@ -505,6 +603,12 @@ export const workersRoutes = new Elysia({
 				.limit(1);
 
 			if (!invitation) throw new NotFoundError("Invitation not found");
+			// SEC-002: only someone who could issue it may revoke it.
+			assertCanAssignRole(actor, invitation.kind, []);
+			await assertInvitationInScope(
+				await grantableLocations(actor),
+				invitation.id,
+			);
 
 			await db
 				.update(invitations)
@@ -532,7 +636,11 @@ export const workersRoutes = new Elysia({
 		"/workplaces/:workplaceId/employments/:employmentId/deactivate",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+			);
 
 			if (params.employmentId === params.workplaceId) {
 				throw new BadRequestError("Invalid employment");
@@ -553,6 +661,11 @@ export const workersRoutes = new Elysia({
 			if (employment.profileId === profile.id) {
 				throw new ConflictError("You cannot deactivate your own Employment");
 			}
+			assertCanManageEmployment(actor, employment);
+			await assertEmploymentInScope(
+				await grantableLocations(actor),
+				employment.id,
+			);
 			if (employment.status === "deactivated") {
 				throw new ConflictError("Employment is already deactivated");
 			}
@@ -587,7 +700,11 @@ export const workersRoutes = new Elysia({
 		"/workplaces/:workplaceId/employments/:employmentId/role",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "workers.manage");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"workers.manage",
+			);
 
 			const [employment] = await db
 				.select()
@@ -622,6 +739,23 @@ export const workersRoutes = new Elysia({
 				body.kind === "worker"
 					? []
 					: (requestedPrivileges as EmploymentPrivilege[]);
+			assertCanManageEmployment(actor, employment);
+			await assertEmploymentInScope(
+				await grantableLocations(actor),
+				employment.id,
+			);
+			assertCanAssignRole(actor, body.kind, privileges);
+			if (body.kind !== "worker") {
+				const current = await db
+					.select({ locationId: employmentLocations.locationId })
+					.from(employmentLocations)
+					.where(eq(employmentLocations.employmentId, employment.id));
+				assertLocationsGrantable(
+					await grantableLocations(actor),
+					body.kind,
+					current.map((row) => row.locationId),
+				);
+			}
 
 			const updated = firstRow(
 				await db

@@ -51,6 +51,22 @@ export type CreateAppOptions = {
 	getReadiness?: () => Promise<ReadinessReport>;
 };
 
+const trustedOrigins = new Set(
+	[env.CORS_ORIGIN, env.APP_URL].map((url) => new URL(url).origin),
+);
+
+/**
+ * SEC-015: cookie-authenticated writes must come from the web app. Requests
+ * without an Origin (native apps, webhooks, server-to-server) carry no
+ * ambient browser credentials to forge, so they pass.
+ */
+function isCrossSiteCookieWrite(request: Request): boolean {
+	if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return false;
+	if (!request.headers.get("cookie")) return false;
+	const origin = request.headers.get("origin");
+	return origin !== null && !trustedOrigins.has(origin);
+}
+
 const startedAtByRequest = new WeakMap<Request, number>();
 const errorByRequest = new WeakMap<Request, string>();
 
@@ -123,6 +139,10 @@ export function createApp(options: CreateAppOptions = {}) {
 			startedAtByRequest.set(request, Date.now());
 			set.headers["cache-control"] = "no-store";
 			set.headers["x-request-id"] = newRequestId(request);
+			if (isCrossSiteCookieWrite(request)) {
+				set.status = 403;
+				return { error: "Cross-site request refused" };
+			}
 		})
 		.onAfterResponse(({ request, set }) => {
 			const startedAt = startedAtByRequest.get(request) ?? Date.now();

@@ -10,6 +10,7 @@ import { Elysia, t } from "elysia";
 import {
 	requirePrivilege,
 	requireSession,
+	requireUnscoped,
 	requireWorkplaceMember,
 } from "../context";
 import { csvCell } from "../csv-import";
@@ -226,7 +227,13 @@ export const notificationsRoutes = new Elysia({
 		"/workplaces/:workplaceId/audit",
 		async ({ headers, params, query, set }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(profile.id, params.workplaceId, "reports.view");
+			const actor = await requirePrivilege(
+				profile.id,
+				params.workplaceId,
+				"reports.view",
+			);
+			// Covers every Location, so it needs Workplace-wide access.
+			await requireUnscoped(actor);
 
 			const hasQuery = Boolean(
 				query.from ||

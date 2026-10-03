@@ -10,7 +10,11 @@ import {
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { Elysia, t } from "elysia";
 
-import { requirePrivilege, requireSession, weekStartDayFor } from "../context";
+import {
+	requireLocationPrivilege,
+	requireSession,
+	weekStartDayFor,
+} from "../context";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { withIdempotency } from "../idempotency";
 import { writeAudit } from "../notify";
@@ -39,7 +43,7 @@ async function locationForManager(
 		.where(eq(locations.id, locationId))
 		.limit(1);
 	if (!location) throw new NotFoundError("Location not found");
-	await requirePrivilege(profileId, location.workplaceId, privilege);
+	await requireLocationPrivilege(profileId, location, privilege);
 	return location;
 }
 

@@ -15,11 +15,17 @@ import { alias } from "drizzle-orm/pg-core";
 import { Elysia, t } from "elysia";
 
 import {
+	grantableLocations,
 	listActiveEmployments,
 	requirePrivilege,
 	requireSession,
 } from "../context";
-import { BadRequestError, ConflictError, NotFoundError } from "../errors";
+import {
+	BadRequestError,
+	ConflictError,
+	ForbiddenError,
+	NotFoundError,
+} from "../errors";
 import { withIdempotency } from "../idempotency";
 import { managerEmploymentIds, notifyEmployments, writeAudit } from "../notify";
 import { assertWorkplaceEnabled, loadWorkplace } from "../workplace-policy";
@@ -50,6 +56,8 @@ export interface SwapDetail {
 	respondedAt: string | null;
 	decidedAt: string | null;
 	workplaceId: string;
+	/** Both shifts' Locations; a scoped reviewer needs access to each. */
+	locationIds: string[];
 	requester: { employmentId: string; name: string };
 	counterpart: { employmentId: string; name: string };
 	requesterShift: {
@@ -87,6 +95,8 @@ const swapDetailColumns = {
 	counterpartPositionName: counterpartPositions.name,
 	requesterTimezone: requesterLocations.timezone,
 	counterpartTimezone: counterpartLocations.timezone,
+	requesterLocationId: requesterLocations.id,
+	counterpartLocationId: counterpartLocations.id,
 };
 
 function swapDetailQuery() {
@@ -161,6 +171,7 @@ function toSwapDetail(row: SwapDetailRow): SwapDetail {
 		respondedAt: row.swap.respondedAt?.toISOString() ?? null,
 		decidedAt: row.swap.decidedAt?.toISOString() ?? null,
 		workplaceId: row.workplaceId,
+		locationIds: [row.requesterLocationId, row.counterpartLocationId],
 		requester: {
 			employmentId: row.swap.requesterEmploymentId,
 			name: row.requesterName ?? row.requesterEmail,
@@ -566,6 +577,11 @@ export async function approveShiftSwap(input: {
 		status: "approved" as const,
 		publishedVersion: published.version.versionNumber,
 	};
+}
+
+/** SEC-013: approving a swap changes both Locations' schedules. */
+function swapInScope(scope: Set<string> | null, swap: SwapDetail): boolean {
+	return scope === null || swap.locationIds.every((id) => scope.has(id));
 }
 
 export const swapRoutes = new Elysia({
@@ -986,12 +1002,13 @@ export const swapRoutes = new Elysia({
 		"/workplaces/:workplaceId/coverage/swaps",
 		async ({ headers, params }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 				{ withoutSubscription: true },
 			);
+			const scope = await grantableLocations(actor);
 
 			const rows = await db
 				.select({ id: shiftSwaps.id })
@@ -1010,7 +1027,8 @@ export const swapRoutes = new Elysia({
 			const details = await loadSwapDetails(rows.map((row) => row.id));
 			const swaps = rows
 				.map((row) => details.get(row.id))
-				.filter((swap) => swap !== undefined);
+				.filter((swap) => swap !== undefined)
+				.filter((swap) => swapInScope(scope, swap));
 			swaps.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
 			return { swaps };
 		},
@@ -1030,11 +1048,12 @@ export const swapRoutes = new Elysia({
 		"/workplaces/:workplaceId/swaps/:swapId/decision",
 		async ({ headers, params, body }) => {
 			const { profile } = await requireSession(headers);
-			await requirePrivilege(
+			const actor = await requirePrivilege(
 				profile.id,
 				params.workplaceId,
 				"approvals.review",
 			);
+			const scope = await grantableLocations(actor);
 			return withIdempotency({
 				actorProfileId: profile.id,
 				scope: `swap.decision:${params.swapId}`,
@@ -1044,6 +1063,9 @@ export const swapRoutes = new Elysia({
 					const swap = await loadSwapDetail(params.swapId);
 					if (swap.workplaceId !== params.workplaceId) {
 						throw new NotFoundError("Swap request not found");
+					}
+					if (!swapInScope(scope, swap)) {
+						throw new ForbiddenError("You do not have access to this Location");
 					}
 					if (swap.status !== "pending_manager") {
 						throw new ConflictError(
