@@ -14,78 +14,78 @@ restaurantSignUp.searchParams.set("opening_restaurant", "1");
 export const solutions = {
 	restaurant: {
 		eyebrow: "Restaurant scheduling software",
-		title: "Publish restaurant shifts with a plan for every change.",
-		lede: "Build a clear rota for front of house and kitchen teams, publish it when it is ready, and keep everyone informed as the week changes.",
+		title: "Publish restaurant shifts. Plan for each change.",
+		lede: "Make a clear schedule for front of house and kitchen workers. Publish it when it is ready. Keep everyone informed when the week changes.",
 		image: "product-schedule",
 		imageAlt:
-			"jooling weekly schedule with shifts assigned across a restaurant team",
+			"jooling weekly schedule with shifts assigned to restaurant workers",
 		points: [
 			[
-				"Build the week around your service",
-				"Set up locations and roles, reuse a weekly schedule, and assign shifts around your team's availability.",
+				"Make the week to match your service",
+				"Set up your locations and roles. Use a weekly template again. Assign shifts to match the availability of your workers.",
 			],
 			[
 				"Publish with confidence",
-				"Share the finished schedule with the team. Workers can see their next shift on web or mobile, and managers can track acknowledgements.",
+				"Send the finished schedule to your workers. Workers can see their next shift on the web or on mobile. Managers can see who acknowledged.",
 			],
 			[
-				"Handle the inevitable change",
-				"Manage time off, open shifts, and swaps in the same place. Publish updates so affected teammates know what changed.",
+				"Prepare for each change",
+				"Manage time off, open shifts, and swaps in one place. Publish an update. The workers it affects then know what changed.",
 			],
 		],
 		closing:
-			"Opening a new restaurant? Set up your first schedule before opening day. New restaurant workplaces can opt into a 90-day trial at their first checkout.",
+			"Do you open a new restaurant? Make your first schedule before opening day. A new restaurant workplace can get a 90-day trial at the first checkout.",
 		cta: "Start your restaurant trial",
 		signUp: restaurantSignUp.toString(),
 	},
 	retail: {
 		eyebrow: "Retail scheduling software",
-		title: "Keep store shifts clear, even when the week moves.",
-		lede: "Plan coverage by role and location, publish one schedule your team can check, and make changes without losing track of the latest plan.",
+		title: "Keep store shifts clear when the week changes.",
+		lede: "Plan coverage for each role and location. Publish one schedule that your workers can see. Make changes and always know which plan is the latest.",
 		image: "product-schedule",
 		imageAlt:
-			"jooling weekly schedule with shifts by person and role across a location",
+			"jooling weekly schedule with shifts for each worker and role at a location",
 		points: [
 			[
 				"See the coverage you need",
-				"Build weekly schedules for each location and role, with availability and time off visible as you plan.",
+				"Make a weekly schedule for each location and role. See availability and time off when you plan.",
 			],
 			[
 				"Give everyone the current schedule",
-				"Publish the week and notify your team. Store associates can check their shifts from the web or mobile app.",
+				"Publish the week and tell your workers. Store workers can see their shifts on the web or in the mobile app.",
 			],
 			[
-				"Fill gaps as they happen",
-				"Use open shifts and swaps to handle changes, then publish the updated schedule and track acknowledgements.",
+				"Fill gaps when they occur",
+				"Use open shifts and swaps to do changes. Then publish the new schedule and see who acknowledged.",
 			],
 		],
 		closing:
-			"Bring every store and teammate into one scheduling workflow. Pricing is per location, with unlimited workers and managers.",
+			"Put each store and each worker in one scheduling workflow. The price is for each location. There is no limit on workers and managers.",
 		cta: "Start 30 days free",
 		signUp: signUp.toString(),
 	},
 	"worker-app": {
 		eyebrow: "Employee scheduling app",
-		title: "A worker app that keeps the next shift in view.",
-		lede: "Give your team a simple place to see their schedule, share availability, request time off, and stay up to date when shifts change.",
+		title: "A worker app that shows the next shift.",
+		lede: "Give your workers one simple place to see their schedule, send their availability, ask for time off, and learn about shift changes.",
 		image: "product-worker-mobile",
-		imageAlt: "jooling worker app showing the next shift and weekly schedule",
+		imageAlt: "jooling worker app. It shows the next shift and the weekly schedule",
 		points: [
 			[
-				"Know what is coming up",
-				"Workers can check their next shift and weekly schedule on mobile or the web.",
+				"Know the next shift",
+				"Workers can see their next shift and their weekly schedule on mobile or on the web.",
 			],
 			[
-				"Make requests without the chase",
-				"Teammates can submit availability and time off, and respond to open shifts and swap requests.",
+				"Send requests with no extra work",
+				"Workers can send availability and time-off requests. They can also answer open shifts and swap requests.",
 			],
 			[
-				"Stay in sync when plans change",
-				"Affected teammates receive schedule updates. Managers can see acknowledgements and ask for acceptance of important late changes.",
+				"Stay informed when plans change",
+				"Workers get schedule updates that affect them. Managers can see acknowledgements. For an important late change, managers can ask the worker to accept it.",
 			],
 		],
 		closing:
-			"The worker app is part of jooling's scheduling plans. Invite your whole team without adding a per-worker fee.",
+			"The worker app is in all jooling scheduling plans. Invite all your workers. There is no fee for each worker.",
 		cta: "Get started",
 		signUp: signUp.toString(),
 	},
@@ -160,7 +160,7 @@ export function SolutionPage({ slug }: { slug: SolutionSlug }) {
 			>
 				<Reveal as="header" className="dk-section-heading">
 					<p className="dk-eyebrow">How jooling helps</p>
-					<h2 id="solution-details-title">A clearer week for everyone.</h2>
+					<h2 id="solution-details-title">A clear week for everyone.</h2>
 				</Reveal>
 				<ul className="dk-point-grid">
 					{page.points.map(([title, description]) => (
@@ -175,7 +175,7 @@ export function SolutionPage({ slug }: { slug: SolutionSlug }) {
 				</ul>
 			</section>
 			<FinalCTA
-				title="Ready to make the next week easier?"
+				title="Make next week easier."
 				body={page.closing}
 				cta={page.cta}
 				href={page.signUp}

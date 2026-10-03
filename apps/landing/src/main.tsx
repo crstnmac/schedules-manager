@@ -13,7 +13,7 @@ import "./styles.css";
 
 const siteUrl = "https://jooling.com";
 const defaultDescription =
-	"Employee scheduling software for hourly teams. Build and publish shifts, handle changes, and keep everyone in sync with jooling. Start your 30-day free trial.";
+	"Scheduling software for hourly teams. Make and publish shifts. Do changes. Keep everyone informed. Start your 30-day free trial.";
 const routeSeo: Record<string, { title: string; description: string }> = {
 	"/": {
 		title: "Employee Scheduling Software for Hourly Teams | jooling",
@@ -42,24 +42,24 @@ const routeSeo: Record<string, { title: string; description: string }> = {
 	"/restaurant": {
 		title: "Restaurant Scheduling Software | jooling",
 		description:
-			"Publish restaurant shifts, manage swaps and time off, and keep front of house and kitchen teams informed. Explore jooling's restaurant scheduling software.",
+			"Publish restaurant shifts. Manage swaps and time off. Keep front of house and kitchen workers informed.",
 	},
 	"/retail": {
 		title: "Retail Scheduling Software | jooling",
 		description:
-			"Plan store coverage, publish retail shifts, and handle schedule changes across locations with jooling.",
+			"Plan store coverage. Publish retail shifts. Do schedule changes at all locations.",
 	},
 	"/worker-app": {
 		title: "Employee Scheduling App for Workers | jooling",
 		description:
-			"Give workers one app to check shifts, share availability, request time off, and stay updated when schedules change.",
+			"Give workers one app to see shifts, send availability, ask for time off, and learn about schedule changes.",
 	},
 	...Object.fromEntries(
 		competitors.map((competitor) => [
 			`/vs/${competitor.slug}`,
 			{
 				title: `jooling — ${competitor.name} alternative for shift scheduling`,
-				description: `Explore jooling as an alternative to ${competitor.name}. Plan, publish, and manage team schedules with clear per-location pricing.`,
+				description: `Use jooling instead of ${competitor.name}. Plan, publish, and manage worker schedules. The price is clear and is for each location.`,
 			},
 		]),
 	),
